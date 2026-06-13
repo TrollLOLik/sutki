@@ -24,21 +24,25 @@ export default function RootLayout() {
 
   if (status === 'loading') return null;
 
-  const authed = status === 'authenticated';
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.surface } }}>
-            <Stack.Protected guard={authed}>
+            <Stack.Protected guard={status === 'authenticated'}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
               <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
               <Stack.Screen name="booking/[id]" />
             </Stack.Protected>
-            <Stack.Protected guard={!authed}>
+            {/* Tokens are set but the profile is incomplete: the (auth) stack is
+                unmounted and only profile-setup is reachable until onboarding
+                completes. This also covers a cold start mid-onboarding. */}
+            <Stack.Protected guard={status === 'onboarding'}>
+              <Stack.Screen name="profile-setup" />
+            </Stack.Protected>
+            <Stack.Protected guard={status === 'unauthenticated'}>
               <Stack.Screen name="(auth)" />
             </Stack.Protected>
           </Stack>
