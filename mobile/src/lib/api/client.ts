@@ -45,8 +45,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const payload = isJson ? await res.json().catch(() => undefined) : undefined;
 
   if (!res.ok) {
-    const message =
-      (payload as { message?: string } | undefined)?.message ?? `Request failed (${res.status})`;
+    const errBody = payload as { message?: string; error?: string } | undefined;
+    const message = errBody?.message ?? errBody?.error ?? `Request failed (${res.status})`;
     throw new ApiError(res.status, message, payload);
   }
 
