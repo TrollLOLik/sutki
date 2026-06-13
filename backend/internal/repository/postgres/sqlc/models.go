@@ -65,6 +65,14 @@ type DoctrineMigrationVersion struct {
 	ExecutionTime *int32
 }
 
+type EmailLoginCode struct {
+	Email     string
+	CodeHash  string
+	ExpiresAt pgtype.Timestamp
+	Attempts  int32
+	CreatedAt pgtype.Timestamp
+}
+
 type Favorite struct {
 	ID        int64
 	UserID    int32

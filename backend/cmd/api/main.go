@@ -17,6 +17,7 @@ import (
 	httpdelivery "github.com/TrollLOLik/sutki/backend/internal/delivery/http"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 )
 
@@ -44,9 +45,20 @@ func main() {
 	listingSvc := listing.New(listingRepo)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
+	userRepo := postgres.NewUserRepo(queries)
+	codeRepo := postgres.NewAuthCodeRepo(queries)
+	refreshRepo := postgres.NewRefreshTokenRepo(queries)
+	authSvc := auth.New(userRepo, codeRepo, refreshRepo, auth.Config{
+		Secret:     cfg.JWTSecret,
+		AccessTTL:  cfg.AccessTTL,
+		RefreshTTL: cfg.RefreshTTL,
+		ExposeCode: cfg.AuthExposeCode,
+	})
+	authHandler := httpdelivery.NewAuthHandler(authSvc)
+
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, authSvc),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}

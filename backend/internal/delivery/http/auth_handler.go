@@ -1,0 +1,195 @@
+package http
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
+)
+
+// AuthHandler serves the email-code authentication API.
+type AuthHandler struct {
+	svc *auth.Service
+}
+
+func NewAuthHandler(svc *auth.Service) *AuthHandler {
+	return &AuthHandler{svc: svc}
+}
+
+// Routes registers the public auth endpoints.
+func (h *AuthHandler) Routes(r chi.Router) {
+	r.Post("/email/request", h.requestCode)
+	r.Post("/email/verify", h.verifyCode)
+	r.Post("/refresh", h.refresh)
+	r.Post("/logout", h.logout)
+}
+
+type userDTO struct {
+	ID         int32  `json:"id"`
+	Email      string `json:"email"`
+	Name       string `json:"name"`
+	Phone      string `json:"phone"`
+	City       string `json:"city"`
+	AvatarURL  string `json:"avatar_url"`
+	IsVerified bool   `json:"is_verified"`
+}
+
+func toUserDTO(u domain.User) userDTO {
+	return userDTO{
+		ID:         u.ID,
+		Email:      u.Email,
+		Name:       u.Name,
+		Phone:      u.Phone,
+		City:       u.City,
+		AvatarURL:  u.AvatarURL,
+		IsVerified: u.IsVerified,
+	}
+}
+
+type authResponse struct {
+	TokenType    string  `json:"token_type"`
+	AccessToken  string  `json:"access_token"`
+	RefreshToken string  `json:"refresh_token"`
+	ExpiresIn    int64   `json:"expires_in"`
+	User         userDTO `json:"user"`
+}
+
+func toAuthResponse(res auth.AuthResult) authResponse {
+	return authResponse{
+		TokenType:    "Bearer",
+		AccessToken:  res.AccessToken,
+		RefreshToken: res.RefreshToken,
+		ExpiresIn:    res.ExpiresIn,
+		User:         toUserDTO(res.User),
+	}
+}
+
+func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	res, err := h.svc.RequestCode(r.Context(), body.Email)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
+	if res.Exposed {
+		resp["dev_code"] = res.Code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) verifyCode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+		Code  string `json:"code"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	res, err := h.svc.VerifyCode(r.Context(), body.Email, body.Code)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAuthResponse(res))
+}
+
+func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	res, err := h.svc.Refresh(r.Context(), body.RefreshToken)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAuthResponse(res))
+}
+
+func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if err := h.svc.Logout(r.Context(), body.RefreshToken); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Me returns the authenticated user (requires AuthMiddleware).
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := h.svc.GetUser(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, toUserDTO(user))
+}
+
+// UpdateMe updates the authenticated user's profile (requires AuthMiddleware).
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Name  string `json:"name"`
+		Phone string `json:"phone"`
+		City  string `json:"city"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Phone, body.City)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, toUserDTO(user))
+}
+
+func writeAuthError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, domain.ErrInvalidEmail):
+		writeError(w, http.StatusBadRequest, "invalid email")
+	case errors.Is(err, domain.ErrCodeInvalid):
+		writeError(w, http.StatusBadRequest, "invalid code")
+	case errors.Is(err, domain.ErrCodeExpired):
+		writeError(w, http.StatusBadRequest, "code expired")
+	case errors.Is(err, domain.ErrTooManyAttempts):
+		writeError(w, http.StatusTooManyRequests, "too many attempts")
+	case errors.Is(err, domain.ErrTokenInvalid):
+		writeError(w, http.StatusUnauthorized, "invalid token")
+	default:
+		writeError(w, http.StatusInternalServerError, "internal error")
+	}
+}

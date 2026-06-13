@@ -10,11 +10,22 @@ import (
 
 type Querier interface {
 	CountActiveHouses(ctx context.Context) (int64, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
+	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	DeleteEmailLoginCode(ctx context.Context, email string) error
+	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
+	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
+	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
+	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
 	ListActiveHouses(ctx context.Context, arg ListActiveHousesParams) ([]ListActiveHousesRow, error)
 	ListHouseCategories(ctx context.Context, houseID int32) ([]ListHouseCategoriesRow, error)
 	ListHousePhotos(ctx context.Context, houseID *int32) ([]ListHousePhotosRow, error)
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
+	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
+	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
 }
 
 var _ Querier = (*Queries)(nil)
