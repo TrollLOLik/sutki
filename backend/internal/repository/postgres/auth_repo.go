@@ -42,6 +42,7 @@ func (r *AuthCodeRepo) Get(ctx context.Context, email string) (domain.EmailLogin
 		CodeHash:  row.CodeHash,
 		ExpiresAt: row.ExpiresAt.Time,
 		Attempts:  row.Attempts,
+		CreatedAt: row.CreatedAt.Time,
 	}, nil
 }
 

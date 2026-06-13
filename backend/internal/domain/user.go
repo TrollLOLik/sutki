@@ -20,6 +20,7 @@ type EmailLoginCode struct {
 	CodeHash  string
 	ExpiresAt time.Time
 	Attempts  int32
+	CreatedAt time.Time
 }
 
 // RefreshToken is a persisted (hashed) refresh token for JWT rotation.

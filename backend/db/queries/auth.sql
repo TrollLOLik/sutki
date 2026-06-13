@@ -35,8 +35,11 @@ RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles;
 
 -- name: UpdateUserProfile :one
 UPDATE "user"
-SET name = $2, phone = $3, city = $4, updated_at = now()
-WHERE id = $1 AND deleted = false
+SET name = COALESCE(sqlc.narg('name'), name),
+    phone = COALESCE(sqlc.narg('phone'), phone),
+    city = COALESCE(sqlc.narg('city'), city),
+    updated_at = now()
+WHERE id = sqlc.arg('id') AND deleted = false
 RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles;
 
 -- name: CreateRefreshToken :exec

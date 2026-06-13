@@ -76,12 +76,12 @@ func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error
 	}, nil
 }
 
-func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city string) (domain.User, error) {
+func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city *string) (domain.User, error) {
 	row, err := r.q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
 		ID:    id,
-		Name:  ptr(name),
-		Phone: ptr(phone),
-		City:  ptr(city),
+		Name:  name,
+		Phone: phone,
+		City:  city,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -105,12 +105,4 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-// ptr returns nil for an empty string so we store SQL NULL rather than ”.
-func ptr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }

@@ -18,7 +18,8 @@ type Config struct {
 	JWTSecret    string
 	AccessTTL    time.Duration
 	RefreshTTL   time.Duration
-	// AuthExposeCode returns login codes in the API response (dev only).
+	// AuthExposeCode returns login codes in the API response and logs them
+	// (dev only). Defaults to false; opt in explicitly via AUTH_EXPOSE_CODE=true.
 	AuthExposeCode bool
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
@@ -33,7 +34,7 @@ func Load() (Config, error) {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		AccessTTL:      getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTTL:     getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
-		AuthExposeCode: getBool("AUTH_EXPOSE_CODE", true),
+		AuthExposeCode: getBool("AUTH_EXPOSE_CODE", false),
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
 	}
