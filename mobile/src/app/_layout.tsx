@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/lib/query';
 import { useSessionStore } from '@/store/session';
+import { palette } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,7 +31,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.surface } }}>
             <Stack.Protected guard={authed}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />

@@ -39,6 +39,7 @@ module.exports = {
       borderRadius: {
         card: '16px',
         field: '12px',
+        pill: '999px',
       },
     },
   },

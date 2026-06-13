@@ -29,7 +29,7 @@ export default function SearchScreen() {
           <Pressable
             accessibilityLabel="Фильтры"
             className="h-12 w-12 items-center justify-center rounded-field bg-primary active:bg-primary-pressed">
-            <Ionicons name="options-outline" size={22} color="#FFFFFF" />
+            <Ionicons name="options-outline" size={22} color={palette.surface} />
           </Pressable>
         </View>
 

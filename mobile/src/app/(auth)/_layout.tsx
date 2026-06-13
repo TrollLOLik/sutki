@@ -1,5 +1,7 @@
 import { Stack } from 'expo-router';
 
+import { palette } from '@/theme/tokens';
+
 export const unstable_settings = {
   initialRouteName: 'welcome',
 };
@@ -10,9 +12,9 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         headerShadowVisible: false,
-        headerTintColor: '#1A1A1A',
+        headerTintColor: palette.ink,
         headerTitleStyle: { fontWeight: '600' },
-        contentStyle: { backgroundColor: '#FFFFFF' },
+        contentStyle: { backgroundColor: palette.surface },
       }}>
       <Stack.Screen name="welcome" />
       <Stack.Screen name="phone" options={{ headerShown: true, title: '' }} />

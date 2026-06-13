@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native';
 
 import { cn } from '@/lib/cn';
+import { palette } from '@/theme/tokens';
 
 type Variant = 'primary' | 'secondary' | 'success' | 'ghost';
 type Size = 'md' | 'lg';
@@ -54,7 +55,9 @@ export function Button({
       )}
       {...rest}>
       {loading ? (
-        <ActivityIndicator color={variant === 'secondary' || variant === 'ghost' ? '#FF5A1F' : '#FFFFFF'} />
+        <ActivityIndicator
+          color={variant === 'secondary' || variant === 'ghost' ? palette.primary : palette.surface}
+        />
       ) : (
         <Text className={cn('text-base font-semibold', text[variant])}>{label}</Text>
       )}
