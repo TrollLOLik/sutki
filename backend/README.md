@@ -17,6 +17,7 @@ cmd/api/                      entrypoint (config, pool, wiring, graceful shutdow
 internal/config/              env-based configuration
 internal/domain/              entities + repository interfaces (no deps)
 internal/usecase/listing/     listing read use cases
+internal/usecase/auth/        email-code auth + JWT issuing
 internal/repository/postgres/ sqlc-backed repository implementation
   └── sqlc/                   generated code (do not edit)
 internal/delivery/http/       chi router, handlers, DTOs
@@ -48,11 +49,33 @@ make run           # start the API on :8080
 
 ## Endpoints
 
-| Method | Path                     | Description                         |
-|--------|--------------------------|-------------------------------------|
-| GET    | `/healthz`               | Liveness probe                      |
-| GET    | `/api/v1/listings`       | Active listings (`?limit&offset`)   |
-| GET    | `/api/v1/listings/{id}`  | Listing detail + photos/services    |
+| Method | Path                          | Auth   | Description                                |
+|--------|-------------------------------|--------|--------------------------------------------|
+| GET    | `/healthz`                    | —      | Liveness probe                             |
+| GET    | `/api/v1/listings`            | —      | Active listings (`?limit&offset`)          |
+| GET    | `/api/v1/listings/{id}`       | —      | Listing detail + photos/services           |
+| POST   | `/api/v1/auth/email/request`  | —      | Send a 6-digit login code to an email      |
+| POST   | `/api/v1/auth/email/verify`   | —      | Verify code → issue access/refresh tokens  |
+| POST   | `/api/v1/auth/refresh`        | —      | Rotate refresh token → new token pair      |
+| POST   | `/api/v1/auth/logout`         | —      | Revoke a refresh token                     |
+| GET    | `/api/v1/me`                  | Bearer | Current user profile                       |
+| PATCH  | `/api/v1/me`                  | Bearer | Update name / phone / city                 |
+
+### Auth flow (email + 6-digit code)
+
+1. `POST /auth/email/request` `{ "email": "a@b.ru" }` — generates a 6-digit
+   code, bcrypt-hashes it, stores it with a 10-minute TTL. No SMTP yet: when
+   `AUTH_EXPOSE_CODE=true` (dev), the code is logged and returned as `dev_code`.
+2. `POST /auth/email/verify` `{ "email": "a@b.ru", "code": "123456" }` —
+   verifies (max 5 attempts), upserts the user by email, returns
+   `{ token_type, access_token, refresh_token, expires_in, user }`.
+3. Use `Authorization: Bearer <access_token>` for `/me`. When the access token
+   expires, call `POST /auth/refresh` `{ "refresh_token": "..." }` — the old
+   refresh token is revoked (rotation) and a new pair is returned.
+4. `POST /auth/logout` `{ "refresh_token": "..." }` revokes the refresh token.
+
+Access tokens are HS256 JWTs. Refresh tokens are random opaque strings; only
+their SHA-256 hash is stored. VK ID and phone (Voice OTP) login are deferred.
 
 ## Configuration
 
@@ -61,4 +84,7 @@ make run           # start the API on :8080
 | `HTTP_ADDR`      | `:8080`                  | HTTP listen address                    |
 | `DATABASE_URL`   | —                        | Required; pgx connection string        |
 | `MEDIA_BASE_URL` | empty                    | Prefix for stored relative media paths |
-| `JWT_SECRET`     | empty                    | Used by auth endpoints (later phase)   |
+| `JWT_SECRET`     | empty                    | HS256 signing secret; random ephemeral if empty (dev) |
+| `ACCESS_TOKEN_TTL`  | `15m`                 | Access token lifetime (Go duration)    |
+| `REFRESH_TOKEN_TTL` | `720h`                | Refresh token lifetime (Go duration)   |
+| `AUTH_EXPOSE_CODE`  | `true`                | Dev only: return login code in response |

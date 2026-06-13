@@ -6,10 +6,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, authSvc *auth.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -23,6 +25,14 @@ func NewRouter(listingHandler *ListingHandler) http.Handler {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/listings", listingHandler.Routes)
+		r.Route("/auth", authHandler.Routes)
+
+		// Authenticated endpoints.
+		r.Group(func(r chi.Router) {
+			r.Use(AuthMiddleware(authSvc.TokenManager()))
+			r.Get("/me", authHandler.Me)
+			r.Patch("/me", authHandler.UpdateMe)
+		})
 	})
 
 	return r
