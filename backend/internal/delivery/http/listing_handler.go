@@ -1,0 +1,181 @@
+package http
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
+)
+
+// ListingHandler serves the public listings read API.
+type ListingHandler struct {
+	svc          *listing.Service
+	mediaBaseURL string
+}
+
+func NewListingHandler(svc *listing.Service, mediaBaseURL string) *ListingHandler {
+	return &ListingHandler{svc: svc, mediaBaseURL: mediaBaseURL}
+}
+
+// Routes registers listing endpoints on the given router.
+func (h *ListingHandler) Routes(r chi.Router) {
+	r.Get("/", h.list)
+	r.Get("/{id}", h.get)
+}
+
+type refDTO struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
+}
+
+type photoDTO struct {
+	ID       int32  `json:"id"`
+	URL      string `json:"url"`
+	Position int32  `json:"position"`
+}
+
+type listingCardDTO struct {
+	ID          int32    `json:"id"`
+	Address     string   `json:"address"`
+	City        string   `json:"city"`
+	Description string   `json:"description"`
+	Price       int32    `json:"price"`
+	Rooms       string   `json:"rooms"`
+	Area        int32    `json:"area"`
+	Lat         *float64 `json:"lat"`
+	Lng         *float64 `json:"lng"`
+	Views       int32    `json:"views"`
+	CoverURL    string   `json:"cover_url"`
+}
+
+type listingDetailDTO struct {
+	listingCardDTO
+	NumberRoom string     `json:"number_room"`
+	Photos     []photoDTO `json:"photos"`
+	Services   []refDTO   `json:"services"`
+	Categories []refDTO   `json:"categories"`
+}
+
+type listResponse struct {
+	Items  []listingCardDTO `json:"items"`
+	Total  int64            `json:"total"`
+	Limit  int32            `json:"limit"`
+	Offset int32            `json:"offset"`
+}
+
+func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
+	limit := parseInt32(r.URL.Query().Get("limit"), 0)
+	offset := parseInt32(r.URL.Query().Get("offset"), 0)
+
+	res, err := h.svc.List(r.Context(), limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	items := make([]listingCardDTO, 0, len(res.Items))
+	for _, hs := range res.Items {
+		items = append(items, h.cardDTO(hs))
+	}
+	writeJSON(w, http.StatusOK, listResponse{
+		Items:  items,
+		Total:  res.Total,
+		Limit:  res.Limit,
+		Offset: res.Offset,
+	})
+}
+
+func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	hs, err := h.svc.Get(r.Context(), int32(id))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "listing not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, h.detailDTO(hs))
+}
+
+func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
+	return listingCardDTO{
+		ID:          hs.ID,
+		Address:     address(hs),
+		City:        hs.City,
+		Description: hs.Description,
+		Price:       hs.Price,
+		Rooms:       hs.CountRoom,
+		Area:        hs.Area,
+		Lat:         hs.Lat,
+		Lng:         hs.Lng,
+		Views:       hs.Views,
+		CoverURL:    h.mediaURL(hs.CoverPath),
+	}
+}
+
+func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
+	photos := make([]photoDTO, 0, len(hs.Photos))
+	for _, p := range hs.Photos {
+		photos = append(photos, photoDTO{ID: p.ID, URL: h.mediaURL(p.Path), Position: p.Position})
+	}
+	services := make([]refDTO, 0, len(hs.Services))
+	for _, s := range hs.Services {
+		services = append(services, refDTO{ID: s.ID, Name: s.Name})
+	}
+	categories := make([]refDTO, 0, len(hs.Categories))
+	for _, c := range hs.Categories {
+		categories = append(categories, refDTO{ID: c.ID, Name: c.Name})
+	}
+	card := h.cardDTO(hs)
+	if card.CoverURL == "" && len(photos) > 0 {
+		card.CoverURL = photos[0].URL
+	}
+	return listingDetailDTO{
+		listingCardDTO: card,
+		NumberRoom:     hs.NumberRoom,
+		Photos:         photos,
+		Services:       services,
+		Categories:     categories,
+	}
+}
+
+// mediaURL turns a stored relative path into an absolute URL using MEDIA_BASE_URL.
+// Legacy paths look like "../upload_files/x.jpg"; the leading "../" is stripped.
+func (h *ListingHandler) mediaURL(p string) string {
+	if p == "" {
+		return ""
+	}
+	if h.mediaBaseURL == "" {
+		return p
+	}
+	clean := strings.TrimPrefix(p, "../")
+	clean = strings.TrimLeft(clean, "/")
+	return strings.TrimRight(h.mediaBaseURL, "/") + "/" + clean
+}
+
+func address(hs domain.House) string {
+	return strings.TrimSpace(strings.TrimSpace(hs.Street) + " " + strings.TrimSpace(hs.HouseNumber))
+}
+
+func parseInt32(s string, def int32) int32 {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return def
+	}
+	return int32(n)
+}
