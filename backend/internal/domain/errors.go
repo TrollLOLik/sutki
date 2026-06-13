@@ -13,6 +13,8 @@ var (
 	ErrCodeExpired = errors.New("code expired")
 	// ErrTooManyAttempts is returned when a code has been guessed too many times.
 	ErrTooManyAttempts = errors.New("too many attempts")
+	// ErrCodeRequestTooSoon is returned when a code is re-requested within the cooldown.
+	ErrCodeRequestTooSoon = errors.New("code requested too soon")
 	// ErrTokenInvalid is returned for an invalid/expired/revoked refresh token.
 	ErrTokenInvalid = errors.New("invalid token")
 	// ErrInvalidEmail is returned when an email fails validation.

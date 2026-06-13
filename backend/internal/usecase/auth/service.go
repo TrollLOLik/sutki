@@ -20,8 +20,10 @@ import (
 )
 
 const (
-	codeTTL     = 10 * time.Minute
-	maxAttempts = 5
+	codeTTL = 10 * time.Minute
+	// resendCooldown throttles how often a new code may be requested per email.
+	resendCooldown = 60 * time.Second
+	maxAttempts    = 5
 )
 
 // Config tunes the auth service.
@@ -89,6 +91,20 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 		return RequestCodeResult{}, err
 	}
 
+	// Throttle: reject if a code was issued for this email within the cooldown.
+	// This prevents invalidating a victim's pending code and (once SMTP is wired)
+	// flooding their inbox.
+	switch existing, err := s.codes.Get(ctx, email); {
+	case err == nil:
+		if s.now().Before(existing.CreatedAt.Add(resendCooldown)) {
+			return RequestCodeResult{}, domain.ErrCodeRequestTooSoon
+		}
+	case errors.Is(err, domain.ErrNotFound):
+		// No prior code for this email: proceed.
+	default:
+		return RequestCodeResult{}, err
+	}
+
 	code, err := generateCode()
 	if err != nil {
 		return RequestCodeResult{}, err
@@ -103,7 +119,10 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	}
 
 	// No email/SMS provider yet: log the code so it can be retrieved in dev.
-	log.Printf("auth: login code for %s is %s (expires %s)", email, code, expiresAt.Format(time.RFC3339))
+	// Gated by exposeCode so the plaintext code never reaches production logs.
+	if s.exposeCode {
+		log.Printf("auth: login code for %s is %s (expires %s)", email, code, expiresAt.Format(time.RFC3339))
+	}
 
 	res := RequestCodeResult{ExpiresIn: int64(codeTTL.Seconds())}
 	if s.exposeCode {
@@ -189,9 +208,19 @@ func (s *Service) GetUser(ctx context.Context, id int32) (domain.User, error) {
 	return s.users.GetByID(ctx, id)
 }
 
-// UpdateProfile updates the mutable profile fields for a user.
-func (s *Service) UpdateProfile(ctx context.Context, id int32, name, phone, city string) (domain.User, error) {
-	return s.users.UpdateProfile(ctx, id, strings.TrimSpace(name), strings.TrimSpace(phone), strings.TrimSpace(city))
+// UpdateProfile updates the provided profile fields for a user. nil fields are
+// left unchanged (PATCH semantics).
+func (s *Service) UpdateProfile(ctx context.Context, id int32, name, phone, city *string) (domain.User, error) {
+	return s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(phone), trimPtr(city))
+}
+
+// trimPtr trims a non-nil string pointer in place, leaving nil pointers as-is.
+func trimPtr(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*s)
+	return &t
 }
 
 func (s *Service) issueTokens(ctx context.Context, user domain.User) (AuthResult, error) {
@@ -220,10 +249,13 @@ func normalizeEmail(raw string) (string, error) {
 	if email == "" {
 		return "", domain.ErrInvalidEmail
 	}
-	if _, err := mail.ParseAddress(email); err != nil {
+	// mail.ParseAddress accepts RFC 5322 forms like `"Name" <a@b.com>`; take the
+	// bare address so the stored key/lookup is always a plain email.
+	addr, err := mail.ParseAddress(email)
+	if err != nil {
 		return "", domain.ErrInvalidEmail
 	}
-	return email, nil
+	return addr.Address, nil
 }
 
 func generateCode() (string, error) {

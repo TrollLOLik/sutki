@@ -157,10 +157,12 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	// Pointer fields distinguish "omitted" (nil, left unchanged) from "set to
+	// empty" so PATCH does not clobber fields the client didn't send.
 	var body struct {
-		Name  string `json:"name"`
-		Phone string `json:"phone"`
-		City  string `json:"city"`
+		Name  *string `json:"name"`
+		Phone *string `json:"phone"`
+		City  *string `json:"city"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -187,6 +189,8 @@ func writeAuthError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "code expired")
 	case errors.Is(err, domain.ErrTooManyAttempts):
 		writeError(w, http.StatusTooManyRequests, "too many attempts")
+	case errors.Is(err, domain.ErrCodeRequestTooSoon):
+		writeError(w, http.StatusTooManyRequests, "please wait before requesting a new code")
 	case errors.Is(err, domain.ErrTokenInvalid):
 		writeError(w, http.StatusUnauthorized, "invalid token")
 	default:

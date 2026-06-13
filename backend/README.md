@@ -66,6 +66,7 @@ make run           # start the API on :8080
 1. `POST /auth/email/request` `{ "email": "a@b.ru" }` — generates a 6-digit
    code, bcrypt-hashes it, stores it with a 10-minute TTL. No SMTP yet: when
    `AUTH_EXPOSE_CODE=true` (dev), the code is logged and returned as `dev_code`.
+   Re-requesting within 60s is rejected with `429` (resend cooldown).
 2. `POST /auth/email/verify` `{ "email": "a@b.ru", "code": "123456" }` —
    verifies (max 5 attempts), upserts the user by email, returns
    `{ token_type, access_token, refresh_token, expires_in, user }`.
@@ -87,4 +88,4 @@ their SHA-256 hash is stored. VK ID and phone (Voice OTP) login are deferred.
 | `JWT_SECRET`     | empty                    | HS256 signing secret; random ephemeral if empty (dev) |
 | `ACCESS_TOKEN_TTL`  | `15m`                 | Access token lifetime (Go duration)    |
 | `REFRESH_TOKEN_TTL` | `720h`                | Refresh token lifetime (Go duration)   |
-| `AUTH_EXPOSE_CODE`  | `true`                | Dev only: return login code in response |
+| `AUTH_EXPOSE_CODE`  | `false`               | Dev only: log + return login code in response. Off by default; `.env.example` enables it for local dev |

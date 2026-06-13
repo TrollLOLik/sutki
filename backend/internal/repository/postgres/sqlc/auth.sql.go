@@ -206,16 +206,19 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, tokenHash string) erro
 
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE "user"
-SET name = $2, phone = $3, city = $4, updated_at = now()
-WHERE id = $1 AND deleted = false
+SET name = COALESCE($1, name),
+    phone = COALESCE($2, phone),
+    city = COALESCE($3, city),
+    updated_at = now()
+WHERE id = $4 AND deleted = false
 RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles
 `
 
 type UpdateUserProfileParams struct {
-	ID    int32
 	Name  *string
 	Phone *string
 	City  *string
+	ID    int32
 }
 
 type UpdateUserProfileRow struct {
@@ -232,10 +235,10 @@ type UpdateUserProfileRow struct {
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
 	row := q.db.QueryRow(ctx, updateUserProfile,
-		arg.ID,
 		arg.Name,
 		arg.Phone,
 		arg.City,
+		arg.ID,
 	)
 	var i UpdateUserProfileRow
 	err := row.Scan(
