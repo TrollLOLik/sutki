@@ -19,7 +19,7 @@ export default function WelcomeScreen() {
       </View>
 
       <View className="gap-3 pb-6">
-        <Button label="Войти по номеру телефона" onPress={() => router.push('/phone')} />
+        <Button label="Войти по email" onPress={() => router.push('/email')} />
         <Button label="Продолжить через VK ID" variant="secondary" onPress={() => {}} />
       </View>
     </ScreenContainer>

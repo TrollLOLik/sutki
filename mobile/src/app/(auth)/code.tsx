@@ -3,15 +3,22 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Button, ScreenContainer } from '@/components/ui';
+import { requestEmailCode, useVerifyEmailCode } from '@/lib/api/auth';
+import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
+import { useSessionStore } from '@/store/session';
 
-const CODE_LENGTH = 4;
+const CODE_LENGTH = 6;
+const RESEND_SECONDS = 60;
 
 export default function CodeScreen() {
-  const { phone } = useLocalSearchParams<{ phone?: string }>();
-  const [code, setCode] = useState('');
-  const [seconds, setSeconds] = useState(45);
+  const { email, devCode } = useLocalSearchParams<{ email?: string; devCode?: string }>();
+  const [code, setCode] = useState(() => (devCode ?? '').replace(/\D/g, '').slice(0, CODE_LENGTH));
+  const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const verify = useVerifyEmailCode();
+  const beginSession = useSessionStore((s) => s.beginSession);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -19,8 +26,35 @@ export default function CodeScreen() {
     return () => clearInterval(id);
   }, [seconds]);
 
-  const onConfirm = () => {
-    router.push({ pathname: '/profile-setup', params: { phone } });
+  const onConfirm = async () => {
+    if (!email || code.length < CODE_LENGTH) return;
+    setError(null);
+    try {
+      const res = await verify.mutateAsync({ email, code });
+      const needsProfile = await beginSession(
+        { accessToken: res.access_token, refreshToken: res.refresh_token },
+        res.user,
+      );
+      // New user → finish onboarding; returning user → root guard swaps stacks.
+      if (needsProfile) router.replace('/profile-setup');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось проверить код. Попробуйте снова.');
+    }
+  };
+
+  const onResend = async () => {
+    if (!email || seconds > 0) return;
+    setError(null);
+    try {
+      await requestEmailCode(email);
+      setSeconds(RESEND_SECONDS);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 429
+          ? 'Слишком частый запрос. Подождите минуту.'
+          : 'Не удалось отправить код повторно.',
+      );
+    }
   };
 
   return (
@@ -29,22 +63,24 @@ export default function CodeScreen() {
         <View className="gap-2">
           <Text className="text-2xl font-bold text-ink">Введите код</Text>
           <Text className="text-base text-ink-secondary">
-            Мы отправили код на номер {phone ? `+7${phone.replace(/\D/g, '').slice(-10)}` : ''}
+            Мы отправили код на {email ?? ''}
           </Text>
         </View>
 
-        <Pressable className="flex-row justify-center gap-3" onPress={() => inputRef.current?.focus()}>
+        <Pressable className="flex-row justify-center gap-2" onPress={() => inputRef.current?.focus()}>
           {Array.from({ length: CODE_LENGTH }).map((_, i) => (
             <View
               key={i}
               className={cn(
-                'h-14 w-14 items-center justify-center rounded-field border',
+                'h-14 flex-1 items-center justify-center rounded-field border',
                 code.length === i ? 'border-primary' : 'border-line',
               )}>
               <Text className="text-2xl font-bold text-ink">{code[i] ?? ''}</Text>
             </View>
           ))}
         </Pressable>
+
+        {error ? <Text className="text-center text-sm text-danger">{error}</Text> : null}
 
         <TextInput
           ref={inputRef}
@@ -57,7 +93,7 @@ export default function CodeScreen() {
           className="absolute h-px w-px opacity-0"
         />
 
-        <Pressable disabled={seconds > 0} onPress={() => setSeconds(45)}>
+        <Pressable disabled={seconds > 0} onPress={onResend}>
           <Text className={cn('text-center text-base', seconds > 0 ? 'text-ink-muted' : 'text-primary')}>
             {seconds > 0
               ? `Отправить код повторно через 00:${String(seconds).padStart(2, '0')}`
@@ -67,7 +103,12 @@ export default function CodeScreen() {
       </View>
 
       <View className="pb-6">
-        <Button label="Подтвердить" disabled={code.length < CODE_LENGTH} onPress={onConfirm} />
+        <Button
+          label="Подтвердить"
+          loading={verify.isPending}
+          disabled={code.length < CODE_LENGTH}
+          onPress={onConfirm}
+        />
       </View>
     </ScreenContainer>
   );

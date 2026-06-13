@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useLocalSearchParams } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { Text, View } from 'react-native';
 import { z } from 'zod';
 
 import { Button, Input, ScreenContainer } from '@/components/ui';
+import { useUpdateMe } from '@/lib/api/auth';
+import { ApiError } from '@/lib/api/client';
 import { useSessionStore } from '@/store/session';
 
 const schema = z.object({
@@ -15,21 +16,25 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function ProfileSetupScreen() {
-  const { phone } = useLocalSearchParams<{ phone?: string }>();
-  const signIn = useSessionStore((s) => s.signIn);
+  const completeOnboarding = useSessionStore((s) => s.completeOnboarding);
+  const updateMe = useUpdateMe();
 
   const {
     control,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { name: '', city: '' } });
 
   const onSubmit = handleSubmit(async ({ name, city }) => {
-    // Phase 0: stubbed tokens until the Go auth endpoint is wired up.
-    await signIn(
-      { accessToken: 'dev-access-token', refreshToken: 'dev-refresh-token' },
-      { id: 'me', name, phone: phone ?? '', city },
-    );
+    try {
+      const user = await updateMe.mutateAsync({ name, city });
+      completeOnboarding(user);
+    } catch (err) {
+      setError('name', {
+        message: err instanceof ApiError ? err.message : 'Не удалось сохранить профиль.',
+      });
+    }
   });
 
   return (

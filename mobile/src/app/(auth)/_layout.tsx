@@ -17,7 +17,7 @@ export default function AuthLayout() {
         contentStyle: { backgroundColor: palette.surface },
       }}>
       <Stack.Screen name="welcome" />
-      <Stack.Screen name="phone" options={{ headerShown: true, title: '' }} />
+      <Stack.Screen name="email" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="code" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="profile-setup" options={{ headerShown: true, title: 'Создание профиля' }} />
     </Stack>
