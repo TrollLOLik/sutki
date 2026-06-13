@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sutki-pg
+    environment:
+      POSTGRES_USER: sutki
+      POSTGRES_PASSWORD: sutki
+      POSTGRES_DB: sutki
+    ports:
+      - "5432:5432"
+    volumes:
+      - sutki_pg_data:/var/lib/postgresql/data
+      # Baseline schema is applied automatically on first container start.
+      - ./db/baseline/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sutki -d sutki"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sutki_pg_data:

@@ -1,0 +1,10 @@
+# Local env
+.env
+
+# Build output
+/bin/
+*.exe
+
+# Local data dumps (never commit production data / PII)
+*.dump
+db/dump/
