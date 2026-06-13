@@ -35,6 +35,7 @@ export default function RootLayout() {
             <Stack.Protected guard={authed}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
+              <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
               <Stack.Screen name="booking/[id]" />
             </Stack.Protected>
             <Stack.Protected guard={!authed}>
