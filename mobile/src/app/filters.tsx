@@ -44,8 +44,8 @@ export default function FiltersScreen() {
       rooms,
       amenities,
       guests,
-      priceMin: priceMin ? Number(priceMin) : null,
-      priceMax: priceMax ? Number(priceMax) : null,
+      priceMin: priceMin !== '' ? Number(priceMin) : null,
+      priceMax: priceMax !== '' ? Number(priceMax) : null,
     });
     router.back();
   };
