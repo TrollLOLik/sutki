@@ -91,7 +91,7 @@ func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
@@ -173,7 +173,7 @@ func parseInt32(s string, def int32) int32 {
 	if s == "" {
 		return def
 	}
-	n, err := strconv.Atoi(s)
+	n, err := strconv.ParseInt(s, 10, 32)
 	if err != nil {
 		return def
 	}
