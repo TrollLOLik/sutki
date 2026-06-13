@@ -12,6 +12,11 @@ interface Tokens {
   refreshToken: string;
 }
 
+/** A profile is incomplete until the user has set a name. */
+function needsOnboarding(user: User): boolean {
+  return user.name.trim() === '';
+}
+
 interface SessionState {
   status: AuthStatus;
   accessToken: string | null;
@@ -21,9 +26,9 @@ interface SessionState {
   hydrate: () => Promise<void>;
   /**
    * Persist tokens after a successful code verification. Returns true when the
-   * user still needs to complete onboarding (no name yet) — the caller then
-   * routes to profile-setup while the session stays in the `onboarding` state
-   * so the (auth) stack remains mounted.
+   * user still needs to complete onboarding (no name yet). The status is set to
+   * `onboarding` or `authenticated` accordingly; the root layout guard then
+   * mounts profile-setup or the tabs — no manual navigation needed.
    */
   beginSession: (tokens: Tokens, user: User) => Promise<boolean>;
   /** Finish onboarding (profile created) → authenticated. */
@@ -64,7 +69,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ accessToken, refreshToken });
     try {
       const user = await fetchMe();
-      set({ user, status: 'authenticated' });
+      set({ user, status: needsOnboarding(user) ? 'onboarding' : 'authenticated' });
       return;
     } catch (err) {
       // Access token expired/invalid: attempt a one-shot refresh.
@@ -76,7 +81,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             accessToken: res.access_token,
             refreshToken: res.refresh_token,
             user: res.user,
-            status: 'authenticated',
+            status: needsOnboarding(res.user) ? 'onboarding' : 'authenticated',
           });
           return;
         } catch {
@@ -90,7 +95,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   beginSession: async ({ accessToken, refreshToken }, user) => {
     await persistTokens(accessToken, refreshToken);
-    const needsProfile = user.name.trim() === '';
+    const needsProfile = needsOnboarding(user);
     set({
       accessToken,
       refreshToken,

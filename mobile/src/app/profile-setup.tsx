@@ -40,7 +40,10 @@ export default function ProfileSetupScreen() {
   return (
     <ScreenContainer centered>
       <View className="flex-1 gap-4 pt-6">
-        <Text className="text-base text-ink-secondary">Расскажите немного о себе.</Text>
+        <View className="gap-2">
+          <Text className="text-2xl font-bold text-ink">Создание профиля</Text>
+          <Text className="text-base text-ink-secondary">Расскажите немного о себе.</Text>
+        </View>
 
         <Controller
           control={control}

@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
@@ -31,12 +31,12 @@ export default function CodeScreen() {
     setError(null);
     try {
       const res = await verify.mutateAsync({ email, code });
-      const needsProfile = await beginSession(
+      // beginSession sets status to 'onboarding' (incomplete profile) or
+      // 'authenticated'; the root layout guard swaps stacks accordingly.
+      await beginSession(
         { accessToken: res.access_token, refreshToken: res.refresh_token },
         res.user,
       );
-      // New user → finish onboarding; returning user → root guard swaps stacks.
-      if (needsProfile) router.replace('/profile-setup');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось проверить код. Попробуйте снова.');
     }
@@ -96,7 +96,7 @@ export default function CodeScreen() {
         <Pressable disabled={seconds > 0} onPress={onResend}>
           <Text className={cn('text-center text-base', seconds > 0 ? 'text-ink-muted' : 'text-primary')}>
             {seconds > 0
-              ? `Отправить код повторно через 00:${String(seconds).padStart(2, '0')}`
+              ? `Отправить код повторно через ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
               : 'Отправить код повторно'}
           </Text>
         </Pressable>
