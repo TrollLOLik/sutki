@@ -11,13 +11,68 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countActiveHouses = `-- name: CountActiveHouses :one
-SELECT count(*) FROM house
-WHERE deleted = false AND status = 'active'
+const countHousesFiltered = `-- name: CountHousesFiltered :one
+SELECT count(*)
+FROM house h
+WHERE h.deleted = false
+  AND h.status = 'active'
+  AND (
+    $1::text IS NULL
+    OR h.street ILIKE '%' || $1 || '%'
+    OR h.house_number ILIKE '%' || $1 || '%'
+    OR h.description ILIKE '%' || $1 || '%'
+    OR h.country ILIKE '%' || $1 || '%'
+  )
+  AND ($2::text IS NULL OR h.country = $2)
+  AND ($3::int IS NULL OR h.price >= $3)
+  AND ($4::int IS NULL OR h.price <= $4)
+  AND (
+    (cardinality($5::int[]) = 0 AND $6::int IS NULL)
+    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($5::int[])
+    OR (
+      $6::int IS NOT NULL
+      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $6
+    )
+  )
+  AND (
+    cardinality($7::int[]) = 0
+    OR (
+      SELECT count(DISTINCT hhs.service_id)
+      FROM house_house_service hhs
+      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($7::int[])
+    ) = cardinality($7::int[])
+  )
+  AND (
+    $8::int IS NULL
+    OR EXISTS (
+      SELECT 1 FROM house_house_category hhc
+      WHERE hhc.house_id = h.id AND hhc.house_category_id = $8
+    )
+  )
 `
 
-func (q *Queries) CountActiveHouses(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveHouses)
+type CountHousesFilteredParams struct {
+	Query    *string
+	City     *string
+	PriceMin *int32
+	PriceMax *int32
+	Rooms    []int32
+	RoomsMin *int32
+	Services []int32
+	Category *int32
+}
+
+func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countHousesFiltered,
+		arg.Query,
+		arg.City,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.Rooms,
+		arg.RoomsMin,
+		arg.Services,
+		arg.Category,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -88,81 +143,60 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 	return i, err
 }
 
-const listActiveHouses = `-- name: ListActiveHouses :many
-SELECT
-  h.id,
-  h.street,
-  h.house_number,
-  h.description,
-  h.price,
-  h.count_room,
-  h.area,
-  h.country,
-  h.status,
-  h.lat,
-  h.lng,
-  h.views,
-  h.created_at,
-  COALESCE((
-    SELECT f.path
-    FROM file f
-    WHERE f.house_id = h.id AND f.deleted = false
-    ORDER BY f.position
-    LIMIT 1
-  ), '')::text AS cover_path
-FROM house h
-WHERE h.deleted = false AND h.status = 'active'
-ORDER BY h.date_top DESC NULLS LAST, h.created_at DESC
-LIMIT $1 OFFSET $2
+const listAllCategories = `-- name: ListAllCategories :many
+SELECT id, name
+FROM house_category
+WHERE deleted = false
+ORDER BY name
 `
 
-type ListActiveHousesParams struct {
-	Limit  int32
-	Offset int32
+type ListAllCategoriesRow struct {
+	ID   int32
+	Name string
 }
 
-type ListActiveHousesRow struct {
-	ID          int32
-	Street      string
-	HouseNumber string
-	Description string
-	Price       int32
-	CountRoom   string
-	Area        int32
-	Country     string
-	Status      string
-	Lat         *float64
-	Lng         *float64
-	Views       int32
-	CreatedAt   pgtype.Timestamp
-	CoverPath   string
-}
-
-func (q *Queries) ListActiveHouses(ctx context.Context, arg ListActiveHousesParams) ([]ListActiveHousesRow, error) {
-	rows, err := q.db.Query(ctx, listActiveHouses, arg.Limit, arg.Offset)
+func (q *Queries) ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error) {
+	rows, err := q.db.Query(ctx, listAllCategories)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListActiveHousesRow
+	var items []ListAllCategoriesRow
 	for rows.Next() {
-		var i ListActiveHousesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Street,
-			&i.HouseNumber,
-			&i.Description,
-			&i.Price,
-			&i.CountRoom,
-			&i.Area,
-			&i.Country,
-			&i.Status,
-			&i.Lat,
-			&i.Lng,
-			&i.Views,
-			&i.CreatedAt,
-			&i.CoverPath,
-		); err != nil {
+		var i ListAllCategoriesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllServices = `-- name: ListAllServices :many
+SELECT id, name
+FROM service
+WHERE deleted = false
+ORDER BY name
+`
+
+type ListAllServicesRow struct {
+	ID   int32
+	Name string
+}
+
+func (q *Queries) ListAllServices(ctx context.Context) ([]ListAllServicesRow, error) {
+	rows, err := q.db.Query(ctx, listAllServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllServicesRow
+	for rows.Next() {
+		var i ListAllServicesRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -268,6 +302,151 @@ func (q *Queries) ListHouseServices(ctx context.Context, houseID int32) ([]ListH
 	for rows.Next() {
 		var i ListHouseServicesRow
 		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHousesFiltered = `-- name: ListHousesFiltered :many
+SELECT
+  h.id,
+  h.street,
+  h.house_number,
+  h.description,
+  h.price,
+  h.count_room,
+  h.area,
+  h.country,
+  h.status,
+  h.lat,
+  h.lng,
+  h.views,
+  h.created_at,
+  COALESCE((
+    SELECT f.path
+    FROM file f
+    WHERE f.house_id = h.id AND f.deleted = false
+    ORDER BY f.position
+    LIMIT 1
+  ), '')::text AS cover_path
+FROM house h
+WHERE h.deleted = false
+  AND h.status = 'active'
+  AND (
+    $1::text IS NULL
+    OR h.street ILIKE '%' || $1 || '%'
+    OR h.house_number ILIKE '%' || $1 || '%'
+    OR h.description ILIKE '%' || $1 || '%'
+    OR h.country ILIKE '%' || $1 || '%'
+  )
+  AND ($2::text IS NULL OR h.country = $2)
+  AND ($3::int IS NULL OR h.price >= $3)
+  AND ($4::int IS NULL OR h.price <= $4)
+  AND (
+    (cardinality($5::int[]) = 0 AND $6::int IS NULL)
+    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($5::int[])
+    OR (
+      $6::int IS NOT NULL
+      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $6
+    )
+  )
+  AND (
+    cardinality($7::int[]) = 0
+    OR (
+      SELECT count(DISTINCT hhs.service_id)
+      FROM house_house_service hhs
+      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($7::int[])
+    ) = cardinality($7::int[])
+  )
+  AND (
+    $8::int IS NULL
+    OR EXISTS (
+      SELECT 1 FROM house_house_category hhc
+      WHERE hhc.house_id = h.id AND hhc.house_category_id = $8
+    )
+  )
+ORDER BY
+  CASE WHEN $9::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $9::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $9::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  h.date_top DESC NULLS LAST,
+  h.created_at DESC
+LIMIT $11 OFFSET $10
+`
+
+type ListHousesFilteredParams struct {
+	Query        *string
+	City         *string
+	PriceMin     *int32
+	PriceMax     *int32
+	Rooms        []int32
+	RoomsMin     *int32
+	Services     []int32
+	Category     *int32
+	Sort         string
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListHousesFilteredRow struct {
+	ID          int32
+	Street      string
+	HouseNumber string
+	Description string
+	Price       int32
+	CountRoom   string
+	Area        int32
+	Country     string
+	Status      string
+	Lat         *float64
+	Lng         *float64
+	Views       int32
+	CreatedAt   pgtype.Timestamp
+	CoverPath   string
+}
+
+func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error) {
+	rows, err := q.db.Query(ctx, listHousesFiltered,
+		arg.Query,
+		arg.City,
+		arg.PriceMin,
+		arg.PriceMax,
+		arg.Rooms,
+		arg.RoomsMin,
+		arg.Services,
+		arg.Category,
+		arg.Sort,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHousesFilteredRow
+	for rows.Next() {
+		var i ListHousesFilteredRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Street,
+			&i.HouseNumber,
+			&i.Description,
+			&i.Price,
+			&i.CountRoom,
+			&i.Area,
+			&i.Country,
+			&i.Status,
+			&i.Lat,
+			&i.Lng,
+			&i.Views,
+			&i.CreatedAt,
+			&i.CoverPath,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

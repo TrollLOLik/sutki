@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -26,6 +27,26 @@ func NewListingHandler(svc *listing.Service, mediaBaseURL string) *ListingHandle
 func (h *ListingHandler) Routes(r chi.Router) {
 	r.Get("/", h.list)
 	r.Get("/{id}", h.get)
+}
+
+// ListServices returns the amenity catalog used to populate the `services` filter.
+func (h *ListingHandler) ListServices(w http.ResponseWriter, r *http.Request) {
+	refs, err := h.svc.Services(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, refResponse{Items: toRefDTOs(refs)})
+}
+
+// ListCategories returns the category catalog used to populate the `category` filter.
+func (h *ListingHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
+	refs, err := h.svc.Categories(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, refResponse{Items: toRefDTOs(refs)})
 }
 
 type refDTO struct {
@@ -68,11 +89,18 @@ type listResponse struct {
 	Offset int32            `json:"offset"`
 }
 
-func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
-	limit := parseInt32(r.URL.Query().Get("limit"), 0)
-	offset := parseInt32(r.URL.Query().Get("offset"), 0)
+type refResponse struct {
+	Items []refDTO `json:"items"`
+}
 
-	res, err := h.svc.List(r.Context(), limit, offset)
+func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
+	filter, msg := parseListFilter(r.URL.Query())
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	res, err := h.svc.List(r.Context(), filter)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -130,14 +158,6 @@ func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
 	for _, p := range hs.Photos {
 		photos = append(photos, photoDTO{ID: p.ID, URL: h.mediaURL(p.Path), Position: p.Position})
 	}
-	services := make([]refDTO, 0, len(hs.Services))
-	for _, s := range hs.Services {
-		services = append(services, refDTO{ID: s.ID, Name: s.Name})
-	}
-	categories := make([]refDTO, 0, len(hs.Categories))
-	for _, c := range hs.Categories {
-		categories = append(categories, refDTO{ID: c.ID, Name: c.Name})
-	}
 	card := h.cardDTO(hs)
 	if card.CoverURL == "" && len(photos) > 0 {
 		card.CoverURL = photos[0].URL
@@ -146,9 +166,17 @@ func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
 		listingCardDTO: card,
 		NumberRoom:     hs.NumberRoom,
 		Photos:         photos,
-		Services:       services,
-		Categories:     categories,
+		Services:       toRefDTOs(hs.Services),
+		Categories:     toRefDTOs(hs.Categories),
 	}
+}
+
+func toRefDTOs(refs []domain.Ref) []refDTO {
+	out := make([]refDTO, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, refDTO{ID: ref.ID, Name: ref.Name})
+	}
+	return out
 }
 
 // mediaURL turns a stored relative path into an absolute URL using MEDIA_BASE_URL.
@@ -178,4 +206,95 @@ func parseInt32(s string, def int32) int32 {
 		return def
 	}
 	return int32(n)
+}
+
+var allowedSorts = map[string]domain.ListSort{
+	"":           domain.SortDefault,
+	"price_asc":  domain.SortPriceAsc,
+	"price_desc": domain.SortPriceDesc,
+	"newest":     domain.SortNewest,
+}
+
+// parseListFilter reads listing filter query params. It returns the built
+// filter, or a non-empty error message describing the first invalid param.
+func parseListFilter(q url.Values) (domain.ListFilter, string) {
+	f := domain.ListFilter{
+		Limit:  parseInt32(q.Get("limit"), 0),
+		Offset: parseInt32(q.Get("offset"), 0),
+	}
+
+	if v := strings.TrimSpace(q.Get("q")); v != "" {
+		f.Query = &v
+	}
+	if v := strings.TrimSpace(q.Get("city")); v != "" {
+		f.City = &v
+	}
+
+	for _, p := range []struct {
+		key string
+		dst **int32
+	}{
+		{"price_min", &f.PriceMin},
+		{"price_max", &f.PriceMax},
+		{"rooms_min", &f.RoomsMin},
+		{"category", &f.Category},
+	} {
+		v, ok := parseOptNonNegInt32(q.Get(p.key))
+		if !ok {
+			return domain.ListFilter{}, "invalid " + p.key
+		}
+		*p.dst = v
+	}
+
+	rooms, ok := parseNonNegInt32CSV(q.Get("rooms"))
+	if !ok {
+		return domain.ListFilter{}, "invalid rooms"
+	}
+	f.Rooms = rooms
+
+	services, ok := parseNonNegInt32CSV(q.Get("services"))
+	if !ok {
+		return domain.ListFilter{}, "invalid services"
+	}
+	f.Services = services
+
+	sort, ok := allowedSorts[q.Get("sort")]
+	if !ok {
+		return domain.ListFilter{}, "invalid sort"
+	}
+	f.Sort = sort
+
+	return f, ""
+}
+
+// parseOptNonNegInt32 parses an optional non-negative int32. Empty → (nil, true);
+// a valid value → (&v, true); anything else → (nil, false).
+func parseOptNonNegInt32(s string) (*int32, bool) {
+	if s == "" {
+		return nil, true
+	}
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil || n < 0 {
+		return nil, false
+	}
+	v := int32(n)
+	return &v, true
+}
+
+// parseNonNegInt32CSV parses a comma-separated list of non-negative int32 values.
+// Empty → (nil, true); any invalid element → (nil, false).
+func parseNonNegInt32CSV(s string) ([]int32, bool) {
+	if s == "" {
+		return nil, true
+	}
+	parts := strings.Split(s, ",")
+	out := make([]int32, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.ParseInt(strings.TrimSpace(p), 10, 32)
+		if err != nil || n < 0 {
+			return nil, false
+		}
+		out = append(out, int32(n))
+	}
+	return out, true
 }

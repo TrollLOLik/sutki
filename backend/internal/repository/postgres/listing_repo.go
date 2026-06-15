@@ -19,8 +19,29 @@ func NewListingRepo(q *sqlc.Queries) *ListingRepo {
 	return &ListingRepo{q: q}
 }
 
-func (r *ListingRepo) ListActive(ctx context.Context, limit, offset int32) ([]domain.House, error) {
-	rows, err := r.q.ListActiveHouses(ctx, sqlc.ListActiveHousesParams{Limit: limit, Offset: offset})
+// nonNil returns an empty (non-nil) slice so it encodes as a PostgreSQL
+// empty array `{}` rather than NULL, keeping `cardinality(...) = 0` valid.
+func nonNil(ids []int32) []int32 {
+	if ids == nil {
+		return []int32{}
+	}
+	return ids
+}
+
+func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]domain.House, error) {
+	rows, err := r.q.ListHousesFiltered(ctx, sqlc.ListHousesFilteredParams{
+		Query:        filter.Query,
+		City:         filter.City,
+		PriceMin:     filter.PriceMin,
+		PriceMax:     filter.PriceMax,
+		Rooms:        nonNil(filter.Rooms),
+		RoomsMin:     filter.RoomsMin,
+		Services:     nonNil(filter.Services),
+		Category:     filter.Category,
+		Sort:         string(filter.Sort),
+		ResultLimit:  filter.Limit,
+		ResultOffset: filter.Offset,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -46,8 +67,17 @@ func (r *ListingRepo) ListActive(ctx context.Context, limit, offset int32) ([]do
 	return houses, nil
 }
 
-func (r *ListingRepo) CountActive(ctx context.Context) (int64, error) {
-	return r.q.CountActiveHouses(ctx)
+func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int64, error) {
+	return r.q.CountHousesFiltered(ctx, sqlc.CountHousesFilteredParams{
+		Query:    filter.Query,
+		City:     filter.City,
+		PriceMin: filter.PriceMin,
+		PriceMax: filter.PriceMax,
+		Rooms:    nonNil(filter.Rooms),
+		RoomsMin: filter.RoomsMin,
+		Services: nonNil(filter.Services),
+		Category: filter.Category,
+	})
 }
 
 func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, error) {
@@ -107,6 +137,30 @@ func (r *ListingRepo) ListServices(ctx context.Context, houseID int32) ([]domain
 
 func (r *ListingRepo) ListCategories(ctx context.Context, houseID int32) ([]domain.Ref, error) {
 	rows, err := r.q.ListHouseCategories(ctx, houseID)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]domain.Ref, 0, len(rows))
+	for _, row := range rows {
+		refs = append(refs, domain.Ref{ID: row.ID, Name: row.Name})
+	}
+	return refs, nil
+}
+
+func (r *ListingRepo) AllServices(ctx context.Context) ([]domain.Ref, error) {
+	rows, err := r.q.ListAllServices(ctx)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]domain.Ref, 0, len(rows))
+	for _, row := range rows {
+		refs = append(refs, domain.Ref{ID: row.ID, Name: row.Name})
+	}
+	return refs, nil
+}
+
+func (r *ListingRepo) AllCategories(ctx context.Context) ([]domain.Ref, error) {
+	rows, err := r.q.ListAllCategories(ctx)
 	if err != nil {
 		return nil, err
 	}
