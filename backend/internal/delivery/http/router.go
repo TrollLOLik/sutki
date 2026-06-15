@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, authSvc *auth.Service) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, authSvc *auth.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -36,6 +36,9 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Patch("/me", authHandler.UpdateMe)
 			r.Post("/listings/{id}/requests", bookingHandler.Create)
 			r.Route("/requests", bookingHandler.Routes)
+			r.Post("/listings/{id}/favorite", favoriteHandler.Add)
+			r.Delete("/listings/{id}/favorite", favoriteHandler.Remove)
+			r.Route("/favorites", favoriteHandler.Routes)
 		})
 	})
 

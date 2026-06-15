@@ -31,6 +31,16 @@ type BookingRepository interface {
 	Cancel(ctx context.Context, id int32) (Booking, error)
 }
 
+// FavoriteRepository abstracts persistence for a user's favorite listings.
+type FavoriteRepository interface {
+	HouseExists(ctx context.Context, houseID int32) (bool, error)
+	Add(ctx context.Context, userID, houseID int32) error
+	Remove(ctx context.Context, userID, houseID int32) error
+	ListHouses(ctx context.Context, userID, limit, offset int32) ([]House, error)
+	CountHouses(ctx context.Context, userID int32) (int64, error)
+	ListIDs(ctx context.Context, userID int32) ([]int32, error)
+}
+
 // UserRepository abstracts persistence for application accounts.
 type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (User, error)

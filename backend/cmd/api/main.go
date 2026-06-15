@@ -19,6 +19,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 )
 
@@ -61,9 +62,13 @@ func main() {
 	bookingSvc := booking.New(bookingRepo)
 	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
 
+	favoriteRepo := postgres.NewFavoriteRepo(queries)
+	favoriteSvc := favorite.New(favoriteRepo)
+	favoriteHandler := httpdelivery.NewFavoriteHandler(favoriteSvc, cfg.MediaBaseURL)
+
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, authSvc),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, authSvc),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}
