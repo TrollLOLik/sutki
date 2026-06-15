@@ -1,0 +1,62 @@
+/**
+ * Booking types mirror the backend DTOs (snake_case kept 1:1 with the wire
+ * format). See backend/internal/delivery/http/booking_handler.go.
+ */
+
+/** Legacy `request.status` values used on mobile. */
+export type BookingStatus = 'in_progress' | 'confirmed' | 'cancelled';
+
+/** Brief listing card embedded in booking list/detail responses. */
+export interface BookingHouse {
+  id: number;
+  address: string;
+  city: string;
+  /** Price per night, in rubles. */
+  price: number;
+  cover_url: string;
+}
+
+export interface Booking {
+  id: number;
+  house_id: number;
+  user_id: number;
+  name: string;
+  surname: string;
+  lastname: string;
+  /** Number of guests. */
+  count: number;
+  message: string;
+  phone: string;
+  /** Check-in date, `YYYY-MM-DD`. */
+  start_date: string;
+  /** Check-out date, `YYYY-MM-DD`; null for open-ended legacy rows. */
+  end_date: string | null;
+  status: string;
+  rejection_reason: string;
+  /** RFC3339 timestamp set when an owner confirms; null otherwise. */
+  confirmed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  house?: BookingHouse;
+}
+
+export interface BookingsPage {
+  items: Booking[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Body of POST /api/v1/listings/{id}/requests. */
+export interface CreateBookingBody {
+  count: number;
+  name: string;
+  surname?: string;
+  lastname?: string;
+  phone: string;
+  message?: string;
+  /** `YYYY-MM-DD`. */
+  start_date: string;
+  /** `YYYY-MM-DD`; omit for an open-ended request. */
+  end_date?: string;
+}

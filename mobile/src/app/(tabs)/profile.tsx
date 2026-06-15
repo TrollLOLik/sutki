@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui';
 import { useSessionStore } from '@/store/session';
@@ -19,6 +20,17 @@ export default function ProfileScreen() {
           <Text className="text-xl font-bold text-ink">{user?.name ?? 'Гость'}</Text>
           {user?.phone ? <Text className="text-base text-ink-secondary">{user.phone}</Text> : null}
         </View>
+      </View>
+
+      <View className="mt-8 overflow-hidden rounded-card border border-line">
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/bookings')}
+          className="flex-row items-center gap-3 px-4 py-4 active:bg-surface-muted">
+          <Ionicons name="reader-outline" size={22} color={palette.ink} />
+          <Text className="flex-1 text-base text-ink">Мои брони</Text>
+          <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
+        </Pressable>
       </View>
 
       <View className="mt-auto pb-8">
