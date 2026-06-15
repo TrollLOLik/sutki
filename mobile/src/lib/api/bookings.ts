@@ -11,6 +11,7 @@ export interface ListBookingsParams {
 export const bookingKeys = {
   all: ['bookings'] as const,
   list: (params: ListBookingsParams) => [...bookingKeys.all, 'list', params] as const,
+  incoming: (params: ListBookingsParams) => [...bookingKeys.all, 'incoming', params] as const,
   detail: (id: number) => [...bookingKeys.all, 'detail', id] as const,
 };
 
@@ -32,6 +33,11 @@ export function fetchMyBookings(params: ListBookingsParams = {}): Promise<Bookin
   return api.get<BookingsPage>(`/api/v1/requests${buildQuery(params)}`);
 }
 
+/** Incoming bookings on listings I own. */
+export function fetchIncomingBookings(params: ListBookingsParams = {}): Promise<BookingsPage> {
+  return api.get<BookingsPage>(`/api/v1/requests/incoming${buildQuery(params)}`);
+}
+
 export function fetchBooking(id: number): Promise<Booking> {
   return api.get<Booking>(`/api/v1/requests/${id}`);
 }
@@ -41,10 +47,29 @@ export function cancelBooking(id: number): Promise<Booking> {
   return api.post<Booking>(`/api/v1/requests/${id}/cancel`);
 }
 
+/** Owner confirms a pending booking on their listing. */
+export function confirmBooking(id: number): Promise<Booking> {
+  return api.post<Booking>(`/api/v1/requests/${id}/confirm`);
+}
+
+/** Owner rejects a pending booking; reason is optional. */
+export function rejectBooking(id: number, reason?: string): Promise<Booking> {
+  const trimmed = reason?.trim();
+  return api.post<Booking>(`/api/v1/requests/${id}/reject`, trimmed ? { reason: trimmed } : undefined);
+}
+
 export function useMyBookings(params: ListBookingsParams = {}) {
   return useQuery({
     queryKey: bookingKeys.list(params),
     queryFn: () => fetchMyBookings(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useIncomingBookings(params: ListBookingsParams = {}) {
+  return useQuery({
+    queryKey: bookingKeys.incoming(params),
+    queryFn: () => fetchIncomingBookings(params),
     placeholderData: keepPreviousData,
   });
 }
@@ -74,4 +99,37 @@ export function useCancelBooking() {
       qc.invalidateQueries({ queryKey: bookingKeys.all });
     },
   });
+}
+
+export function useConfirmBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => confirmBooking(id),
+    onSuccess: (booking) => {
+      patchDetail(qc, booking);
+      qc.invalidateQueries({ queryKey: bookingKeys.all });
+    },
+  });
+}
+
+export function useRejectBooking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) => rejectBooking(id, reason),
+    onSuccess: (booking) => {
+      patchDetail(qc, booking);
+      qc.invalidateQueries({ queryKey: bookingKeys.all });
+    },
+  });
+}
+
+/**
+ * Update the cached detail after a status transition. The confirm/reject/cancel
+ * responses omit the house summary (only GET /requests/{id} joins it), so keep
+ * the previously cached house instead of dropping it from the open screen.
+ */
+function patchDetail(qc: ReturnType<typeof useQueryClient>, booking: Booking) {
+  qc.setQueryData<Booking>(bookingKeys.detail(booking.id), (prev) =>
+    prev ? { ...booking, house: booking.house ?? prev.house } : booking,
+  );
 }

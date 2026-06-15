@@ -31,6 +31,14 @@ export default function ProfileScreen() {
           <Text className="flex-1 text-base text-ink">Мои брони</Text>
           <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
         </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/incoming')}
+          className="flex-row items-center gap-3 border-t border-line px-4 py-4 active:bg-surface-muted">
+          <Ionicons name="file-tray-full-outline" size={22} color={palette.ink} />
+          <Text className="flex-1 text-base text-ink">Входящие заявки</Text>
+          <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
+        </Pressable>
       </View>
 
       <View className="mt-auto pb-8">

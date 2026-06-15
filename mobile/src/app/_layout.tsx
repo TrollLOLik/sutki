@@ -37,6 +37,8 @@ export default function RootLayout() {
               <Stack.Screen name="booking/[id]" />
               <Stack.Screen name="bookings/index" />
               <Stack.Screen name="bookings/[id]" />
+              <Stack.Screen name="incoming/index" />
+              <Stack.Screen name="incoming/[id]" />
             </Stack.Protected>
             {/* Tokens are set but the profile is incomplete: the (auth) stack is
                 unmounted and only profile-setup is reachable until onboarding

@@ -9,11 +9,23 @@ import { formatDateRangeRu } from '@/lib/format';
 import { palette } from '@/theme/tokens';
 import type { Booking } from '@/types/booking';
 
-export function BookingCard({ booking, onPress }: { booking: Booking; onPress: () => void }) {
+interface BookingCardProps {
+  booking: Booking;
+  onPress: () => void;
+  /** Owner inbox: lead with the requester's name instead of the listing. */
+  showRequester?: boolean;
+}
+
+export function BookingCard({ booking, onPress, showRequester = false }: BookingCardProps) {
   const status = bookingStatusMeta(booking.status);
   const cover = booking.house?.cover_url;
   const start = parseISO(booking.start_date);
   const end = booking.end_date ? parseISO(booking.end_date) : null;
+
+  const title = showRequester
+    ? booking.name || 'Гость'
+    : (booking.house?.address ?? 'Объявление');
+  const subtitle = showRequester ? booking.house?.address : booking.house?.city;
 
   return (
     <Pressable
@@ -32,10 +44,12 @@ export function BookingCard({ booking, onPress }: { booking: Booking; onPress: (
       <View className="flex-1 justify-between py-0.5">
         <View className="gap-0.5">
           <Text numberOfLines={1} className="text-base font-semibold text-ink">
-            {booking.house?.address ?? 'Объявление'}
+            {title}
           </Text>
-          {booking.house?.city ? (
-            <Text className="text-sm text-ink-secondary">{booking.house.city}</Text>
+          {subtitle ? (
+            <Text numberOfLines={1} className="text-sm text-ink-secondary">
+              {subtitle}
+            </Text>
           ) : null}
           <Text className="text-sm text-ink-muted">{formatDateRangeRu(start, end)}</Text>
         </View>
