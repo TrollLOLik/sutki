@@ -18,6 +18,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 )
 
@@ -56,9 +57,13 @@ func main() {
 	})
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 
+	bookingRepo := postgres.NewBookingRepo(queries)
+	bookingSvc := booking.New(bookingRepo)
+	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
+
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, authSvc),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, authSvc),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}

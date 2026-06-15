@@ -17,6 +17,20 @@ type ListingRepository interface {
 	AllCategories(ctx context.Context) ([]Ref, error)
 }
 
+// BookingRepository abstracts persistence for rental requests (bookings).
+type BookingRepository interface {
+	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, err error)
+	Create(ctx context.Context, b NewBooking) (Booking, error)
+	GetByID(ctx context.Context, id int32) (Booking, error)
+	ListByUser(ctx context.Context, userID, limit, offset int32) ([]Booking, error)
+	CountByUser(ctx context.Context, userID int32) (int64, error)
+	ListForOwner(ctx context.Context, ownerID, limit, offset int32) ([]Booking, error)
+	CountForOwner(ctx context.Context, ownerID int32) (int64, error)
+	Confirm(ctx context.Context, id int32) (Booking, error)
+	Reject(ctx context.Context, id int32, reason string) (Booking, error)
+	Cancel(ctx context.Context, id int32) (Booking, error)
+}
+
 // UserRepository abstracts persistence for application accounts.
 type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (User, error)

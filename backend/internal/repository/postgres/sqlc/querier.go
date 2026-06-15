@@ -9,13 +9,20 @@ import (
 )
 
 type Querier interface {
+	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
+	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
+	CountRequestsByUser(ctx context.Context, userID int32) (int64, error)
+	CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
+	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteEmailLoginCode(ctx context.Context, email string) error
 	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
+	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
@@ -25,6 +32,9 @@ type Querier interface {
 	ListHousePhotos(ctx context.Context, houseID *int32) ([]ListHousePhotosRow, error)
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
 	ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error)
+	ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error)
+	ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error)
+	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
