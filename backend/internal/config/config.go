@@ -23,6 +23,13 @@ type Config struct {
 	AuthExposeCode bool
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
+
+	// SMTP settings for email-code sending (Yandex)
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 // Load reads configuration from the environment. DATABASE_URL is required.
@@ -37,6 +44,12 @@ func Load() (Config, error) {
 		AuthExposeCode: getBool("AUTH_EXPOSE_CODE", false),
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
+
+		SMTPHost:     getEnv("SMTP_HOST", "smtp.yandex.ru"),
+		SMTPPort:     getInt("SMTP_PORT", 465),
+		SMTPUsername: os.Getenv("SMTP_USERNAME"),
+		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:     os.Getenv("SMTP_FROM"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
@@ -91,3 +104,16 @@ func randomSecret() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+func getInt(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return i
+}
+

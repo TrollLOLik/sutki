@@ -13,7 +13,7 @@ const RESEND_SECONDS = 60;
 
 export default function CodeScreen() {
   const { email, devCode } = useLocalSearchParams<{ email?: string; devCode?: string }>();
-  const [code, setCode] = useState(() => (devCode ?? '').replace(/\D/g, '').slice(0, CODE_LENGTH));
+  const [code, setCode] = useState('');
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);

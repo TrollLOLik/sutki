@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"math/big"
+	"mime"
 	"net/mail"
+	"net/smtp"
 	"strings"
 	"time"
 
@@ -34,6 +37,12 @@ type Config struct {
 	// ExposeCode returns the generated login code in the API response and is
 	// intended for development only (no email/SMS provider wired yet).
 	ExposeCode bool
+
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 // Service implements passwordless email-code auth with JWT access/refresh.
@@ -46,6 +55,12 @@ type Service struct {
 	refreshTTL time.Duration
 	exposeCode bool
 	now        func() time.Time
+
+	smtpHost     string
+	smtpPort     int
+	smtpUsername string
+	smtpPassword string
+	smtpFrom     string
 }
 
 func New(
@@ -63,6 +78,12 @@ func New(
 		refreshTTL: cfg.RefreshTTL,
 		exposeCode: cfg.ExposeCode,
 		now:        time.Now,
+
+		smtpHost:     cfg.SMTPHost,
+		smtpPort:     cfg.SMTPPort,
+		smtpUsername: cfg.SMTPUsername,
+		smtpPassword: cfg.SMTPPassword,
+		smtpFrom:     cfg.SMTPFrom,
 	}
 }
 
@@ -92,17 +113,19 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	}
 
 	// Throttle: reject if a code was issued for this email within the cooldown.
-	// This prevents invalidating a victim's pending code and (once SMTP is wired)
-	// flooding their inbox.
-	switch existing, err := s.codes.Get(ctx, email); {
-	case err == nil:
-		if s.now().Before(existing.CreatedAt.Add(resendCooldown)) {
-			return RequestCodeResult{}, domain.ErrCodeRequestTooSoon
+	// This prevents invalidating a victim's pending code and flooding their inbox.
+	// Bypassed in dev (exposeCode=true) so developers can test quickly.
+	if !s.exposeCode {
+		switch existing, err := s.codes.Get(ctx, email); {
+		case err == nil:
+			if s.now().Before(existing.CreatedAt.Add(resendCooldown)) {
+				return RequestCodeResult{}, domain.ErrCodeRequestTooSoon
+			}
+		case errors.Is(err, domain.ErrNotFound):
+			// No prior code for this email: proceed.
+		default:
+			return RequestCodeResult{}, err
 		}
-	case errors.Is(err, domain.ErrNotFound):
-		// No prior code for this email: proceed.
-	default:
-		return RequestCodeResult{}, err
 	}
 
 	code, err := generateCode()
@@ -116,6 +139,20 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	expiresAt := s.now().Add(codeTTL)
 	if err := s.codes.Upsert(ctx, email, string(hash), expiresAt); err != nil {
 		return RequestCodeResult{}, err
+	}
+
+	// Send verification email via SMTP if configured
+	if s.smtpUsername != "" && s.smtpPassword != "" {
+		go func() {
+			subject := "Код подтверждения для приложения Дом Рядом"
+			body := fmt.Sprintf("Ваш одноразовый код для входа: %s\nКод действителен в течение 10 минут.", code)
+			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, email, subject, body)
+			if err != nil {
+				log.Printf("auth: failed to send email to %s: %v", email, err)
+			} else {
+				log.Printf("auth: verification email sent to %s", email)
+			}
+		}()
 	}
 
 	// No email/SMS provider yet: log the code so it can be retrieved in dev.
@@ -277,4 +314,77 @@ func generateToken() (string, error) {
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func sendEmail(host string, port int, username, password, from, to, subject, body string) error {
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	// Create TLS configuration
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: false,
+		ServerName:         host,
+	}
+
+	// Connect to the SMTP Server
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("tls dial: %w", err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp client: %w", err)
+	}
+	defer client.Close()
+
+	// Authenticate
+	auth := smtp.PlainAuth("", username, password, host)
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("auth: %w", err)
+	}
+
+	// Clean single quotes if present (e.g. from .env file representation)
+	fromCleaned := strings.TrimSpace(from)
+	if len(fromCleaned) >= 2 && fromCleaned[0] == '\'' && fromCleaned[len(fromCleaned)-1] == '\'' {
+		fromCleaned = fromCleaned[1 : len(fromCleaned)-1]
+	}
+	fromCleaned = strings.TrimSpace(fromCleaned)
+
+	// Parse the sender address to extract the bare email for the SMTP envelope
+	fromParsed, err := mail.ParseAddress(fromCleaned)
+	if err != nil {
+		return fmt.Errorf("parse sender address: %w", err)
+	}
+
+	// Set the sender and recipient
+	if err = client.Mail(fromParsed.Address); err != nil {
+		return fmt.Errorf("mail: %w", err)
+	}
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("rcpt: %w", err)
+	}
+
+	// Send the email body
+	writer, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("data: %w", err)
+	}
+	defer writer.Close()
+
+	// MIME-encode From name and Subject to support Cyrillic/non-ASCII characters
+	var fromHeader string
+	if fromParsed.Name != "" {
+		fromHeader = fmt.Sprintf("%s <%s>", mime.BEncoding.Encode("utf-8", fromParsed.Name), fromParsed.Address)
+	} else {
+		fromHeader = fromParsed.Address
+	}
+	subjectHeader := mime.BEncoding.Encode("utf-8", subject)
+
+	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", fromHeader, to, subjectHeader, body)
+	if _, err = writer.Write([]byte(msg)); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	return nil
 }

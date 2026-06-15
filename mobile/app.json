@@ -15,7 +15,8 @@
         "backgroundColor": "#FF5A1F",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.sutki"
     },
     "web": {
       "output": "static",

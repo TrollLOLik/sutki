@@ -50,10 +50,15 @@ func main() {
 	codeRepo := postgres.NewAuthCodeRepo(queries)
 	refreshRepo := postgres.NewRefreshTokenRepo(queries)
 	authSvc := auth.New(userRepo, codeRepo, refreshRepo, auth.Config{
-		Secret:     cfg.JWTSecret,
-		AccessTTL:  cfg.AccessTTL,
-		RefreshTTL: cfg.RefreshTTL,
-		ExposeCode: cfg.AuthExposeCode,
+		Secret:       cfg.JWTSecret,
+		AccessTTL:    cfg.AccessTTL,
+		RefreshTTL:   cfg.RefreshTTL,
+		ExposeCode:   cfg.AuthExposeCode,
+		SMTPHost:     cfg.SMTPHost,
+		SMTPPort:     cfg.SMTPPort,
+		SMTPUsername: cfg.SMTPUsername,
+		SMTPPassword: cfg.SMTPPassword,
+		SMTPFrom:     cfg.SMTPFrom,
 	})
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 
