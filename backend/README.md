@@ -52,14 +52,40 @@ make run           # start the API on :8080
 | Method | Path                          | Auth   | Description                                |
 |--------|-------------------------------|--------|--------------------------------------------|
 | GET    | `/healthz`                    | —      | Liveness probe                             |
-| GET    | `/api/v1/listings`            | —      | Active listings (`?limit&offset`)          |
+| GET    | `/api/v1/listings`            | —      | Search active listings (filters below)     |
 | GET    | `/api/v1/listings/{id}`       | —      | Listing detail + photos/services           |
+| GET    | `/api/v1/services`            | —      | Amenity catalog (for the `services` filter)|
+| GET    | `/api/v1/categories`          | —      | Category catalog (for the `category` filter)|
 | POST   | `/api/v1/auth/email/request`  | —      | Send a 6-digit login code to an email      |
 | POST   | `/api/v1/auth/email/verify`   | —      | Verify code → issue access/refresh tokens  |
 | POST   | `/api/v1/auth/refresh`        | —      | Rotate refresh token → new token pair      |
 | POST   | `/api/v1/auth/logout`         | —      | Revoke a refresh token                     |
 | GET    | `/api/v1/me`                  | Bearer | Current user profile                       |
 | PATCH  | `/api/v1/me`                  | Bearer | Update name / phone / city                 |
+
+### Listing search & filters
+
+`GET /api/v1/listings` applies all filters server-side over active listings and
+returns `{ items, total, limit, offset }` where `total` is the count for the
+filter (ignoring pagination). All params are optional and combined with `AND`
+(except `rooms`/`rooms_min`, which are `OR`-combined). An invalid value returns
+`400 { "error": "invalid <param>" }`.
+
+| Param        | Type        | Meaning                                                        |
+|--------------|-------------|----------------------------------------------------------------|
+| `q`          | string      | Case-insensitive substring over address/description/city       |
+| `city`       | string      | Exact match on the city (legacy `country` column)              |
+| `price_min`  | int ≥ 0     | Minimum nightly price (inclusive)                              |
+| `price_max`  | int ≥ 0     | Maximum nightly price (inclusive)                              |
+| `rooms`      | int CSV     | Exact room counts, e.g. `rooms=1,2`                            |
+| `rooms_min`  | int ≥ 0     | At least N rooms (use for a "3+" bucket); OR-combined with `rooms` |
+| `services`   | int CSV     | Listing must include **all** given service IDs (see `/services`) |
+| `category`   | int         | Listing belongs to this category ID (see `/categories`)        |
+| `sort`       | enum        | `price_asc` \| `price_desc` \| `newest`; default = promoted then newest |
+| `limit`      | int         | Page size, clamped to `[1, 100]` (default 20)                  |
+| `offset`     | int         | Pagination offset (default 0)                                  |
+
+Example: `GET /api/v1/listings?q=ленина&price_max=2000&rooms=1,2&rooms_min=3&services=2&sort=price_asc&limit=20`
 
 ### Auth flow (email + 6-digit code)
 

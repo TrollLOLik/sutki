@@ -25,6 +25,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, authSvc
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/listings", listingHandler.Routes)
+		r.Get("/services", listingHandler.ListServices)
+		r.Get("/categories", listingHandler.ListCategories)
 		r.Route("/auth", authHandler.Routes)
 
 		// Authenticated endpoints.

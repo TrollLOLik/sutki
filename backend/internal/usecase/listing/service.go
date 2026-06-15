@@ -28,26 +28,37 @@ type ListResult struct {
 	Offset int32
 }
 
-// List returns a page of active listings. Limit is clamped to [1, maxLimit].
-func (s *Service) List(ctx context.Context, limit, offset int32) (ListResult, error) {
-	if limit <= 0 {
-		limit = defaultLimit
+// List returns a filtered page of active listings. Limit is clamped to
+// [1, maxLimit] and offset to [0, ∞). The filter is applied server-side.
+func (s *Service) List(ctx context.Context, filter domain.ListFilter) (ListResult, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = defaultLimit
 	}
-	if limit > maxLimit {
-		limit = maxLimit
+	if filter.Limit > maxLimit {
+		filter.Limit = maxLimit
 	}
-	if offset < 0 {
-		offset = 0
+	if filter.Offset < 0 {
+		filter.Offset = 0
 	}
-	items, err := s.repo.ListActive(ctx, limit, offset)
+	items, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return ListResult{}, err
 	}
-	total, err := s.repo.CountActive(ctx)
+	total, err := s.repo.Count(ctx, filter)
 	if err != nil {
 		return ListResult{}, err
 	}
-	return ListResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+	return ListResult{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+// Services returns the catalog of amenities usable as listing filters.
+func (s *Service) Services(ctx context.Context) ([]domain.Ref, error) {
+	return s.repo.AllServices(ctx)
+}
+
+// Categories returns the catalog of listing categories usable as filters.
+func (s *Service) Categories(ctx context.Context) ([]domain.Ref, error) {
+	return s.repo.AllCategories(ctx)
 }
 
 // Get returns a single listing with its photos, services and categories.

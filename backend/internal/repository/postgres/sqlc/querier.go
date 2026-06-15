@@ -9,7 +9,7 @@ import (
 )
 
 type Querier interface {
-	CountActiveHouses(ctx context.Context) (int64, error)
+	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteEmailLoginCode(ctx context.Context, email string) error
@@ -19,10 +19,12 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
-	ListActiveHouses(ctx context.Context, arg ListActiveHousesParams) ([]ListActiveHousesRow, error)
+	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
+	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)
 	ListHouseCategories(ctx context.Context, houseID int32) ([]ListHouseCategoriesRow, error)
 	ListHousePhotos(ctx context.Context, houseID *int32) ([]ListHousePhotosRow, error)
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
+	ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
