@@ -62,6 +62,13 @@ make run           # start the API on :8080
 | POST   | `/api/v1/auth/logout`         | —      | Revoke a refresh token                     |
 | GET    | `/api/v1/me`                  | Bearer | Current user profile                       |
 | PATCH  | `/api/v1/me`                  | Bearer | Update name / phone / city                 |
+| POST   | `/api/v1/listings/{id}/requests` | Bearer | Create a booking request for a listing  |
+| GET    | `/api/v1/requests`            | Bearer | My bookings (as tenant), paginated         |
+| GET    | `/api/v1/requests/incoming`   | Bearer | Incoming bookings on my listings (as owner)|
+| GET    | `/api/v1/requests/{id}`       | Bearer | Booking detail (tenant or listing owner)   |
+| POST   | `/api/v1/requests/{id}/confirm` | Bearer | Owner confirms a pending booking         |
+| POST   | `/api/v1/requests/{id}/reject`  | Bearer | Owner rejects a pending booking (+reason) |
+| POST   | `/api/v1/requests/{id}/cancel`  | Bearer | Tenant cancels their own pending booking  |
 
 ### Listing search & filters
 

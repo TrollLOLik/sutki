@@ -20,3 +20,14 @@ var (
 	// ErrInvalidEmail is returned when an email fails validation.
 	ErrInvalidEmail = errors.New("invalid email")
 )
+
+// Booking-related errors.
+var (
+	// ErrListingUnavailable is returned when booking a listing that is not active.
+	ErrListingUnavailable = errors.New("listing unavailable")
+	// ErrBookingForbidden is returned when a user acts on a booking they may not.
+	ErrBookingForbidden = errors.New("booking forbidden")
+	// ErrBookingNotPending is returned when a status transition is not allowed
+	// from the booking's current status.
+	ErrBookingNotPending = errors.New("booking not pending")
+)
