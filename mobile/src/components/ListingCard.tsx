@@ -9,9 +9,12 @@ import type { ListingCard as ListingCardModel } from '@/types/listing';
 interface ListingCardProps {
   listing: ListingCardModel;
   onPress?: () => void;
+  /** When set, a heart toggle is shown over the cover photo. */
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
-export function ListingCard({ listing, onPress }: ListingCardProps) {
+export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: ListingCardProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -30,6 +33,20 @@ export function ListingCard({ listing, onPress }: ListingCardProps) {
             <Ionicons name="image-outline" size={40} color={palette.inkMuted} />
           </View>
         )}
+        {onToggleFavorite ? (
+          <Pressable
+            onPress={onToggleFavorite}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+            className="absolute right-2 top-2 h-9 w-9 items-center justify-center rounded-full bg-surface active:opacity-80">
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={18}
+              color={isFavorite ? palette.primary : palette.ink}
+            />
+          </Pressable>
+        ) : null}
       </View>
 
       <View className="gap-1 p-3">
