@@ -9,8 +9,10 @@ import (
 )
 
 type Querier interface {
+	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
 	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
+	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
 	CountRequestsByUser(ctx context.Context, userID int32) (int64, error)
 	CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error)
@@ -25,9 +27,12 @@ type Querier interface {
 	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
+	HouseExists(ctx context.Context, id int32) (bool, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
 	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)
+	ListFavoriteHouses(ctx context.Context, arg ListFavoriteHousesParams) ([]ListFavoriteHousesRow, error)
+	ListFavoriteIDs(ctx context.Context, userID int32) ([]int32, error)
 	ListHouseCategories(ctx context.Context, houseID int32) ([]ListHouseCategoriesRow, error)
 	ListHousePhotos(ctx context.Context, houseID *int32) ([]ListHousePhotosRow, error)
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
@@ -35,6 +40,7 @@ type Querier interface {
 	ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error)
 	ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error)
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
+	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
