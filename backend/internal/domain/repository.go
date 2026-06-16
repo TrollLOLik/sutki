@@ -22,13 +22,22 @@ type BookingRepository interface {
 	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, err error)
 	Create(ctx context.Context, b NewBooking) (Booking, error)
 	GetByID(ctx context.Context, id int32) (Booking, error)
-	ListByUser(ctx context.Context, userID, limit, offset int32) ([]Booking, error)
-	CountByUser(ctx context.Context, userID int32) (int64, error)
+	ListByUser(ctx context.Context, userID, limit, offset int32, scope string) ([]Booking, error)
+	CountByUser(ctx context.Context, userID int32, scope string) (int64, error)
 	ListForOwner(ctx context.Context, ownerID, limit, offset int32) ([]Booking, error)
 	CountForOwner(ctx context.Context, ownerID int32) (int64, error)
 	Confirm(ctx context.Context, id int32) (Booking, error)
 	Reject(ctx context.Context, id int32, reason string) (Booking, error)
 	Cancel(ctx context.Context, id int32) (Booking, error)
+}
+
+// ReviewRepository abstracts persistence for listing reviews.
+type ReviewRepository interface {
+	HouseExists(ctx context.Context, houseID int32) (bool, error)
+	ListByHouse(ctx context.Context, houseID, limit, offset int32) ([]Review, error)
+	CountByHouse(ctx context.Context, houseID int32) (int64, error)
+	Summary(ctx context.Context, houseID int32) (RatingSummary, error)
+	Create(ctx context.Context, r NewReview) (Review, error)
 }
 
 // FavoriteRepository abstracts persistence for a user's favorite listings.

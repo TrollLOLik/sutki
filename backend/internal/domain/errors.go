@@ -31,3 +31,10 @@ var (
 	// from the booking's current status.
 	ErrBookingNotPending = errors.New("booking not pending")
 )
+
+// Review-related errors.
+var (
+	// ErrInvalidReview is returned when a review fails validation (rating out of
+	// range or empty body).
+	ErrInvalidReview = errors.New("invalid review")
+)

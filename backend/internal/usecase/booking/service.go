@@ -71,18 +71,32 @@ func (s *Service) Get(ctx context.Context, id, actorID int32) (domain.Booking, e
 	return b, nil
 }
 
-// ListMine returns bookings created by userID (as a tenant).
-func (s *Service) ListMine(ctx context.Context, userID, limit, offset int32) (ListResult, error) {
+// ListMine returns bookings created by userID (as a tenant). scope selects the
+// subset: "active" (pending or upcoming-confirmed), "history" (cancelled or
+// past-confirmed), or "all" (default, backwards compatible).
+func (s *Service) ListMine(ctx context.Context, userID, limit, offset int32, scope string) (ListResult, error) {
 	limit, offset = clamp(limit, offset)
-	items, err := s.repo.ListByUser(ctx, userID, limit, offset)
+	scope = normalizeScope(scope)
+	items, err := s.repo.ListByUser(ctx, userID, limit, offset, scope)
 	if err != nil {
 		return ListResult{}, err
 	}
-	total, err := s.repo.CountByUser(ctx, userID)
+	total, err := s.repo.CountByUser(ctx, userID, scope)
 	if err != nil {
 		return ListResult{}, err
 	}
 	return ListResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+// normalizeScope maps an incoming scope value onto the three supported values,
+// defaulting unknown/empty input to "all".
+func normalizeScope(scope string) string {
+	switch scope {
+	case "active", "history":
+		return scope
+	default:
+		return "all"
+	}
 }
 
 // ListIncoming returns bookings on listings owned by ownerID.

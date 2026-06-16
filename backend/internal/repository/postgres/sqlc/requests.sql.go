@@ -118,11 +118,28 @@ func (q *Queries) ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestR
 }
 
 const countRequestsByUser = `-- name: CountRequestsByUser :one
-SELECT count(*) FROM request r WHERE r.user_id = $1::int
+SELECT count(*) FROM request r
+WHERE r.user_id = $1::int
+  AND (
+    $2::text = 'all'
+    OR ($2::text = 'active' AND (
+      r.status = 'in_progress'
+      OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+    ))
+    OR ($2::text = 'history' AND (
+      r.status = 'cancelled'
+      OR (r.status = 'confirmed' AND r.end_date IS NOT NULL AND r.end_date < CURRENT_DATE)
+    ))
+  )
 `
 
-func (q *Queries) CountRequestsByUser(ctx context.Context, userID int32) (int64, error) {
-	row := q.db.QueryRow(ctx, countRequestsByUser, userID)
+type CountRequestsByUserParams struct {
+	UserID int32
+	Scope  string
+}
+
+func (q *Queries) CountRequestsByUser(ctx context.Context, arg CountRequestsByUserParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRequestsByUser, arg.UserID, arg.Scope)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -325,12 +342,24 @@ SELECT
 FROM request r
 JOIN house h ON h.id = r.house_id
 WHERE r.user_id = $1::int
+  AND (
+    $2::text = 'all'
+    OR ($2::text = 'active' AND (
+      r.status = 'in_progress'
+      OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+    ))
+    OR ($2::text = 'history' AND (
+      r.status = 'cancelled'
+      OR (r.status = 'confirmed' AND r.end_date IS NOT NULL AND r.end_date < CURRENT_DATE)
+    ))
+  )
 ORDER BY r.created_at DESC
-LIMIT $3 OFFSET $2
+LIMIT $4 OFFSET $3
 `
 
 type ListRequestsByUserParams struct {
 	UserID       int32
+	Scope        string
 	ResultOffset int32
 	ResultLimit  int32
 }
@@ -361,7 +390,12 @@ type ListRequestsByUserRow struct {
 }
 
 func (q *Queries) ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error) {
-	rows, err := q.db.Query(ctx, listRequestsByUser, arg.UserID, arg.ResultOffset, arg.ResultLimit)
+	rows, err := q.db.Query(ctx, listRequestsByUser,
+		arg.UserID,
+		arg.Scope,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

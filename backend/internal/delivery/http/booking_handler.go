@@ -152,7 +152,7 @@ func (h *BookingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	res, err := h.svc.ListMine(r.Context(), userID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
+	res, err := h.svc.ListMine(r.Context(), userID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0), r.URL.Query().Get("scope"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
