@@ -6,6 +6,8 @@ import type { Booking, BookingsPage, CreateBookingBody } from '@/types/booking';
 export interface ListBookingsParams {
   limit?: number;
   offset?: number;
+  /** Filters "my requests": 'active' (pending/upcoming) or 'history' (terminal). */
+  scope?: 'active' | 'history';
 }
 
 export const bookingKeys = {
@@ -19,6 +21,7 @@ function buildQuery(params: ListBookingsParams): string {
   const sp = new URLSearchParams();
   if (params.limit != null) sp.set('limit', String(params.limit));
   if (params.offset != null) sp.set('offset', String(params.offset));
+  if (params.scope != null) sp.set('scope', params.scope);
   const qs = sp.toString();
   return qs ? `?${qs}` : '';
 }

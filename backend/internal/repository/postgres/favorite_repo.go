@@ -40,20 +40,22 @@ func (r *FavoriteRepo) ListHouses(ctx context.Context, userID, limit, offset int
 	houses := make([]domain.House, 0, len(rows))
 	for _, row := range rows {
 		houses = append(houses, domain.House{
-			ID:          row.ID,
-			Street:      row.Street,
-			HouseNumber: row.HouseNumber,
-			Description: row.Description,
-			Price:       row.Price,
-			CountRoom:   row.CountRoom,
-			Area:        row.Area,
-			City:        row.Country,
-			Status:      row.Status,
-			Lat:         row.Lat,
-			Lng:         row.Lng,
-			Views:       row.Views,
-			CoverPath:   row.CoverPath,
-			CreatedAt:   row.CreatedAt.Time,
+			ID:           row.ID,
+			Street:       row.Street,
+			HouseNumber:  row.HouseNumber,
+			Description:  row.Description,
+			Price:        row.Price,
+			CountRoom:    row.CountRoom,
+			Area:         row.Area,
+			City:         row.Country,
+			Status:       row.Status,
+			Lat:          row.Lat,
+			Lng:          row.Lng,
+			Views:        row.Views,
+			CoverPath:    row.CoverPath,
+			CreatedAt:    row.CreatedAt.Time,
+			Rating:       row.Rating,
+			ReviewsCount: row.ReviewsCount,
 		})
 	}
 	return houses, nil

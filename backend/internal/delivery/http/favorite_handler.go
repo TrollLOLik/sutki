@@ -119,17 +119,19 @@ func (h *FavoriteHandler) actorAndID(w http.ResponseWriter, r *http.Request) (in
 
 func (h *FavoriteHandler) cardDTO(hs domain.House) listingCardDTO {
 	return listingCardDTO{
-		ID:          hs.ID,
-		Address:     address(hs),
-		City:        hs.City,
-		Description: hs.Description,
-		Price:       hs.Price,
-		Rooms:       hs.CountRoom,
-		Area:        hs.Area,
-		Lat:         hs.Lat,
-		Lng:         hs.Lng,
-		Views:       hs.Views,
-		CoverURL:    h.mediaURL(hs.CoverPath),
+		ID:           hs.ID,
+		Address:      address(hs),
+		City:         hs.City,
+		Description:  hs.Description,
+		Price:        hs.Price,
+		Rooms:        hs.CountRoom,
+		Area:         hs.Area,
+		Lat:          hs.Lat,
+		Lng:          hs.Lng,
+		Views:        hs.Views,
+		CoverURL:     h.mediaURL(hs.CoverPath),
+		Rating:       hs.Rating,
+		ReviewsCount: hs.ReviewsCount,
 	}
 }
 

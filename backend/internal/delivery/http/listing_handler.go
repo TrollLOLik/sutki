@@ -72,6 +72,10 @@ type listingCardDTO struct {
 	Lng         *float64 `json:"lng"`
 	Views       int32    `json:"views"`
 	CoverURL    string   `json:"cover_url"`
+	// Rating is the average review score (0 when there are no reviews);
+	// ReviewsCount is the published review count.
+	Rating       float64 `json:"rating"`
+	ReviewsCount int32   `json:"reviews_count"`
 }
 
 type listingDetailDTO struct {
@@ -139,17 +143,19 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 
 func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 	return listingCardDTO{
-		ID:          hs.ID,
-		Address:     address(hs),
-		City:        hs.City,
-		Description: hs.Description,
-		Price:       hs.Price,
-		Rooms:       hs.CountRoom,
-		Area:        hs.Area,
-		Lat:         hs.Lat,
-		Lng:         hs.Lng,
-		Views:       hs.Views,
-		CoverURL:    h.mediaURL(hs.CoverPath),
+		ID:           hs.ID,
+		Address:      address(hs),
+		City:         hs.City,
+		Description:  hs.Description,
+		Price:        hs.Price,
+		Rooms:        hs.CountRoom,
+		Area:         hs.Area,
+		Lat:          hs.Lat,
+		Lng:          hs.Lng,
+		Views:        hs.Views,
+		CoverURL:     h.mediaURL(hs.CoverPath),
+		Rating:       hs.Rating,
+		ReviewsCount: hs.ReviewsCount,
 	}
 }
 

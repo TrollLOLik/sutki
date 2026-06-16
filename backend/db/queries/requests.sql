@@ -43,11 +43,35 @@ SELECT
 FROM request r
 JOIN house h ON h.id = r.house_id
 WHERE r.user_id = @user_id::int
+  AND (
+    @scope::text = 'all'
+    OR (@scope::text = 'active' AND (
+      r.status = 'in_progress'
+      OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+    ))
+    OR (@scope::text = 'history' AND (
+      r.status = 'cancelled'
+      OR (r.status = 'confirmed' AND r.end_date IS NOT NULL AND r.end_date < CURRENT_DATE)
+    ))
+  )
 ORDER BY r.created_at DESC
 LIMIT @result_limit OFFSET @result_offset;
 
 -- name: CountRequestsByUser :one
-SELECT count(*) FROM request r WHERE r.user_id = @user_id::int;
+SELECT count(*) FROM request r
+WHERE r.user_id = @user_id::int
+  AND (
+    @scope::text = 'all'
+    OR (@scope::text = 'active' AND (
+      r.status = 'in_progress'
+      OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+    ))
+    OR (@scope::text = 'history' AND (
+      r.status = 'cancelled'
+      OR (r.status = 'confirmed' AND r.end_date IS NOT NULL AND r.end_date < CURRENT_DATE)
+    ))
+  )
+;
 
 -- name: ListRequestsForOwner :many
 SELECT

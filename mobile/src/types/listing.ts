@@ -30,6 +30,10 @@ export interface ListingCard {
   lng: number | null;
   views: number;
   cover_url: string;
+  /** Average review score (0 when there are no reviews). */
+  rating: number;
+  /** Number of published reviews. */
+  reviews_count: number;
 }
 
 export interface ListingDetail extends ListingCard {

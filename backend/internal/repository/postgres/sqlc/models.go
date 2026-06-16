@@ -210,6 +210,7 @@ type Review struct {
 	Rating          int32
 	Status          string
 	RejectionReason *string
+	CreatedAt       pgtype.Timestamp
 }
 
 type Service struct {

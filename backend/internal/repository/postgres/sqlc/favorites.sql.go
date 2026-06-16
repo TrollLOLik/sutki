@@ -72,6 +72,16 @@ SELECT
   h.views,
   h.created_at,
   COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  ), 0)::float8 AS rating,
+  (
+    SELECT count(*)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  )::int AS reviews_count,
+  COALESCE((
     SELECT f.path
     FROM file f
     WHERE f.house_id = h.id AND f.deleted = false
@@ -94,20 +104,22 @@ type ListFavoriteHousesParams struct {
 }
 
 type ListFavoriteHousesRow struct {
-	ID          int32
-	Street      string
-	HouseNumber string
-	Description string
-	Price       int32
-	CountRoom   string
-	Area        int32
-	Country     string
-	Status      string
-	Lat         *float64
-	Lng         *float64
-	Views       int32
-	CreatedAt   pgtype.Timestamp
-	CoverPath   string
+	ID           int32
+	Street       string
+	HouseNumber  string
+	Description  string
+	Price        int32
+	CountRoom    string
+	Area         int32
+	Country      string
+	Status       string
+	Lat          *float64
+	Lng          *float64
+	Views        int32
+	CreatedAt    pgtype.Timestamp
+	Rating       float64
+	ReviewsCount int32
+	CoverPath    string
 }
 
 func (q *Queries) ListFavoriteHouses(ctx context.Context, arg ListFavoriteHousesParams) ([]ListFavoriteHousesRow, error) {
@@ -133,6 +145,8 @@ func (q *Queries) ListFavoriteHouses(ctx context.Context, arg ListFavoriteHouses
 			&i.Lng,
 			&i.Views,
 			&i.CreatedAt,
+			&i.Rating,
+			&i.ReviewsCount,
 			&i.CoverPath,
 		); err != nil {
 			return nil, err

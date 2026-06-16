@@ -31,6 +31,21 @@ export function formatDateRangeRu(start: Date, end: Date | null): string {
   return `${formatDateRu(start)} — ${formatDateRu(end)}`;
 }
 
+/** One-decimal rating label, e.g. 4 -> "4.0", 4.85 -> "4.9". */
+export function formatRating(value: number): string {
+  return value.toFixed(1);
+}
+
+/** Reviews count with a Russian plural suffix, e.g. "1 отзыв", "3 отзыва". */
+export function formatReviewsCount(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  let word = 'отзывов';
+  if (mod10 === 1 && mod100 !== 11) word = 'отзыв';
+  else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) word = 'отзыва';
+  return `${count} ${word}`;
+}
+
 /** Guests count with a Russian plural suffix, e.g. "1 гость", "3 гостя". */
 export function formatGuests(count: number): string {
   const mod10 = count % 10;
