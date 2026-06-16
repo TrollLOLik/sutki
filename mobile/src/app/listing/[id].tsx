@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { Badge, Button, Chip } from '@/components/ui';
+import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListing } from '@/lib/api/listings';
 import { formatPricePerNight, formatRooms } from '@/lib/format';
 import { palette } from '@/theme/tokens';
@@ -23,6 +24,9 @@ export default function ListingDetailScreen() {
   const numericId = Number(id);
   const { width } = useWindowDimensions();
   const { data, isLoading, isError, refetch } = useListing(numericId);
+  const { data: favoriteIds } = useFavoriteIds();
+  const toggleFavorite = useToggleFavorite();
+  const isFavorite = favoriteIds?.has(numericId) ?? false;
 
   return (
     <View className="flex-1 bg-surface">
@@ -35,9 +39,15 @@ export default function ListingDetailScreen() {
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
           <Pressable
-            accessibilityLabel="В избранное"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
-            <Ionicons name="heart-outline" size={20} color={palette.ink} />
+            onPress={() => toggleFavorite.mutate({ id: numericId, isFavorite })}
+            disabled={numericId <= 0}
+            accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted active:opacity-80">
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isFavorite ? palette.primary : palette.ink}
+            />
           </Pressable>
         </View>
 

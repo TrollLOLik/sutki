@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { Button, Chip } from '@/components/ui';
+import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListings } from '@/lib/api/listings';
 import { filterListings } from '@/lib/listing-filters';
 import { useFiltersStore, type RoomFilter } from '@/store/filters';
@@ -24,6 +25,8 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const filters = useFiltersStore();
   const { data, isLoading, isError, refetch, isRefetching } = useListings({ limit: 50 });
+  const { data: favoriteIds } = useFavoriteIds();
+  const toggleFavorite = useToggleFavorite();
 
   const visible = useMemo(
     () => filterListings(data?.items ?? [], filters, query),
@@ -136,6 +139,13 @@ export default function SearchScreen() {
               listing={item}
               onPress={() =>
                 router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
+              }
+              isFavorite={favoriteIds?.has(item.id) ?? false}
+              onToggleFavorite={() =>
+                toggleFavorite.mutate({
+                  id: item.id,
+                  isFavorite: favoriteIds?.has(item.id) ?? false,
+                })
               }
             />
           )}
