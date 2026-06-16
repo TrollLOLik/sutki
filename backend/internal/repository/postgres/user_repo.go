@@ -3,8 +3,10 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
@@ -38,6 +40,7 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (domain.User, e
 		City:       deref(row.City),
 		AvatarURL:  deref(row.AvatarUrl),
 		IsVerified: row.IsVerified,
+		Birthday:   toTimePtr(row.Birthday),
 	}, nil
 }
 
@@ -57,6 +60,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id int32) (domain.User, error) {
 		City:       deref(row.City),
 		AvatarURL:  deref(row.AvatarUrl),
 		IsVerified: row.IsVerified,
+		Birthday:   toTimePtr(row.Birthday),
 	}, nil
 }
 
@@ -73,15 +77,22 @@ func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error
 		City:       deref(row.City),
 		AvatarURL:  deref(row.AvatarUrl),
 		IsVerified: row.IsVerified,
+		Birthday:   toTimePtr(row.Birthday),
 	}, nil
 }
 
-func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city *string) (domain.User, error) {
+func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time) (domain.User, error) {
+	var pgBirthday pgtype.Date
+	if birthday != nil {
+		pgBirthday = pgtype.Date{Time: *birthday, Valid: true}
+	}
 	row, err := r.q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
-		ID:    id,
-		Name:  name,
-		Phone: phone,
-		City:  city,
+		ID:        id,
+		Name:      name,
+		Phone:     phone,
+		City:      city,
+		Birthday:  pgBirthday,
+		AvatarUrl: avatarURL,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -97,7 +108,12 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, cit
 		City:       deref(row.City),
 		AvatarURL:  deref(row.AvatarUrl),
 		IsVerified: row.IsVerified,
+		Birthday:   toTimePtr(row.Birthday),
 	}, nil
+}
+
+func (r *UserRepo) Delete(ctx context.Context, id int32) error {
+	return r.q.DeleteUser(ctx, id)
 }
 
 func deref(s *string) string {
@@ -105,4 +121,12 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func toTimePtr(d pgtype.Date) *time.Time {
+	if !d.Valid {
+		return nil
+	}
+	t := d.Time
+	return &t
 }

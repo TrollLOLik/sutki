@@ -247,8 +247,13 @@ func (s *Service) GetUser(ctx context.Context, id int32) (domain.User, error) {
 
 // UpdateProfile updates the provided profile fields for a user. nil fields are
 // left unchanged (PATCH semantics).
-func (s *Service) UpdateProfile(ctx context.Context, id int32, name, phone, city *string) (domain.User, error) {
-	return s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(phone), trimPtr(city))
+func (s *Service) UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time) (domain.User, error) {
+	return s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(phone), trimPtr(city), trimPtr(avatarURL), birthday)
+}
+
+// DeleteUser deletes a user account (e.g. if they abort onboarding).
+func (s *Service) DeleteUser(ctx context.Context, id int32) error {
+	return s.users.Delete(ctx, id)
 }
 
 // trimPtr trims a non-nil string pointer in place, leaving nil pointers as-is.

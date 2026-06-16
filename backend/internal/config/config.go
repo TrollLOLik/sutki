@@ -30,6 +30,8 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	SMTPFrom     string
+
+	DadataAPIKey string
 }
 
 // Load reads configuration from the environment. DATABASE_URL is required.
@@ -50,6 +52,8 @@ func Load() (Config, error) {
 		SMTPUsername: os.Getenv("SMTP_USERNAME"),
 		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
 		SMTPFrom:     os.Getenv("SMTP_FROM"),
+
+		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")

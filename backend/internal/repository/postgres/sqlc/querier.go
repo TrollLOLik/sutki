@@ -20,6 +20,7 @@ type Querier interface {
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteEmailLoginCode(ctx context.Context, email string) error
+	DeleteUser(ctx context.Context, id int32) error
 	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)

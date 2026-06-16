@@ -12,6 +12,7 @@ type User struct {
 	City       string
 	AvatarURL  string
 	IsVerified bool
+	Birthday   *time.Time
 }
 
 // EmailLoginCode is a short-lived, hashed passwordless login code for an email.

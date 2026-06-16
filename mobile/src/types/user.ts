@@ -11,4 +11,5 @@ export interface User {
   city: string;
   avatar_url: string;
   is_verified: boolean;
+  birthday?: string;
 }

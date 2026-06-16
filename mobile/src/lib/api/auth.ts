@@ -52,3 +52,12 @@ export function useVerifyEmailCode() {
 export function useUpdateMe() {
   return useMutation({ mutationFn: (body: UpdateProfileBody) => updateMe(body) });
 }
+
+/** Delete the current user's account (used when aborting onboarding). */
+export function deleteMe(): Promise<void> {
+  return api.delete<void>('/api/v1/me');
+}
+
+export function useDeleteMe() {
+  return useMutation({ mutationFn: deleteMe });
+}

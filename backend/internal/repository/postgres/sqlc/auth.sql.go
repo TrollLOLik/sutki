@@ -30,7 +30,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO "user" (email, roles, deleted, is_verified, enable, created_at, updated_at)
 VALUES ($1, $2, false, true, true, now(), now())
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles
+RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday
 `
 
 type CreateUserParams struct {
@@ -48,6 +48,7 @@ type CreateUserRow struct {
 	AvatarUrl  *string
 	IsVerified bool
 	Roles      []byte
+	Birthday   pgtype.Date
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -63,6 +64,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.AvatarUrl,
 		&i.IsVerified,
 		&i.Roles,
+		&i.Birthday,
 	)
 	return i, err
 }
@@ -73,6 +75,15 @@ DELETE FROM email_login_code WHERE email = $1
 
 func (q *Queries) DeleteEmailLoginCode(ctx context.Context, email string) error {
 	_, err := q.db.Exec(ctx, deleteEmailLoginCode, email)
+	return err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM "user" WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
 }
 
@@ -116,7 +127,7 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (Refres
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, surname, email, phone, city, avatar_url, is_verified, roles
+SELECT id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday
 FROM "user"
 WHERE email = $1 AND deleted = false
 `
@@ -131,6 +142,7 @@ type GetUserByEmailRow struct {
 	AvatarUrl  *string
 	IsVerified bool
 	Roles      []byte
+	Birthday   pgtype.Date
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -146,12 +158,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.AvatarUrl,
 		&i.IsVerified,
 		&i.Roles,
+		&i.Birthday,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, surname, email, phone, city, avatar_url, is_verified, roles
+SELECT id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday
 FROM "user"
 WHERE id = $1 AND deleted = false
 `
@@ -166,6 +179,7 @@ type GetUserByIDRow struct {
 	AvatarUrl  *string
 	IsVerified bool
 	Roles      []byte
+	Birthday   pgtype.Date
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error) {
@@ -181,6 +195,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, er
 		&i.AvatarUrl,
 		&i.IsVerified,
 		&i.Roles,
+		&i.Birthday,
 	)
 	return i, err
 }
@@ -209,16 +224,20 @@ UPDATE "user"
 SET name = COALESCE($1, name),
     phone = COALESCE($2, phone),
     city = COALESCE($3, city),
+    birthday = COALESCE($4, birthday),
+    avatar_url = COALESCE($5, avatar_url),
     updated_at = now()
-WHERE id = $4 AND deleted = false
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles
+WHERE id = $6 AND deleted = false
+RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday
 `
 
 type UpdateUserProfileParams struct {
-	Name  *string
-	Phone *string
-	City  *string
-	ID    int32
+	Name      *string
+	Phone     *string
+	City      *string
+	Birthday  pgtype.Date
+	AvatarUrl *string
+	ID        int32
 }
 
 type UpdateUserProfileRow struct {
@@ -231,6 +250,7 @@ type UpdateUserProfileRow struct {
 	AvatarUrl  *string
 	IsVerified bool
 	Roles      []byte
+	Birthday   pgtype.Date
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
@@ -238,6 +258,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		arg.Name,
 		arg.Phone,
 		arg.City,
+		arg.Birthday,
+		arg.AvatarUrl,
 		arg.ID,
 	)
 	var i UpdateUserProfileRow
@@ -251,6 +273,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.AvatarUrl,
 		&i.IsVerified,
 		&i.Roles,
+		&i.Birthday,
 	)
 	return i, err
 }

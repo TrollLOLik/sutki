@@ -31,4 +31,6 @@ export interface UpdateProfileBody {
   name?: string;
   phone?: string;
   city?: string;
+  birthday?: string;
+  avatar_url?: string;
 }

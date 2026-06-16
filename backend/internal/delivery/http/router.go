@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, authSvc *auth.Service) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, authSvc *auth.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -28,12 +28,15 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Get("/services", listingHandler.ListServices)
 		r.Get("/categories", listingHandler.ListCategories)
 		r.Route("/auth", authHandler.Routes)
+		r.Post("/cities/suggest", cityHandler.Suggest)
+		r.Get("/cities/iplocate", cityHandler.IPLocate)
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
 			r.Use(AuthMiddleware(authSvc.TokenManager()))
 			r.Get("/me", authHandler.Me)
 			r.Patch("/me", authHandler.UpdateMe)
+			r.Delete("/me", authHandler.DeleteMe)
 			r.Post("/listings/{id}/requests", bookingHandler.Create)
 			r.Route("/requests", bookingHandler.Routes)
 			r.Post("/listings/{id}/favorite", favoriteHandler.Add)

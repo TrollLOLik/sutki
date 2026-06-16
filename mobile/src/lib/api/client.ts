@@ -41,6 +41,53 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+  if (res.status === 401 && auth) {
+    const state = useSessionStore.getState();
+    const refreshToken = state.refreshToken;
+    if (refreshToken) {
+      try {
+        const refreshRes = await fetch(`${env.apiUrl}/api/v1/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          await state.beginSession(
+            { accessToken: data.access_token, refreshToken: data.refresh_token },
+            data.user,
+          );
+
+          const retryHeaders = {
+            ...finalHeaders,
+            Authorization: `Bearer ${data.access_token}`,
+          };
+          const retryRes = await fetch(`${env.apiUrl}${path}`, {
+            ...rest,
+            headers: retryHeaders,
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+          });
+          const retryIsJson = retryRes.headers.get('content-type')?.includes('application/json');
+          const retryPayload = retryIsJson ? await retryRes.json().catch(() => undefined) : undefined;
+          if (retryRes.ok) {
+            return retryPayload as T;
+          }
+          const errBody = retryPayload as { message?: string; error?: string } | undefined;
+          const message = errBody?.message ?? errBody?.error ?? `Request failed (${retryRes.status})`;
+          throw new ApiError(retryRes.status, message, retryPayload);
+        } else {
+          await state.signOut();
+        }
+      } catch (refreshErr) {
+        console.error('Failed to auto-refresh token:', refreshErr);
+        await state.signOut();
+      }
+    }
+  }
+
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const payload = isJson ? await res.json().catch(() => undefined) : undefined;
 

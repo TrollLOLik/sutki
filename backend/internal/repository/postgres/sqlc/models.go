@@ -248,6 +248,7 @@ type User struct {
 	RejectionReason *string
 	VkID            *string
 	AvatarUrl       *string
+	Birthday        pgtype.Date
 }
 
 type View struct {

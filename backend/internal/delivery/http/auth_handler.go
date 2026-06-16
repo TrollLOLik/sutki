@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -28,16 +29,22 @@ func (h *AuthHandler) Routes(r chi.Router) {
 }
 
 type userDTO struct {
-	ID         int32  `json:"id"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	Phone      string `json:"phone"`
-	City       string `json:"city"`
-	AvatarURL  string `json:"avatar_url"`
-	IsVerified bool   `json:"is_verified"`
+	ID         int32   `json:"id"`
+	Email      string  `json:"email"`
+	Name       string  `json:"name"`
+	Phone      string  `json:"phone"`
+	City       string  `json:"city"`
+	AvatarURL  string  `json:"avatar_url"`
+	IsVerified bool    `json:"is_verified"`
+	Birthday   *string `json:"birthday"`
 }
 
 func toUserDTO(u domain.User) userDTO {
+	var bdayStr *string
+	if u.Birthday != nil {
+		s := u.Birthday.Format("2006-01-02")
+		bdayStr = &s
+	}
 	return userDTO{
 		ID:         u.ID,
 		Email:      u.Email,
@@ -46,6 +53,7 @@ func toUserDTO(u domain.User) userDTO {
 		City:       u.City,
 		AvatarURL:  u.AvatarURL,
 		IsVerified: u.IsVerified,
+		Birthday:   bdayStr,
 	}
 }
 
@@ -160,14 +168,29 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	// Pointer fields distinguish "omitted" (nil, left unchanged) from "set to
 	// empty" so PATCH does not clobber fields the client didn't send.
 	var body struct {
-		Name  *string `json:"name"`
-		Phone *string `json:"phone"`
-		City  *string `json:"city"`
+		Name      *string `json:"name"`
+		Phone     *string `json:"phone"`
+		City      *string `json:"city"`
+		Birthday  *string `json:"birthday"`
+		AvatarURL *string `json:"avatar_url"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Phone, body.City)
+	var bday *time.Time
+	if body.Birthday != nil && *body.Birthday != "" {
+		t, err := time.Parse("2006-01-02", *body.Birthday)
+		if err != nil {
+			// fallback to DD.MM.YYYY
+			t, err = time.Parse("02.01.2006", *body.Birthday)
+		}
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid birthday format (expected YYYY-MM-DD)")
+			return
+		}
+		bday = &t
+	}
+	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Phone, body.City, body.AvatarURL, bday)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")
@@ -177,6 +200,20 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))
+}
+
+// DeleteMe deletes the authenticated user's account (requires AuthMiddleware).
+func (h *AuthHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err := h.svc.DeleteUser(r.Context(), userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeAuthError(w http.ResponseWriter, err error) {

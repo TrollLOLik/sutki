@@ -9,7 +9,7 @@ import { useRequestEmailCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 
 const schema = z.object({
-  email: z.string().email('Введите корректный email'),
+  email: z.string().trim().email('Введите корректный email'),
 });
 
 type FormValues = z.infer<typeof schema>;

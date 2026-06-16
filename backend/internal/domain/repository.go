@@ -46,7 +46,8 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (User, error)
 	GetByID(ctx context.Context, id int32) (User, error)
 	Create(ctx context.Context, email string) (User, error)
-	UpdateProfile(ctx context.Context, id int32, name, phone, city *string) (User, error)
+	UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time) (User, error)
+	Delete(ctx context.Context, id int32) error
 }
 
 // AuthCodeRepository persists short-lived email login codes.
