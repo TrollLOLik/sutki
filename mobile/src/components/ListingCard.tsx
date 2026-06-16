@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 
-import { formatPricePerNight, formatRooms } from '@/lib/format';
+import { formatPricePerNight, formatRating, formatReviewsCount, formatRooms } from '@/lib/format';
 import { palette } from '@/theme/tokens';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
 
@@ -62,6 +62,14 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
             <Text className="text-sm text-ink-muted">· {listing.area} м²</Text>
           ) : null}
         </View>
+
+        {listing.reviews_count > 0 ? (
+          <View className="flex-row items-center gap-1">
+            <Ionicons name="star" size={13} color={palette.star} />
+            <Text className="text-sm font-semibold text-ink">{formatRating(listing.rating)}</Text>
+            <Text className="text-sm text-ink-muted">· {formatReviewsCount(listing.reviews_count)}</Text>
+          </View>
+        ) : null}
 
         <View className="mt-1 flex-row items-center justify-between">
           <Text className="text-lg font-bold text-primary">

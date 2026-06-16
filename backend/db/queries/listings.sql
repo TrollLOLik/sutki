@@ -14,6 +14,16 @@ SELECT
   h.views,
   h.created_at,
   COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  ), 0)::float8 AS rating,
+  (
+    SELECT count(*)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  )::int AS reviews_count,
+  COALESCE((
     SELECT f.path
     FROM file f
     WHERE f.house_id = h.id AND f.deleted = false
@@ -120,7 +130,17 @@ SELECT
   h.lng,
   h.views,
   h.created_at,
-  h.updated_at
+  h.updated_at,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  ), 0)::float8 AS rating,
+  (
+    SELECT count(*)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  )::int AS reviews_count
 FROM house h
 WHERE h.id = $1 AND h.deleted = false;
 

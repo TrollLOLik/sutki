@@ -82,9 +82,9 @@ func (r *BookingRepo) GetByID(ctx context.Context, id int32) (domain.Booking, er
 	return b, nil
 }
 
-func (r *BookingRepo) ListByUser(ctx context.Context, userID, limit, offset int32) ([]domain.Booking, error) {
+func (r *BookingRepo) ListByUser(ctx context.Context, userID, limit, offset int32, scope string) ([]domain.Booking, error) {
 	rows, err := r.q.ListRequestsByUser(ctx, sqlc.ListRequestsByUserParams{
-		UserID: userID, ResultLimit: limit, ResultOffset: offset,
+		UserID: userID, Scope: scope, ResultLimit: limit, ResultOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -109,8 +109,8 @@ func (r *BookingRepo) ListByUser(ctx context.Context, userID, limit, offset int3
 	return out, nil
 }
 
-func (r *BookingRepo) CountByUser(ctx context.Context, userID int32) (int64, error) {
-	return r.q.CountRequestsByUser(ctx, userID)
+func (r *BookingRepo) CountByUser(ctx context.Context, userID int32, scope string) (int64, error) {
+	return r.q.CountRequestsByUser(ctx, sqlc.CountRequestsByUserParams{UserID: userID, Scope: scope})
 }
 
 func (r *BookingRepo) ListForOwner(ctx context.Context, ownerID, limit, offset int32) ([]domain.Booking, error) {

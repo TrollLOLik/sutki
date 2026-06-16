@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge, Button, Chip } from '@/components/ui';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListing } from '@/lib/api/listings';
-import { formatPricePerNight, formatRooms } from '@/lib/format';
+import { formatPricePerNight, formatRating, formatReviewsCount, formatRooms } from '@/lib/format';
 import { palette } from '@/theme/tokens';
 
 export default function ListingDetailScreen() {
@@ -105,6 +105,29 @@ export default function ListingDetailScreen() {
                 <Text className="text-2xl font-bold text-primary">
                   {formatPricePerNight(data.price)}
                 </Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Открыть отзывы"
+                  onPress={() => router.push({ pathname: '/reviews/[id]', params: { id } })}
+                  className="flex-row items-center justify-between rounded-card border border-line bg-surface px-3 py-3 active:opacity-80">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="star" size={18} color={palette.star} />
+                    {data.reviews_count > 0 ? (
+                      <>
+                        <Text className="text-base font-semibold text-ink">
+                          {formatRating(data.rating)}
+                        </Text>
+                        <Text className="text-base text-ink-secondary">
+                          · {formatReviewsCount(data.reviews_count)}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text className="text-base text-ink-secondary">Пока нет отзывов</Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+                </Pressable>
 
                 {data.categories.length > 0 ? (
                   <View className="flex-row flex-wrap gap-2">

@@ -21,6 +21,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
 )
 
 func main() {
@@ -71,11 +72,15 @@ func main() {
 	favoriteSvc := favorite.New(favoriteRepo)
 	favoriteHandler := httpdelivery.NewFavoriteHandler(favoriteSvc, cfg.MediaBaseURL)
 
+	reviewRepo := postgres.NewReviewRepo(queries)
+	reviewSvc := review.New(reviewRepo)
+	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
+
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, authSvc),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, authSvc),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}
