@@ -1,60 +1,236 @@
 import { Ionicons } from '@expo/vector-icons';
-import { parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
-import { Badge } from '@/components/ui';
 import { bookingStatusMeta } from '@/lib/booking-status';
-import { formatDateRangeRu } from '@/lib/format';
+import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
 import { palette } from '@/theme/tokens';
 import type { Booking } from '@/types/booking';
 
 interface BookingCardProps {
   booking: Booking;
   onPress: () => void;
+  /** Show "Повторить" action button. */
+  onRepeat?: () => void;
   /** Owner inbox: lead with the requester's name instead of the listing. */
   showRequester?: boolean;
 }
 
-export function BookingCard({ booking, onPress, showRequester = false }: BookingCardProps) {
+const statusColors: Record<string, string> = {
+  in_progress: '#FF9500',
+  confirmed:   '#2EAD6B',
+  cancelled:   '#9AA0A6',
+};
+
+export function BookingCard({
+  booking,
+  onPress,
+  onRepeat,
+  showRequester = false,
+}: BookingCardProps) {
+  const { width: screenWidth } = useWindowDimensions();
+
+  // Image: fixed square size
+  const imgSize = 90;
+
   const status = bookingStatusMeta(booking.status);
+  const badgeColor = statusColors[booking.status] ?? '#9AA0A6';
   const cover = booking.house?.cover_url;
+
   const start = parseISO(booking.start_date);
   const end = booking.end_date ? parseISO(booking.end_date) : null;
+
+  const nights = end ? differenceInCalendarDays(end, start) : 0;
+  const totalPrice = nights > 0 && booking.house?.price
+    ? booking.house.price * nights
+    : null;
 
   const title = showRequester
     ? booking.name || 'Гость'
     : (booking.house?.address ?? 'Объявление');
-  const subtitle = showRequester ? booking.house?.address : booking.house?.city;
+
+  const subtitle = showRequester
+    ? booking.house?.address
+    : booking.house?.city;
+
+  const createdAt = format(parseISO(booking.created_at), 'd MMM, HH:mm', { locale: ru });
 
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="mb-3 flex-row gap-3 rounded-card border border-line bg-surface p-3 active:opacity-80">
-      <View className="h-20 w-20 overflow-hidden rounded-field bg-surface-skeleton">
-        {cover ? (
-          <Image source={{ uri: cover }} style={{ flex: 1 }} contentFit="cover" transition={150} />
-        ) : (
-          <View className="flex-1 items-center justify-center">
-            <Ionicons name="image-outline" size={24} color={palette.inkMuted} />
-          </View>
-        )}
+      className="mb-3 rounded-card border border-line bg-surface active:opacity-90"
+      style={{ overflow: 'hidden' }}
+    >
+      {/* Top stripe: status badge left, booking number right */}
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: 12,
+          paddingTop: 10,
+          paddingBottom: 8,
+          borderBottomWidth: 1,
+          borderBottomColor: palette.line,
+        }}
+      >
+        <View
+          style={{
+            backgroundColor: badgeColor + '22', // 13% opacity tint
+            borderRadius: 999,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+          }}
+        >
+          <View
+            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: badgeColor }}
+          />
+          <Text style={{ fontSize: 12, fontWeight: '600', color: badgeColor }}>
+            {status.label}
+          </Text>
+        </View>
+
+        <Text style={{ fontSize: 11, color: palette.inkMuted, fontWeight: '500' }}>
+          №{booking.id}
+        </Text>
       </View>
-      <View className="flex-1 justify-between py-0.5">
-        <View className="gap-0.5">
-          <Text numberOfLines={1} className="text-base font-semibold text-ink">
+
+      {/* Main content row: image + details */}
+      <View style={{ flexDirection: 'row', gap: 12, padding: 12 }}>
+        {/* Image */}
+        <View
+          style={{
+            width: imgSize,
+            height: imgSize,
+            borderRadius: 10,
+            overflow: 'hidden',
+            backgroundColor: palette.surfaceSkeleton,
+            flexShrink: 0,
+          }}
+        >
+          {cover ? (
+            <Image
+              source={{ uri: cover }}
+              style={{ width: imgSize, height: imgSize }}
+              contentFit="cover"
+              transition={150}
+            />
+          ) : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="image-outline" size={28} color={palette.inkMuted} />
+            </View>
+          )}
+        </View>
+
+        {/* Details */}
+        <View style={{ flex: 1, gap: 3, justifyContent: 'center' }}>
+          <Text
+            numberOfLines={2}
+            style={{ fontSize: 15, fontWeight: '700', color: palette.ink, lineHeight: 20 }}
+          >
             {title}
           </Text>
+
           {subtitle ? (
-            <Text numberOfLines={1} className="text-sm text-ink-secondary">
+            <Text
+              numberOfLines={1}
+              style={{ fontSize: 12, color: palette.inkSecondary }}
+            >
               {subtitle}
             </Text>
           ) : null}
-          <Text className="text-sm text-ink-muted">{formatDateRangeRu(start, end)}</Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <Ionicons name="calendar-outline" size={12} color={palette.inkMuted} />
+            <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
+              {formatDateRangeRu(start, end)}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="people-outline" size={12} color={palette.inkMuted} />
+            <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
+              {formatGuests(booking.count)}
+            </Text>
+          </View>
+
+          {totalPrice != null ? (
+            <Text
+              style={{ fontSize: 16, fontWeight: '800', color: palette.ink, marginTop: 4 }}
+            >
+              {formatRub(totalPrice)} ₽
+            </Text>
+          ) : null}
         </View>
-        <Badge label={status.label} tone={status.tone} />
       </View>
+
+      {/* Bottom section: two separate rows */}
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: palette.line,
+          paddingHorizontal: 12,
+          paddingTop: 8,
+          paddingBottom: 10,
+          gap: 10,
+        }}
+      >
+        {/* Row 1: created date */}
+        <Text style={{ fontSize: 11, color: palette.inkMuted }}>
+          Создана {createdAt}
+        </Text>
+
+        {/* Row 2: action buttons */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* Открыть чат — always shown */}
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation(); onPress(); }}
+            style={{
+              flex: 1,
+              borderWidth: 1,
+              borderColor: palette.line,
+              borderRadius: 999,
+              paddingVertical: 9,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
+          >
+            <Ionicons name="chatbubble-outline" size={14} color={palette.ink} />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: palette.ink }}>
+              Открыть чат
+            </Text>
+          </TouchableOpacity>
+
+          {/* Повторить */}
+          {onRepeat ? (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); onRepeat(); }}
+              style={{
+                flex: 1,
+                backgroundColor: palette.primary,
+                borderRadius: 999,
+                paddingVertical: 9,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>
+                Повторить
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+
     </Pressable>
   );
 }
+

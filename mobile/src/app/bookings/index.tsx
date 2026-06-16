@@ -31,14 +31,16 @@ export default function MyBookingsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center gap-3 px-4 py-2">
+        <View className="flex-row items-center px-4 py-2">
           <Pressable
             onPress={() => router.back()}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
-          <Text className="text-lg font-semibold text-ink">Заявки</Text>
+          <Text className="flex-1 text-center text-lg font-semibold text-ink">Заявки</Text>
+          {/* Spacer to balance the back button */}
+          <View className="h-10 w-10" />
         </View>
 
         <View className="flex-row gap-1 rounded-pill bg-surface-muted p-1 mx-4 mb-2">
@@ -97,7 +99,11 @@ export default function MyBookingsScreen() {
                   onReview={() => review(item)}
                 />
               ) : (
-                <BookingCard booking={item} onPress={() => open(item)} />
+                <BookingCard
+                  booking={item}
+                  onPress={() => open(item)}
+                  onRepeat={() => repeat(item)}
+                />
               )
             }
           />

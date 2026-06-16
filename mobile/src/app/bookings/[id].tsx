@@ -1,17 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import { parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import { Badge, Button } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { useBooking, useCancelBooking } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
-import { formatDateRu, formatGuests, formatPricePerNight } from '@/lib/format';
+import { formatGuests, formatRub } from '@/lib/format';
 import { palette } from '@/theme/tokens';
+
+/** Format date without year, e.g. "20 мая" */
+function formatDateShort(date: Date): string {
+  return format(date, 'd MMMM', { locale: ru });
+}
+
+const statusColors: Record<string, string> = {
+  in_progress: '#FF9500',
+  confirmed:   '#2EAD6B',
+  cancelled:   '#9AA0A6',
+};
 
 export default function BookingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,14 +53,36 @@ export default function BookingDetailScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center gap-3 px-4 py-2">
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: palette.surface,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: palette.line,
+          }}
+        >
           <Pressable
             onPress={() => router.back()}
             accessibilityLabel="Назад"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
+            style={{
+              width: 40, height: 40,
+              alignItems: 'center', justifyContent: 'center',
+              borderRadius: 20,
+              backgroundColor: palette.surfaceMuted,
+            }}
+          >
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
-          <Text className="text-lg font-semibold text-ink">Заявка</Text>
+          <Text
+            style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: palette.ink }}
+          >
+            {data ? `Заявка №${data.id}` : 'Заявка'}
+          </Text>
+          <View style={{ width: 40 }} />
         </View>
 
         {isLoading ? (
@@ -68,70 +102,279 @@ export default function BookingDetailScreen() {
           </View>
         ) : (
           <>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 px-4 pb-6 pt-1">
-              <View className="self-start">
-                <Badge {...badgeProps(data.status)} />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
+
+              {/* Status + created date bar */}
+              {(() => {
+                const status = bookingStatusMeta(data.status);
+                const badgeColor = statusColors[data.status] ?? '#9AA0A6';
+                const createdAt = format(parseISO(data.created_at), 'd MMM, HH:mm', { locale: ru });
+                return (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: palette.surface,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: badgeColor + '20',
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: badgeColor }} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: badgeColor }}>
+                        {status.label}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: palette.inkMuted }}>
+                      Создана {createdAt}
+                    </Text>
+                  </View>
+                );
+              })()}
+
+              {/* Listing card */}
+              {data.house ? (() => {
+                const start = parseISO(data.start_date);
+                const end = data.end_date ? parseISO(data.end_date) : null;
+                const nights = end ? differenceInCalendarDays(end, start) : 0;
+                const total = nights > 0 ? data.house.price * nights : data.house.price;
+
+                return (
+                  <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 14 }}>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      {/* Cover image */}
+                      <View
+                        style={{
+                          width: 90, height: 90,
+                          borderRadius: 12, overflow: 'hidden',
+                          backgroundColor: palette.surfaceSkeleton,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {data.house.cover_url ? (
+                          <Image
+                            source={{ uri: data.house.cover_url }}
+                            style={{ width: 90, height: 90 }}
+                            contentFit="cover"
+                            transition={150}
+                          />
+                        ) : (
+                          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="image-outline" size={28} color={palette.inkMuted} />
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Info */}
+                      <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink, lineHeight: 21 }}
+                          numberOfLines={2}>
+                          {data.house.address}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
+                          {data.house.city}
+                        </Text>
+                        <Text style={{ fontSize: 17, fontWeight: '800', color: palette.ink, marginTop: 4 }}>
+                          {formatRub(total)} ₽
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })() : null}
+
+              {/* Details block */}
+              <View style={{ backgroundColor: palette.surface }}>
+                <InfoRow
+                  icon="calendar-outline"
+                  label="Заезд — выезд"
+                  value={
+                    data.end_date
+                      ? `${formatDateShort(parseISO(data.start_date))} — ${formatDateShort(parseISO(data.end_date))}`
+                      : formatDateShort(parseISO(data.start_date))
+                  }
+                />
+                <Divider />
+                <InfoRow icon="people-outline" label="Количество гостей" value={formatGuests(data.count)} />
+                <Divider />
+                {data.house ? (
+                  <>
+                    <InfoRow
+                      icon="card-outline"
+                      label="Сумма бронирования"
+                      value={(() => {
+                        const start = parseISO(data.start_date);
+                        const end = data.end_date ? parseISO(data.end_date) : null;
+                        const nights = end ? differenceInCalendarDays(end, start) : 0;
+                        const total = nights > 0 ? data.house!.price * nights : data.house!.price;
+                        return `${formatRub(total)} ₽`;
+                      })()}
+                    />
+                    <Divider />
+                  </>
+                ) : null}
+                <InfoRow icon="cash-outline" label="Способ оплаты" value="Банковская карта" />
               </View>
 
-              {data.house ? (
-                <View className="flex-row gap-3 rounded-card border border-line p-3">
-                  <View className="h-20 w-20 overflow-hidden rounded-field bg-surface-skeleton">
-                    {data.house.cover_url ? (
-                      <Image
-                        source={{ uri: data.house.cover_url }}
-                        style={{ flex: 1 }}
-                        contentFit="cover"
-                        transition={150}
-                      />
-                    ) : (
-                      <View className="flex-1 items-center justify-center">
-                        <Ionicons name="image-outline" size={24} color={palette.inkMuted} />
-                      </View>
-                    )}
+              {/* Total */}
+              {data.house ? (() => {
+                const start = parseISO(data.start_date);
+                const end = data.end_date ? parseISO(data.end_date) : null;
+                const nights = end ? differenceInCalendarDays(end, start) : 0;
+                const total = nights > 0 ? data.house.price * nights : data.house.price;
+                return (
+                  <View
+                    style={{
+                      backgroundColor: palette.surface,
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 16,
+                    }}
+                  >
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: palette.ink }}>Итого</Text>
+                    <Text style={{ fontSize: 19, fontWeight: '900', color: palette.ink }}>
+                      {formatRub(total)} ₽
+                    </Text>
                   </View>
-                  <View className="flex-1 justify-center gap-0.5">
-                    <Text className="text-base font-semibold text-ink">{data.house.address}</Text>
-                    <Text className="text-sm text-ink-secondary">{data.house.city}</Text>
-                    <Text className="text-sm text-primary">
-                      {formatPricePerNight(data.house.price)}
+                );
+              })() : null}
+
+              {/* Контакты владельца */}
+              <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 16, gap: 12 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+                  Контакты владельца
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  {/* Avatar */}
+                  <View
+                    style={{
+                      width: 48, height: 48,
+                      borderRadius: 24,
+                      backgroundColor: palette.surfaceMuted,
+                      alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Ionicons name="person" size={22} color={palette.inkMuted} />
+                  </View>
+                  {/* Name + rating + phone */}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+                        {data.name || 'Владелец'}
+                      </Text>
+                      <Ionicons name="star" size={13} color="#FFB400" />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: palette.ink }}>4,9</Text>
+                    </View>
+                    <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
+                      {data.phone || '+7 *** ***-**-**'}
                     </Text>
                   </View>
                 </View>
-              ) : null}
-
-              <View className="gap-2 rounded-card border border-line p-4">
-                <DetailRow label="Заезд" value={formatDateRu(parseISO(data.start_date))} />
-                <DetailRow
-                  label="Выезд"
-                  value={data.end_date ? formatDateRu(parseISO(data.end_date)) : '—'}
-                />
-                <DetailRow label="Гости" value={formatGuests(data.count)} />
               </View>
 
-              <View className="gap-2 rounded-card border border-line p-4">
-                <DetailRow label="Имя" value={data.name || '—'} />
-                <DetailRow label="Телефон" value={data.phone || '—'} />
-                {data.message ? <DetailRow label="Комментарий" value={data.message} /> : null}
+              {/* Правила отмены */}
+              <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 16, gap: 6 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+                  Правила отмены
+                </Text>
+                <Text style={{ fontSize: 14, color: palette.inkSecondary, lineHeight: 20 }}>
+                  {(() => {
+                    const start = parseISO(data.start_date);
+                    const cancelDeadline = new Date(start);
+                    cancelDeadline.setDate(cancelDeadline.getDate() - 3);
+                    cancelDeadline.setHours(14, 0, 0, 0);
+                    return `Бесплатная отмена до ${format(cancelDeadline, 'd MMMM, HH:mm', { locale: ru })}.`;
+                  })()}
+                </Text>
               </View>
 
+              {/* Rejection reason */}
               {data.status === 'cancelled' && data.rejection_reason ? (
-                <View className="gap-1 rounded-card border border-line bg-surface-muted p-4">
-                  <Text className="text-sm font-semibold text-ink">Причина отклонения</Text>
-                  <Text className="text-base text-ink-secondary">{data.rejection_reason}</Text>
+                <View
+                  style={{
+                    backgroundColor: '#FDECEC',
+                    marginHorizontal: 16,
+                    borderRadius: 16,
+                    padding: 16,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={palette.danger} />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: palette.danger }}>
+                      Причина отклонения
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 20 }}>
+                    {data.rejection_reason}
+                  </Text>
                 </View>
               ) : null}
             </ScrollView>
 
-            {isPending(data.status) ? (
-              <View className="border-t border-line px-4 py-3">
-                <Button
-                  label="Отменить заявку"
-                  variant="secondary"
-                  loading={cancel.isPending}
+            {/* Bottom actions */}
+            <View
+              style={{
+                backgroundColor: palette.surface,
+                borderTopWidth: 1,
+                borderTopColor: palette.line,
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: 8,
+                gap: 10,
+              }}
+            >
+              {/* Открыть чат */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  borderWidth: 1.5,
+                  borderColor: palette.line,
+                  borderRadius: 999,
+                  paddingVertical: 13,
+                }}
+                onPress={() => router.back()}
+              >
+                <Ionicons name="chatbubble-outline" size={18} color={palette.ink} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Открыть чат</Text>
+              </TouchableOpacity>
+
+              {/* Отменить заявку — only for pending */}
+              {isPending(data.status) ? (
+                <TouchableOpacity
+                  disabled={cancel.isPending}
                   onPress={onCancel}
-                />
-              </View>
-            ) : null}
+                  style={{
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 999,
+                    paddingVertical: 13,
+                    backgroundColor: '#FDECEC',
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: palette.danger }}>
+                    {cancel.isPending ? 'Отмена...' : 'Отменить заявку'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </>
         )}
       </SafeAreaView>
@@ -139,16 +382,38 @@ export default function BookingDetailScreen() {
   );
 }
 
-function badgeProps(status: string) {
-  const meta = bookingStatusMeta(status);
-  return { label: meta.label, tone: meta.tone };
+function Divider() {
+  return (
+    <View style={{ height: 1, backgroundColor: palette.line, marginLeft: 52 }} />
+  );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <View className="flex-row items-start justify-between gap-4">
-      <Text className="text-base text-ink-secondary">{label}</Text>
-      <Text className="flex-1 text-right text-base text-ink">{value}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 13,
+        gap: 12,
+      }}
+    >
+      <View
+        style={{
+          width: 36, height: 36,
+          borderRadius: 10,
+          backgroundColor: palette.surfaceMuted,
+          alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Ionicons name={icon as any} size={18} color={palette.inkSecondary} />
+      </View>
+      <Text style={{ flex: 1, fontSize: 14, color: palette.inkSecondary }}>{label}</Text>
+      <Text style={{ fontSize: 14, fontWeight: '600', color: palette.ink, textAlign: 'right', maxWidth: '50%' }}>
+        {value}
+      </Text>
     </View>
   );
 }

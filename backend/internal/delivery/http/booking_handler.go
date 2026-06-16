@@ -124,7 +124,9 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start, ok := parseDate(body.StartDate)
-	if !ok || start.Before(today()) {
+	// Allow dates starting from yesterday (UTC) to handle timezone offsets on client devices.
+	// A client in e.g. UTC+5 may send "today" which equals yesterday in UTC.
+	if !ok || start.Before(yesterday()) {
 		writeError(w, http.StatusBadRequest, "invalid start_date")
 		return
 	}
@@ -335,4 +337,11 @@ func parseDate(s string) (time.Time, bool) {
 func today() time.Time {
 	now := time.Now().UTC()
 	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// yesterday returns the start of yesterday in UTC.
+// Used for timezone-safe validation: clients ahead of UTC (e.g. UTC+5)
+// may send a date that equals "yesterday" in UTC terms.
+func yesterday() time.Time {
+	return today().AddDate(0, 0, -1)
 }
