@@ -23,15 +23,19 @@ export default function ReviewsScreen() {
 
   return (
     <View className="flex-1 bg-surface">
-      <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center gap-3 px-4 py-2">
+      <SafeAreaView edges={['top', 'bottom']} className="flex-1">
+        {/* Header with centered title */}
+        <View className="flex-row items-center justify-between px-4 py-2 relative h-14 bg-surface border-b border-line">
           <Pressable
             onPress={() => router.back()}
             accessibilityLabel="Назад"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
+            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted z-10">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
-          <Text className="text-lg font-semibold text-ink">Отзывы</Text>
+          <View className="absolute left-0 right-0 top-0 bottom-0 items-center justify-center">
+            <Text className="text-lg font-semibold text-ink">Отзывы</Text>
+          </View>
+          <View className="w-10 h-10" />
         </View>
 
         {isLoading ? (
@@ -39,7 +43,7 @@ export default function ReviewsScreen() {
             <ActivityIndicator color={palette.primary} />
           </View>
         ) : isError ? (
-          <View className="flex-1 gap-4 px-4">
+          <View className="flex-1 gap-4 px-4 justify-center">
             <EmptyState
               icon="cloud-offline-outline"
               title="Не удалось загрузить"
@@ -50,23 +54,32 @@ export default function ReviewsScreen() {
             </View>
           </View>
         ) : (
-          <FlatList
-            data={items}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerClassName="px-4 pb-6"
-            showsVerticalScrollIndicator={false}
-            onRefresh={() => refetch()}
-            refreshing={isRefetching}
-            ListHeaderComponent={summary ? <SummaryHeader summary={summary} /> : null}
-            ListEmptyComponent={
-              <EmptyState
-                icon="chatbubble-ellipses-outline"
-                title="Отзывов пока нет"
-                subtitle="Будьте первым, кто оставит отзыв об этом объекте."
+          <>
+            <FlatList
+              data={items}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerClassName="px-4 pb-6"
+              showsVerticalScrollIndicator={false}
+              onRefresh={() => refetch()}
+              refreshing={isRefetching}
+              ListHeaderComponent={summary ? <SummaryHeader summary={summary} /> : null}
+              ListEmptyComponent={
+                <EmptyState
+                  icon="chatbubble-ellipses-outline"
+                  title="Отзывов пока нет"
+                  subtitle="Будьте первым, кто оставит отзыв об этом объекте."
+                />
+              }
+              renderItem={({ item }) => <ReviewRow review={item} />}
+            />
+
+            <View className="border-t border-line px-4 py-3 bg-surface">
+              <Button
+                label="Оставить заявку"
+                onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
               />
-            }
-            renderItem={({ item }) => <ReviewRow review={item} />}
-          />
+            </View>
+          </>
         )}
       </SafeAreaView>
     </View>
@@ -76,33 +89,37 @@ export default function ReviewsScreen() {
 function SummaryHeader({ summary }: { summary: ReviewSummary }) {
   const max = Math.max(1, ...Object.values(summary.distribution));
   return (
-    <View className="gap-4 py-4">
-      <View className="flex-row items-center gap-4">
-        <View className="items-center">
-          <Text className="text-4xl font-bold text-ink">{formatRating(summary.average)}</Text>
-          <Stars value={summary.average} size={16} />
-          <Text className="mt-1 text-sm text-ink-muted">{formatReviewsCount(summary.total)}</Text>
+    <View className="flex-row gap-3 py-4">
+      {/* Left Card: Average Rating */}
+      <View className="w-[38%] rounded-2xl border border-line bg-surface p-4 items-center justify-center">
+        <Text className="text-4xl font-extrabold text-ink leading-tight">{formatRating(summary.average)}</Text>
+        <View className="my-1.5">
+          <Stars value={summary.average} size={14} />
         </View>
-        <View className="flex-1 gap-1.5">
-          {[5, 4, 3, 2, 1].map((star) => {
-            const count = summary.distribution[String(star)] ?? 0;
-            return (
-              <View key={star} className="flex-row items-center gap-2">
-                <Text className="w-3 text-xs text-ink-secondary">{star}</Text>
-                <Ionicons name="star" size={11} color={palette.star} />
-                <View className="h-2 flex-1 overflow-hidden rounded-pill bg-surface-skeleton">
-                  <View
-                    className="h-full rounded-pill bg-star"
-                    style={{ width: `${(count / max) * 100}%` }}
-                  />
-                </View>
-                <Text className="w-6 text-right text-xs text-ink-muted">{count}</Text>
-              </View>
-            );
-          })}
-        </View>
+        <Text className="text-xs text-ink-muted text-center leading-none">
+          {formatReviewsCount(summary.total)}
+        </Text>
       </View>
-      <View className="h-px bg-line" />
+
+      {/* Right Card: Distribution */}
+      <View className="flex-1 rounded-2xl border border-line bg-surface p-4 justify-between">
+        {[5, 4, 3, 2, 1].map((star) => {
+          const count = summary.distribution[String(star)] ?? 0;
+          return (
+            <View key={star} className="flex-row items-center gap-2 h-4">
+              <Text className="w-2 text-[11px] font-semibold text-ink-secondary">{star}</Text>
+              <Ionicons name="star" size={9} color={palette.inkMuted} />
+              <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-skeleton">
+                <View
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(count / max) * 100}%` }}
+                />
+              </View>
+              <Text className="w-6 text-right text-[11px] font-medium text-ink-muted">{count}</Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -110,9 +127,9 @@ function SummaryHeader({ summary }: { summary: ReviewSummary }) {
 function ReviewRow({ review }: { review: Review }) {
   const date = review.created_at ? parseISO(review.created_at) : null;
   return (
-    <View className="border-b border-line py-4">
+    <View className="mb-3 rounded-2xl border border-line bg-surface p-4">
       <View className="flex-row items-center justify-between">
-        <View className="flex-1 flex-row items-center gap-3">
+        <View className="flex-row items-center gap-3">
           <View className="h-10 w-10 overflow-hidden rounded-full bg-surface-skeleton">
             {review.author_avatar_url ? (
               <Image source={{ uri: review.author_avatar_url }} style={{ flex: 1 }} contentFit="cover" />
@@ -123,14 +140,17 @@ function ReviewRow({ review }: { review: Review }) {
             )}
           </View>
           <View>
-            <Text className="text-base font-semibold text-ink">{review.author_name}</Text>
-            {date ? <Text className="text-xs text-ink-muted">{formatDateRu(date)}</Text> : null}
+            <Text className="text-sm font-semibold text-ink">{review.author_name}</Text>
+            {date ? <Text className="text-xs text-ink-muted mt-0.5">{formatDateRu(date)}</Text> : null}
           </View>
         </View>
-        <Stars value={review.rating} size={14} />
+        <View className="flex-row items-center gap-1">
+          <Ionicons name="star" size={14} color={palette.primary} />
+          <Text className="text-sm font-bold text-ink">{formatRating(review.rating)}</Text>
+        </View>
       </View>
       {review.body ? (
-        <Text className="mt-2 text-base leading-6 text-ink-secondary">{review.body}</Text>
+        <Text className="mt-3 text-[14px] leading-5 text-ink-secondary">{review.body}</Text>
       ) : null}
     </View>
   );

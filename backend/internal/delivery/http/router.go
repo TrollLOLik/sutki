@@ -24,8 +24,21 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Route("/listings", listingHandler.Routes)
-		r.Get("/listings/{id}/reviews", reviewHandler.List)
+		r.Route("/listings", func(r chi.Router) {
+			r.Get("/", listingHandler.list)
+			r.Get("/{id}", listingHandler.get)
+			r.Get("/{id}/reviews", reviewHandler.List)
+
+			// Authenticated endpoints under /listings
+			r.Group(func(r chi.Router) {
+				r.Use(AuthMiddleware(authSvc.TokenManager()))
+				r.Post("/{id}/requests", bookingHandler.Create)
+				r.Post("/{id}/reviews", reviewHandler.Create)
+				r.Post("/{id}/favorite", favoriteHandler.Add)
+				r.Delete("/{id}/favorite", favoriteHandler.Remove)
+			})
+		})
+
 		r.Get("/services", listingHandler.ListServices)
 		r.Get("/categories", listingHandler.ListCategories)
 		r.Route("/auth", authHandler.Routes)
@@ -38,11 +51,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Get("/me", authHandler.Me)
 			r.Patch("/me", authHandler.UpdateMe)
 			r.Delete("/me", authHandler.DeleteMe)
-			r.Post("/listings/{id}/requests", bookingHandler.Create)
-			r.Post("/listings/{id}/reviews", reviewHandler.Create)
 			r.Route("/requests", bookingHandler.Routes)
-			r.Post("/listings/{id}/favorite", favoriteHandler.Add)
-			r.Delete("/listings/{id}/favorite", favoriteHandler.Remove)
 			r.Route("/favorites", favoriteHandler.Routes)
 		})
 	})

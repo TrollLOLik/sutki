@@ -30,7 +30,7 @@ export default function ListingDetailScreen() {
 
   return (
     <View className="flex-1 bg-surface">
-      <SafeAreaView edges={['top']} className="flex-1">
+      <SafeAreaView edges={['top', 'bottom']} className="flex-1">
         <View className="flex-row items-center justify-between px-4 py-2">
           <Pressable
             onPress={() => router.back()}
