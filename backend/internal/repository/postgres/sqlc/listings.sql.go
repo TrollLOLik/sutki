@@ -11,6 +11,51 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addHouseCategory = `-- name: AddHouseCategory :exec
+INSERT INTO house_house_category (house_id, house_category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddHouseCategoryParams struct {
+	HouseID         int32
+	HouseCategoryID int32
+}
+
+func (q *Queries) AddHouseCategory(ctx context.Context, arg AddHouseCategoryParams) error {
+	_, err := q.db.Exec(ctx, addHouseCategory, arg.HouseID, arg.HouseCategoryID)
+	return err
+}
+
+const addHouseService = `-- name: AddHouseService :exec
+INSERT INTO house_house_service (house_id, service_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddHouseServiceParams struct {
+	HouseID   int32
+	ServiceID int32
+}
+
+func (q *Queries) AddHouseService(ctx context.Context, arg AddHouseServiceParams) error {
+	_, err := q.db.Exec(ctx, addHouseService, arg.HouseID, arg.ServiceID)
+	return err
+}
+
+const countHousesByOwner = `-- name: CountHousesByOwner :one
+SELECT count(*)
+FROM house h
+WHERE h.owner_id = $1 AND h.deleted = false
+`
+
+func (q *Queries) CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, countHousesByOwner, ownerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countHousesFiltered = `-- name: CountHousesFiltered :one
 SELECT count(*)
 FROM house h
@@ -76,6 +121,54 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createHouse = `-- name: CreateHouse :one
+INSERT INTO house (
+  owner_id, street, house_number, description, price, count_room, number_room,
+  area, country, status, deleted, pay, views, lat, lng, created_at, updated_at
+) VALUES (
+  $1, $2, $3, $4, $5, $6,
+  $7, $8, $9, 'active', false, false, 0,
+  $10, $11, now(), now()
+)
+RETURNING id
+`
+
+type CreateHouseParams struct {
+	OwnerID     int32
+	Street      string
+	HouseNumber string
+	Description string
+	Price       int32
+	CountRoom   string
+	NumberRoom  *string
+	Area        int32
+	Country     string
+	Lat         *float64
+	Lng         *float64
+}
+
+// Creates a new listing owned by the given user. New listings are published
+// immediately (status='active') for the MVP; the one-time publication fee is a
+// front-end stub until YooKassa is wired (then `pay` flips via webhook).
+func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error) {
+	row := q.db.QueryRow(ctx, createHouse,
+		arg.OwnerID,
+		arg.Street,
+		arg.HouseNumber,
+		arg.Description,
+		arg.Price,
+		arg.CountRoom,
+		arg.NumberRoom,
+		arg.Area,
+		arg.Country,
+		arg.Lat,
+		arg.Lng,
+	)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getHouseByID = `-- name: GetHouseByID :one
@@ -316,6 +409,106 @@ func (q *Queries) ListHouseServices(ctx context.Context, houseID int32) ([]ListH
 	for rows.Next() {
 		var i ListHouseServicesRow
 		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHousesByOwner = `-- name: ListHousesByOwner :many
+SELECT
+  h.id,
+  h.street,
+  h.house_number,
+  h.description,
+  h.price,
+  h.count_room,
+  h.area,
+  h.country,
+  h.status,
+  h.lat,
+  h.lng,
+  h.views,
+  h.created_at,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  ), 0)::float8 AS rating,
+  (
+    SELECT count(*)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  )::int AS reviews_count,
+  COALESCE((
+    SELECT f.path
+    FROM file f
+    WHERE f.house_id = h.id AND f.deleted = false
+    ORDER BY f.position
+    LIMIT 1
+  ), '')::text AS cover_path
+FROM house h
+WHERE h.owner_id = $1 AND h.deleted = false
+ORDER BY h.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListHousesByOwnerParams struct {
+	OwnerID      int32
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListHousesByOwnerRow struct {
+	ID           int32
+	Street       string
+	HouseNumber  string
+	Description  string
+	Price        int32
+	CountRoom    string
+	Area         int32
+	Country      string
+	Status       string
+	Lat          *float64
+	Lng          *float64
+	Views        int32
+	CreatedAt    pgtype.Timestamp
+	Rating       float64
+	ReviewsCount int32
+	CoverPath    string
+}
+
+func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerParams) ([]ListHousesByOwnerRow, error) {
+	rows, err := q.db.Query(ctx, listHousesByOwner, arg.OwnerID, arg.ResultOffset, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHousesByOwnerRow
+	for rows.Next() {
+		var i ListHousesByOwnerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Street,
+			&i.HouseNumber,
+			&i.Description,
+			&i.Price,
+			&i.CountRoom,
+			&i.Area,
+			&i.Country,
+			&i.Status,
+			&i.Lat,
+			&i.Lng,
+			&i.Views,
+			&i.CreatedAt,
+			&i.Rating,
+			&i.ReviewsCount,
+			&i.CoverPath,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

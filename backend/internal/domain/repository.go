@@ -9,6 +9,9 @@ import (
 type ListingRepository interface {
 	List(ctx context.Context, filter ListFilter) ([]House, error)
 	Count(ctx context.Context, filter ListFilter) (int64, error)
+	Create(ctx context.Context, h NewHouse) (int32, error)
+	ListByOwner(ctx context.Context, ownerID, limit, offset int32) ([]House, error)
+	CountByOwner(ctx context.Context, ownerID int32) (int64, error)
 	GetByID(ctx context.Context, id int32) (House, error)
 	ListPhotos(ctx context.Context, houseID int32) ([]Photo, error)
 	ListServices(ctx context.Context, houseID int32) ([]Ref, error)

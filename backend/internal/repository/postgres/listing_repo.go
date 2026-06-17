@@ -69,6 +69,76 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 	return houses, nil
 }
 
+// Create inserts a new listing (status='active') and links its services and
+// categories. Photos are not persisted yet (S3 media phase). Returns the new id.
+func (r *ListingRepo) Create(ctx context.Context, h domain.NewHouse) (int32, error) {
+	id, err := r.q.CreateHouse(ctx, sqlc.CreateHouseParams{
+		OwnerID:     h.OwnerID,
+		Street:      h.Street,
+		HouseNumber: h.HouseNumber,
+		Description: h.Description,
+		Price:       h.Price,
+		CountRoom:   h.CountRoom,
+		NumberRoom:  h.NumberRoom,
+		Area:        h.Area,
+		Country:     h.City,
+		Lat:         h.Lat,
+		Lng:         h.Lng,
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, sid := range h.ServiceIDs {
+		if err := r.q.AddHouseService(ctx, sqlc.AddHouseServiceParams{HouseID: id, ServiceID: sid}); err != nil {
+			return 0, err
+		}
+	}
+	for _, cid := range h.CategoryIDs {
+		if err := r.q.AddHouseCategory(ctx, sqlc.AddHouseCategoryParams{HouseID: id, HouseCategoryID: cid}); err != nil {
+			return 0, err
+		}
+	}
+	return id, nil
+}
+
+func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset int32) ([]domain.House, error) {
+	rows, err := r.q.ListHousesByOwner(ctx, sqlc.ListHousesByOwnerParams{
+		OwnerID:      ownerID,
+		ResultLimit:  limit,
+		ResultOffset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	houses := make([]domain.House, 0, len(rows))
+	for _, row := range rows {
+		houses = append(houses, domain.House{
+			ID:           row.ID,
+			OwnerID:      ownerID,
+			Street:       row.Street,
+			HouseNumber:  row.HouseNumber,
+			Description:  row.Description,
+			Price:        row.Price,
+			CountRoom:    row.CountRoom,
+			Area:         row.Area,
+			City:         row.Country,
+			Status:       row.Status,
+			Lat:          row.Lat,
+			Lng:          row.Lng,
+			Views:        row.Views,
+			CoverPath:    row.CoverPath,
+			CreatedAt:    row.CreatedAt.Time,
+			Rating:       row.Rating,
+			ReviewsCount: row.ReviewsCount,
+		})
+	}
+	return houses, nil
+}
+
+func (r *ListingRepo) CountByOwner(ctx context.Context, ownerID int32) (int64, error) {
+	return r.q.CountHousesByOwner(ctx, ownerID)
+}
+
 func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int64, error) {
 	return r.q.CountHousesFiltered(ctx, sqlc.CountHousesFilteredParams{
 		Query:    filter.Query,

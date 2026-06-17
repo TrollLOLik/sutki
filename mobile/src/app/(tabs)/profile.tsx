@@ -25,8 +25,16 @@ export default function ProfileScreen() {
       <View className="mt-8 overflow-hidden rounded-card border border-line">
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/bookings')}
+          onPress={() => router.push('/my-listings')}
           className="flex-row items-center gap-3 px-4 py-4 active:bg-surface-muted">
+          <Ionicons name="home-outline" size={22} color={palette.ink} />
+          <Text className="flex-1 text-base text-ink">Мои объявления</Text>
+          <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/bookings')}
+          className="flex-row items-center gap-3 border-t border-line px-4 py-4 active:bg-surface-muted">
           <Ionicons name="reader-outline" size={22} color={palette.ink} />
           <Text className="flex-1 text-base text-ink">Мои брони</Text>
           <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />

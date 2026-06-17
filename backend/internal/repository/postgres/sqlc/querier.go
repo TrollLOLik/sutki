@@ -10,13 +10,20 @@ import (
 
 type Querier interface {
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
+	AddHouseCategory(ctx context.Context, arg AddHouseCategoryParams) error
+	AddHouseService(ctx context.Context, arg AddHouseServiceParams) error
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
 	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
+	CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
 	CountRequestsByUser(ctx context.Context, arg CountRequestsByUserParams) (int64, error)
 	CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountReviewsByHouse(ctx context.Context, houseID int32) (int64, error)
+	// Creates a new listing owned by the given user. New listings are published
+	// immediately (status='active') for the MVP; the one-time publication fee is a
+	// front-end stub until YooKassa is wired (then `pay` flips via webhook).
+	CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
@@ -40,6 +47,7 @@ type Querier interface {
 	ListHouseCategories(ctx context.Context, houseID int32) ([]ListHouseCategoriesRow, error)
 	ListHousePhotos(ctx context.Context, houseID *int32) ([]ListHousePhotosRow, error)
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
+	ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerParams) ([]ListHousesByOwnerRow, error)
 	ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error)
 	ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error)
 	ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error)

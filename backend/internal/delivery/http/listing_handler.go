@@ -122,6 +122,90 @@ func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type createListingRequest struct {
+	Street      string   `json:"street"`
+	HouseNumber string   `json:"house_number"`
+	City        string   `json:"city"`
+	Description string   `json:"description"`
+	Price       int32    `json:"price"`
+	CountRoom   string   `json:"count_room"`
+	NumberRoom  *string  `json:"number_room"`
+	Area        int32    `json:"area"`
+	Lat         *float64 `json:"lat"`
+	Lng         *float64 `json:"lng"`
+	ServiceIDs  []int32  `json:"service_ids"`
+	CategoryIDs []int32  `json:"category_ids"`
+}
+
+// create handles POST /api/v1/listings: the authenticated user publishes a new
+// listing. OwnerID comes from the session, not the body.
+func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body createListingRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	in := domain.NewHouse{
+		OwnerID:     userID,
+		Street:      body.Street,
+		HouseNumber: body.HouseNumber,
+		City:        body.City,
+		Description: body.Description,
+		Price:       body.Price,
+		CountRoom:   body.CountRoom,
+		NumberRoom:  body.NumberRoom,
+		Area:        body.Area,
+		Lat:         body.Lat,
+		Lng:         body.Lng,
+		ServiceIDs:  body.ServiceIDs,
+		CategoryIDs: body.CategoryIDs,
+	}
+	hs, err := h.svc.Create(r.Context(), in)
+	if err != nil {
+		if errors.Is(err, listing.ErrInvalidListing) {
+			writeError(w, http.StatusBadRequest, "invalid listing")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusCreated, h.detailDTO(hs))
+}
+
+// listMine handles GET /api/v1/listings/mine: the authenticated user's own
+// listings (any status), newest first.
+func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	res, err := h.svc.ListMine(
+		r.Context(),
+		userID,
+		parseInt32(r.URL.Query().Get("limit"), 0),
+		parseInt32(r.URL.Query().Get("offset"), 0),
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	items := make([]listingCardDTO, 0, len(res.Items))
+	for _, hs := range res.Items {
+		items = append(items, h.cardDTO(hs))
+	}
+	writeJSON(w, http.StatusOK, listResponse{
+		Items:  items,
+		Total:  res.Total,
+		Limit:  res.Limit,
+		Offset: res.Offset,
+	})
+}
+
 func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 {

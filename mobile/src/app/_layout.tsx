@@ -39,6 +39,8 @@ export default function RootLayout() {
               <Stack.Screen name="bookings/[id]" />
               <Stack.Screen name="incoming/index" />
               <Stack.Screen name="incoming/[id]" />
+              <Stack.Screen name="create" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="my-listings/index" />
             </Stack.Protected>
             {/* Tokens are set but the profile is incomplete: the (auth) stack is
                 unmounted and only profile-setup is reachable until onboarding

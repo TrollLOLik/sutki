@@ -2,6 +2,8 @@ package listing
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
@@ -10,6 +12,9 @@ const (
 	defaultLimit int32 = 20
 	maxLimit     int32 = 100
 )
+
+// ErrInvalidListing is returned when create input fails validation.
+var ErrInvalidListing = errors.New("invalid listing")
 
 // Service implements listing read use cases over a ListingRepository.
 type Service struct {
@@ -49,6 +54,63 @@ func (s *Service) List(ctx context.Context, filter domain.ListFilter) (ListResul
 		return ListResult{}, err
 	}
 	return ListResult{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+// Create validates and persists a new listing owned by ownerID, then returns
+// the full created listing (with services/categories). Photos are out of scope
+// until the media phase. Returns ErrInvalidListing on bad input.
+func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House, error) {
+	in.Street = strings.TrimSpace(in.Street)
+	in.HouseNumber = strings.TrimSpace(in.HouseNumber)
+	in.Description = strings.TrimSpace(in.Description)
+	in.City = strings.TrimSpace(in.City)
+	in.CountRoom = strings.TrimSpace(in.CountRoom)
+	if in.NumberRoom != nil {
+		trimmed := strings.TrimSpace(*in.NumberRoom)
+		in.NumberRoom = &trimmed
+	}
+
+	if in.OwnerID <= 0 {
+		return domain.House{}, ErrInvalidListing
+	}
+	if in.Street == "" || in.HouseNumber == "" || in.City == "" || in.CountRoom == "" {
+		return domain.House{}, ErrInvalidListing
+	}
+	if in.Description == "" {
+		return domain.House{}, ErrInvalidListing
+	}
+	if in.Price <= 0 || in.Area <= 0 {
+		return domain.House{}, ErrInvalidListing
+	}
+
+	id, err := s.repo.Create(ctx, in)
+	if err != nil {
+		return domain.House{}, err
+	}
+	return s.Get(ctx, id)
+}
+
+// ListMine returns a page of listings owned by ownerID (any status), newest
+// first, for the "Мои объявления" profile screen.
+func (s *Service) ListMine(ctx context.Context, ownerID, limit, offset int32) (ListResult, error) {
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	items, err := s.repo.ListByOwner(ctx, ownerID, limit, offset)
+	if err != nil {
+		return ListResult{}, err
+	}
+	total, err := s.repo.CountByOwner(ctx, ownerID)
+	if err != nil {
+		return ListResult{}, err
+	}
+	return ListResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 // Services returns the catalog of amenities usable as listing filters.

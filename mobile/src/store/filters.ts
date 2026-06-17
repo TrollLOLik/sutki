@@ -13,6 +13,8 @@ export interface SearchFilters {
   priceMax: number | null;
   rooms: RoomFilter[];
   amenities: Amenity[];
+  /** When true, the feed shows only listings the user has favorited. */
+  favoritesOnly: boolean;
 }
 
 export const defaultFilters: SearchFilters = {
@@ -25,12 +27,14 @@ export const defaultFilters: SearchFilters = {
   priceMax: null,
   rooms: [],
   amenities: [],
+  favoritesOnly: false,
 };
 
 interface FiltersState extends SearchFilters {
   setFilters: (patch: Partial<SearchFilters>) => void;
   toggleRoom: (room: RoomFilter) => void;
   toggleAmenity: (amenity: Amenity) => void;
+  toggleFavoritesOnly: () => void;
   reset: () => void;
 }
 
@@ -43,5 +47,6 @@ export const useFiltersStore = create<FiltersState>((set) => ({
   setFilters: (patch) => set(patch),
   toggleRoom: (room) => set((s) => ({ rooms: toggle(s.rooms, room) })),
   toggleAmenity: (amenity) => set((s) => ({ amenities: toggle(s.amenities, amenity) })),
+  toggleFavoritesOnly: () => set((s) => ({ favoritesOnly: !s.favoritesOnly })),
   reset: () => set(defaultFilters),
 }));

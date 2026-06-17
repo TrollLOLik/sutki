@@ -43,10 +43,13 @@ export default function SearchScreen() {
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
 
-  const visible = useMemo(
-    () => filterListings(data?.items ?? [], filters, query),
-    [data?.items, filters, query],
-  );
+  const visible = useMemo(() => {
+    const list = filterListings(data?.items ?? [], filters, query);
+    if (filters.favoritesOnly) {
+      return list.filter((item) => favoriteIds?.has(item.id) ?? false);
+    }
+    return list;
+  }, [data?.items, filters, query, favoriteIds]);
 
   const activeFilters =
     filters.rooms.length +
@@ -265,6 +268,21 @@ export default function SearchScreen() {
               <Text className="text-sm font-medium text-ink">{formatGuests(filters.guests)}</Text>
             </View>
             <Ionicons name="chevron-down" size={16} color={palette.inkMuted} />
+          </Pressable>
+
+          {/* Favorites filter (replaces the old Избранное tab) */}
+          <Pressable
+            accessibilityLabel="Только избранное"
+            accessibilityState={{ selected: filters.favoritesOnly }}
+            onPress={filters.toggleFavoritesOnly}
+            className={`h-12 w-12 items-center justify-center rounded-field border active:opacity-80 ${
+              filters.favoritesOnly ? 'border-primary bg-primary-light' : 'border-line bg-surface'
+            }`}>
+            <Ionicons
+              name={filters.favoritesOnly ? 'heart' : 'heart-outline'}
+              size={22}
+              color={palette.primary}
+            />
           </Pressable>
         </View>
       </View>
