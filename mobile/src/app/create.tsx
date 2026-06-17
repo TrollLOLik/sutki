@@ -182,12 +182,12 @@ export default function CreateListingScreen() {
           <Text className="mt-2 text-center text-base text-ink-secondary">
             Оно уже доступно в поиске. Управлять им можно в разделе «Мои объявления».
           </Text>
-          <View className="mt-8 w-full gap-3">
+          <View style={{ width: '100%', maxWidth: 320, gap: 12, marginTop: 32 }}>
             <Button
               label="Мои объявления"
               onPress={() => {
                 draft.reset();
-                router.replace('/my-listings');
+                router.replace('/my-listings' as any);
               }}
             />
             <Button

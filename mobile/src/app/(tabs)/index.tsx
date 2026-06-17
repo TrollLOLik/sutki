@@ -22,11 +22,13 @@ import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { Button, Chip } from '@/components/ui';
+import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
 import { filterListings } from '@/lib/listing-filters';
 import { useFiltersStore } from '@/store/filters';
+import { useSessionStore } from '@/store/session';
 import { palette, radii } from '@/theme/tokens';
 
 const QUICK_FILTERS = [
@@ -43,13 +45,24 @@ export default function SearchScreen() {
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
 
+  const { status: authStatus } = useSessionStore();
+  const isAuthenticated = authStatus === 'authenticated';
+  const { data: myListingsData } = useMyListings({ limit: 50 }, { enabled: isAuthenticated });
+
+  const myListingsIds = useMemo(() => {
+    return new Set(myListingsData?.items.map((item) => item.id) ?? []);
+  }, [myListingsData]);
+
   const visible = useMemo(() => {
-    const list = filterListings(data?.items ?? [], filters, query);
+    let list = filterListings(data?.items ?? [], filters, query);
     if (filters.favoritesOnly) {
-      return list.filter((item) => favoriteIds?.has(item.id) ?? false);
+      list = list.filter((item) => favoriteIds?.has(item.id) ?? false);
+    }
+    if (isAuthenticated && myListingsIds.size > 0) {
+      list = list.filter((item) => !myListingsIds.has(item.id));
     }
     return list;
-  }, [data?.items, filters, query, favoriteIds]);
+  }, [data?.items, filters, query, favoriteIds, isAuthenticated, myListingsIds]);
 
   const activeFilters =
     filters.rooms.length +

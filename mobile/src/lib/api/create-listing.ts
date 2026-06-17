@@ -69,7 +69,7 @@ export const myListingKeys = {
 };
 
 /** The authenticated user's own listings (any status), newest first. */
-export function useMyListings(params: ListListingsParams = {}) {
+export function useMyListings(params: ListListingsParams = {}, options?: { enabled?: boolean }) {
   const sp = new URLSearchParams();
   if (params.limit != null) sp.set('limit', String(params.limit));
   if (params.offset != null) sp.set('offset', String(params.offset));
@@ -77,5 +77,6 @@ export function useMyListings(params: ListListingsParams = {}) {
   return useQuery({
     queryKey: myListingKeys.list(params),
     queryFn: () => api.get<ListingsPage>(`/api/v1/listings/mine${qs ? `?${qs}` : ''}`),
+    ...options,
   });
 }
