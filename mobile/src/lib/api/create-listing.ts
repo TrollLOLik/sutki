@@ -63,6 +63,20 @@ export function useCreateListing() {
   });
 }
 
+/** Updates an existing listing. Invalidates the listing detail, public feed and "Мои объявления". */
+export function useUpdateListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: NewListingInput }) =>
+      api.put<ListingDetail>(`/api/v1/listings/${id}`, input),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: listingKeys.all });
+      qc.invalidateQueries({ queryKey: listingKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: myListingKeys.all });
+    },
+  });
+}
+
 export const myListingKeys = {
   all: ['my-listings'] as const,
   list: (params: ListListingsParams) => [...myListingKeys.all, params] as const,

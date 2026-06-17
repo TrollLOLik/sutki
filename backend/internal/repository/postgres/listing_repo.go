@@ -244,3 +244,39 @@ func (r *ListingRepo) AllCategories(ctx context.Context) ([]domain.Ref, error) {
 	}
 	return refs, nil
 }
+
+func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) error {
+	q := `UPDATE house 
+		SET street = $1, house_number = $2, country = $3, description = $4, price = $5, count_room = $6, number_room = $7, area = $8, lat = $9, lng = $10, updated_at = now()
+		WHERE id = $11 AND owner_id = $12 AND deleted = false`
+	_, err := r.q.DB().Exec(ctx, q, h.Street, h.HouseNumber, h.City, h.Description, h.Price, h.CountRoom, h.NumberRoom, h.Area, h.Lat, h.Lng, id, h.OwnerID)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.q.DB().Exec(ctx, "DELETE FROM house_house_service WHERE house_id = $1", id)
+	if err != nil {
+		return err
+	}
+	for _, serviceID := range h.ServiceIDs {
+		err = r.q.AddHouseService(ctx, sqlc.AddHouseServiceParams{HouseID: id, ServiceID: serviceID})
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = r.q.DB().Exec(ctx, "DELETE FROM house_house_category WHERE house_id = $1", id)
+	if err != nil {
+		return err
+	}
+	for _, categoryID := range h.CategoryIDs {
+		err = r.q.AddHouseCategory(ctx, sqlc.AddHouseCategoryParams{HouseID: id, HouseCategoryID: categoryID})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+

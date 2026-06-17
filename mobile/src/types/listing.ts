@@ -37,6 +37,8 @@ export interface ListingCard {
 }
 
 export interface ListingDetail extends ListingCard {
+  street?: string;
+  house_number?: string;
   number_room: string;
   photos: ListingPhoto[];
   services: ListingRef[];

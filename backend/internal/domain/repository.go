@@ -18,6 +18,7 @@ type ListingRepository interface {
 	ListCategories(ctx context.Context, houseID int32) ([]Ref, error)
 	AllServices(ctx context.Context) ([]Ref, error)
 	AllCategories(ctx context.Context) ([]Ref, error)
+	Update(ctx context.Context, id int32, h NewHouse) error
 }
 
 // BookingRepository abstracts persistence for rental requests (bookings).

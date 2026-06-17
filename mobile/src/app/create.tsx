@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -19,8 +19,10 @@ import {
   useCategories,
   useCreateListing,
   useServices,
+  useUpdateListing,
   type NewListingInput,
 } from '@/lib/api/create-listing';
+import { useListing } from '@/lib/api/listings';
 import { env } from '@/lib/env';
 import { useCreateListingStore } from '@/store/create-listing';
 import { palette } from '@/theme/tokens';
@@ -68,10 +70,43 @@ export default function CreateListingScreen() {
   const { data: services } = useServices();
   const createListing = useCreateListing();
 
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEditing = editId != null && editId.length > 0;
+  const editListingId = isEditing ? Number(editId) : undefined;
+
+  const { data: editListing, isLoading: isEditLoading } = useListing(editListingId);
+  const updateListing = useUpdateListing();
+
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [published, setPublished] = useState(false);
+
+  const [loadedEdit, setLoadedEdit] = useState(false);
+
+  useEffect(() => {
+    if (isEditing && editListing && !loadedEdit) {
+      useCreateListingStore.setState({
+        categoryIds: editListing.categories.map((c) => c.id),
+        countRoom: editListing.rooms,
+        city: editListing.city,
+        street: editListing.street || '',
+        houseNumber: editListing.house_number || '',
+        area: String(editListing.area),
+        price: String(editListing.price),
+        serviceIds: editListing.services.map((s) => s.id),
+        description: editListing.description,
+        photos: editListing.photos.map((p) => p.url),
+      });
+      setLoadedEdit(true);
+    }
+  }, [isEditing, editListing, loadedEdit]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      draft.reset();
+    }
+  }, [isEditing]);
 
   // City autocomplete
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -98,6 +133,14 @@ export default function CreateListingScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)');
   };
+
+  if (isEditing && isEditLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-surface justify-center items-center">
+        <ActivityIndicator color={palette.primary} />
+      </SafeAreaView>
+    );
+  }
 
   const validateStep = (s: number): string | null => {
     switch (s) {
@@ -140,10 +183,6 @@ export default function CreateListingScreen() {
 
   const handlePublish = async () => {
     setError(null);
-    setPaying(true);
-    // Payment is a front-end stub for the MVP (no YooKassa yet): simulate the
-    // 199 ₽ charge, then create the listing.
-    await new Promise((r) => setTimeout(r, 900));
     const payload: NewListingInput = {
       city: draft.city.trim(),
       street: draft.street.trim(),
@@ -155,6 +194,21 @@ export default function CreateListingScreen() {
       service_ids: draft.serviceIds,
       category_ids: draft.categoryIds,
     };
+
+    if (isEditing) {
+      try {
+        await updateListing.mutateAsync({ id: editListingId!, input: payload });
+        setPublished(true);
+      } catch (e) {
+        setError('Не удалось сохранить изменения. Попробуйте ещё раз.');
+      }
+      return;
+    }
+
+    setPaying(true);
+    // Payment is a front-end stub for the MVP (no YooKassa yet): simulate the
+    // 199 ₽ charge, then create the listing.
+    await new Promise((r) => setTimeout(r, 900));
     try {
       await createListing.mutateAsync(payload);
       setPaying(false);
@@ -178,9 +232,13 @@ export default function CreateListingScreen() {
             className="h-20 w-20 items-center justify-center rounded-full bg-success-light">
             <Ionicons name="checkmark" size={44} color={palette.success} />
           </MotiView>
-          <Text className="mt-6 text-center text-2xl font-bold text-ink">Объявление опубликовано!</Text>
+          <Text className="mt-6 text-center text-2xl font-bold text-ink">
+            {isEditing ? 'Объявление обновлено!' : 'Объявление опубликовано!'}
+          </Text>
           <Text className="mt-2 text-center text-base text-ink-secondary">
-            Оно уже доступно в поиске. Управлять им можно в разделе «Мои объявления».
+            {isEditing
+              ? 'Изменения уже видны в поиске. Управлять им можно в разделе «Мои объявления».'
+              : 'Оно уже доступно в поиске. Управлять им можно в разделе «Мои объявления».'}
           </Text>
           <View style={{ width: '100%', maxWidth: 320, gap: 12, marginTop: 32 }}>
             <Button
@@ -390,22 +448,26 @@ export default function CreateListingScreen() {
 
           {step === 5 && (
             <View className="gap-5">
-              <Text className="text-base font-semibold text-ink">Проверьте и опубликуйте</Text>
+              <Text className="text-base font-semibold text-ink">
+                {isEditing ? 'Проверьте и сохраните' : 'Проверьте и опубликуйте'}
+              </Text>
               <View className="gap-3 rounded-card border border-line bg-surface p-4">
                 <SummaryRow label="Адрес" value={`${draft.city}, ${draft.street} ${draft.houseNumber}`} />
                 <SummaryRow label="Комнат" value={draft.countRoom} />
                 <SummaryRow label="Площадь" value={`${draft.area} м²`} />
                 <SummaryRow label="Цена" value={`${draft.price} ₽ / ночь`} />
               </View>
-              <View className="flex-row items-center justify-between rounded-card bg-primary-light p-4">
-                <View className="flex-1 pr-3">
-                  <Text className="text-base font-semibold text-ink">Разовая плата за публикацию</Text>
-                  <Text className="text-sm text-ink-secondary">
-                    Объявление будет активно сразу после оплаты.
-                  </Text>
+              {!isEditing && (
+                <View className="flex-row items-center justify-between rounded-card bg-primary-light p-4">
+                  <View className="flex-1 pr-3">
+                    <Text className="text-base font-semibold text-ink">Разовая плата за публикацию</Text>
+                    <Text className="text-sm text-ink-secondary">
+                      Объявление будет активно сразу после оплаты.
+                    </Text>
+                  </View>
+                  <Text className="text-xl font-bold text-primary">{LISTING_PRICE_RUB} ₽</Text>
                 </View>
-                <Text className="text-xl font-bold text-primary">{LISTING_PRICE_RUB} ₽</Text>
-              </View>
+              )}
             </View>
           )}
 
@@ -418,9 +480,13 @@ export default function CreateListingScreen() {
             <Button label="Далее" onPress={goNext} />
           ) : (
             <Button
-              label={paying ? 'Оплата…' : `Оплатить ${LISTING_PRICE_RUB} ₽ и опубликовать`}
+              label={
+                isEditing
+                  ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
+                  : (paying ? 'Оплата…' : `Оплатить ${LISTING_PRICE_RUB} ₽ и опубликовать`)
+              }
               variant="success"
-              loading={paying || createListing.isPending}
+              loading={isEditing ? updateListing.isPending : (paying || createListing.isPending)}
               onPress={handlePublish}
             />
           )}

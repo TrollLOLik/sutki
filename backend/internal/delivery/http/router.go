@@ -33,6 +33,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Group(func(r chi.Router) {
 				r.Use(AuthMiddleware(authSvc.TokenManager()))
 				r.Post("/", listingHandler.create)
+				r.Put("/{id}", listingHandler.update)
 				r.Get("/mine", listingHandler.listMine)
 				r.Post("/{id}/requests", bookingHandler.Create)
 				r.Post("/{id}/reviews", reviewHandler.Create)

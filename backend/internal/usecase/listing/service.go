@@ -140,3 +140,35 @@ func (s *Service) Get(ctx context.Context, id int32) (domain.House, error) {
 	}
 	return house, nil
 }
+
+func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (domain.House, error) {
+	in.Street = strings.TrimSpace(in.Street)
+	in.HouseNumber = strings.TrimSpace(in.HouseNumber)
+	in.Description = strings.TrimSpace(in.Description)
+	in.City = strings.TrimSpace(in.City)
+	in.CountRoom = strings.TrimSpace(in.CountRoom)
+	if in.NumberRoom != nil {
+		trimmed := strings.TrimSpace(*in.NumberRoom)
+		in.NumberRoom = &trimmed
+	}
+
+	if in.OwnerID <= 0 {
+		return domain.House{}, ErrInvalidListing
+	}
+	if in.Street == "" || in.HouseNumber == "" || in.City == "" || in.CountRoom == "" {
+		return domain.House{}, ErrInvalidListing
+	}
+	if in.Description == "" {
+		return domain.House{}, ErrInvalidListing
+	}
+	if in.Price <= 0 || in.Area <= 0 {
+		return domain.House{}, ErrInvalidListing
+	}
+
+	err := s.repo.Update(ctx, id, in)
+	if err != nil {
+		return domain.House{}, err
+	}
+	return s.Get(ctx, id)
+}
+
