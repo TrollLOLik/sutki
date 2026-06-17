@@ -245,38 +245,48 @@ func (r *ListingRepo) AllCategories(ctx context.Context) ([]domain.Ref, error) {
 	return refs, nil
 }
 
+// Update edits an existing listing owned by h.OwnerID. It returns
+// domain.ErrNotFound when no listing matches (missing or not owned), so the
+// caller can answer 404 instead of silently reporting success.
 func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) error {
-	q := `UPDATE house 
-		SET street = $1, house_number = $2, country = $3, description = $4, price = $5, count_room = $6, number_room = $7, area = $8, lat = $9, lng = $10, updated_at = now()
-		WHERE id = $11 AND owner_id = $12 AND deleted = false`
-	_, err := r.q.DB().Exec(ctx, q, h.Street, h.HouseNumber, h.City, h.Description, h.Price, h.CountRoom, h.NumberRoom, h.Area, h.Lat, h.Lng, id, h.OwnerID)
+	affected, err := r.q.UpdateHouse(ctx, sqlc.UpdateHouseParams{
+		Street:      h.Street,
+		HouseNumber: h.HouseNumber,
+		Description: h.Description,
+		Price:       h.Price,
+		CountRoom:   h.CountRoom,
+		NumberRoom:  h.NumberRoom,
+		Area:        h.Area,
+		Country:     h.City,
+		Lat:         h.Lat,
+		Lng:         h.Lng,
+		ID:          id,
+		OwnerID:     h.OwnerID,
+	})
 	if err != nil {
 		return err
 	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
 
-	_, err = r.q.DB().Exec(ctx, "DELETE FROM house_house_service WHERE house_id = $1", id)
-	if err != nil {
+	if err := r.q.DeleteHouseServices(ctx, id); err != nil {
 		return err
 	}
 	for _, serviceID := range h.ServiceIDs {
-		err = r.q.AddHouseService(ctx, sqlc.AddHouseServiceParams{HouseID: id, ServiceID: serviceID})
-		if err != nil {
+		if err := r.q.AddHouseService(ctx, sqlc.AddHouseServiceParams{HouseID: id, ServiceID: serviceID}); err != nil {
 			return err
 		}
 	}
 
-	_, err = r.q.DB().Exec(ctx, "DELETE FROM house_house_category WHERE house_id = $1", id)
-	if err != nil {
+	if err := r.q.DeleteHouseCategories(ctx, id); err != nil {
 		return err
 	}
 	for _, categoryID := range h.CategoryIDs {
-		err = r.q.AddHouseCategory(ctx, sqlc.AddHouseCategoryParams{HouseID: id, HouseCategoryID: categoryID})
-		if err != nil {
+		if err := r.q.AddHouseCategory(ctx, sqlc.AddHouseCategoryParams{HouseID: id, HouseCategoryID: categoryID}); err != nil {
 			return err
 		}
 	}
 
 	return nil
 }
-
-

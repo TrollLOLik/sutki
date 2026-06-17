@@ -212,11 +212,14 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	hs, err := h.svc.Update(r.Context(), int32(id), in)
 	if err != nil {
-		if errors.Is(err, listing.ErrInvalidListing) {
+		switch {
+		case errors.Is(err, listing.ErrInvalidListing):
 			writeError(w, http.StatusBadRequest, "invalid listing")
-			return
+		case errors.Is(err, domain.ErrNotFound):
+			writeError(w, http.StatusNotFound, "listing not found")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.detailDTO(hs))

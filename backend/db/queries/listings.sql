@@ -190,6 +190,29 @@ INSERT INTO house (
 )
 RETURNING id;
 
+-- name: UpdateHouse :execrows
+-- Updates a listing owned by the given user. Returns the number of affected
+-- rows so the caller can distinguish "not found / not owner" (0) from success.
+UPDATE house
+SET street = @street,
+    house_number = @house_number,
+    description = @description,
+    price = @price,
+    count_room = @count_room,
+    number_room = sqlc.narg('number_room'),
+    area = @area,
+    country = @country,
+    lat = sqlc.narg('lat'),
+    lng = sqlc.narg('lng'),
+    updated_at = now()
+WHERE id = @id AND owner_id = @owner_id AND deleted = false;
+
+-- name: DeleteHouseServices :exec
+DELETE FROM house_house_service WHERE house_id = $1;
+
+-- name: DeleteHouseCategories :exec
+DELETE FROM house_house_category WHERE house_id = $1;
+
 -- name: AddHouseService :exec
 INSERT INTO house_house_service (house_id, service_id)
 VALUES ($1, $2)

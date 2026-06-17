@@ -29,6 +29,8 @@ type Querier interface {
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteEmailLoginCode(ctx context.Context, email string) error
+	DeleteHouseCategories(ctx context.Context, houseID int32) error
+	DeleteHouseServices(ctx context.Context, houseID int32) error
 	DeleteUser(ctx context.Context, id int32) error
 	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
@@ -56,6 +58,9 @@ type Querier interface {
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
 	ReviewSummaryByHouse(ctx context.Context, houseID int32) (ReviewSummaryByHouseRow, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	// Updates a listing owned by the given user. Returns the number of affected
+	// rows so the caller can distinguish "not found / not owner" (0) from success.
+	UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
 }

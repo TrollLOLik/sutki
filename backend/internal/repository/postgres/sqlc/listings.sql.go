@@ -171,6 +171,24 @@ func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32
 	return id, err
 }
 
+const deleteHouseCategories = `-- name: DeleteHouseCategories :exec
+DELETE FROM house_house_category WHERE house_id = $1
+`
+
+func (q *Queries) DeleteHouseCategories(ctx context.Context, houseID int32) error {
+	_, err := q.db.Exec(ctx, deleteHouseCategories, houseID)
+	return err
+}
+
+const deleteHouseServices = `-- name: DeleteHouseServices :exec
+DELETE FROM house_house_service WHERE house_id = $1
+`
+
+func (q *Queries) DeleteHouseServices(ctx context.Context, houseID int32) error {
+	_, err := q.db.Exec(ctx, deleteHouseServices, houseID)
+	return err
+}
+
 const getHouseByID = `-- name: GetHouseByID :one
 SELECT
   h.id,
@@ -676,4 +694,58 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateHouse = `-- name: UpdateHouse :execrows
+UPDATE house
+SET street = $1,
+    house_number = $2,
+    description = $3,
+    price = $4,
+    count_room = $5,
+    number_room = $6,
+    area = $7,
+    country = $8,
+    lat = $9,
+    lng = $10,
+    updated_at = now()
+WHERE id = $11 AND owner_id = $12 AND deleted = false
+`
+
+type UpdateHouseParams struct {
+	Street      string
+	HouseNumber string
+	Description string
+	Price       int32
+	CountRoom   string
+	NumberRoom  *string
+	Area        int32
+	Country     string
+	Lat         *float64
+	Lng         *float64
+	ID          int32
+	OwnerID     int32
+}
+
+// Updates a listing owned by the given user. Returns the number of affected
+// rows so the caller can distinguish "not found / not owner" (0) from success.
+func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateHouse,
+		arg.Street,
+		arg.HouseNumber,
+		arg.Description,
+		arg.Price,
+		arg.CountRoom,
+		arg.NumberRoom,
+		arg.Area,
+		arg.Country,
+		arg.Lat,
+		arg.Lng,
+		arg.ID,
+		arg.OwnerID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

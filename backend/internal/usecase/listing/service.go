@@ -171,4 +171,3 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	}
 	return s.Get(ctx, id)
 }
-
