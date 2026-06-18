@@ -15,10 +15,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui';
+import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListing } from '@/lib/api/listings';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
+import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
+import { useMemo } from 'react';
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,6 +32,15 @@ export default function ListingDetailScreen() {
   const toggleFavorite = useToggleFavorite();
   const isFavorite = favoriteIds?.has(numericId) ?? false;
   const insets = useSafeAreaInsets();
+
+  const { status: authStatus } = useSessionStore();
+  const isAuthenticated = authStatus === 'authenticated';
+  const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated });
+
+  const isOwnListing = useMemo(() => {
+    if (!myListingsData || !numericId) return false;
+    return myListingsData.items.some((item) => item.id === numericId);
+  }, [myListingsData, numericId]);
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -289,10 +301,17 @@ export default function ListingDetailScreen() {
           </ScrollView>
 
           <SafeAreaView edges={['bottom']} className="border-t border-line px-4 py-3 bg-surface">
-            <Button
-              label="Оставить заявку"
-              onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
-            />
+            {isOwnListing ? (
+              <Button
+                label="Редактировать"
+                onPress={() => router.push({ pathname: '/create', params: { editId: id } } as any)}
+              />
+            ) : (
+              <Button
+                label="Оставить заявку"
+                onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
+              />
+            )}
           </SafeAreaView>
         </>
       )}

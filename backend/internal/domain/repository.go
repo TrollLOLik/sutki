@@ -9,12 +9,16 @@ import (
 type ListingRepository interface {
 	List(ctx context.Context, filter ListFilter) ([]House, error)
 	Count(ctx context.Context, filter ListFilter) (int64, error)
+	Create(ctx context.Context, h NewHouse) (int32, error)
+	ListByOwner(ctx context.Context, ownerID, limit, offset int32) ([]House, error)
+	CountByOwner(ctx context.Context, ownerID int32) (int64, error)
 	GetByID(ctx context.Context, id int32) (House, error)
 	ListPhotos(ctx context.Context, houseID int32) ([]Photo, error)
 	ListServices(ctx context.Context, houseID int32) ([]Ref, error)
 	ListCategories(ctx context.Context, houseID int32) ([]Ref, error)
 	AllServices(ctx context.Context) ([]Ref, error)
 	AllCategories(ctx context.Context) ([]Ref, error)
+	Update(ctx context.Context, id int32, h NewHouse) error
 }
 
 // BookingRepository abstracts persistence for rental requests (bookings).

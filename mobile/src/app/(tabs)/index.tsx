@@ -22,11 +22,13 @@ import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { Button, Chip } from '@/components/ui';
+import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
 import { filterListings } from '@/lib/listing-filters';
 import { useFiltersStore } from '@/store/filters';
+import { useSessionStore } from '@/store/session';
 import { palette, radii } from '@/theme/tokens';
 
 const QUICK_FILTERS = [
@@ -43,10 +45,24 @@ export default function SearchScreen() {
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
 
-  const visible = useMemo(
-    () => filterListings(data?.items ?? [], filters, query),
-    [data?.items, filters, query],
-  );
+  const { status: authStatus } = useSessionStore();
+  const isAuthenticated = authStatus === 'authenticated';
+  const { data: myListingsData } = useMyListings({ limit: 50 }, { enabled: isAuthenticated });
+
+  const myListingsIds = useMemo(() => {
+    return new Set(myListingsData?.items.map((item) => item.id) ?? []);
+  }, [myListingsData]);
+
+  const visible = useMemo(() => {
+    let list = filterListings(data?.items ?? [], filters, query);
+    if (filters.favoritesOnly) {
+      list = list.filter((item) => favoriteIds?.has(item.id) ?? false);
+    }
+    if (isAuthenticated && myListingsIds.size > 0) {
+      list = list.filter((item) => !myListingsIds.has(item.id));
+    }
+    return list;
+  }, [data?.items, filters, query, favoriteIds, isAuthenticated, myListingsIds]);
 
   const activeFilters =
     filters.rooms.length +
@@ -265,6 +281,21 @@ export default function SearchScreen() {
               <Text className="text-sm font-medium text-ink">{formatGuests(filters.guests)}</Text>
             </View>
             <Ionicons name="chevron-down" size={16} color={palette.inkMuted} />
+          </Pressable>
+
+          {/* Favorites filter (replaces the old Избранное tab) */}
+          <Pressable
+            accessibilityLabel="Только избранное"
+            accessibilityState={{ selected: filters.favoritesOnly }}
+            onPress={filters.toggleFavoritesOnly}
+            className={`h-12 w-12 items-center justify-center rounded-field border active:opacity-80 ${
+              filters.favoritesOnly ? 'border-primary bg-primary-light' : 'border-line bg-surface'
+            }`}>
+            <Ionicons
+              name={filters.favoritesOnly ? 'heart' : 'heart-outline'}
+              size={22}
+              color={palette.primary}
+            />
           </Pressable>
         </View>
       </View>

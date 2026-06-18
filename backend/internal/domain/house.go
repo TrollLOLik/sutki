@@ -45,3 +45,22 @@ type Ref struct {
 	ID   int32
 	Name string
 }
+
+// NewHouse is the input for creating a listing. OwnerID is taken from the
+// authenticated session, not the request body. ServiceIDs/CategoryIDs link the
+// listing to the amenity/category catalogs. Lat/Lng are optional (map screen).
+type NewHouse struct {
+	OwnerID     int32
+	Street      string
+	HouseNumber string
+	Description string
+	Price       int32
+	CountRoom   string
+	NumberRoom  *string
+	Area        int32
+	City        string
+	Lat         *float64
+	Lng         *float64
+	ServiceIDs  []int32
+	CategoryIDs []int32
+}

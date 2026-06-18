@@ -175,3 +175,92 @@ SELECT id, name
 FROM house_category
 WHERE deleted = false
 ORDER BY name;
+
+-- name: CreateHouse :one
+-- Creates a new listing owned by the given user. New listings are published
+-- immediately (status='active') for the MVP; the one-time publication fee is a
+-- front-end stub until YooKassa is wired (then `pay` flips via webhook).
+INSERT INTO house (
+  owner_id, street, house_number, description, price, count_room, number_room,
+  area, country, status, deleted, pay, views, lat, lng, created_at, updated_at
+) VALUES (
+  @owner_id, @street, @house_number, @description, @price, @count_room,
+  sqlc.narg('number_room'), @area, @country, 'active', false, false, 0,
+  sqlc.narg('lat'), sqlc.narg('lng'), now(), now()
+)
+RETURNING id;
+
+-- name: UpdateHouse :execrows
+-- Updates a listing owned by the given user. Returns the number of affected
+-- rows so the caller can distinguish "not found / not owner" (0) from success.
+UPDATE house
+SET street = @street,
+    house_number = @house_number,
+    description = @description,
+    price = @price,
+    count_room = @count_room,
+    number_room = sqlc.narg('number_room'),
+    area = @area,
+    country = @country,
+    lat = sqlc.narg('lat'),
+    lng = sqlc.narg('lng'),
+    updated_at = now()
+WHERE id = @id AND owner_id = @owner_id AND deleted = false;
+
+-- name: DeleteHouseServices :exec
+DELETE FROM house_house_service WHERE house_id = $1;
+
+-- name: DeleteHouseCategories :exec
+DELETE FROM house_house_category WHERE house_id = $1;
+
+-- name: AddHouseService :exec
+INSERT INTO house_house_service (house_id, service_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: AddHouseCategory :exec
+INSERT INTO house_house_category (house_id, house_category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: ListHousesByOwner :many
+SELECT
+  h.id,
+  h.street,
+  h.house_number,
+  h.description,
+  h.price,
+  h.count_room,
+  h.area,
+  h.country,
+  h.status,
+  h.lat,
+  h.lng,
+  h.views,
+  h.created_at,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  ), 0)::float8 AS rating,
+  (
+    SELECT count(*)
+    FROM review rv
+    WHERE rv.house_id = h.id AND rv.status = 'active'
+  )::int AS reviews_count,
+  COALESCE((
+    SELECT f.path
+    FROM file f
+    WHERE f.house_id = h.id AND f.deleted = false
+    ORDER BY f.position
+    LIMIT 1
+  ), '')::text AS cover_path
+FROM house h
+WHERE h.owner_id = @owner_id AND h.deleted = false
+ORDER BY h.created_at DESC
+LIMIT @result_limit OFFSET @result_offset;
+
+-- name: CountHousesByOwner :one
+SELECT count(*)
+FROM house h
+WHERE h.owner_id = @owner_id AND h.deleted = false;

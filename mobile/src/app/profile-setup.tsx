@@ -408,14 +408,14 @@ export default function ProfileSetupScreen() {
           <View className="items-center gap-2">
             <Text className="text-2xl font-bold text-ink">Профиль создан</Text>
             <Text className="text-center text-base text-ink-secondary">
-              Теперь выберите роль
+              Добро пожаловать в «Дом рядом»
             </Text>
           </View>
         </View>
 
         <View className="w-full pb-6 px-4">
           <Button
-            label="Продолжить"
+            label="Начать"
             onPress={() => completeOnboarding(createdUser)}
           />
         </View>
