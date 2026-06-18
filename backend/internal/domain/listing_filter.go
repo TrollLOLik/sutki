@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // ListSort selects the ordering of a listing search.
 type ListSort string
 
@@ -27,7 +29,15 @@ type ListFilter struct {
 	Services []int32
 	// Category requires the listing to belong to this category ID.
 	Category *int32
-	Sort     ListSort
-	Limit    int32
-	Offset   int32
+	// CheckIn/CheckOut, when both set, keep only listings that are free for the
+	// whole [CheckIn, CheckOut) range — i.e. no confirmed booking overlaps it.
+	// A nil on either side disables the availability constraint.
+	CheckIn  *time.Time
+	CheckOut *time.Time
+	// Guests, when set, keeps listings whose max_guests is unknown (legacy rows)
+	// or at least this large.
+	Guests *int32
+	Sort   ListSort
+	Limit  int32
+	Offset int32
 }

@@ -30,6 +30,8 @@ interface CalendarRangeProps {
   onChange: (range: DateRange) => void;
   /** Earliest selectable day (inclusive). Defaults to today. */
   minDate?: Date;
+  /** Optional predicate to mark individual days as unavailable (e.g. booked). */
+  isDateDisabled?: (day: Date) => boolean;
 }
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -40,7 +42,7 @@ const WEEK_OPTS = { weekStartsOn: 1 } as const;
  * First tap sets the start, a later tap sets the end; tapping on/before the
  * start (or after a full range) restarts the selection.
  */
-export function CalendarRange({ value, onChange, minDate }: CalendarRangeProps) {
+export function CalendarRange({ value, onChange, minDate, isDateDisabled }: CalendarRangeProps) {
   const min = startOfDay(minDate ?? new Date());
   const [month, setMonth] = useState(() => startOfMonth(value.start ?? min));
 
@@ -51,6 +53,15 @@ export function CalendarRange({ value, onChange, minDate }: CalendarRangeProps) 
 
   const canGoPrev = isBefore(startOfMonth(min), startOfMonth(month));
 
+  // True if any day in (start, end] is marked unavailable — prevents selecting a
+  // range that spans a booked night.
+  const rangeCrossesDisabled = (start: Date, end: Date): boolean => {
+    if (!isDateDisabled) return false;
+    return eachDayOfInterval({ start, end }).some(
+      (d) => !isSameDay(d, start) && isDateDisabled(d),
+    );
+  };
+
   const onDayPress = (day: Date) => {
     const { start, end } = value;
     if (!start || end) {
@@ -58,6 +69,11 @@ export function CalendarRange({ value, onChange, minDate }: CalendarRangeProps) 
       return;
     }
     if (isBefore(day, start) || isSameDay(day, start)) {
+      onChange({ start: day, end: null });
+      return;
+    }
+    // Restart the selection if the range would cross an unavailable day.
+    if (rangeCrossesDisabled(start, day)) {
       onChange({ start: day, end: null });
       return;
     }
@@ -99,7 +115,8 @@ export function CalendarRange({ value, onChange, minDate }: CalendarRangeProps) 
       <View className="flex-row flex-wrap">
         {days.map((day) => {
           const outside = !isSameMonth(day, month);
-          const disabled = isBefore(day, min);
+          const blocked = isDateDisabled?.(day) ?? false;
+          const disabled = isBefore(day, min) || blocked;
           const isStart = value.start != null && isSameDay(day, value.start);
           const isEnd = value.end != null && isSameDay(day, value.end);
           const inRange =
@@ -125,6 +142,7 @@ export function CalendarRange({ value, onChange, minDate }: CalendarRangeProps) 
                     endpoint ? 'font-bold text-white' : 'text-ink',
                     inRange && !endpoint && 'text-primary',
                     (disabled || outside) && 'text-ink-muted opacity-40',
+                    blocked && !outside && 'line-through',
                   )}>
                   {format(day, 'd')}
                 </Text>

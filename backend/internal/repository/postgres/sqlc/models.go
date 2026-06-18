@@ -122,6 +122,7 @@ type House struct {
 	RejectionReason *string
 	Lat             *float64
 	Lng             *float64
+	MaxGuests       *int32
 }
 
 type HouseCategory struct {

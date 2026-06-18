@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -70,6 +71,7 @@ type listingCardDTO struct {
 	Area        int32    `json:"area"`
 	Lat         *float64 `json:"lat"`
 	Lng         *float64 `json:"lng"`
+	MaxGuests   *int32   `json:"max_guests"`
 	Views       int32    `json:"views"`
 	CoverURL    string   `json:"cover_url"`
 	// Rating is the average review score (0 when there are no reviews);
@@ -135,6 +137,7 @@ type createListingRequest struct {
 	Area        int32    `json:"area"`
 	Lat         *float64 `json:"lat"`
 	Lng         *float64 `json:"lng"`
+	MaxGuests   *int32   `json:"max_guests"`
 	ServiceIDs  []int32  `json:"service_ids"`
 	CategoryIDs []int32  `json:"category_ids"`
 }
@@ -163,6 +166,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		Area:        body.Area,
 		Lat:         body.Lat,
 		Lng:         body.Lng,
+		MaxGuests:   body.MaxGuests,
 		ServiceIDs:  body.ServiceIDs,
 		CategoryIDs: body.CategoryIDs,
 	}
@@ -207,6 +211,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		Area:        body.Area,
 		Lat:         body.Lat,
 		Lng:         body.Lng,
+		MaxGuests:   body.MaxGuests,
 		ServiceIDs:  body.ServiceIDs,
 		CategoryIDs: body.CategoryIDs,
 	}
@@ -285,6 +290,7 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 		Area:         hs.Area,
 		Lat:          hs.Lat,
 		Lng:          hs.Lng,
+		MaxGuests:    hs.MaxGuests,
 		Views:        hs.Views,
 		CoverURL:     h.mediaURL(hs.CoverPath),
 		Rating:       hs.Rating,
@@ -379,6 +385,7 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 		{"price_max", &f.PriceMax},
 		{"rooms_min", &f.RoomsMin},
 		{"category", &f.Category},
+		{"guests", &f.Guests},
 	} {
 		v, ok := parseOptNonNegInt32(q.Get(p.key))
 		if !ok {
@@ -399,6 +406,24 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 	}
 	f.Services = services
 
+	checkIn, ok := parseOptDate(q.Get("check_in"))
+	if !ok {
+		return domain.ListFilter{}, "invalid check_in"
+	}
+	checkOut, ok := parseOptDate(q.Get("check_out"))
+	if !ok {
+		return domain.ListFilter{}, "invalid check_out"
+	}
+	// Availability filtering only applies when both ends are present and the
+	// range is non-empty; otherwise leave it unconstrained.
+	if checkIn != nil && checkOut != nil {
+		if !checkOut.After(*checkIn) {
+			return domain.ListFilter{}, "check_out must be after check_in"
+		}
+		f.CheckIn = checkIn
+		f.CheckOut = checkOut
+	}
+
 	sort, ok := allowedSorts[q.Get("sort")]
 	if !ok {
 		return domain.ListFilter{}, "invalid sort"
@@ -406,6 +431,20 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 	f.Sort = sort
 
 	return f, ""
+}
+
+// parseOptDate parses an optional YYYY-MM-DD date. Empty → (nil, true); a valid
+// date → (&t, true); anything else → (nil, false).
+func parseOptDate(s string) (*time.Time, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, true
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return nil, false
+	}
+	return &t, true
 }
 
 // parseOptNonNegInt32 parses an optional non-negative int32. Empty → (nil, true);

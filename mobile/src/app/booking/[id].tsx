@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { differenceInCalendarDays, format } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
 import { Button, Input } from '@/components/ui';
-import { useCreateBooking } from '@/lib/api/bookings';
+import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
 import { formatGuests, formatPricePerNight, formatRub } from '@/lib/format';
@@ -33,11 +33,26 @@ export default function BookingScreen() {
   const listingId = Number(id);
   const user = useSessionStore((s) => s.user);
   const { data: listing } = useListing(listingId);
+  const { data: availability } = useListingAvailability(listingId);
   const createBooking = useCreateBooking(listingId);
 
   const [range, setRange] = useState<DateRange>({ start: null, end: null });
   const [count, setCount] = useState(1);
   const [dateError, setDateError] = useState<string | null>(null);
+
+  // A day is unavailable if it falls inside a confirmed range [start, end);
+  // the checkout day itself is free. A null end_date means a single night.
+  const isDateDisabled = useMemo(() => {
+    const ranges = (availability?.ranges ?? []).map((r) => {
+      const start = startOfDay(parseISO(r.start_date));
+      const end = r.end_date ? startOfDay(parseISO(r.end_date)) : addDays(start, 1);
+      return { start, end };
+    });
+    return (day: Date) => {
+      const d = startOfDay(day);
+      return ranges.some((r) => d >= r.start && d < r.end);
+    };
+  }, [availability]);
 
   const {
     control,
@@ -71,6 +86,12 @@ export default function BookingScreen() {
         { text: 'OK', onPress: () => router.replace('/bookings') },
       ]);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setDateError('Эти даты уже заняты. Выберите другие.');
+        setRange({ start: null, end: null });
+        Alert.alert('Даты заняты', 'На выбранные даты уже есть подтверждённое бронирование. Пожалуйста, выберите другие даты.');
+        return;
+      }
       const message =
         err instanceof ApiError ? err.message : 'Не удалось отправить заявку. Попробуйте снова.';
       Alert.alert('Ошибка', message);
@@ -106,7 +127,8 @@ export default function BookingScreen() {
 
             <View className="gap-2">
               <Text className="text-base font-semibold text-ink">Даты</Text>
-              <CalendarRange value={range} onChange={setRange} />
+              <CalendarRange value={range} onChange={setRange} isDateDisabled={isDateDisabled} />
+              <Text className="text-xs text-ink-muted">Занятые даты недоступны для выбора.</Text>
               {dateError ? <Text className="text-sm text-danger">{dateError}</Text> : null}
             </View>
 

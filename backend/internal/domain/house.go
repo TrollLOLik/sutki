@@ -16,12 +16,14 @@ type House struct {
 	Area        int32
 	City        string
 	Status      string
-	Lat         *float64
-	Lng         *float64
-	Views       int32
-	CoverPath   string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// MaxGuests is the sleeping capacity; nil means unknown (legacy listings).
+	MaxGuests *int32
+	Lat       *float64
+	Lng       *float64
+	Views     int32
+	CoverPath string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 
 	// Rating is the average review score rounded to one decimal (0 when the
 	// listing has no published reviews); ReviewsCount is the published count.
@@ -61,6 +63,7 @@ type NewHouse struct {
 	City        string
 	Lat         *float64
 	Lng         *float64
+	MaxGuests   *int32
 	ServiceIDs  []int32
 	CategoryIDs []int32
 }

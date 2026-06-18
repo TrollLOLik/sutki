@@ -24,10 +24,9 @@ import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { Button, Chip } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
-import { useListings } from '@/lib/api/listings';
+import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
-import { filterListings } from '@/lib/listing-filters';
-import { useFiltersStore } from '@/store/filters';
+import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { palette, radii } from '@/theme/tokens';
 
@@ -41,7 +40,11 @@ const QUICK_FILTERS = [
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const filters = useFiltersStore();
-  const { data, isLoading, isError, refetch, isRefetching } = useListings({ limit: 50 });
+  const listParams = useMemo(
+    () => filtersToListParams(filters, query, { limit: 50 }),
+    [filters, query],
+  );
+  const { data, isLoading, isError, refetch, isRefetching } = useListings(listParams);
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
 
@@ -54,7 +57,10 @@ export default function SearchScreen() {
   }, [myListingsData]);
 
   const visible = useMemo(() => {
-    let list = filterListings(data?.items ?? [], filters, query);
+    // Filtering (text, city, price, rooms, amenities, guests, dates) is done
+    // server-side; only the favorites toggle and hiding the user's own
+    // listings remain client-side.
+    let list = data?.items ?? [];
     if (filters.favoritesOnly) {
       list = list.filter((item) => favoriteIds?.has(item.id) ?? false);
     }
@@ -62,12 +68,9 @@ export default function SearchScreen() {
       list = list.filter((item) => !myListingsIds.has(item.id));
     }
     return list;
-  }, [data?.items, filters, query, favoriteIds, isAuthenticated, myListingsIds]);
+  }, [data?.items, filters.favoritesOnly, favoriteIds, isAuthenticated, myListingsIds]);
 
-  const activeFilters =
-    filters.rooms.length +
-    filters.amenities.length +
-    (filters.priceMin != null || filters.priceMax != null ? 1 : 0);
+  const activeFilters = countActiveFilters(filters);
 
   // Picker States
   const [dateModalVisible, setDateModalVisible] = useState(false);
@@ -209,7 +212,7 @@ export default function SearchScreen() {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Город, адрес или metro"
+              placeholder="Город, адрес или название"
               placeholderTextColor={palette.inkMuted}
               returnKeyType="search"
               className="ml-2 flex-1 text-base text-ink"

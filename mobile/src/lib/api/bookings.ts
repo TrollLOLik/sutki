@@ -31,6 +31,32 @@ export function createBooking(listingId: number, body: CreateBookingBody): Promi
   return api.post<Booking>(`/api/v1/listings/${listingId}/requests`, body);
 }
 
+/** A confirmed (occupied) date range on a listing. end_date is null for one night. */
+export interface BookedRange {
+  start_date: string;
+  end_date: string | null;
+}
+
+interface AvailabilityResponse {
+  ranges: BookedRange[];
+}
+
+/** Confirmed occupied ranges for a listing, used to block taken dates. Public. */
+export function fetchListingAvailability(listingId: number): Promise<AvailabilityResponse> {
+  return api.get<AvailabilityResponse>(`/api/v1/listings/${listingId}/availability`, {
+    auth: false,
+  });
+}
+
+export function useListingAvailability(listingId: number | undefined) {
+  return useQuery({
+    queryKey: [...bookingKeys.all, 'availability', listingId ?? 0] as const,
+    queryFn: () => fetchListingAvailability(listingId as number),
+    enabled: listingId != null && listingId > 0,
+    staleTime: 1000 * 60,
+  });
+}
+
 /** My bookings as a tenant. */
 export function fetchMyBookings(params: ListBookingsParams = {}): Promise<BookingsPage> {
   return api.get<BookingsPage>(`/api/v1/requests${buildQuery(params)}`);
