@@ -33,6 +33,8 @@ interface SessionState {
   beginSession: (tokens: Tokens, user: User) => Promise<boolean>;
   /** Finish onboarding (profile created) → authenticated. */
   completeOnboarding: (user: User) => void;
+  /** Replace the cached user after a profile update (PATCH /me). */
+  setUser: (user: User) => void;
   signOut: () => Promise<void>;
 }
 
@@ -106,6 +108,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   completeOnboarding: (user) => set({ user, status: 'authenticated' }),
+
+  setUser: (user) => set({ user }),
 
   signOut: async () => {
     const { refreshToken } = get();
