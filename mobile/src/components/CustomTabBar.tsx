@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { MotiView } from 'moti';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { palette } from '@/theme/tokens';
@@ -87,25 +89,75 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           onPressIn={() => setPressed(true)}
           onPressOut={() => setPressed(false)}
           onPress={() => router.push('/create')}
-          style={{ marginTop: -22 }}
+          style={{ marginTop: -18 }}
           className="items-center justify-center">
           <MotiView
-            animate={{ scale: pressed ? 0.86 : 1, rotate: pressed ? '90deg' : '0deg' }}
+            from={{ scale: 1, opacity: 0.6 }}
+            animate={{ scale: 1.35, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 2000,
+              loop: true,
+            }}
+            style={{
+              position: 'absolute',
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: palette.primary,
+            }}
+          />
+          <MotiView
+            animate={{ scale: pressed ? 0.86 : 1 }}
             transition={{ type: 'timing', duration: 160 }}
             style={{
-              width: 58,
-              height: 58,
-              borderRadius: 29,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: palette.primary,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
               shadowColor: palette.primary,
               shadowOpacity: 0.4,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 8,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 6,
             }}>
-            <Ionicons name="add" size={34} color="#FFFFFF" />
+            <MotiView
+              animate={{ rotate: pressed ? '90deg' : '0deg' }}
+              transition={{ type: 'timing', duration: 160 }}
+              style={{
+                flex: 1,
+                borderRadius: 24,
+                overflow: 'hidden',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <MotiView
+                from={{ rotate: '0deg' }}
+                animate={{ rotate: '360deg' }}
+                transition={{
+                  type: 'timing',
+                  duration: 4000,
+                  loop: true,
+                  repeatReverse: false,
+                  easing: Easing.linear,
+                }}
+                style={{
+                  position: 'absolute',
+                  width: 76,
+                  height: 76,
+                  top: -14,
+                  left: -14,
+                }}>
+                <LinearGradient
+                  colors={['#FF8E53', '#FF5A1F', '#FF2D55', '#FF8E53']}
+                  start={{ x: 0.0, y: 0.0 }}
+                  end={{ x: 1.0, y: 1.0 }}
+                  style={{
+                    flex: 1,
+                  }}
+                />
+              </MotiView>
+              <Ionicons name="add" size={28} color="#FFFFFF" />
+            </MotiView>
           </MotiView>
         </Pressable>
       </View>
