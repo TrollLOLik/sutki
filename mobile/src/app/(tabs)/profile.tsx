@@ -5,10 +5,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
+import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { Button } from '@/components/ui';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
+import { useUpdateMe } from '@/lib/api/auth';
+import { ApiError } from '@/lib/api/client';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
+import type { UpdateProfileBody } from '@/types/auth';
 
 type SettingsTab = 'basic' | 'security';
 
@@ -56,6 +61,68 @@ function SettingsField({ label, value, icon }: { label: string; value: string; i
   );
 }
 
+function EditableField({
+  label,
+  value,
+  onChangeText,
+  icon,
+  placeholder,
+  keyboardType = 'default',
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  icon: keyof typeof Ionicons.glyphMap;
+  placeholder?: string;
+  keyboardType?: 'default' | 'phone-pad';
+}) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-semibold text-ink-secondary">{label}</Text>
+      <View className="h-12 flex-row items-center rounded-field border border-line bg-surface px-3">
+        <Ionicons name={icon} size={18} color={palette.primary} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={palette.inkMuted}
+          keyboardType={keyboardType}
+          className="ml-2 flex-1 text-base text-ink"
+        />
+      </View>
+    </View>
+  );
+}
+
+function PickerField({
+  label,
+  value,
+  placeholder,
+  icon,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  return (
+    <View className="gap-2">
+      <Text className="text-sm font-semibold text-ink-secondary">{label}</Text>
+      <Pressable
+        onPress={onPress}
+        className="h-12 flex-row items-center rounded-field border border-line bg-surface px-3 active:bg-surface-muted">
+        <Ionicons name={icon} size={18} color={palette.primary} />
+        <Text className={`ml-2 flex-1 text-base ${value ? 'text-ink' : 'text-ink-muted'}`}>
+          {value || placeholder}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
 function ProfileAction({
   icon,
   title,
@@ -88,9 +155,60 @@ function ProfileAction({
 export default function ProfileScreen() {
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
+  const setUser = useSessionStore((s) => s.setUser);
+  const updateMe = useUpdateMe();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('basic');
   const [vkLinked, setVkLinked] = useState(false);
+
+  // Editable "Основное" form state (initialised from the cached user on open).
+  const [formName, setFormName] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formCity, setFormCity] = useState('');
+  const [formBirthday, setFormBirthday] = useState(''); // YYYY-MM-DD
+  const [cityPickerVisible, setCityPickerVisible] = useState(false);
+  const [birthdayPickerVisible, setBirthdayPickerVisible] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settingsVisible) {
+      setFormName(user?.name ?? '');
+      setFormPhone(user?.phone ?? '');
+      setFormCity(user?.city ?? '');
+      setFormBirthday(user?.birthday ?? '');
+      setSaveError(null);
+    }
+  }, [settingsVisible, user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    const name = formName.trim();
+    const phone = formPhone.trim();
+    const city = formCity.trim();
+    if (name.length < 2) {
+      setSaveError('Введите имя (минимум 2 символа)');
+      return;
+    }
+    // Only send changed fields. Birthday can't be cleared via the API (empty =
+    // "unchanged" server-side), so only send it when set and different.
+    const body: UpdateProfileBody = {};
+    if (name !== (user.name ?? '')) body.name = name;
+    if (phone !== (user.phone ?? '')) body.phone = phone;
+    if (city !== (user.city ?? '')) body.city = city;
+    if (formBirthday && formBirthday !== (user.birthday ?? '')) body.birthday = formBirthday;
+    if (Object.keys(body).length === 0) {
+      closeSettings();
+      return;
+    }
+    setSaveError(null);
+    try {
+      const updated = await updateMe.mutateAsync(body);
+      setUser(updated);
+      closeSettings();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : 'Не удалось сохранить профиль.');
+    }
+  };
   const [settingsFade] = useState(() => new Animated.Value(0));
   const [settingsSlide] = useState(() => new Animated.Value(SCREEN_HEIGHT));
   const handleScroll = useScrollHideTabBar();
@@ -366,10 +484,38 @@ export default function ProfileScreen() {
                     </View>
 
                     <SettingsField label="Email" value={valueOrPlaceholder(user?.email)} icon="mail-outline" />
-                    <SettingsField label="Имя" value={valueOrPlaceholder(user?.name)} icon="person-outline" />
-                    <SettingsField label="Телефон" value={valueOrPlaceholder(user?.phone)} icon="call-outline" />
-                    <SettingsField label="Город" value={valueOrPlaceholder(user?.city)} icon="location-outline" />
-                    <SettingsField label="Дата рождения" value={valueOrPlaceholder(user?.birthday)} icon="calendar-outline" />
+                    <EditableField
+                      label="Имя"
+                      value={formName}
+                      onChangeText={setFormName}
+                      icon="person-outline"
+                      placeholder="Ваше имя"
+                    />
+                    <EditableField
+                      label="Телефон"
+                      value={formPhone}
+                      onChangeText={setFormPhone}
+                      icon="call-outline"
+                      placeholder="+7 900 000-00-00"
+                      keyboardType="phone-pad"
+                    />
+                    <PickerField
+                      label="Город"
+                      value={formCity}
+                      placeholder="Выберите город"
+                      icon="location-outline"
+                      onPress={() => setCityPickerVisible(true)}
+                    />
+                    <PickerField
+                      label="Дата рождения"
+                      value={formatBirthday(formBirthday)}
+                      placeholder="Укажите дату рождения"
+                      icon="calendar-outline"
+                      onPress={() => setBirthdayPickerVisible(true)}
+                    />
+                    {saveError ? (
+                      <Text className="px-1 text-sm font-medium text-danger">{saveError}</Text>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -481,9 +627,34 @@ export default function ProfileScreen() {
 
               <View className="flex-row gap-3">
                 <Button label="Позже" variant="secondary" size="md" className="flex-1" onPress={closeSettings} />
-                <Button label="Сохранить" size="md" className="flex-1" onPress={closeSettings} />
+                <Button
+                  label="Сохранить"
+                  size="md"
+                  className="flex-1"
+                  loading={updateMe.isPending}
+                  onPress={handleSaveProfile}
+                />
               </View>
             </SafeAreaView>
+
+            <CityPickerSheet
+              visible={cityPickerVisible}
+              onClose={() => setCityPickerVisible(false)}
+              onSelect={(city) => {
+                setFormCity(city);
+                setCityPickerVisible(false);
+              }}
+              selectedCity={formCity}
+            />
+            <BirthdayPickerSheet
+              visible={birthdayPickerVisible}
+              onClose={() => setBirthdayPickerVisible(false)}
+              onApply={(iso) => {
+                setFormBirthday(iso);
+                setBirthdayPickerVisible(false);
+              }}
+              initialValue={formBirthday}
+            />
           </Animated.View>
         </View>
       </Modal>

@@ -19,22 +19,23 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { env } from '@/lib/env';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { Button, Chip } from '@/components/ui';
+import { suggestCities } from '@/lib/api/cities';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
+import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recent-searches';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
-import { BlurView } from 'expo-blur';
-import { useTabBarStore } from '@/store/tabbar';
 import { useSessionStore } from '@/store/session';
+import { useTabBarStore } from '@/store/tabbar';
 import { palette, radii } from '@/theme/tokens';
 
 const QUICK_FILTERS = [
@@ -50,6 +51,14 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
 
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+
+  // The pill reflects either an exact city filter (picked from the overlay) or a
+  // free-text query (typed + submitted). Clearing resets both.
+  const searchLabel = filters.city ?? (query.trim().length > 0 ? query : '');
+  const clearSearch = () => {
+    setQuery('');
+    filters.setFilters({ city: null });
+  };
 
   const headerAnim = useRef(new Animated.Value(1)).current;
   const headerVisible = useRef(true);
@@ -320,16 +329,16 @@ export default function SearchScreen() {
             <Ionicons name="search" size={20} color={palette.inkMuted} />
             <Text
               numberOfLines={1}
-              className={`ml-2 flex-1 text-base ${query ? 'text-ink font-semibold' : 'text-ink-muted'}`}
+              className={`ml-2 flex-1 text-base ${searchLabel ? 'text-ink font-semibold' : 'text-ink-muted'}`}
             >
-              {query || 'Город, адрес или название'}
+              {searchLabel || 'Город, адрес или название'}
             </Text>
-            {query.length > 0 ? (
+            {searchLabel.length > 0 ? (
               <Pressable
                 accessibilityLabel="Очистить"
                 onPress={(e) => {
                   e.stopPropagation();
-                  setQuery('');
+                  clearSearch();
                 }}
               >
                 <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
@@ -608,15 +617,24 @@ export default function SearchScreen() {
         </Modal>
       )}
 
-      {/* Dadata Search Overlay Modal */}
+      {/* City / free-text Search Overlay Modal */}
       <SearchModal
         visible={searchModalVisible}
-        onClose={() => setSearchModalVisible(false)}
-        onSelect={(val) => {
-          setQuery(val);
+        onSelectCity={(city) => {
+          // Exact city filter (backend matches h.country = city). Remembered.
+          filters.setFilters({ city });
+          setQuery('');
+          void addRecentSearch(city).catch(() => undefined);
           setSearchModalVisible(false);
         }}
-        initialValue={query}
+        onSubmitQuery={(text) => {
+          // Free-text address/name search (backend q ILIKE). Not remembered.
+          setQuery(text);
+          filters.setFilters({ city: null });
+          setSearchModalVisible(false);
+        }}
+        onClose={() => setSearchModalVisible(false)}
+        initialValue={searchLabel}
       />
     </View>
   );
@@ -625,45 +643,33 @@ export default function SearchScreen() {
 interface SearchModalProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (q: string) => void;
+  /** A city was picked (suggestion/popular/recent) → exact city filter. */
+  onSelectCity: (city: string) => void;
+  /** Free text was submitted from the keyboard → fuzzy `q` search. */
+  onSubmitQuery: (text: string) => void;
   initialValue: string;
 }
 
-// DaData suggestion fetcher helper
-const fetchSuggestions = async (q: string): Promise<string[]> => {
-  const trimmed = q.trim();
-  if (trimmed.length === 0) return [];
-  try {
-    const res = await fetch(`${env.apiUrl}/api/v1/cities/suggest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        query: trimmed,
-      }),
-    });
-    const data = await res.json();
-    if (data?.suggestions) {
-      return (data.suggestions as any[])
-        .map((s) => s?.value)
-        .filter((v: unknown): v is string => typeof v === 'string' && v.length > 0)
-        .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
-    }
-  } catch (err) {
-    console.error('DaData suggestion fetch error:', err);
-  }
-  return [];
-};
+const POPULAR_DESTINATIONS = [
+  { name: 'Москва', desc: 'Столица России' },
+  { name: 'Санкт-Петербург', desc: 'Культурная столица' },
+  { name: 'Казань', desc: 'Третья столица' },
+  { name: 'Сочи', desc: 'Курортный город' },
+  { name: 'Краснодар', desc: 'Южный мегаполис' },
+];
 
-function SearchModal({ visible, onClose, onSelect, initialValue }: SearchModalProps) {
+function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialValue }: SearchModalProps) {
   const [searchVal, setSearchVal] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
       setSearchVal(initialValue);
       setSuggestions([]);
+      getRecentSearches().then(setRecent).catch(() => setRecent([]));
     } else {
       setSearchVal('');
       setSuggestions([]);
@@ -671,7 +677,7 @@ function SearchModal({ visible, onClose, onSelect, initialValue }: SearchModalPr
     }
   }, [visible, initialValue]);
 
-  // Debounced suggestion fetching
+  // Debounced city suggestions (suggestCities = city-bounded, clean names).
   useEffect(() => {
     if (!visible) return;
 
@@ -682,14 +688,25 @@ function SearchModal({ visible, onClose, onSelect, initialValue }: SearchModalPr
     }
 
     setIsLoadingSuggestions(true);
+    const controller = new AbortController();
     const delayDebounceFn = setTimeout(async () => {
-      const results = await fetchSuggestions(searchVal);
-      setSuggestions(results);
-      setIsLoadingSuggestions(false);
+      const results = await suggestCities(searchVal, controller.signal);
+      if (!controller.signal.aborted) {
+        setSuggestions(results);
+        setIsLoadingSuggestions(false);
+      }
     }, 300);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      controller.abort();
+      clearTimeout(delayDebounceFn);
+    };
   }, [searchVal, visible]);
+
+  const handleClearRecent = () => {
+    setRecent([]);
+    void clearRecentSearches().catch(() => undefined);
+  };
 
   if (!visible) return null;
 
@@ -724,7 +741,7 @@ function SearchModal({ visible, onClose, onSelect, initialValue }: SearchModalPr
                 className="ml-2 flex-1 text-base text-ink"
                 onSubmitEditing={() => {
                   if (searchVal.trim()) {
-                    onSelect(searchVal.trim());
+                    onSubmitQuery(searchVal.trim());
                   }
                 }}
               />
@@ -750,11 +767,11 @@ function SearchModal({ visible, onClose, onSelect, initialValue }: SearchModalPr
               </View>
             ) : searchVal.trim().length > 0 ? (
               <View>
-                <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-3 mb-3">РЕЗУЛЬТАТЫ ПОИСКА</Text>
+                <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-3 mb-3">ГОРОДА</Text>
                 {suggestions.map((item, index) => (
                   <Pressable
                     key={index}
-                    onPress={() => onSelect(item)}
+                    onPress={() => onSelectCity(item)}
                     className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
                   >
                     <View className="h-9 w-9 rounded-pill bg-surface-muted items-center justify-center mr-3">
@@ -767,44 +784,42 @@ function SearchModal({ visible, onClose, onSelect, initialValue }: SearchModalPr
                 ))}
                 {suggestions.length === 0 && (
                   <View className="py-8 items-center">
-                    <Text className="text-sm text-ink-secondary">Ничего не найдено</Text>
+                    <Text className="text-sm text-ink-secondary">Город не найден. Нажмите «ввод», чтобы искать по адресу.</Text>
                   </View>
                 )}
               </View>
             ) : (
               <View>
-                {/* Recent Searches stub */}
-                <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-3 mb-3">НЕДАВНИЕ ЗАПРОСЫ</Text>
-                {[
-                  { name: 'Москва, Пресненская набережная', date: 'Вчера' },
-                  { name: 'Санкт-Петербург, Невский проспект', date: '2 дня назад' },
-                ].map((item, index) => (
-                  <Pressable
-                    key={index}
-                    onPress={() => onSelect(item.name)}
-                    className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
-                  >
-                    <View className="h-9 w-9 rounded-pill bg-surface-muted items-center justify-center mr-3">
-                      <Ionicons name="time-outline" size={18} color={palette.inkSecondary} />
+                {recent.length > 0 ? (
+                  <>
+                    <View className="flex-row items-center justify-between mt-3 mb-3">
+                      <Text className="text-xs font-bold text-ink-secondary tracking-wider">НЕДАВНИЕ ЗАПРОСЫ</Text>
+                      <Pressable onPress={handleClearRecent} className="active:opacity-60">
+                        <Text className="text-xs font-semibold text-primary">Очистить</Text>
+                      </Pressable>
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-base text-ink font-medium" numberOfLines={1}>{item.name}</Text>
-                      <Text className="text-xs text-ink-secondary mt-0.5">{item.date}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+                    {recent.map((item, index) => (
+                      <Pressable
+                        key={index}
+                        onPress={() => onSelectCity(item)}
+                        className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
+                      >
+                        <View className="h-9 w-9 rounded-pill bg-surface-muted items-center justify-center mr-3">
+                          <Ionicons name="time-outline" size={18} color={palette.inkSecondary} />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-base text-ink font-medium" numberOfLines={1}>{item}</Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </>
+                ) : null}
 
                 <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-6 mb-3">ПОПУЛЯРНЫЕ НАПРАВЛЕНИЯ</Text>
-                {[
-                  { name: 'Москва', desc: 'Столица России' },
-                  { name: 'Санкт-Петербург', desc: 'Культурная столица' },
-                  { name: 'Казань', desc: 'Третья столица' },
-                  { name: 'Сочи', desc: 'Курортный город' },
-                  { name: 'Краснодар', desc: 'Южный мегаполис' },
-                ].map((item, index) => (
+                {POPULAR_DESTINATIONS.map((item, index) => (
                   <Pressable
                     key={index}
-                    onPress={() => onSelect(item.name)}
+                    onPress={() => onSelectCity(item.name)}
                     className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
                   >
                     <View className="h-9 w-9 rounded-pill bg-primary-light items-center justify-center mr-3">
