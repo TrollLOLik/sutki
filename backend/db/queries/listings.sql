@@ -66,6 +66,17 @@ WHERE h.deleted = false
       WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')
     )
   )
+  AND (
+    sqlc.narg('check_in')::date IS NULL
+    OR sqlc.narg('check_out')::date IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM request rq
+      WHERE rq.house_id = h.id
+        AND rq.status IN ('in_progress', 'confirmed')
+        AND rq.start_date < sqlc.narg('check_out')::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date
+    )
+  )
 ORDER BY
   CASE WHEN @sort::text = 'price_asc' THEN h.price END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price_desc' THEN h.price END DESC NULLS LAST,
@@ -110,6 +121,17 @@ WHERE h.deleted = false
     OR EXISTS (
       SELECT 1 FROM house_house_category hhc
       WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')
+    )
+  )
+  AND (
+    sqlc.narg('check_in')::date IS NULL
+    OR sqlc.narg('check_out')::date IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM request rq
+      WHERE rq.house_id = h.id
+        AND rq.status IN ('in_progress', 'confirmed')
+        AND rq.start_date < sqlc.narg('check_out')::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date
     )
   );
 

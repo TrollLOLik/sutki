@@ -94,6 +94,17 @@ WHERE h.deleted = false
       WHERE hhc.house_id = h.id AND hhc.house_category_id = $8
     )
   )
+  AND (
+    $9::date IS NULL
+    OR $10::date IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM request rq
+      WHERE rq.house_id = h.id
+        AND rq.status IN ('in_progress', 'confirmed')
+        AND rq.start_date < $10::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > $9::date
+    )
+  )
 `
 
 type CountHousesFilteredParams struct {
@@ -105,6 +116,8 @@ type CountHousesFilteredParams struct {
 	RoomsMin *int32
 	Services []int32
 	Category *int32
+	CheckIn  pgtype.Date
+	CheckOut pgtype.Date
 }
 
 func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error) {
@@ -117,6 +130,8 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 		arg.RoomsMin,
 		arg.Services,
 		arg.Category,
+		arg.CheckIn,
+		arg.CheckOut,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -605,13 +620,24 @@ WHERE h.deleted = false
       WHERE hhc.house_id = h.id AND hhc.house_category_id = $8
     )
   )
+  AND (
+    $9::date IS NULL
+    OR $10::date IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM request rq
+      WHERE rq.house_id = h.id
+        AND rq.status IN ('in_progress', 'confirmed')
+        AND rq.start_date < $10::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > $9::date
+    )
+  )
 ORDER BY
-  CASE WHEN $9::text = 'price_asc' THEN h.price END ASC NULLS LAST,
-  CASE WHEN $9::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN $9::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN $11::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $11::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $11::text = 'newest' THEN h.created_at END DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
   h.created_at DESC
-LIMIT $11 OFFSET $10
+LIMIT $13 OFFSET $12
 `
 
 type ListHousesFilteredParams struct {
@@ -623,6 +649,8 @@ type ListHousesFilteredParams struct {
 	RoomsMin     *int32
 	Services     []int32
 	Category     *int32
+	CheckIn      pgtype.Date
+	CheckOut     pgtype.Date
 	Sort         string
 	ResultOffset int32
 	ResultLimit  int32
@@ -657,6 +685,8 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		arg.RoomsMin,
 		arg.Services,
 		arg.Category,
+		arg.CheckIn,
+		arg.CheckOut,
 		arg.Sort,
 		arg.ResultOffset,
 		arg.ResultLimit,

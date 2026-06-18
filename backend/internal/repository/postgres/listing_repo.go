@@ -38,6 +38,8 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 		RoomsMin:     filter.RoomsMin,
 		Services:     nonNil(filter.Services),
 		Category:     filter.Category,
+		CheckIn:      dateParamPtr(filter.CheckIn),
+		CheckOut:     dateParamPtr(filter.CheckOut),
 		Sort:         string(filter.Sort),
 		ResultLimit:  filter.Limit,
 		ResultOffset: filter.Offset,
@@ -149,6 +151,8 @@ func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int6
 		RoomsMin: filter.RoomsMin,
 		Services: nonNil(filter.Services),
 		Category: filter.Category,
+		CheckIn:  dateParamPtr(filter.CheckIn),
+		CheckOut: dateParamPtr(filter.CheckOut),
 	})
 }
 
