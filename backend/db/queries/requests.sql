@@ -133,3 +133,13 @@ SELECT EXISTS (
     AND rq.start_date < @range_end::date
     AND COALESCE(rq.end_date, rq.start_date + 1) > @range_start::date
 ) AS has_overlap;
+
+-- name: ListConfirmedRangesForHouse :many
+-- Confirmed (occupied) date ranges for a house, used to block taken dates in
+-- the booking calendar. Past ranges are omitted.
+SELECT start_date, end_date
+FROM request
+WHERE house_id = $1
+  AND status = 'confirmed'
+  AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+ORDER BY start_date;

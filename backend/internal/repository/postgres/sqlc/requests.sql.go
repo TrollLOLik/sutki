@@ -357,6 +357,42 @@ func (q *Queries) HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConf
 	return has_overlap, err
 }
 
+const listConfirmedRangesForHouse = `-- name: ListConfirmedRangesForHouse :many
+SELECT start_date, end_date
+FROM request
+WHERE house_id = $1
+  AND status = 'confirmed'
+  AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+ORDER BY start_date
+`
+
+type ListConfirmedRangesForHouseRow struct {
+	StartDate pgtype.Date
+	EndDate   pgtype.Date
+}
+
+// Confirmed (occupied) date ranges for a house, used to block taken dates in
+// the booking calendar. Past ranges are omitted.
+func (q *Queries) ListConfirmedRangesForHouse(ctx context.Context, houseID *int32) ([]ListConfirmedRangesForHouseRow, error) {
+	rows, err := q.db.Query(ctx, listConfirmedRangesForHouse, houseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListConfirmedRangesForHouseRow
+	for rows.Next() {
+		var i ListConfirmedRangesForHouseRow
+		if err := rows.Scan(&i.StartDate, &i.EndDate); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRequestsByUser = `-- name: ListRequestsByUser :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,

@@ -68,6 +68,12 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	return s.repo.Create(ctx, b)
 }
 
+// ConfirmedRanges returns the confirmed (occupied) date ranges for a house so
+// clients can block taken dates. It is public information about a listing.
+func (s *Service) ConfirmedRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
+	return s.repo.ConfirmedRanges(ctx, houseID)
+}
+
 // Get returns a booking visible to actorID (its author or the listing owner).
 func (s *Service) Get(ctx context.Context, id, actorID int32) (domain.Booking, error) {
 	b, err := s.repo.GetByID(ctx, id)

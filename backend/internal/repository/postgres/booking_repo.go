@@ -45,6 +45,21 @@ func (r *BookingRepo) HasConfirmedOverlap(ctx context.Context, houseID int32, st
 	})
 }
 
+func (r *BookingRepo) ConfirmedRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
+	rows, err := r.q.ListConfirmedRangesForHouse(ctx, &houseID)
+	if err != nil {
+		return nil, err
+	}
+	ranges := make([]domain.BookedRange, 0, len(rows))
+	for _, row := range rows {
+		ranges = append(ranges, domain.BookedRange{
+			Start: row.StartDate.Time,
+			End:   dateToPtr(row.EndDate),
+		})
+	}
+	return ranges, nil
+}
+
 func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.Booking, error) {
 	row, err := r.q.CreateRequest(ctx, sqlc.CreateRequestParams{
 		HouseID:   b.HouseID,

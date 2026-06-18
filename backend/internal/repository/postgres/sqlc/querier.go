@@ -48,6 +48,9 @@ type Querier interface {
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
 	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)
+	// Confirmed (occupied) date ranges for a house, used to block taken dates in
+	// the booking calendar. Past ranges are omitted.
+	ListConfirmedRangesForHouse(ctx context.Context, houseID *int32) ([]ListConfirmedRangesForHouseRow, error)
 	ListFavoriteHouses(ctx context.Context, arg ListFavoriteHousesParams) ([]ListFavoriteHousesRow, error)
 	ListFavoriteIDs(ctx context.Context, userID int32) ([]int32, error)
 	ListHouseCategories(ctx context.Context, houseID int32) ([]ListHouseCategoriesRow, error)
