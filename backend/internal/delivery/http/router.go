@@ -27,6 +27,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Route("/listings", func(r chi.Router) {
 			r.Get("/", listingHandler.list)
 			r.Get("/{id}", listingHandler.get)
+			r.Get("/{id}/availability", bookingHandler.Availability)
 			r.Get("/{id}/reviews", reviewHandler.List)
 
 			// Authenticated endpoints under /listings

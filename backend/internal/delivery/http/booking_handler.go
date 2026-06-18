@@ -74,6 +74,43 @@ type bookingListResponse struct {
 
 // Create handles POST /api/v1/listings/{id}/requests: the authenticated user
 // books the listing identified by the {id} path param.
+type availabilityRangeDTO struct {
+	StartDate string  `json:"start_date"`
+	EndDate   *string `json:"end_date"`
+}
+
+type availabilityResponse struct {
+	Ranges []availabilityRangeDTO `json:"ranges"`
+}
+
+// Availability returns the confirmed (occupied) date ranges for a listing so
+// the booking calendar can block taken dates. Public, no auth required.
+func (h *BookingHandler) Availability(w http.ResponseWriter, r *http.Request) {
+	houseID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || houseID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	ranges, err := h.svc.ConfirmedRanges(r.Context(), int32(houseID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load availability")
+		return
+	}
+	items := make([]availabilityRangeDTO, 0, len(ranges))
+	for _, rg := range ranges {
+		var end *string
+		if rg.End != nil {
+			s := rg.End.Format(dateLayout)
+			end = &s
+		}
+		items = append(items, availabilityRangeDTO{
+			StartDate: rg.Start.Format(dateLayout),
+			EndDate:   end,
+		})
+	}
+	writeJSON(w, http.StatusOK, availabilityResponse{Ranges: items})
+}
+
 func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
@@ -317,6 +354,8 @@ func (h *BookingHandler) writeBookingError(w http.ResponseWriter, err error, not
 		writeError(w, http.StatusNotFound, notFoundMsg)
 	case errors.Is(err, domain.ErrListingUnavailable):
 		writeError(w, http.StatusConflict, "listing unavailable")
+	case errors.Is(err, domain.ErrDatesUnavailable):
+		writeError(w, http.StatusConflict, "dates unavailable")
 	case errors.Is(err, domain.ErrBookingForbidden):
 		writeError(w, http.StatusForbidden, "forbidden")
 	case errors.Is(err, domain.ErrBookingNotPending):

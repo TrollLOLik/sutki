@@ -28,6 +28,8 @@ export interface ListingCard {
   area: number;
   lat: number | null;
   lng: number | null;
+  /** Sleeping capacity; null when unknown (legacy listings). */
+  max_guests: number | null;
   views: number;
   cover_url: string;
   /** Average review score (0 when there are no reviews). */

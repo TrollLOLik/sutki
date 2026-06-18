@@ -23,7 +23,7 @@ import {
   type NewListingInput,
 } from '@/lib/api/create-listing';
 import { useListing } from '@/lib/api/listings';
-import { env } from '@/lib/env';
+import { suggestCities } from '@/lib/api/cities';
 import { useCreateListingStore } from '@/store/create-listing';
 import { palette } from '@/theme/tokens';
 
@@ -39,30 +39,6 @@ const STEP_TITLES = [
   'Фотографии',
   'Публикация',
 ];
-
-async function fetchCitySuggestions(query: string): Promise<string[]> {
-  try {
-    const res = await fetch(`${env.apiUrl}/api/v1/cities/suggest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        query,
-        from_bound: { value: 'city' },
-        to_bound: { value: 'city' },
-      }),
-    });
-    const data = await res.json();
-    if (data?.suggestions) {
-      return data.suggestions
-        .map((s: any) => s.data.city)
-        .filter((c: any) => c != null && c.length > 0)
-        .filter((v: any, i: number, a: any[]) => a.indexOf(v) === i);
-    }
-  } catch (err) {
-    console.error('City suggest error:', err);
-  }
-  return [];
-}
 
 export default function CreateListingScreen() {
   const draft = useCreateListingStore();
@@ -94,6 +70,7 @@ export default function CreateListingScreen() {
         houseNumber: editListing.house_number || '',
         area: String(editListing.area),
         price: String(editListing.price),
+        maxGuests: editListing.max_guests != null ? String(editListing.max_guests) : '',
         serviceIds: editListing.services.map((s) => s.id),
         description: editListing.description,
         photos: editListing.photos.map((p) => p.url),
@@ -121,7 +98,7 @@ export default function CreateListingScreen() {
       return;
     }
     cityTimer.current = setTimeout(() => {
-      fetchCitySuggestions(draft.city.trim()).then(setCitySuggestions);
+      suggestCities(draft.city.trim()).then(setCitySuggestions);
     }, 300);
     return () => {
       if (cityTimer.current) clearTimeout(cityTimer.current);
@@ -191,6 +168,7 @@ export default function CreateListingScreen() {
       price: Math.round(Number(draft.price)),
       count_room: draft.countRoom.replace('+', ''),
       area: Math.round(Number(draft.area)),
+      max_guests: draft.maxGuests !== '' ? Math.round(Number(draft.maxGuests)) : null,
       service_ids: draft.serviceIds,
       category_ids: draft.categoryIds,
     };
@@ -396,6 +374,16 @@ export default function CreateListingScreen() {
                     onChangeText={(t) => draft.setField('price', t.replace(/[^0-9]/g, ''))}
                   />
                 </View>
+              </View>
+              <View className="gap-2">
+                <Text className="text-sm font-medium text-ink-secondary">Гостей (макс.)</Text>
+                <Input
+                  icon="people-outline"
+                  placeholder="4"
+                  keyboardType="number-pad"
+                  value={draft.maxGuests}
+                  onChangeText={(t) => draft.setField('maxGuests', t.replace(/[^0-9]/g, ''))}
+                />
               </View>
               <View className="gap-3">
                 <Text className="text-base font-semibold text-ink">Удобства</Text>

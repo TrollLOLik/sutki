@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+// BookedRange is a confirmed occupancy window on a listing. End is nil for a
+// single-night booking.
+type BookedRange struct {
+	Start time.Time
+	End   *time.Time
+}
+
 // ListingRepository abstracts persistence for rental listings.
 type ListingRepository interface {
 	List(ctx context.Context, filter ListFilter) ([]House, error)
@@ -24,6 +31,12 @@ type ListingRepository interface {
 // BookingRepository abstracts persistence for rental requests (bookings).
 type BookingRepository interface {
 	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, err error)
+	// HasConfirmedOverlap reports whether the house already has a confirmed
+	// booking overlapping [start, end). A nil end means a single night.
+	HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error)
+	// ConfirmedRanges returns the house's confirmed (occupied) date ranges,
+	// used to block taken dates in the booking calendar.
+	ConfirmedRanges(ctx context.Context, houseID int32) ([]BookedRange, error)
 	Create(ctx context.Context, b NewBooking) (Booking, error)
 	GetByID(ctx context.Context, id int32) (Booking, error)
 	ListByUser(ctx context.Context, userID, limit, offset int32, scope string) ([]Booking, error)

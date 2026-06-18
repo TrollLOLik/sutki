@@ -9,6 +9,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.max_guests,
   h.lat,
   h.lng,
   h.views,
@@ -66,6 +67,22 @@ WHERE h.deleted = false
       WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')
     )
   )
+  AND (
+    sqlc.narg('check_in')::date IS NULL
+    OR sqlc.narg('check_out')::date IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM request rq
+      WHERE rq.house_id = h.id
+        AND rq.status = 'confirmed'
+        AND rq.start_date < sqlc.narg('check_out')::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date
+    )
+  )
+  AND (
+    sqlc.narg('guests')::int IS NULL
+    OR h.max_guests IS NULL
+    OR h.max_guests >= sqlc.narg('guests')
+  )
 ORDER BY
   CASE WHEN @sort::text = 'price_asc' THEN h.price END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price_desc' THEN h.price END DESC NULLS LAST,
@@ -111,6 +128,22 @@ WHERE h.deleted = false
       SELECT 1 FROM house_house_category hhc
       WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')
     )
+  )
+  AND (
+    sqlc.narg('check_in')::date IS NULL
+    OR sqlc.narg('check_out')::date IS NULL
+    OR NOT EXISTS (
+      SELECT 1 FROM request rq
+      WHERE rq.house_id = h.id
+        AND rq.status = 'confirmed'
+        AND rq.start_date < sqlc.narg('check_out')::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date
+    )
+  )
+  AND (
+    sqlc.narg('guests')::int IS NULL
+    OR h.max_guests IS NULL
+    OR h.max_guests >= sqlc.narg('guests')
   );
 
 -- name: GetHouseByID :one
@@ -126,6 +159,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.max_guests,
   h.lat,
   h.lng,
   h.views,
@@ -182,11 +216,12 @@ ORDER BY name;
 -- front-end stub until YooKassa is wired (then `pay` flips via webhook).
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
-  area, country, status, deleted, pay, views, lat, lng, created_at, updated_at
+  area, country, status, deleted, pay, views, lat, lng, max_guests,
+  created_at, updated_at
 ) VALUES (
   @owner_id, @street, @house_number, @description, @price, @count_room,
   sqlc.narg('number_room'), @area, @country, 'active', false, false, 0,
-  sqlc.narg('lat'), sqlc.narg('lng'), now(), now()
+  sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('max_guests'), now(), now()
 )
 RETURNING id;
 
@@ -204,6 +239,7 @@ SET street = @street,
     country = @country,
     lat = sqlc.narg('lat'),
     lng = sqlc.narg('lng'),
+    max_guests = sqlc.narg('max_guests'),
     updated_at = now()
 WHERE id = @id AND owner_id = @owner_id AND deleted = false;
 
@@ -234,6 +270,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.max_guests,
   h.lat,
   h.lng,
   h.views,

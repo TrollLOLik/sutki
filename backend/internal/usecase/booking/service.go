@@ -56,7 +56,22 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	if ownerID == b.UserID {
 		return domain.Booking{}, domain.ErrBookingForbidden
 	}
+	// Reject requests that overlap an already-confirmed booking so users cannot
+	// request dates that are taken.
+	overlap, err := s.repo.HasConfirmedOverlap(ctx, b.HouseID, b.StartDate, b.EndDate)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	if overlap {
+		return domain.Booking{}, domain.ErrDatesUnavailable
+	}
 	return s.repo.Create(ctx, b)
+}
+
+// ConfirmedRanges returns the confirmed (occupied) date ranges for a house so
+// clients can block taken dates. It is public information about a listing.
+func (s *Service) ConfirmedRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
+	return s.repo.ConfirmedRanges(ctx, houseID)
 }
 
 // Get returns a booking visible to actorID (its author or the listing owner).
