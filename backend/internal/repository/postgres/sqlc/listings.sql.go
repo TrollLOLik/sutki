@@ -100,10 +100,15 @@ WHERE h.deleted = false
     OR NOT EXISTS (
       SELECT 1 FROM request rq
       WHERE rq.house_id = h.id
-        AND rq.status IN ('in_progress', 'confirmed')
+        AND rq.status = 'confirmed'
         AND rq.start_date < $10::date
         AND COALESCE(rq.end_date, rq.start_date + 1) > $9::date
     )
+  )
+  AND (
+    $11::int IS NULL
+    OR h.max_guests IS NULL
+    OR h.max_guests >= $11
   )
 `
 
@@ -118,6 +123,7 @@ type CountHousesFilteredParams struct {
 	Category *int32
 	CheckIn  pgtype.Date
 	CheckOut pgtype.Date
+	Guests   *int32
 }
 
 func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error) {
@@ -132,6 +138,7 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 		arg.Category,
 		arg.CheckIn,
 		arg.CheckOut,
+		arg.Guests,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -141,11 +148,12 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 const createHouse = `-- name: CreateHouse :one
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
-  area, country, status, deleted, pay, views, lat, lng, created_at, updated_at
+  area, country, status, deleted, pay, views, lat, lng, max_guests,
+  created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6,
   $7, $8, $9, 'active', false, false, 0,
-  $10, $11, now(), now()
+  $10, $11, $12, now(), now()
 )
 RETURNING id
 `
@@ -162,6 +170,7 @@ type CreateHouseParams struct {
 	Country     string
 	Lat         *float64
 	Lng         *float64
+	MaxGuests   *int32
 }
 
 // Creates a new listing owned by the given user. New listings are published
@@ -180,6 +189,7 @@ func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32
 		arg.Country,
 		arg.Lat,
 		arg.Lng,
+		arg.MaxGuests,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -217,6 +227,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.max_guests,
   h.lat,
   h.lng,
   h.views,
@@ -248,6 +259,7 @@ type GetHouseByIDRow struct {
 	Area         int32
 	Country      string
 	Status       string
+	MaxGuests    *int32
 	Lat          *float64
 	Lng          *float64
 	Views        int32
@@ -272,6 +284,7 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.Area,
 		&i.Country,
 		&i.Status,
+		&i.MaxGuests,
 		&i.Lat,
 		&i.Lng,
 		&i.Views,
@@ -463,6 +476,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.max_guests,
   h.lat,
   h.lng,
   h.views,
@@ -506,6 +520,7 @@ type ListHousesByOwnerRow struct {
 	Area         int32
 	Country      string
 	Status       string
+	MaxGuests    *int32
 	Lat          *float64
 	Lng          *float64
 	Views        int32
@@ -534,6 +549,7 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.Area,
 			&i.Country,
 			&i.Status,
+			&i.MaxGuests,
 			&i.Lat,
 			&i.Lng,
 			&i.Views,
@@ -563,6 +579,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.max_guests,
   h.lat,
   h.lng,
   h.views,
@@ -626,18 +643,23 @@ WHERE h.deleted = false
     OR NOT EXISTS (
       SELECT 1 FROM request rq
       WHERE rq.house_id = h.id
-        AND rq.status IN ('in_progress', 'confirmed')
+        AND rq.status = 'confirmed'
         AND rq.start_date < $10::date
         AND COALESCE(rq.end_date, rq.start_date + 1) > $9::date
     )
   )
+  AND (
+    $11::int IS NULL
+    OR h.max_guests IS NULL
+    OR h.max_guests >= $11
+  )
 ORDER BY
-  CASE WHEN $11::text = 'price_asc' THEN h.price END ASC NULLS LAST,
-  CASE WHEN $11::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN $11::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN $12::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $12::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $12::text = 'newest' THEN h.created_at END DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
   h.created_at DESC
-LIMIT $13 OFFSET $12
+LIMIT $14 OFFSET $13
 `
 
 type ListHousesFilteredParams struct {
@@ -651,6 +673,7 @@ type ListHousesFilteredParams struct {
 	Category     *int32
 	CheckIn      pgtype.Date
 	CheckOut     pgtype.Date
+	Guests       *int32
 	Sort         string
 	ResultOffset int32
 	ResultLimit  int32
@@ -666,6 +689,7 @@ type ListHousesFilteredRow struct {
 	Area         int32
 	Country      string
 	Status       string
+	MaxGuests    *int32
 	Lat          *float64
 	Lng          *float64
 	Views        int32
@@ -687,6 +711,7 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		arg.Category,
 		arg.CheckIn,
 		arg.CheckOut,
+		arg.Guests,
 		arg.Sort,
 		arg.ResultOffset,
 		arg.ResultLimit,
@@ -708,6 +733,7 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 			&i.Area,
 			&i.Country,
 			&i.Status,
+			&i.MaxGuests,
 			&i.Lat,
 			&i.Lng,
 			&i.Views,
@@ -738,8 +764,9 @@ SET street = $1,
     country = $8,
     lat = $9,
     lng = $10,
+    max_guests = $11,
     updated_at = now()
-WHERE id = $11 AND owner_id = $12 AND deleted = false
+WHERE id = $12 AND owner_id = $13 AND deleted = false
 `
 
 type UpdateHouseParams struct {
@@ -753,6 +780,7 @@ type UpdateHouseParams struct {
 	Country     string
 	Lat         *float64
 	Lng         *float64
+	MaxGuests   *int32
 	ID          int32
 	OwnerID     int32
 }
@@ -771,6 +799,7 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		arg.Country,
 		arg.Lat,
 		arg.Lng,
+		arg.MaxGuests,
 		arg.ID,
 		arg.OwnerID,
 	)

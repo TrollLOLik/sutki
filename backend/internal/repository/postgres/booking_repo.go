@@ -32,6 +32,19 @@ func (r *BookingRepo) GetHouseForBooking(ctx context.Context, houseID int32) (ow
 	return row.OwnerID, row.Status, nil
 }
 
+func (r *BookingRepo) HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error) {
+	// Treat a missing end as a single night so same-day requests still conflict.
+	rangeEnd := start.AddDate(0, 0, 1)
+	if end != nil {
+		rangeEnd = *end
+	}
+	return r.q.HouseHasConfirmedOverlap(ctx, sqlc.HouseHasConfirmedOverlapParams{
+		HouseID:    houseID,
+		RangeStart: dateParam(start),
+		RangeEnd:   dateParam(rangeEnd),
+	})
+}
+
 func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.Booking, error) {
 	row, err := r.q.CreateRequest(ctx, sqlc.CreateRequestParams{
 		HouseID:   b.HouseID,

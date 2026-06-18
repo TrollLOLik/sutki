@@ -317,6 +317,8 @@ func (h *BookingHandler) writeBookingError(w http.ResponseWriter, err error, not
 		writeError(w, http.StatusNotFound, notFoundMsg)
 	case errors.Is(err, domain.ErrListingUnavailable):
 		writeError(w, http.StatusConflict, "listing unavailable")
+	case errors.Is(err, domain.ErrDatesUnavailable):
+		writeError(w, http.StatusConflict, "dates unavailable")
 	case errors.Is(err, domain.ErrBookingForbidden):
 		writeError(w, http.StatusForbidden, "forbidden")
 	case errors.Is(err, domain.ErrBookingNotPending):

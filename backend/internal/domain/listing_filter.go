@@ -30,11 +30,14 @@ type ListFilter struct {
 	// Category requires the listing to belong to this category ID.
 	Category *int32
 	// CheckIn/CheckOut, when both set, keep only listings that are free for the
-	// whole [CheckIn, CheckOut) range — i.e. no in-progress/confirmed booking
-	// overlaps it. A nil on either side disables the availability constraint.
+	// whole [CheckIn, CheckOut) range — i.e. no confirmed booking overlaps it.
+	// A nil on either side disables the availability constraint.
 	CheckIn  *time.Time
 	CheckOut *time.Time
-	Sort     ListSort
-	Limit    int32
-	Offset   int32
+	// Guests, when set, keeps listings whose max_guests is unknown (legacy rows)
+	// or at least this large.
+	Guests *int32
+	Sort   ListSort
+	Limit  int32
+	Offset int32
 }

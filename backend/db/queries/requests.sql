@@ -120,3 +120,16 @@ RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason;
+
+-- name: HouseHasConfirmedOverlap :one
+-- Reports whether the house already has a confirmed request overlapping the
+-- requested [range_start, range_end) date range. The caller passes the
+-- exclusive end (for a single-night request, range_start + 1 day).
+SELECT EXISTS (
+  SELECT 1
+  FROM request rq
+  WHERE rq.house_id = @house_id::int
+    AND rq.status = 'confirmed'
+    AND rq.start_date < @range_end::date
+    AND COALESCE(rq.end_date, rq.start_date + 1) > @range_start::date
+) AS has_overlap;

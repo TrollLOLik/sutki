@@ -41,6 +41,10 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	HouseExists(ctx context.Context, id int32) (bool, error)
+	// Reports whether the house already has a confirmed request overlapping the
+	// requested [range_start, range_end) date range. The caller passes the
+	// exclusive end (for a single-night request, range_start + 1 day).
+	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
 	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)

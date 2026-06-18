@@ -330,6 +330,33 @@ func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDR
 	return i, err
 }
 
+const houseHasConfirmedOverlap = `-- name: HouseHasConfirmedOverlap :one
+SELECT EXISTS (
+  SELECT 1
+  FROM request rq
+  WHERE rq.house_id = $1::int
+    AND rq.status = 'confirmed'
+    AND rq.start_date < $2::date
+    AND COALESCE(rq.end_date, rq.start_date + 1) > $3::date
+) AS has_overlap
+`
+
+type HouseHasConfirmedOverlapParams struct {
+	HouseID    int32
+	RangeEnd   pgtype.Date
+	RangeStart pgtype.Date
+}
+
+// Reports whether the house already has a confirmed request overlapping the
+// requested [range_start, range_end) date range. The caller passes the
+// exclusive end (for a single-night request, range_start + 1 day).
+func (q *Queries) HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error) {
+	row := q.db.QueryRow(ctx, houseHasConfirmedOverlap, arg.HouseID, arg.RangeEnd, arg.RangeStart)
+	var has_overlap bool
+	err := row.Scan(&has_overlap)
+	return has_overlap, err
+}
+
 const listRequestsByUser = `-- name: ListRequestsByUser :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,

@@ -71,6 +71,7 @@ type listingCardDTO struct {
 	Area        int32    `json:"area"`
 	Lat         *float64 `json:"lat"`
 	Lng         *float64 `json:"lng"`
+	MaxGuests   *int32   `json:"max_guests"`
 	Views       int32    `json:"views"`
 	CoverURL    string   `json:"cover_url"`
 	// Rating is the average review score (0 when there are no reviews);
@@ -136,6 +137,7 @@ type createListingRequest struct {
 	Area        int32    `json:"area"`
 	Lat         *float64 `json:"lat"`
 	Lng         *float64 `json:"lng"`
+	MaxGuests   *int32   `json:"max_guests"`
 	ServiceIDs  []int32  `json:"service_ids"`
 	CategoryIDs []int32  `json:"category_ids"`
 }
@@ -164,6 +166,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		Area:        body.Area,
 		Lat:         body.Lat,
 		Lng:         body.Lng,
+		MaxGuests:   body.MaxGuests,
 		ServiceIDs:  body.ServiceIDs,
 		CategoryIDs: body.CategoryIDs,
 	}
@@ -208,6 +211,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		Area:        body.Area,
 		Lat:         body.Lat,
 		Lng:         body.Lng,
+		MaxGuests:   body.MaxGuests,
 		ServiceIDs:  body.ServiceIDs,
 		CategoryIDs: body.CategoryIDs,
 	}
@@ -286,6 +290,7 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 		Area:         hs.Area,
 		Lat:          hs.Lat,
 		Lng:          hs.Lng,
+		MaxGuests:    hs.MaxGuests,
 		Views:        hs.Views,
 		CoverURL:     h.mediaURL(hs.CoverPath),
 		Rating:       hs.Rating,
@@ -380,6 +385,7 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 		{"price_max", &f.PriceMax},
 		{"rooms_min", &f.RoomsMin},
 		{"category", &f.Category},
+		{"guests", &f.Guests},
 	} {
 		v, ok := parseOptNonNegInt32(q.Get(p.key))
 		if !ok {

@@ -56,6 +56,15 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	if ownerID == b.UserID {
 		return domain.Booking{}, domain.ErrBookingForbidden
 	}
+	// Reject requests that overlap an already-confirmed booking so users cannot
+	// request dates that are taken.
+	overlap, err := s.repo.HasConfirmedOverlap(ctx, b.HouseID, b.StartDate, b.EndDate)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	if overlap {
+		return domain.Booking{}, domain.ErrDatesUnavailable
+	}
 	return s.repo.Create(ctx, b)
 }
 

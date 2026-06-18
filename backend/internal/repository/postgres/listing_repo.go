@@ -40,6 +40,7 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 		Category:     filter.Category,
 		CheckIn:      dateParamPtr(filter.CheckIn),
 		CheckOut:     dateParamPtr(filter.CheckOut),
+		Guests:       filter.Guests,
 		Sort:         string(filter.Sort),
 		ResultLimit:  filter.Limit,
 		ResultOffset: filter.Offset,
@@ -59,6 +60,7 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 			Area:         row.Area,
 			City:         row.Country,
 			Status:       row.Status,
+			MaxGuests:    row.MaxGuests,
 			Lat:          row.Lat,
 			Lng:          row.Lng,
 			Views:        row.Views,
@@ -86,6 +88,7 @@ func (r *ListingRepo) Create(ctx context.Context, h domain.NewHouse) (int32, err
 		Country:     h.City,
 		Lat:         h.Lat,
 		Lng:         h.Lng,
+		MaxGuests:   h.MaxGuests,
 	})
 	if err != nil {
 		return 0, err
@@ -125,6 +128,7 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 			Area:         row.Area,
 			City:         row.Country,
 			Status:       row.Status,
+			MaxGuests:    row.MaxGuests,
 			Lat:          row.Lat,
 			Lng:          row.Lng,
 			Views:        row.Views,
@@ -153,6 +157,7 @@ func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int6
 		Category: filter.Category,
 		CheckIn:  dateParamPtr(filter.CheckIn),
 		CheckOut: dateParamPtr(filter.CheckOut),
+		Guests:   filter.Guests,
 	})
 }
 
@@ -175,6 +180,7 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		Area:         row.Area,
 		City:         row.Country,
 		Status:       row.Status,
+		MaxGuests:    row.MaxGuests,
 		Lat:          row.Lat,
 		Lng:          row.Lng,
 		Views:        row.Views,
@@ -264,6 +270,7 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 		Country:     h.City,
 		Lat:         h.Lat,
 		Lng:         h.Lng,
+		MaxGuests:   h.MaxGuests,
 		ID:          id,
 		OwnerID:     h.OwnerID,
 	})

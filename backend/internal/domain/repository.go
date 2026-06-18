@@ -24,6 +24,9 @@ type ListingRepository interface {
 // BookingRepository abstracts persistence for rental requests (bookings).
 type BookingRepository interface {
 	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, err error)
+	// HasConfirmedOverlap reports whether the house already has a confirmed
+	// booking overlapping [start, end). A nil end means a single night.
+	HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error)
 	Create(ctx context.Context, b NewBooking) (Booking, error)
 	GetByID(ctx context.Context, id int32) (Booking, error)
 	ListByUser(ctx context.Context, userID, limit, offset int32, scope string) ([]Booking, error)

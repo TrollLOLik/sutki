@@ -30,6 +30,9 @@ var (
 	// ErrBookingNotPending is returned when a status transition is not allowed
 	// from the booking's current status.
 	ErrBookingNotPending = errors.New("booking not pending")
+	// ErrDatesUnavailable is returned when the requested dates overlap an
+	// already-confirmed booking on the same listing.
+	ErrDatesUnavailable = errors.New("dates unavailable")
 )
 
 // Review-related errors.
