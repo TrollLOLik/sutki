@@ -59,3 +59,11 @@ WHERE token_hash = $1 AND revoked_at IS NULL;
 
 -- name: DeleteUser :exec
 DELETE FROM "user" WHERE id = $1;
+
+-- name: UpdateUserEmail :one
+UPDATE "user"
+SET email = $2,
+    updated_at = now()
+WHERE id = $1 AND deleted = false
+RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday;
+

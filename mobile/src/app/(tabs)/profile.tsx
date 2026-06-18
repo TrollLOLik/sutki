@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
+import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { Button } from '@/components/ui';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 import { useUpdateMe } from '@/lib/api/auth';
@@ -168,6 +169,7 @@ export default function ProfileScreen() {
   const [formBirthday, setFormBirthday] = useState(''); // YYYY-MM-DD
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [birthdayPickerVisible, setBirthdayPickerVisible] = useState(false);
+  const [emailChangeVisible, setEmailChangeVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -177,6 +179,11 @@ export default function ProfileScreen() {
       setFormCity(user?.city ?? '');
       setFormBirthday(user?.birthday ?? '');
       setSaveError(null);
+      setSettingsTab('basic');
+      tabAnim.setValue(0);
+      requestAnimationFrame(() => {
+        horizontalScrollRef.current?.scrollTo({ x: 0, animated: false });
+      });
     }
   }, [settingsVisible, user]);
 
@@ -212,6 +219,29 @@ export default function ProfileScreen() {
   const [settingsFade] = useState(() => new Animated.Value(0));
   const [settingsSlide] = useState(() => new Animated.Value(SCREEN_HEIGHT));
   const handleScroll = useScrollHideTabBar();
+
+  const horizontalScrollRef = useRef<ScrollView>(null);
+  const tabAnim = useRef(new Animated.Value(0)).current;
+  const windowWidth = Dimensions.get('window').width;
+  const [containerWidth, setContainerWidth] = useState(windowWidth - 32);
+
+  // Tab switching animation
+  useEffect(() => {
+    Animated.timing(tabAnim, {
+      toValue: settingsTab === 'basic' ? 0 : 1,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [settingsTab]);
+
+  const handleTabChange = (tab: SettingsTab) => {
+    setSettingsTab(tab);
+    horizontalScrollRef.current?.scrollTo({
+      x: tab === 'basic' ? 0 : containerWidth,
+      animated: true,
+    });
+  };
 
   useEffect(() => {
     if (settingsVisible) {
@@ -451,178 +481,244 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
 
-              <View className="mt-5 flex-row rounded-field bg-surface-muted p-1">
+              <View
+                onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+                className="mt-5 flex-row rounded-field bg-surface-muted p-1 relative"
+              >
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    left: 4,
+                    bottom: 4,
+                    width: (containerWidth - 8) / 2,
+                    transform: [{
+                      translateX: tabAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, (containerWidth - 8) / 2],
+                      })
+                    }],
+                    backgroundColor: palette.surface,
+                    borderRadius: 12,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
+                />
                 <Pressable
                   accessibilityRole="tab"
                   accessibilityState={{ selected: settingsTab === 'basic' }}
-                  onPress={() => setSettingsTab('basic')}
-                  className={`h-11 flex-1 items-center justify-center rounded-field ${settingsTab === 'basic' ? 'bg-surface' : ''}`}>
-                  <Text className={`font-bold ${settingsTab === 'basic' ? 'text-ink' : 'text-ink-secondary'}`}>Основное</Text>
+                  onPress={() => handleTabChange('basic')}
+                  className="h-11 flex-1 items-center justify-center rounded-field relative z-10"
+                >
+                  <Text className={`font-bold transition-colors duration-200 ${settingsTab === 'basic' ? 'text-ink' : 'text-ink-secondary'}`}>
+                    Основное
+                  </Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="tab"
                   accessibilityState={{ selected: settingsTab === 'security' }}
-                  onPress={() => setSettingsTab('security')}
-                  className={`h-11 flex-1 items-center justify-center rounded-field ${settingsTab === 'security' ? 'bg-surface' : ''}`}>
-                  <Text className={`font-bold ${settingsTab === 'security' ? 'text-ink' : 'text-ink-secondary'}`}>Безопасность</Text>
+                  onPress={() => handleTabChange('security')}
+                  className="h-11 flex-1 items-center justify-center rounded-field relative z-10"
+                >
+                  <Text className={`font-bold transition-colors duration-200 ${settingsTab === 'security' ? 'text-ink' : 'text-ink-secondary'}`}>
+                    Безопасность
+                  </Text>
                 </Pressable>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 py-5">
-                {settingsTab === 'basic' ? (
-                  <>
-                    <View className="rounded-[24px] border border-line bg-surface-muted p-4" style={{ borderRadius: 24 }}>
-                      <View className="flex-row items-center gap-4">
-                        <Image source={{ uri: avatarUrl }} className="h-20 w-20 rounded-[24px]" />
-                        <View className="flex-1">
-                          <Text className="text-lg font-extrabold text-ink">Фото профиля</Text>
-                          <Text className="mt-1 text-sm leading-5 text-ink-secondary">
-                            Заглушка загрузки аватара. Позже подключим выбор изображения и сохранение.
-                          </Text>
-                        </View>
+              <ScrollView
+                ref={horizontalScrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                scrollEventThrottle={16}
+                onMomentumScrollEnd={(e) => {
+                  const offsetX = e.nativeEvent.contentOffset.x;
+                  const page = Math.round(offsetX / containerWidth);
+                  const nextTab = page === 0 ? 'basic' : 'security';
+                  if (settingsTab !== nextTab) {
+                    setSettingsTab(nextTab);
+                  }
+                }}
+                className="flex-1 mt-2"
+              >
+                {/* Basic Tab */}
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerClassName="gap-4 py-5 pr-2"
+                  style={{ width: containerWidth }}
+                >
+                  <View className="rounded-[24px] border border-line bg-surface-muted p-4" style={{ borderRadius: 24 }}>
+                    <View className="flex-row items-center gap-4">
+                      <Image source={{ uri: avatarUrl }} className="h-20 w-20 rounded-[24px]" />
+                      <View className="flex-1">
+                        <Text className="text-lg font-extrabold text-ink">Фото профиля</Text>
+                        <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                          Заглушка загрузки аватара. Позже подключим выбор изображения и сохранение.
+                        </Text>
                       </View>
                     </View>
+                  </View>
 
-                    <SettingsField label="Email" value={valueOrPlaceholder(user?.email)} icon="mail-outline" />
-                    <EditableField
-                      label="Имя"
-                      value={formName}
-                      onChangeText={setFormName}
-                      icon="person-outline"
-                      placeholder="Ваше имя"
-                    />
-                    <EditableField
-                      label="Телефон"
-                      value={formPhone}
-                      onChangeText={setFormPhone}
-                      icon="call-outline"
-                      placeholder="+7 900 000-00-00"
-                      keyboardType="phone-pad"
-                    />
-                    <PickerField
-                      label="Город"
-                      value={formCity}
-                      placeholder="Выберите город"
-                      icon="location-outline"
-                      onPress={() => setCityPickerVisible(true)}
-                    />
-                    <PickerField
-                      label="Дата рождения"
-                      value={formatBirthday(formBirthday)}
-                      placeholder="Укажите дату рождения"
-                      icon="calendar-outline"
-                      onPress={() => setBirthdayPickerVisible(true)}
-                    />
-                    {saveError ? (
-                      <Text className="px-1 text-sm font-medium text-danger">{saveError}</Text>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <View className="rounded-[24px] bg-primary-light p-4" style={{ borderRadius: 24 }}>
-                      <View className="flex-row items-start gap-3">
-                        <View className="h-12 w-12 items-center justify-center rounded-full bg-surface">
-                          <Ionicons name="lock-closed-outline" size={23} color={palette.primary} />
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-lg font-extrabold text-ink">Защита аккаунта</Text>
-                          <Text className="mt-1 text-sm leading-5 text-ink-secondary">
-                            UI-заглушки для email-кода, устройств входа и статуса верификации без серверной логики.
-                          </Text>
-                        </View>
+                  <PickerField
+                    label="Email"
+                    value={valueOrPlaceholder(user?.email)}
+                    placeholder="Укажите email"
+                    icon="mail-outline"
+                    onPress={() => setEmailChangeVisible(true)}
+                  />
+                  <EditableField
+                    label="Имя"
+                    value={formName}
+                    onChangeText={setFormName}
+                    icon="person-outline"
+                    placeholder="Ваше имя"
+                  />
+                  <EditableField
+                    label="Телефон"
+                    value={formPhone}
+                    onChangeText={setFormPhone}
+                    icon="call-outline"
+                    placeholder="+7 900 000-00-00"
+                    keyboardType="phone-pad"
+                  />
+                  <PickerField
+                    label="Город"
+                    value={formCity}
+                    placeholder="Выберите город"
+                    icon="location-outline"
+                    onPress={() => setCityPickerVisible(true)}
+                  />
+                  <PickerField
+                    label="Дата рождения"
+                    value={formatBirthday(formBirthday)}
+                    placeholder="Укажите дату рождения"
+                    icon="calendar-outline"
+                    onPress={() => setBirthdayPickerVisible(true)}
+                  />
+                  {saveError ? (
+                    <Text className="px-1 text-sm font-medium text-danger">{saveError}</Text>
+                  ) : null}
+                </ScrollView>
+
+                {/* Security Tab */}
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerClassName="gap-4 py-5 pl-2"
+                  style={{ width: containerWidth }}
+                >
+                  <View className="rounded-[24px] bg-primary-light p-4" style={{ borderRadius: 24 }}>
+                    <View className="flex-row items-start gap-3">
+                      <View className="h-12 w-12 items-center justify-center rounded-full bg-surface">
+                        <Ionicons name="lock-closed-outline" size={23} color={palette.primary} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-lg font-extrabold text-ink">Защита аккаунта</Text>
+                        <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                          UI-заглушки для email-кода, устройств входа и статуса верификации без серверной логики.
+                        </Text>
                       </View>
                     </View>
+                  </View>
 
-                    <View className="gap-3 rounded-card border border-line bg-surface p-4">
-                      <View className="flex-row items-center justify-between">
-                        <View>
-                          <Text className="text-base font-extrabold text-ink">Вход по email-коду</Text>
-                          <Text className="mt-1 text-sm text-ink-secondary">{valueOrPlaceholder(user?.email)}</Text>
-                        </View>
+                  <View className="gap-3 rounded-card border border-line bg-surface p-4">
+                    <Pressable
+                      onPress={() => setEmailChangeVisible(true)}
+                      className="flex-row items-center justify-between active:opacity-70"
+                    >
+                      <View className="flex-1 pr-2">
+                        <Text className="text-base font-extrabold text-ink">Вход по email-коду</Text>
+                        <Text className="mt-1 text-sm text-ink-secondary">{valueOrPlaceholder(user?.email)}</Text>
+                      </View>
+                      <View className="flex-row items-center gap-2">
                         <View className="rounded-pill bg-success-light px-3 py-1">
                           <Text className="text-xs font-bold text-success">Активно</Text>
                         </View>
+                        <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
                       </View>
-                      <View className="h-px bg-line" />
-                      <View className="flex-row items-center justify-between">
-                        <View>
-                          <Text className="text-base font-extrabold text-ink">Верификация</Text>
-                          <Text className="mt-1 text-sm text-ink-secondary">Паспорт и документы пока не подключены</Text>
+                    </Pressable>
+                    <View className="h-px bg-line" />
+                    <View className="flex-row items-center justify-between">
+                      <View>
+                        <Text className="text-base font-extrabold text-ink">Верификация</Text>
+                        <Text className="mt-1 text-sm text-ink-secondary">Паспорт и документы пока не подключены</Text>
+                      </View>
+                      <Ionicons
+                        name={user?.is_verified ? 'shield-checkmark' : 'shield-outline'}
+                        size={24}
+                        color={user?.is_verified ? palette.success : palette.inkMuted}
+                      />
+                    </View>
+                    <View className="h-px bg-line" />
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 pr-4">
+                        <Text className="text-base font-extrabold text-ink">ВКонтакте</Text>
+                        <Text className="mt-1 text-sm text-ink-secondary">
+                          {vkLinked ? 'Аккаунт VK привязан' : 'Связать профиль для быстрого входа'}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => setVkLinked(!vkLinked)}
+                        className={`rounded-pill px-3 py-1.5 ${vkLinked ? 'bg-surface-muted border border-line' : 'bg-primary-light'}`}
+                      >
+                        <Text className={`text-xs font-bold ${vkLinked ? 'text-ink-secondary' : 'text-primary'}`}>
+                          {vkLinked ? 'Отвязать' : 'Привязать'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View className="gap-3">
+                    <Text className="text-lg font-extrabold text-ink">Устройства входа</Text>
+                    {LOGIN_DEVICES.map((device) => (
+                      <View key={`${device.name}-${device.date}`} className="flex-row items-center gap-3 rounded-card border border-line bg-surface p-4">
+                        <View className="h-11 w-11 items-center justify-center rounded-full bg-surface-muted">
+                          <Ionicons name={device.current ? 'phone-portrait-outline' : 'desktop-outline'} size={21} color={palette.primary} />
                         </View>
-                        <Ionicons
-                          name={user?.is_verified ? 'shield-checkmark' : 'shield-outline'}
-                          size={24}
-                          color={user?.is_verified ? palette.success : palette.inkMuted}
-                        />
+                        <View className="flex-1">
+                          <View className="flex-row items-center gap-2">
+                            <Text className="font-bold text-ink">{device.name}</Text>
+                            {device.current ? (
+                              <View className="rounded-pill bg-success-light px-2 py-0.5">
+                                <Text className="text-[10px] font-bold text-success">Сейчас</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text className="mt-1 text-sm text-ink-secondary">{device.place}</Text>
+                          <Text className="text-xs text-ink-muted">{device.date}</Text>
+                        </View>
+                        <Ionicons name="ellipsis-horizontal" size={20} color={palette.inkMuted} />
                       </View>
-                      <View className="h-px bg-line" />
-                      <View className="flex-row items-center justify-between">
-                        <View className="flex-1 pr-4">
-                          <Text className="text-base font-extrabold text-ink">ВКонтакте</Text>
-                          <Text className="mt-1 text-sm text-ink-secondary">
-                            {vkLinked ? 'Аккаунт VK привязан' : 'Связать профиль для быстрого входа'}
+                    ))}
+                  </View>
+
+                  <View className="gap-3 mt-6">
+                    <Text className="text-lg font-extrabold" style={{ color: palette.danger }}>Опасная зона</Text>
+                    <View className="rounded-card border p-4" style={{ borderRadius: 16, backgroundColor: palette.dangerLight, borderColor: 'rgba(229, 72, 77, 0.2)' }}>
+                      <View className="flex-row items-start gap-3">
+                        <View className="h-11 w-11 items-center justify-center rounded-full bg-surface">
+                          <Ionicons name="trash-outline" size={20} color={palette.danger} />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-base font-extrabold text-ink">Удаление аккаунта</Text>
+                          <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                            Удаление профиля является окончательным действием. Все ваши объявления, переписка и бронирования будут безвозвратно удалены.
                           </Text>
                         </View>
-                        <Pressable
-                          onPress={() => setVkLinked(!vkLinked)}
-                          className={`rounded-pill px-3 py-1.5 ${vkLinked ? 'bg-surface-muted border border-line' : 'bg-primary-light'}`}
-                        >
-                          <Text className={`text-xs font-bold ${vkLinked ? 'text-ink-secondary' : 'text-primary'}`}>
-                            {vkLinked ? 'Отвязать' : 'Привязать'}
-                          </Text>
-                        </Pressable>
                       </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={handleDeleteAccount}
+                        style={{ backgroundColor: palette.danger }}
+                        className="mt-4 h-11 items-center justify-center rounded-field active:opacity-90">
+                        <Text className="text-base font-bold text-white">Удалить профиль</Text>
+                      </Pressable>
                     </View>
-
-                    <View className="gap-3">
-                      <Text className="text-lg font-extrabold text-ink">Устройства входа</Text>
-                      {LOGIN_DEVICES.map((device) => (
-                        <View key={`${device.name}-${device.date}`} className="flex-row items-center gap-3 rounded-card border border-line bg-surface p-4">
-                          <View className="h-11 w-11 items-center justify-center rounded-full bg-surface-muted">
-                            <Ionicons name={device.current ? 'phone-portrait-outline' : 'desktop-outline'} size={21} color={palette.primary} />
-                          </View>
-                          <View className="flex-1">
-                            <View className="flex-row items-center gap-2">
-                              <Text className="font-bold text-ink">{device.name}</Text>
-                              {device.current ? (
-                                <View className="rounded-pill bg-success-light px-2 py-0.5">
-                                  <Text className="text-[10px] font-bold text-success">Сейчас</Text>
-                                </View>
-                              ) : null}
-                            </View>
-                            <Text className="mt-1 text-sm text-ink-secondary">{device.place}</Text>
-                            <Text className="text-xs text-ink-muted">{device.date}</Text>
-                          </View>
-                          <Ionicons name="ellipsis-horizontal" size={20} color={palette.inkMuted} />
-                        </View>
-                      ))}
-                    </View>
-
-                    <View className="gap-3 mt-6">
-                      <Text className="text-lg font-extrabold" style={{ color: palette.danger }}>Опасная зона</Text>
-                      <View className="rounded-card border p-4" style={{ borderRadius: 16, backgroundColor: palette.dangerLight, borderColor: 'rgba(229, 72, 77, 0.2)' }}>
-                        <View className="flex-row items-start gap-3">
-                          <View className="h-11 w-11 items-center justify-center rounded-full bg-surface">
-                            <Ionicons name="trash-outline" size={20} color={palette.danger} />
-                          </View>
-                          <View className="flex-1">
-                            <Text className="text-base font-extrabold text-ink">Удаление аккаунта</Text>
-                            <Text className="mt-1 text-sm leading-5 text-ink-secondary">
-                              Удаление профиля является окончательным действием. Все ваши объявления, переписка и бронирования будут безвозвратно удалены.
-                            </Text>
-                          </View>
-                        </View>
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={handleDeleteAccount}
-                          style={{ backgroundColor: palette.danger }}
-                          className="mt-4 h-11 items-center justify-center rounded-field active:opacity-90">
-                          <Text className="text-base font-bold text-white">Удалить профиль</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  </>
-                )}
+                  </View>
+                </ScrollView>
               </ScrollView>
 
               <View className="flex-row gap-3">
@@ -654,6 +750,10 @@ export default function ProfileScreen() {
                 setBirthdayPickerVisible(false);
               }}
               initialValue={formBirthday}
+            />
+            <EmailChangeSheet
+              visible={emailChangeVisible}
+              onClose={() => setEmailChangeVisible(false)}
             />
           </Animated.View>
         </View>

@@ -19,6 +19,8 @@ var (
 	ErrTokenInvalid = errors.New("invalid token")
 	// ErrInvalidEmail is returned when an email fails validation.
 	ErrInvalidEmail = errors.New("invalid email")
+	// ErrEmailTaken is returned when trying to change the email to an already registered address.
+	ErrEmailTaken = errors.New("email already taken")
 )
 
 // Booking-related errors.

@@ -18,6 +18,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -51,6 +52,28 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
 
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+
+  const quickFilterAnim = useRef(new Animated.Value(0)).current;
+  const windowWidth = Dimensions.get('window').width;
+  const [quickFilterWidth, setQuickFilterWidth] = useState(windowWidth - 32);
+
+  const getQuickFilterIndex = () => {
+    if (filters.rooms.length === 0) return 0;
+    if (filters.rooms.includes('studio')) return 1;
+    if (filters.rooms.includes('1')) return 2;
+    if (filters.rooms.includes('2')) return 3;
+    return 0;
+  };
+
+  useEffect(() => {
+    const activeIndex = getQuickFilterIndex();
+    Animated.timing(quickFilterAnim, {
+      toValue: activeIndex,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [filters.rooms]);
 
   // The pill reflects either an exact city filter (picked from the overlay) or a
   // free-text query (typed + submitted). Clearing resets both.
@@ -115,14 +138,14 @@ export default function SearchScreen() {
 
   const headerHeight = headerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 104],
+    outputRange: [0, 114],
   });
   const headerOpacity = headerAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
 
-  const listPaddingTop = insets.top + 172;
+  const listPaddingTop = insets.top + 182;
   const listParams = useMemo(
     () => filtersToListParams(filters, query, { limit: 50 }),
     [filters, query],
@@ -365,33 +388,58 @@ export default function SearchScreen() {
             overflow: 'hidden',
           }}
         >
-          <FlatList
-            style={{ marginTop: 10, height: 36, minHeight: 36, maxHeight: 36 }}
-            data={QUICK_FILTERS}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.value}
-            contentContainerClassName="gap-2"
-            renderItem={({ item }) => {
+          <View
+            onLayout={(e) => setQuickFilterWidth(e.nativeEvent.layout.width)}
+            className="mt-3 flex-row rounded-field bg-surface-muted p-1 relative h-11 items-center"
+          >
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 4,
+                left: 4,
+                bottom: 4,
+                width: (quickFilterWidth - 8) / 4,
+                transform: [{
+                  translateX: quickFilterAnim.interpolate({
+                    inputRange: [0, 1, 2, 3],
+                    outputRange: [
+                      0,
+                      (quickFilterWidth - 8) / 4,
+                      ((quickFilterWidth - 8) / 4) * 2,
+                      ((quickFilterWidth - 8) / 4) * 3,
+                    ],
+                  })
+                }],
+                backgroundColor: palette.primary,
+                borderRadius: 12,
+              }}
+            />
+            {QUICK_FILTERS.map((item) => {
               const isAll = item.value === 'all';
               const selected = isAll
                 ? filters.rooms.length === 0
                 : filters.rooms.includes(item.value as any);
               return (
-                <Chip
-                  label={item.label}
-                  selected={selected}
+                <Pressable
+                  key={item.value}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
                   onPress={() => {
                     if (isAll) {
                       filters.setFilters({ rooms: [] });
                     } else {
-                      filters.toggleRoom(item.value as any);
+                      filters.setFilters({ rooms: [item.value as any] });
                     }
                   }}
-                />
+                  className="flex-1 h-9 items-center justify-center rounded-field relative z-10"
+                >
+                  <Text className={`text-sm font-semibold transition-colors duration-200 ${selected ? 'text-white' : 'text-ink-secondary'}`}>
+                    {item.label}
+                  </Text>
+                </Pressable>
               );
-            }}
-          />
+            })}
+          </View>
 
           <View style={{ marginTop: 10 }} className="flex-row items-center gap-2">
             {/* Dates Button */}

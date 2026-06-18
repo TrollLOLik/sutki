@@ -68,6 +68,7 @@ type Querier interface {
 	// Updates a listing owned by the given user. Returns the number of affected
 	// rows so the caller can distinguish "not found / not owner" (0) from success.
 	UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error)
+	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
 }

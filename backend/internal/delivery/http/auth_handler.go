@@ -234,3 +234,92 @@ func writeAuthError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
 }
+
+func (h *AuthHandler) RequestOldEmailCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	res, err := h.svc.RequestOldEmailCode(r.Context(), userID)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
+	if res.Exposed {
+		resp["dev_code"] = res.Code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) VerifyOldEmailCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	token, err := h.svc.VerifyOldEmailCode(r.Context(), userID, body.Code)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"temp_token": token})
+}
+
+func (h *AuthHandler) RequestNewEmailCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		TempToken string `json:"temp_token"`
+		NewEmail  string `json:"new_email"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	res, err := h.svc.RequestNewEmailCode(r.Context(), userID, body.TempToken, body.NewEmail)
+	if err != nil {
+		if errors.Is(err, domain.ErrEmailTaken) {
+			writeError(w, http.StatusBadRequest, "email already taken")
+			return
+		}
+		writeAuthError(w, err)
+		return
+	}
+	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
+	if res.Exposed {
+		resp["dev_code"] = res.Code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		NewEmail string `json:"new_email"`
+		Code     string `json:"code"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	user, err := h.svc.ConfirmEmailChange(r.Context(), userID, body.NewEmail, body.Code)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toUserDTO(user))
+}
+

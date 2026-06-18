@@ -61,3 +61,51 @@ export function deleteMe(): Promise<void> {
 export function useDeleteMe() {
   return useMutation({ mutationFn: deleteMe });
 }
+
+/** Request a code for the current email to verify ownership before change. */
+export function requestOldEmailCode(): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/change-email/request-old');
+}
+
+/** Verify ownership of the current email. Returns a temp token. */
+export function verifyOldEmailCode(code: string): Promise<{ temp_token: string }> {
+  return api.post<{ temp_token: string }>('/api/v1/me/change-email/verify-old', { code });
+}
+
+/** Request a code for the new email. Takes the temp token. */
+export function requestNewEmailCode(tempToken: string, newEmail: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/change-email/request-new', {
+    temp_token: tempToken,
+    new_email: newEmail,
+  });
+}
+
+/** Confirm the email change with the code sent to the new email. Returns the updated User. */
+export function confirmEmailChange(newEmail: string, code: string): Promise<User> {
+  return api.post<User>('/api/v1/me/change-email/confirm', { new_email: newEmail, code });
+}
+
+export function useRequestOldEmailCode() {
+  return useMutation({ mutationFn: requestOldEmailCode });
+}
+
+export function useVerifyOldEmailCode() {
+  return useMutation({
+    mutationFn: (code: string) => verifyOldEmailCode(code),
+  });
+}
+
+export function useRequestNewEmailCode() {
+  return useMutation({
+    mutationFn: ({ tempToken, newEmail }: { tempToken: string; newEmail: string }) =>
+      requestNewEmailCode(tempToken, newEmail),
+  });
+}
+
+export function useConfirmEmailChange() {
+  return useMutation({
+    mutationFn: ({ newEmail, code }: { newEmail: string; code: string }) =>
+      confirmEmailChange(newEmail, code),
+  });
+}
+

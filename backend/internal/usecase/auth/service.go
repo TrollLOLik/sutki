@@ -15,6 +15,7 @@ import (
 	"net/mail"
 	"net/smtp"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -61,6 +62,8 @@ type Service struct {
 	smtpUsername string
 	smtpPassword string
 	smtpFrom     string
+
+	emailChangeTokens sync.Map // map[int32]string (userID -> temporary token)
 }
 
 func New(
@@ -393,3 +396,112 @@ func sendEmail(host string, port int, username, password, from, to, subject, bod
 
 	return nil
 }
+
+func (s *Service) RequestOldEmailCode(ctx context.Context, userID int32) (RequestCodeResult, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	return s.RequestCode(ctx, user.Email)
+}
+
+func (s *Service) VerifyOldEmailCode(ctx context.Context, userID int32, code string) (string, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	email, err := normalizeEmail(user.Email)
+	if err != nil {
+		return "", err
+	}
+	code = strings.TrimSpace(code)
+
+	rec, err := s.codes.Get(ctx, email)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return "", domain.ErrCodeInvalid
+		}
+		return "", err
+	}
+	if rec.Attempts >= maxAttempts {
+		return "", domain.ErrTooManyAttempts
+	}
+	if s.now().After(rec.ExpiresAt) {
+		_ = s.codes.Delete(ctx, email)
+		return "", domain.ErrCodeExpired
+	}
+	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
+		_ = s.codes.IncrementAttempts(ctx, email)
+		return "", domain.ErrCodeInvalid
+	}
+
+	_ = s.codes.Delete(ctx, email)
+
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(b)
+	s.emailChangeTokens.Store(userID, token)
+
+	return token, nil
+}
+
+func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToken, newEmailRaw string) (RequestCodeResult, error) {
+	stored, ok := s.emailChangeTokens.Load(userID)
+	if !ok || stored.(string) != oldToken {
+		return RequestCodeResult{}, domain.ErrTokenInvalid
+	}
+
+	newEmail, err := normalizeEmail(newEmailRaw)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+
+	_, err = s.users.GetByEmail(ctx, newEmail)
+	if err == nil {
+		return RequestCodeResult{}, domain.ErrEmailTaken
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return RequestCodeResult{}, err
+	}
+
+	return s.RequestCode(ctx, newEmail)
+}
+
+func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmailRaw, code string) (domain.User, error) {
+	_, ok := s.emailChangeTokens.Load(userID)
+	if !ok {
+		return domain.User{}, domain.ErrTokenInvalid
+	}
+
+	newEmail, err := normalizeEmail(newEmailRaw)
+	if err != nil {
+		return domain.User{}, err
+	}
+	code = strings.TrimSpace(code)
+
+	rec, err := s.codes.Get(ctx, newEmail)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.User{}, domain.ErrCodeInvalid
+		}
+		return domain.User{}, err
+	}
+	if rec.Attempts >= maxAttempts {
+		return domain.User{}, domain.ErrTooManyAttempts
+	}
+	if s.now().After(rec.ExpiresAt) {
+		_ = s.codes.Delete(ctx, newEmail)
+		return domain.User{}, domain.ErrCodeExpired
+	}
+	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
+		_ = s.codes.IncrementAttempts(ctx, newEmail)
+		return domain.User{}, domain.ErrCodeInvalid
+	}
+
+	_ = s.codes.Delete(ctx, newEmail)
+	s.emailChangeTokens.Delete(userID)
+
+	return s.users.UpdateEmail(ctx, userID, newEmail)
+}
+

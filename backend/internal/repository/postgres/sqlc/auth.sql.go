@@ -219,6 +219,50 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, tokenHash string) erro
 	return err
 }
 
+const updateUserEmail = `-- name: UpdateUserEmail :one
+UPDATE "user"
+SET email = $2,
+    updated_at = now()
+WHERE id = $1 AND deleted = false
+RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday
+`
+
+type UpdateUserEmailParams struct {
+	ID    int32
+	Email string
+}
+
+type UpdateUserEmailRow struct {
+	ID         int32
+	Name       *string
+	Surname    *string
+	Email      string
+	Phone      *string
+	City       *string
+	AvatarUrl  *string
+	IsVerified bool
+	Roles      []byte
+	Birthday   pgtype.Date
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error) {
+	row := q.db.QueryRow(ctx, updateUserEmail, arg.ID, arg.Email)
+	var i UpdateUserEmailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Surname,
+		&i.Email,
+		&i.Phone,
+		&i.City,
+		&i.AvatarUrl,
+		&i.IsVerified,
+		&i.Roles,
+		&i.Birthday,
+	)
+	return i, err
+}
+
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE "user"
 SET name = COALESCE($1, name),

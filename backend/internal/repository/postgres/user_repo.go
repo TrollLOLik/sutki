@@ -112,6 +112,29 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, cit
 	}, nil
 }
 
+func (r *UserRepo) UpdateEmail(ctx context.Context, id int32, email string) (domain.User, error) {
+	row, err := r.q.UpdateUserEmail(ctx, sqlc.UpdateUserEmailParams{
+		ID:    id,
+		Email: email,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, domain.ErrNotFound
+		}
+		return domain.User{}, err
+	}
+	return domain.User{
+		ID:         row.ID,
+		Email:      row.Email,
+		Name:       deref(row.Name),
+		Phone:      deref(row.Phone),
+		City:       deref(row.City),
+		AvatarURL:  deref(row.AvatarUrl),
+		IsVerified: row.IsVerified,
+		Birthday:   toTimePtr(row.Birthday),
+	}, nil
+}
+
 func (r *UserRepo) Delete(ctx context.Context, id int32) error {
 	return r.q.DeleteUser(ctx, id)
 }
