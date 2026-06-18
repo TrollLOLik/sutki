@@ -19,6 +19,7 @@ export interface NewListingInput {
   area: number;
   lat?: number | null;
   lng?: number | null;
+  max_guests?: number | null;
   service_ids: number[];
   category_ids: number[];
 }

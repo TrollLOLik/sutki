@@ -16,6 +16,8 @@ export interface CreateListingDraft {
   area: string;
   /** Price per night in rubles, entered as text and parsed on submit. */
   price: string;
+  /** Max guests (sleeping capacity), entered as text and parsed on submit. */
+  maxGuests: string;
   serviceIds: number[];
   description: string;
   /** Local image URIs for preview only. */
@@ -30,6 +32,7 @@ const emptyDraft: CreateListingDraft = {
   houseNumber: '',
   area: '',
   price: '',
+  maxGuests: '',
   serviceIds: [],
   description: '',
   photos: [],
