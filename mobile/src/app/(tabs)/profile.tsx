@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Animated, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
+import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 
@@ -92,6 +93,7 @@ export default function ProfileScreen() {
   const [vkLinked, setVkLinked] = useState(false);
   const [settingsFade] = useState(() => new Animated.Value(0));
   const [settingsSlide] = useState(() => new Animated.Value(SCREEN_HEIGHT));
+  const handleScroll = useScrollHideTabBar();
 
   useEffect(() => {
     if (settingsVisible) {
@@ -133,6 +135,31 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Удаление аккаунта',
+      'Вы уверены, что хотите безвозвратно удалить свой аккаунт? Это действие нельзя отменить.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Успешно', 'Запрос на удаление аккаунта отправлен. Вы будете разлогинены.', [
+              {
+                text: 'OK',
+                onPress: () => {
+                  closeSettings();
+                  signOut();
+                },
+              },
+            ]);
+          },
+        },
+      ]
+    );
+  };
+
   const displayName = user?.name || 'Гость';
   const avatarUrl = user?.avatar_url || FALLBACK_AVATAR;
   const completion = useMemo(() => {
@@ -156,7 +183,12 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="px-4 pb-8">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="px-4 pb-28"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         <LinearGradient
           colors={[palette.primary, palette.primaryPressed]}
           start={{ x: 0, y: 0 }}
@@ -418,6 +450,30 @@ export default function ProfileScreen() {
                           <Ionicons name="ellipsis-horizontal" size={20} color={palette.inkMuted} />
                         </View>
                       ))}
+                    </View>
+
+                    <View className="gap-3 mt-6">
+                      <Text className="text-lg font-extrabold" style={{ color: palette.danger }}>Опасная зона</Text>
+                      <View className="rounded-card border p-4" style={{ borderRadius: 16, backgroundColor: palette.dangerLight, borderColor: 'rgba(229, 72, 77, 0.2)' }}>
+                        <View className="flex-row items-start gap-3">
+                          <View className="h-11 w-11 items-center justify-center rounded-full bg-surface">
+                            <Ionicons name="trash-outline" size={20} color={palette.danger} />
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-base font-extrabold text-ink">Удаление аккаунта</Text>
+                            <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                              Удаление профиля является окончательным действием. Все ваши объявления, переписка и бронирования будут безвозвратно удалены.
+                            </Text>
+                          </View>
+                        </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={handleDeleteAccount}
+                          style={{ backgroundColor: palette.danger }}
+                          className="mt-4 h-11 items-center justify-center rounded-field active:opacity-90">
+                          <Text className="text-base font-bold text-white">Удалить профиль</Text>
+                        </Pressable>
+                      </View>
                     </View>
                   </>
                 )}

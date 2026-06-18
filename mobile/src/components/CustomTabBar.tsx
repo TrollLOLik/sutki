@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabBarStore } from '@/store/tabbar';
 import { palette } from '@/theme/tokens';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -75,6 +76,24 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const routeByName = Object.fromEntries(state.routes.map((r) => [r.name, r] as const));
   const activeName = state.routes[state.index]?.name;
 
+  const visible = useTabBarStore((s) => s.visible);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    useTabBarStore.getState().setVisible(true);
+  }, [activeName]);
+
+  useEffect(() => {
+    translateY.value = withTiming(visible ? 0 : 100 + insets.bottom, {
+      duration: 250,
+      easing: Easing.out(Easing.ease),
+    });
+  }, [visible, insets.bottom]);
+
+  const tabBarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
   const renderTab = (name: string) => {
     const route = routeByName[name];
     const meta = TAB_META[name];
@@ -107,8 +126,17 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View
-      style={{ paddingBottom: insets.bottom }}
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingBottom: insets.bottom,
+        },
+        tabBarStyle,
+      ]}
       className="flex-row items-end border-t border-line bg-surface pb-1">
       {LEFT_TABS.map(renderTab)}
 
@@ -184,6 +212,6 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       </View>
 
       {RIGHT_TABS.map(renderTab)}
-    </View>
+    </Animated.View>
   );
 }

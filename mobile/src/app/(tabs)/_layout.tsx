@@ -6,7 +6,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}>
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { position: 'absolute' },
+      }}>
       <Tabs.Screen name="index" options={{ title: 'Поиск' }} />
       <Tabs.Screen name="map" options={{ title: 'Карта' }} />
       <Tabs.Screen name="messages" options={{ title: 'Сообщения' }} />
