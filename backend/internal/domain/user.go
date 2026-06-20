@@ -5,14 +5,17 @@ import "time"
 // User is an application account. It maps onto the legacy `user` table;
 // nullable legacy columns are flattened to empty strings here.
 type User struct {
-	ID         int32
-	Email      string
-	Name       string
-	Phone      string
-	City       string
-	AvatarURL  string
-	IsVerified bool
-	Birthday   *time.Time
+	ID            int32
+	Email         string
+	Name          string
+	Phone         string
+	City          string
+	AvatarURL     string
+	IsVerified    bool
+	Birthday      *time.Time
+	ListingsCount int32
+	Rating        float64
+	VKID          string
 }
 
 // EmailLoginCode is a short-lived, hashed passwordless login code for an email.

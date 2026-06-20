@@ -33,4 +33,6 @@ export interface UpdateProfileBody {
   city?: string;
   birthday?: string;
   avatar_url?: string;
+  vk_id?: string;
+  vk_id_do_null?: boolean;
 }

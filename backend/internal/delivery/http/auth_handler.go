@@ -29,14 +29,16 @@ func (h *AuthHandler) Routes(r chi.Router) {
 }
 
 type userDTO struct {
-	ID         int32   `json:"id"`
-	Email      string  `json:"email"`
-	Name       string  `json:"name"`
-	Phone      string  `json:"phone"`
-	City       string  `json:"city"`
-	AvatarURL  string  `json:"avatar_url"`
-	IsVerified bool    `json:"is_verified"`
-	Birthday   *string `json:"birthday"`
+	ID            int32   `json:"id"`
+	Email         string  `json:"email"`
+	Name          string  `json:"name"`
+	Phone         string  `json:"phone"`
+	City          string  `json:"city"`
+	AvatarURL     string  `json:"avatar_url"`
+	IsVerified    bool    `json:"is_verified"`
+	Birthday      *string `json:"birthday"`
+	ListingsCount int32   `json:"listings_count"`
+	Rating        float64 `json:"rating"`
 }
 
 func toUserDTO(u domain.User) userDTO {
@@ -46,14 +48,16 @@ func toUserDTO(u domain.User) userDTO {
 		bdayStr = &s
 	}
 	return userDTO{
-		ID:         u.ID,
-		Email:      u.Email,
-		Name:       u.Name,
-		Phone:      u.Phone,
-		City:       u.City,
-		AvatarURL:  u.AvatarURL,
-		IsVerified: u.IsVerified,
-		Birthday:   bdayStr,
+		ID:            u.ID,
+		Email:         u.Email,
+		Name:          u.Name,
+		Phone:         u.Phone,
+		City:          u.City,
+		AvatarURL:     u.AvatarURL,
+		IsVerified:    u.IsVerified,
+		Birthday:      bdayStr,
+		ListingsCount: u.ListingsCount,
+		Rating:        u.Rating,
 	}
 }
 
@@ -168,11 +172,13 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	// Pointer fields distinguish "omitted" (nil, left unchanged) from "set to
 	// empty" so PATCH does not clobber fields the client didn't send.
 	var body struct {
-		Name      *string `json:"name"`
-		Phone     *string `json:"phone"`
-		City      *string `json:"city"`
-		Birthday  *string `json:"birthday"`
-		AvatarURL *string `json:"avatar_url"`
+		Name         *string `json:"name"`
+		Phone        *string `json:"phone"`
+		City         *string `json:"city"`
+		Birthday     *string `json:"birthday"`
+		AvatarURL    *string `json:"avatar_url"`
+		VKID         *string `json:"vk_id"`
+		VKIDDoNull   *bool   `json:"vk_id_do_null"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -190,7 +196,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		}
 		bday = &t
 	}
-	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Phone, body.City, body.AvatarURL, bday)
+	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Phone, body.City, body.AvatarURL, bday, body.VKID, body.VKIDDoNull)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")

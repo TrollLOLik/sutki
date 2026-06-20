@@ -12,4 +12,7 @@ export interface User {
   avatar_url: string;
   is_verified: boolean;
   birthday?: string;
+  listings_count?: number;
+  rating?: number;
+  vk_id?: string;
 }

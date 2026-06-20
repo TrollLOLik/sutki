@@ -33,14 +33,16 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (domain.User, e
 		return domain.User{}, err
 	}
 	return domain.User{
-		ID:         row.ID,
-		Email:      row.Email,
-		Name:       deref(row.Name),
-		Phone:      deref(row.Phone),
-		City:       deref(row.City),
-		AvatarURL:  deref(row.AvatarUrl),
-		IsVerified: row.IsVerified,
-		Birthday:   toTimePtr(row.Birthday),
+		ID:            row.ID,
+		Email:         row.Email,
+		Name:          deref(row.Name),
+		Phone:         deref(row.Phone),
+		City:          deref(row.City),
+		AvatarURL:     deref(row.AvatarUrl),
+		IsVerified:    row.IsVerified,
+		Birthday:      toTimePtr(row.Birthday),
+		ListingsCount: 0,
+		Rating:        0.0,
 	}, nil
 }
 
@@ -53,14 +55,16 @@ func (r *UserRepo) GetByID(ctx context.Context, id int32) (domain.User, error) {
 		return domain.User{}, err
 	}
 	return domain.User{
-		ID:         row.ID,
-		Email:      row.Email,
-		Name:       deref(row.Name),
-		Phone:      deref(row.Phone),
-		City:       deref(row.City),
-		AvatarURL:  deref(row.AvatarUrl),
-		IsVerified: row.IsVerified,
-		Birthday:   toTimePtr(row.Birthday),
+		ID:            row.ID,
+		Email:         row.Email,
+		Name:          deref(row.Name),
+		Phone:         deref(row.Phone),
+		City:          deref(row.City),
+		AvatarURL:     deref(row.AvatarUrl),
+		IsVerified:    row.IsVerified,
+		Birthday:      toTimePtr(row.Birthday),
+		ListingsCount: row.ListingsCount,
+		Rating:        row.Rating,
 	}, nil
 }
 
@@ -70,29 +74,33 @@ func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error
 		return domain.User{}, err
 	}
 	return domain.User{
-		ID:         row.ID,
-		Email:      row.Email,
-		Name:       deref(row.Name),
-		Phone:      deref(row.Phone),
-		City:       deref(row.City),
-		AvatarURL:  deref(row.AvatarUrl),
-		IsVerified: row.IsVerified,
-		Birthday:   toTimePtr(row.Birthday),
+		ID:            row.ID,
+		Email:         row.Email,
+		Name:          deref(row.Name),
+		Phone:         deref(row.Phone),
+		City:          deref(row.City),
+		AvatarURL:     deref(row.AvatarUrl),
+		IsVerified:    row.IsVerified,
+		Birthday:      toTimePtr(row.Birthday),
+		ListingsCount: 0,
+		Rating:        0.0,
 	}, nil
 }
 
-func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time) (domain.User, error) {
+func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
 	var pgBirthday pgtype.Date
 	if birthday != nil {
 		pgBirthday = pgtype.Date{Time: *birthday, Valid: true}
 	}
-	row, err := r.q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
-		ID:        id,
-		Name:      name,
-		Phone:     phone,
-		City:      city,
-		Birthday:  pgBirthday,
-		AvatarUrl: avatarURL,
+	_, err := r.q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
+		ID:         id,
+		Name:       name,
+		Phone:      phone,
+		City:       city,
+		Birthday:   pgBirthday,
+		AvatarUrl:  avatarURL,
+		VkID:       vkID,
+		VkIDDoNull: vkIDDoNull,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -100,20 +108,11 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, cit
 		}
 		return domain.User{}, err
 	}
-	return domain.User{
-		ID:         row.ID,
-		Email:      row.Email,
-		Name:       deref(row.Name),
-		Phone:      deref(row.Phone),
-		City:       deref(row.City),
-		AvatarURL:  deref(row.AvatarUrl),
-		IsVerified: row.IsVerified,
-		Birthday:   toTimePtr(row.Birthday),
-	}, nil
+	return r.GetByID(ctx, id)
 }
 
 func (r *UserRepo) UpdateEmail(ctx context.Context, id int32, email string) (domain.User, error) {
-	row, err := r.q.UpdateUserEmail(ctx, sqlc.UpdateUserEmailParams{
+	_, err := r.q.UpdateUserEmail(ctx, sqlc.UpdateUserEmailParams{
 		ID:    id,
 		Email: email,
 	})
@@ -123,16 +122,7 @@ func (r *UserRepo) UpdateEmail(ctx context.Context, id int32, email string) (dom
 		}
 		return domain.User{}, err
 	}
-	return domain.User{
-		ID:         row.ID,
-		Email:      row.Email,
-		Name:       deref(row.Name),
-		Phone:      deref(row.Phone),
-		City:       deref(row.City),
-		AvatarURL:  deref(row.AvatarUrl),
-		IsVerified: row.IsVerified,
-		Birthday:   toTimePtr(row.Birthday),
-	}, nil
+	return r.GetByID(ctx, id)
 }
 
 func (r *UserRepo) Delete(ctx context.Context, id int32) error {

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
 import { Button } from '@/components/ui';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
-import { useUpdateMe } from '@/lib/api/auth';
+import { useUpdateMe, fetchMe } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
@@ -161,7 +161,43 @@ export default function ProfileScreen() {
   const updateMe = useUpdateMe();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('basic');
-  const [vkLinked, setVkLinked] = useState(false);
+  const vkLinked = !!user?.vk_id;
+
+  // Auto-refresh profile on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchMe()
+        .then((latestUser) => {
+          if (active) {
+            setUser(latestUser);
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to refresh user profile:', err);
+        });
+      return () => {
+        active = false;
+      };
+    }, [setUser])
+  );
+
+  // User card shimmer sweep animation (блеск/переливание)
+  const shimmerAnim = useRef(new Animated.Value(-1)).current;
+  useEffect(() => {
+    shimmerAnim.setValue(-1);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1.5,
+          duration: 3000,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.delay(1000),
+      ])
+    ).start();
+  }, [shimmerAnim]);
 
   // Editable "Основное" form state (initialised from the cached user on open).
   const [formName, setFormName] = useState('');
@@ -218,6 +254,25 @@ export default function ProfileScreen() {
       setSaveError(err instanceof ApiError ? err.message : 'Не удалось сохранить профиль.');
     }
   };
+
+  const handleToggleVK = async () => {
+    if (!user) return;
+    try {
+      if (user.vk_id) {
+        // unlink VK
+        const updated = await updateMe.mutateAsync({ vk_id_do_null: true });
+        setUser(updated);
+      } else {
+        // link VK (simulate linking with dummy VK ID)
+        const updated = await updateMe.mutateAsync({ vk_id: 'vk_12345' });
+        setUser(updated);
+      }
+    } catch (err) {
+      console.warn('Failed to toggle VK link:', err);
+      Alert.alert('Ошибка', 'Не удалось изменить привязку ВКонтакте.');
+    }
+  };
+
   const [settingsFade] = useState(() => new Animated.Value(0));
   const [settingsSlide] = useState(() => new Animated.Value(SCREEN_HEIGHT));
   const handleScroll = useScrollHideTabBar();
@@ -225,6 +280,10 @@ export default function ProfileScreen() {
   const horizontalScrollRef = useRef<ScrollView>(null);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const windowWidth = Dimensions.get('window').width;
+  const shimmerTranslateX = shimmerAnim.interpolate({
+    inputRange: [-1, 1.5],
+    outputRange: [-windowWidth, windowWidth * 1.5],
+  });
   const [containerWidth, setContainerWidth] = useState(windowWidth - 32);
 
   // Tab switching animation
@@ -250,6 +309,12 @@ export default function ProfileScreen() {
       settingsFade.setValue(0);
       settingsSlide.setValue(SCREEN_HEIGHT);
       requestAnimationFrame(() => {
+        // Ensure scroll view is immediately in the correct page state before slide-in starts
+        horizontalScrollRef.current?.scrollTo({
+          x: settingsTab === 'basic' ? 0 : containerWidth,
+          animated: false,
+        });
+
         Animated.parallel([
           Animated.timing(settingsFade, {
             toValue: 0.4,
@@ -265,7 +330,7 @@ export default function ProfileScreen() {
         ]).start();
       });
     }
-  }, [settingsVisible]);
+  }, [settingsVisible, settingsTab, containerWidth]);
 
   const closeSettings = () => {
     Animated.parallel([
@@ -291,11 +356,53 @@ export default function ProfileScreen() {
 
   const displayName = user?.name || 'Гость';
   const avatarUrl = user?.avatar_url || FALLBACK_AVATAR;
-  const completion = useMemo(() => {
-    if (!user) return 24;
-    const fields = [user.email, user.name, user.phone, user.city, user.avatar_url, user.birthday];
-    return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+  const completionItems = useMemo(() => {
+    if (!user) return [];
+    return [
+      {
+        id: 'avatar',
+        label: 'Добавить аватарку',
+        completed: !!(user.avatar_url && user.avatar_url !== FALLBACK_AVATAR && user.avatar_url.trim() !== ''),
+        onPress: () => {
+          setSettingsVisible(true);
+          setSettingsTab('basic');
+        },
+      },
+      {
+        id: 'phone',
+        label: 'Подтвердить телефон',
+        completed: !!(user.phone && user.phone.trim() !== ''),
+        onPress: () => {
+          setSettingsVisible(true);
+          setSettingsTab('basic');
+        },
+      },
+      {
+        id: 'email',
+        label: 'Подтвердить почту',
+        completed: !!(user.email && user.email.trim() !== ''),
+        onPress: () => {
+          setSettingsVisible(true);
+          setSettingsTab('basic');
+        },
+      },
+      {
+        id: 'vk',
+        label: 'Привязать аккаунт VK',
+        completed: !!(user.vk_id && user.vk_id.trim() !== ''),
+        onPress: () => {
+          setSettingsVisible(true);
+          setSettingsTab('security');
+        },
+      },
+    ];
   }, [user]);
+
+  const completion = useMemo(() => {
+    if (completionItems.length === 0) return 0;
+    const completedCount = completionItems.filter(item => item.completed).length;
+    return Math.round((completedCount / completionItems.length) * 100);
+  }, [completionItems]);
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-surface-muted">
@@ -322,7 +429,7 @@ export default function ProfileScreen() {
           colors={[palette.primary, palette.primaryPressed]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 24, padding: 20, overflow: 'hidden' }}>
+          style={{ borderRadius: 24, padding: 20, overflow: 'hidden', position: 'relative' }}>
           <View className="flex-row items-center gap-4">
             <View className="h-20 w-20 items-center justify-center rounded-full border-2 border-white bg-primary-light overflow-hidden">
               {avatarUrl ? (
@@ -342,31 +449,46 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
+
+          {/* Shimmer shining sweep overlay */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              width: 130,
+              transform: [{ translateX: shimmerTranslateX }, { skewX: '-25deg' }],
+            }}
+            pointerEvents="none"
+          >
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.45)', 'rgba(255, 255, 255, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ flex: 1 }}
+            />
+          </Animated.View>
         </LinearGradient>
 
-        <View className="mt-4 rounded-card border border-line bg-surface p-4" style={{ borderRadius: 20 }}>
-          <View className="flex-row items-center justify-between">
-            <Text className="text-sm font-semibold text-ink-secondary">Заполнение профиля</Text>
-            <Text className="text-sm font-extrabold text-primary">{completion}%</Text>
+        <View className="mt-4 flex-row gap-3">
+          <View className="flex-1 rounded-card border border-line bg-surface p-4"
+            style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
+            <Text className="text-xl font-extrabold text-ink">{user?.listings_count ?? 0}</Text>
+            <Text className="text-xs font-semibold text-ink-secondary">объявления</Text>
           </View>
-          <View className="mt-3 h-2 overflow-hidden rounded-pill bg-surface-muted">
-            <View className="h-full rounded-pill bg-primary" style={{ width: `${completion}%` }} />
-          </View>
-          <View className="mt-4 flex-row gap-3">
-            <View className="flex-1 rounded-field bg-primary-light px-3 py-3">
-              <Text className="text-xl font-extrabold text-ink">3</Text>
-              <Text className="text-xs font-semibold text-ink-secondary">объявления</Text>
-            </View>
-            <View className="flex-1 rounded-field bg-surface-muted px-3 py-3">
-              <Text className="text-xl font-extrabold text-ink">4.9</Text>
-              <Text className="text-xs font-semibold text-ink-secondary">рейтинг</Text>
-            </View>
+          <View className="flex-1 rounded-card border border-line bg-surface p-4"
+            style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
+            <Text className="text-xl font-extrabold text-ink">
+              {user?.rating && user.rating > 0 ? user.rating.toFixed(1) : '0.0'}
+            </Text>
+            <Text className="text-xs font-semibold text-ink-secondary">рейтинг</Text>
           </View>
         </View>
 
         <View className="mt-5 flex-row gap-3">
           {TRUST_ITEMS.map((item) => (
-            <View key={item.label} className="flex-1 rounded-card border border-line bg-surface p-3">
+            <View key={item.label} className="flex-1 rounded-card border border-line bg-surface p-3"
+              style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
               <View className="mb-3 h-9 w-9 items-center justify-center rounded-full bg-primary-light">
                 <Ionicons name={item.icon} size={18} color={palette.primary} />
               </View>
@@ -403,7 +525,47 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <View className="mt-6 rounded-[28px] border border-line bg-surface p-5" style={{ borderRadius: 28 }}>
+        <View className="mt-6 border border-line bg-surface p-4"
+          style={{ borderRadius: 24, shadowColor: palette.ink, shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }}>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm font-semibold text-ink-secondary">Заполнение профиля</Text>
+            <Text className="text-sm font-extrabold text-primary">{completion}%</Text>
+          </View>
+          <View className="mt-3 h-2 overflow-hidden rounded-pill bg-surface-muted">
+            <View className="h-full rounded-pill bg-primary" style={{ width: `${completion}%` }} />
+          </View>
+
+          {/* Checklist of completion tasks */}
+          <View className="mt-4 gap-3">
+            {completionItems.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={item.onPress}
+                className="flex-row items-center justify-between rounded-field bg-surface-muted px-4 py-3 active:opacity-80"
+              >
+                <View className="flex-row items-center gap-3 flex-1 pr-2">
+                  <Ionicons
+                    name={item.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={20}
+                    color={item.completed ? palette.success : palette.inkMuted}
+                  />
+                  <Text className={`text-sm ${item.completed ? 'text-ink-secondary line-through' : 'text-ink font-semibold'}`}>
+                    {item.label}
+                  </Text>
+                </View>
+                {!item.completed && (
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-xs text-primary font-bold">Заполнить</Text>
+                    <Ionicons name="chevron-forward" size={12} color={palette.primary} />
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View className="mt-4 border border-line bg-surface p-5"
+          style={{ borderRadius: 24, shadowColor: palette.ink, shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-4">
               <Text className="text-xl font-extrabold text-ink">Сделайте профиль заметнее</Text>
@@ -424,7 +586,7 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        <View className="mt-4">
+        <View className="mt-6">
           <Button label="Выйти" variant="secondary" onPress={signOut} />
         </View>
       </ScrollView>
@@ -457,8 +619,9 @@ export default function ProfileScreen() {
           >
             <SafeAreaView edges={['top', 'bottom']} className="flex-1">
               <View className="flex-row items-center justify-between">
-                <View>
+                <View className="flex-row items-baseline gap-1.5">
                   <Text className="text-2xl font-extrabold text-ink">Профиль</Text>
+                  <Text className="text-sm font-semibold text-primary">({completion}%)</Text>
                 </View>
                 <Pressable
                   accessibilityLabel="Закрыть настройки"
@@ -648,7 +811,7 @@ export default function ProfileScreen() {
                         </Text>
                       </View>
                       <Pressable
-                        onPress={() => setVkLinked(!vkLinked)}
+                        onPress={handleToggleVK}
                         className={`rounded-pill px-3 py-1.5 ${vkLinked ? 'bg-surface-muted border border-line' : 'bg-primary-light'}`}
                       >
                         <Text className={`text-xs font-bold ${vkLinked ? 'text-ink-secondary' : 'text-primary'}`}>
