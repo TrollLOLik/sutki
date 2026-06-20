@@ -5,11 +5,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useMemo } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { Stars } from '@/components/Stars';
 import { Button } from '@/components/ui';
+import { useMyListings } from '@/lib/api/create-listing';
 import { useReviews } from '@/lib/api/reviews';
 import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
+import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 import type { Review, ReviewSummary } from '@/types/review';
 
@@ -17,6 +20,15 @@ export default function ReviewsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const { data, isLoading, isError, refetch, isRefetching } = useReviews(numericId, { limit: 50 });
+
+  const { status: authStatus } = useSessionStore();
+  const isAuthenticated = authStatus === 'authenticated';
+  const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated });
+
+  const isOwnListing = useMemo(() => {
+    if (!myListingsData || !numericId) return false;
+    return myListingsData.items.some((item) => item.id === numericId);
+  }, [myListingsData, numericId]);
 
   const summary = data?.summary;
   const items = data?.items ?? [];
@@ -74,10 +86,17 @@ export default function ReviewsScreen() {
             />
 
             <View className="border-t border-line px-4 py-3 bg-surface">
-              <Button
-                label="Оставить заявку"
-                onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
-              />
+              {isOwnListing ? (
+                <Button
+                  label="Редактировать"
+                  onPress={() => router.push({ pathname: '/create', params: { editId: id } } as any)}
+                />
+              ) : (
+                <Button
+                  label="Оставить заявку"
+                  onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
+                />
+              )}
             </View>
           </>
         )}
