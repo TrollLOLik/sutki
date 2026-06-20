@@ -2,9 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addDays, differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
@@ -20,13 +30,55 @@ import { palette } from '@/theme/tokens';
 const ISO = 'yyyy-MM-dd';
 const MAX_GUESTS = 20;
 
+// ---------------------------------------------------------------------------
+// Phone mask helpers
+// ---------------------------------------------------------------------------
+
+/** Strip everything but digits; if number starts with 7/8 and is 11 digits, drop the prefix. */
+function normalizePhoneDigits(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if ((digits.startsWith('7') || digits.startsWith('8')) && digits.length === 11) {
+    return digits.slice(1);
+  }
+  return digits.slice(0, 10);
+}
+
+/** Format up to 10 digits as (XXX) XXX-XX-XX */
+function formatPhoneMask(digits: string): string {
+  const d = digits.replace(/\D/g, '').slice(0, 10);
+  let result = '';
+  if (d.length > 0) result += '(' + d.slice(0, Math.min(d.length, 3));
+  if (d.length >= 3) result += ') ' + d.slice(3, Math.min(d.length, 6));
+  if (d.length >= 6) result += '-' + d.slice(6, Math.min(d.length, 8));
+  if (d.length >= 8) result += '-' + d.slice(8, 10);
+  return result;
+}
+
+/** Extract raw 10 digits from masked value, then build +7XXXXXXXXXX for the API. */
+function toFullPhone(masked: string): string {
+  const digits = masked.replace(/\D/g, '').slice(0, 10);
+  return '+7' + digits;
+}
+
+// ---------------------------------------------------------------------------
+// Validation schema
+// ---------------------------------------------------------------------------
+
 const schema = z.object({
   name: z.string().trim().min(1, 'Укажите имя'),
-  phone: z.string().trim().min(5, 'Укажите телефон'),
+  /** Stores masked value like "(999) 888-77-66" – must contain exactly 10 digits. */
+  phone: z.string().refine(
+    (v) => v.replace(/\D/g, '').length === 10,
+    'Укажите полный номер (10 цифр)',
+  ),
   message: z.string().trim().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
 
 export default function BookingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,8 +92,12 @@ export default function BookingScreen() {
   const [count, setCount] = useState(1);
   const [dateError, setDateError] = useState<string | null>(null);
 
-  // A day is unavailable if it falls inside a confirmed range [start, end);
-  // the checkout day itself is free. A null end_date means a single night.
+  // Pre-fill phone from profile (normalise and mask)
+  const initialPhone = useMemo(() => {
+    if (!user?.phone) return '';
+    return formatPhoneMask(normalizePhoneDigits(user.phone));
+  }, [user?.phone]);
+
   const isDateDisabled = useMemo(() => {
     const ranges = (availability?.ranges ?? []).map((r) => {
       const start = startOfDay(parseISO(r.start_date));
@@ -60,7 +116,7 @@ export default function BookingScreen() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: user?.name ?? '', phone: user?.phone ?? '', message: '' },
+    defaultValues: { name: user?.name ?? '', phone: initialPhone, message: '' },
   });
 
   const nights =
@@ -77,7 +133,7 @@ export default function BookingScreen() {
       await createBooking.mutateAsync({
         count,
         name: values.name,
-        phone: values.phone,
+        phone: toFullPhone(values.phone),
         message: values.message || undefined,
         start_date: format(range.start, ISO),
         end_date: format(range.end, ISO),
@@ -89,7 +145,10 @@ export default function BookingScreen() {
       if (err instanceof ApiError && err.status === 409) {
         setDateError('Эти даты уже заняты. Выберите другие.');
         setRange({ start: null, end: null });
-        Alert.alert('Даты заняты', 'На выбранные даты уже есть подтверждённое бронирование. Пожалуйста, выберите другие даты.');
+        Alert.alert(
+          'Даты заняты',
+          'На выбранные даты уже есть подтверждённое бронирование. Пожалуйста, выберите другие даты.',
+        );
         return;
       }
       const message =
@@ -101,48 +160,104 @@ export default function BookingScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center gap-3 px-4 py-2">
+
+        {/* ── Header (centred title) ─────────────────────────────── */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: palette.line,
+          }}
+        >
           <Pressable
             onPress={() => router.back()}
             accessibilityLabel="Назад"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
+            style={{
+              width: 40, height: 40,
+              alignItems: 'center', justifyContent: 'center',
+              borderRadius: 20,
+              backgroundColor: palette.surfaceMuted,
+            }}
+          >
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
-          <Text className="text-lg font-semibold text-ink">Заявка на аренду</Text>
+
+          <Text
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 17,
+              fontWeight: '600',
+              color: palette.ink,
+            }}
+          >
+            Заявка на аренду
+          </Text>
+
+          {/* Placeholder to keep title centred */}
+          <View style={{ width: 40 }} />
         </View>
 
+        {/* ── Content ───────────────────────────────────────────── */}
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1">
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerClassName="gap-5 px-4 pb-6 pt-2"
+            contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingBottom: 24, paddingTop: 16 }}
             keyboardShouldPersistTaps="handled">
+
             {listing ? (
-              <View className="gap-1">
-                <Text className="text-base font-semibold text-ink">{listing.address}</Text>
-                <Text className="text-base text-primary">{formatPricePerNight(listing.price)}</Text>
+              <View style={{ gap: 2 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
+                  {listing.address}
+                </Text>
+                <Text style={{ fontSize: 14, color: palette.primary }}>
+                  {formatPricePerNight(listing.price)}
+                </Text>
               </View>
             ) : null}
 
-            <View className="gap-2">
-              <Text className="text-base font-semibold text-ink">Даты</Text>
+            {/* Dates */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Даты</Text>
               <CalendarRange value={range} onChange={setRange} isDateDisabled={isDateDisabled} />
-              <Text className="text-xs text-ink-muted">Занятые даты недоступны для выбора.</Text>
-              {dateError ? <Text className="text-sm text-danger">{dateError}</Text> : null}
+              <Text style={{ fontSize: 12, color: palette.inkMuted }}>
+                Занятые даты недоступны для выбора.
+              </Text>
+              {dateError ? (
+                <Text style={{ fontSize: 13, color: palette.danger }}>{dateError}</Text>
+              ) : null}
             </View>
 
-            <View className="gap-2">
-              <Text className="text-base font-semibold text-ink">Гости</Text>
-              <View className="flex-row items-center justify-between rounded-card border border-line px-4 py-3">
-                <Text className="text-base text-ink">{formatGuests(count)}</Text>
-                <View className="flex-row items-center gap-4">
+            {/* Guests stepper */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Гости</Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: palette.line,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                }}
+              >
+                <Text style={{ fontSize: 15, color: palette.ink }}>{formatGuests(count)}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                   <Stepper
                     icon="remove"
                     disabled={count <= 1}
                     onPress={() => setCount((c) => Math.max(1, c - 1))}
                   />
-                  <Text className="w-6 text-center text-base font-semibold text-ink">{count}</Text>
+                  <Text style={{ width: 24, textAlign: 'center', fontSize: 15, fontWeight: '600', color: palette.ink }}>
+                    {count}
+                  </Text>
                   <Stepper
                     icon="add"
                     disabled={count >= MAX_GUESTS}
@@ -152,8 +267,13 @@ export default function BookingScreen() {
               </View>
             </View>
 
-            <View className="gap-3">
-              <Text className="text-base font-semibold text-ink">Контактные данные</Text>
+            {/* Contact details */}
+            <View style={{ gap: 10 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
+                Контактные данные
+              </Text>
+
+              {/* Name */}
               <Controller
                 control={control}
                 name="name"
@@ -168,21 +288,22 @@ export default function BookingScreen() {
                   />
                 )}
               />
+
+              {/* Phone with RU flag + +7 prefix + mask */}
               <Controller
                 control={control}
                 name="phone"
                 render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    icon="call-outline"
-                    keyboardType="phone-pad"
-                    placeholder="+7 999 000-00-00"
+                  <PhoneInput
                     value={value}
-                    onChangeText={onChange}
+                    onChange={onChange}
                     onBlur={onBlur}
                     error={errors.phone?.message}
                   />
                 )}
               />
+
+              {/* Comment */}
               <Controller
                 control={control}
                 name="message"
@@ -198,16 +319,36 @@ export default function BookingScreen() {
               />
             </View>
 
+            {/* Price breakdown */}
             {nights > 0 && listing ? (
-              <View className="gap-2 rounded-card border border-line p-4">
-                <Row label={`${formatPricePerNight(listing.price)} × ${nights}`} value={`${formatRub(total)}\u00A0₽`} />
-                <View className="my-1 h-px bg-line" />
+              <View
+                style={{
+                  gap: 8,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: palette.line,
+                  padding: 16,
+                }}
+              >
+                <Row
+                  label={`${formatPricePerNight(listing.price)} × ${nights}`}
+                  value={`${formatRub(total)}\u00A0₽`}
+                />
+                <View style={{ height: 1, backgroundColor: palette.line }} />
                 <Row label="Итого" value={`${formatRub(total)}\u00A0₽`} bold />
               </View>
             ) : null}
           </ScrollView>
 
-          <View className="border-t border-line px-4 py-3">
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: palette.line,
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: 8,
+            }}
+          >
             <Button label="Отправить заявку" loading={createBooking.isPending} onPress={onSubmit} />
           </View>
         </KeyboardAvoidingView>
@@ -215,6 +356,109 @@ export default function BookingScreen() {
     </View>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Phone input with RU flag, +7 prefix and mask
+// ---------------------------------------------------------------------------
+
+interface PhoneInputProps {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  error?: string;
+}
+
+function PhoneInput({ value, onChange, onBlur, error }: PhoneInputProps) {
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+
+  const handleChangeText = (text: string) => {
+    // Keep only digits, limit to 10
+    const digits = text.replace(/\D/g, '').slice(0, 10);
+    onChange(formatPhoneMask(digits));
+  };
+
+  const borderColor = error
+    ? palette.danger
+    : focused
+    ? palette.primary
+    : palette.line;
+
+  return (
+    <View style={{ width: '100%' }}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => inputRef.current?.focus()}
+        style={{
+          height: 56,
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor,
+          backgroundColor: palette.surface,
+          paddingHorizontal: 14,
+          gap: 10,
+        }}
+      >
+        {/* Flag + prefix */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingRight: 10,
+            borderRightWidth: 1,
+            borderRightColor: palette.line,
+          }}
+        >
+          <Text style={{ fontSize: 20, lineHeight: 24 }}>🇷🇺</Text>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: '600',
+              color: focused ? palette.primary : palette.ink,
+              letterSpacing: 0.3,
+            }}
+          >
+            +7
+          </Text>
+        </View>
+
+        {/* Masked input */}
+        <TextInput
+          ref={inputRef}
+          value={value}
+          onChangeText={handleChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
+          keyboardType="phone-pad"
+          placeholder="(999) 000-00-00"
+          placeholderTextColor={palette.inkMuted}
+          style={{
+            flex: 1,
+            fontSize: 15,
+            color: palette.ink,
+          }}
+          maxLength={15} // "(XXX) XXX-XX-XX" = 15 chars
+        />
+      </TouchableOpacity>
+
+      {error ? (
+        <Text style={{ marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontWeight: '500', color: palette.danger }}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function Stepper({
   icon,
@@ -230,8 +474,17 @@ function Stepper({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      className="h-9 w-9 items-center justify-center rounded-full border border-line"
-      style={disabled ? { opacity: 0.4 } : undefined}>
+      style={[
+        {
+          width: 36, height: 36,
+          alignItems: 'center', justifyContent: 'center',
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: palette.line,
+        },
+        disabled ? { opacity: 0.4 } : undefined,
+      ]}
+    >
       <Ionicons name={icon} size={18} color={palette.ink} />
     </Pressable>
   );
@@ -239,11 +492,25 @@ function Stepper({
 
 function Row({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
   return (
-    <View className="flex-row items-center justify-between">
-      <Text className={bold ? 'text-base font-semibold text-ink' : 'text-base text-ink-secondary'}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text
+        style={{
+          fontSize: 15,
+          color: bold ? palette.ink : palette.inkSecondary,
+          fontWeight: bold ? '600' : '400',
+        }}
+      >
         {label}
       </Text>
-      <Text className={bold ? 'text-base font-bold text-ink' : 'text-base text-ink'}>{value}</Text>
+      <Text
+        style={{
+          fontSize: 15,
+          color: palette.ink,
+          fontWeight: bold ? '700' : '400',
+        }}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
