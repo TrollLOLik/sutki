@@ -70,6 +70,10 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 		in.NumberRoom = &trimmed
 	}
 
+	if err := validateAndCleanRules(&in); err != nil {
+		return domain.House{}, err
+	}
+
 	if in.OwnerID <= 0 {
 		return domain.House{}, ErrInvalidListing
 	}
@@ -152,6 +156,10 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		in.NumberRoom = &trimmed
 	}
 
+	if err := validateAndCleanRules(&in); err != nil {
+		return domain.House{}, err
+	}
+
 	if in.OwnerID <= 0 {
 		return domain.House{}, ErrInvalidListing
 	}
@@ -170,4 +178,104 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		return domain.House{}, err
 	}
 	return s.Get(ctx, id)
+}
+
+func validateTimeFormat(t string) bool {
+	if len(t) != 5 {
+		return false
+	}
+	if t[2] != ':' {
+		return false
+	}
+	h := t[0:2]
+	m := t[3:5]
+	if h[0] < '0' || h[0] > '2' || h[1] < '0' || h[1] > '9' {
+		return false
+	}
+	if h == "24" {
+		return false
+	}
+	if m[0] < '0' || m[0] > '5' || m[1] < '0' || m[1] > '9' {
+		return false
+	}
+	return true
+}
+
+func isValidEnum(val string, allowed []string) bool {
+	for _, a := range allowed {
+		if val == a {
+			return true
+		}
+	}
+	return false
+}
+
+func validateAndCleanRules(in *domain.NewHouse) error {
+	if in.CheckInAfter != nil {
+		trimmed := strings.TrimSpace(*in.CheckInAfter)
+		if trimmed == "" {
+			in.CheckInAfter = nil
+		} else {
+			in.CheckInAfter = &trimmed
+			if !validateTimeFormat(trimmed) {
+				return ErrInvalidListing
+			}
+		}
+	}
+	if in.CheckOutBefore != nil {
+		trimmed := strings.TrimSpace(*in.CheckOutBefore)
+		if trimmed == "" {
+			in.CheckOutBefore = nil
+		} else {
+			in.CheckOutBefore = &trimmed
+			if !validateTimeFormat(trimmed) {
+				return ErrInvalidListing
+			}
+		}
+	}
+	if in.SmokingAllowed != nil {
+		trimmed := strings.TrimSpace(*in.SmokingAllowed)
+		if trimmed == "" {
+			in.SmokingAllowed = nil
+		} else {
+			in.SmokingAllowed = &trimmed
+			if !isValidEnum(trimmed, []string{"allowed", "forbidden", "on_balcony"}) {
+				return ErrInvalidListing
+			}
+		}
+	}
+	if in.PetsAllowed != nil {
+		trimmed := strings.TrimSpace(*in.PetsAllowed)
+		if trimmed == "" {
+			in.PetsAllowed = nil
+		} else {
+			in.PetsAllowed = &trimmed
+			if !isValidEnum(trimmed, []string{"allowed", "forbidden", "on_request"}) {
+				return ErrInvalidListing
+			}
+		}
+	}
+	if in.ChildrenAllowed != nil {
+		trimmed := strings.TrimSpace(*in.ChildrenAllowed)
+		if trimmed == "" {
+			in.ChildrenAllowed = nil
+		} else {
+			in.ChildrenAllowed = &trimmed
+			if !isValidEnum(trimmed, []string{"allowed", "forbidden", "on_request"}) {
+				return ErrInvalidListing
+			}
+		}
+	}
+	if in.EventsAllowed != nil {
+		trimmed := strings.TrimSpace(*in.EventsAllowed)
+		if trimmed == "" {
+			in.EventsAllowed = nil
+		} else {
+			in.EventsAllowed = &trimmed
+			if !isValidEnum(trimmed, []string{"allowed", "forbidden", "on_request"}) {
+				return ErrInvalidListing
+			}
+		}
+	}
+	return nil
 }

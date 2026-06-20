@@ -149,28 +149,38 @@ const createHouse = `-- name: CreateHouse :one
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
   area, country, status, deleted, pay, views, lat, lng, max_guests,
+  check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
   created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6,
   $7, $8, $9, 'active', false, false, 0,
-  $10, $11, $12, now(), now()
+  $10, $11, $12,
+  $13, $14, $15,
+  $16, $17, $18,
+  now(), now()
 )
 RETURNING id
 `
 
 type CreateHouseParams struct {
-	OwnerID     int32
-	Street      string
-	HouseNumber string
-	Description string
-	Price       int32
-	CountRoom   string
-	NumberRoom  *string
-	Area        int32
-	Country     string
-	Lat         *float64
-	Lng         *float64
-	MaxGuests   *int32
+	OwnerID         int32
+	Street          string
+	HouseNumber     string
+	Description     string
+	Price           int32
+	CountRoom       string
+	NumberRoom      *string
+	Area            int32
+	Country         string
+	Lat             *float64
+	Lng             *float64
+	MaxGuests       *int32
+	CheckInAfter    pgtype.Time
+	CheckOutBefore  pgtype.Time
+	SmokingAllowed  *string
+	PetsAllowed     *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
 }
 
 // Creates a new listing owned by the given user. New listings are published
@@ -190,6 +200,12 @@ func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32
 		arg.Lat,
 		arg.Lng,
 		arg.MaxGuests,
+		arg.CheckInAfter,
+		arg.CheckOutBefore,
+		arg.SmokingAllowed,
+		arg.PetsAllowed,
+		arg.ChildrenAllowed,
+		arg.EventsAllowed,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -231,6 +247,12 @@ SELECT
   h.lat,
   h.lng,
   h.views,
+  h.check_in_after,
+  h.check_out_before,
+  h.smoking_allowed,
+  h.pets_allowed,
+  h.children_allowed,
+  h.events_allowed,
   h.created_at,
   h.updated_at,
   COALESCE((
@@ -242,31 +264,68 @@ SELECT
     SELECT count(*)
     FROM review rv
     WHERE rv.house_id = h.id AND rv.status = 'active'
-  )::int AS reviews_count
+  )::int AS reviews_count,
+  u.name AS owner_name,
+  u.surname AS owner_surname,
+  u.phone AS owner_phone,
+  u.avatar_url AS owner_avatar_url,
+  u.is_verified AS owner_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house owner_h ON owner_h.id = rv.house_id
+    WHERE owner_h.owner_id = h.owner_id AND rv.status = 'active'
+  ), 0.0)::float8 AS owner_rating,
+  COALESCE((
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house owner_h ON owner_h.id = rv.house_id
+    WHERE owner_h.owner_id = h.owner_id AND rv.status = 'active'
+  ), 0)::int AS owner_reviews_count,
+  COALESCE((
+    SELECT count(*)::int
+    FROM house owner_h
+    WHERE owner_h.owner_id = h.owner_id AND owner_h.deleted = false
+  ), 0)::int AS owner_listings_count
 FROM house h
+JOIN "user" u ON h.owner_id = u.id
 WHERE h.id = $1 AND h.deleted = false
 `
 
 type GetHouseByIDRow struct {
-	ID           int32
-	OwnerID      int32
-	Street       string
-	HouseNumber  string
-	Description  string
-	Price        int32
-	CountRoom    string
-	NumberRoom   *string
-	Area         int32
-	Country      string
-	Status       string
-	MaxGuests    *int32
-	Lat          *float64
-	Lng          *float64
-	Views        int32
-	CreatedAt    pgtype.Timestamp
-	UpdatedAt    pgtype.Timestamp
-	Rating       float64
-	ReviewsCount int32
+	ID                 int32
+	OwnerID            int32
+	Street             string
+	HouseNumber        string
+	Description        string
+	Price              int32
+	CountRoom          string
+	NumberRoom         *string
+	Area               int32
+	Country            string
+	Status             string
+	MaxGuests          *int32
+	Lat                *float64
+	Lng                *float64
+	Views              int32
+	CheckInAfter       pgtype.Time
+	CheckOutBefore     pgtype.Time
+	SmokingAllowed     *string
+	PetsAllowed        *string
+	ChildrenAllowed    *string
+	EventsAllowed      *string
+	CreatedAt          pgtype.Timestamp
+	UpdatedAt          pgtype.Timestamp
+	Rating             float64
+	ReviewsCount       int32
+	OwnerName          *string
+	OwnerSurname       *string
+	OwnerPhone         *string
+	OwnerAvatarUrl     *string
+	OwnerIsVerified    bool
+	OwnerRating        float64
+	OwnerReviewsCount  int32
+	OwnerListingsCount int32
 }
 
 func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error) {
@@ -288,10 +347,24 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.Lat,
 		&i.Lng,
 		&i.Views,
+		&i.CheckInAfter,
+		&i.CheckOutBefore,
+		&i.SmokingAllowed,
+		&i.PetsAllowed,
+		&i.ChildrenAllowed,
+		&i.EventsAllowed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Rating,
 		&i.ReviewsCount,
+		&i.OwnerName,
+		&i.OwnerSurname,
+		&i.OwnerPhone,
+		&i.OwnerAvatarUrl,
+		&i.OwnerIsVerified,
+		&i.OwnerRating,
+		&i.OwnerReviewsCount,
+		&i.OwnerListingsCount,
 	)
 	return i, err
 }
@@ -480,6 +553,12 @@ SELECT
   h.lat,
   h.lng,
   h.views,
+  h.check_in_after,
+  h.check_out_before,
+  h.smoking_allowed,
+  h.pets_allowed,
+  h.children_allowed,
+  h.events_allowed,
   h.created_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
@@ -511,23 +590,29 @@ type ListHousesByOwnerParams struct {
 }
 
 type ListHousesByOwnerRow struct {
-	ID           int32
-	Street       string
-	HouseNumber  string
-	Description  string
-	Price        int32
-	CountRoom    string
-	Area         int32
-	Country      string
-	Status       string
-	MaxGuests    *int32
-	Lat          *float64
-	Lng          *float64
-	Views        int32
-	CreatedAt    pgtype.Timestamp
-	Rating       float64
-	ReviewsCount int32
-	CoverPath    string
+	ID              int32
+	Street          string
+	HouseNumber     string
+	Description     string
+	Price           int32
+	CountRoom       string
+	Area            int32
+	Country         string
+	Status          string
+	MaxGuests       *int32
+	Lat             *float64
+	Lng             *float64
+	Views           int32
+	CheckInAfter    pgtype.Time
+	CheckOutBefore  pgtype.Time
+	SmokingAllowed  *string
+	PetsAllowed     *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
+	CreatedAt       pgtype.Timestamp
+	Rating          float64
+	ReviewsCount    int32
+	CoverPath       string
 }
 
 func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerParams) ([]ListHousesByOwnerRow, error) {
@@ -553,6 +638,12 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.Lat,
 			&i.Lng,
 			&i.Views,
+			&i.CheckInAfter,
+			&i.CheckOutBefore,
+			&i.SmokingAllowed,
+			&i.PetsAllowed,
+			&i.ChildrenAllowed,
+			&i.EventsAllowed,
 			&i.CreatedAt,
 			&i.Rating,
 			&i.ReviewsCount,
@@ -583,6 +674,12 @@ SELECT
   h.lat,
   h.lng,
   h.views,
+  h.check_in_after,
+  h.check_out_before,
+  h.smoking_allowed,
+  h.pets_allowed,
+  h.children_allowed,
+  h.events_allowed,
   h.created_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
@@ -680,23 +777,29 @@ type ListHousesFilteredParams struct {
 }
 
 type ListHousesFilteredRow struct {
-	ID           int32
-	Street       string
-	HouseNumber  string
-	Description  string
-	Price        int32
-	CountRoom    string
-	Area         int32
-	Country      string
-	Status       string
-	MaxGuests    *int32
-	Lat          *float64
-	Lng          *float64
-	Views        int32
-	CreatedAt    pgtype.Timestamp
-	Rating       float64
-	ReviewsCount int32
-	CoverPath    string
+	ID              int32
+	Street          string
+	HouseNumber     string
+	Description     string
+	Price           int32
+	CountRoom       string
+	Area            int32
+	Country         string
+	Status          string
+	MaxGuests       *int32
+	Lat             *float64
+	Lng             *float64
+	Views           int32
+	CheckInAfter    pgtype.Time
+	CheckOutBefore  pgtype.Time
+	SmokingAllowed  *string
+	PetsAllowed     *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
+	CreatedAt       pgtype.Timestamp
+	Rating          float64
+	ReviewsCount    int32
+	CoverPath       string
 }
 
 func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error) {
@@ -737,6 +840,12 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 			&i.Lat,
 			&i.Lng,
 			&i.Views,
+			&i.CheckInAfter,
+			&i.CheckOutBefore,
+			&i.SmokingAllowed,
+			&i.PetsAllowed,
+			&i.ChildrenAllowed,
+			&i.EventsAllowed,
 			&i.CreatedAt,
 			&i.Rating,
 			&i.ReviewsCount,
@@ -765,24 +874,36 @@ SET street = $1,
     lat = $9,
     lng = $10,
     max_guests = $11,
+    check_in_after = $12,
+    check_out_before = $13,
+    smoking_allowed = $14,
+    pets_allowed = $15,
+    children_allowed = $16,
+    events_allowed = $17,
     updated_at = now()
-WHERE id = $12 AND owner_id = $13 AND deleted = false
+WHERE id = $18 AND owner_id = $19 AND deleted = false
 `
 
 type UpdateHouseParams struct {
-	Street      string
-	HouseNumber string
-	Description string
-	Price       int32
-	CountRoom   string
-	NumberRoom  *string
-	Area        int32
-	Country     string
-	Lat         *float64
-	Lng         *float64
-	MaxGuests   *int32
-	ID          int32
-	OwnerID     int32
+	Street          string
+	HouseNumber     string
+	Description     string
+	Price           int32
+	CountRoom       string
+	NumberRoom      *string
+	Area            int32
+	Country         string
+	Lat             *float64
+	Lng             *float64
+	MaxGuests       *int32
+	CheckInAfter    pgtype.Time
+	CheckOutBefore  pgtype.Time
+	SmokingAllowed  *string
+	PetsAllowed     *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
+	ID              int32
+	OwnerID         int32
 }
 
 // Updates a listing owned by the given user. Returns the number of affected
@@ -800,6 +921,12 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		arg.Lat,
 		arg.Lng,
 		arg.MaxGuests,
+		arg.CheckInAfter,
+		arg.CheckOutBefore,
+		arg.SmokingAllowed,
+		arg.PetsAllowed,
+		arg.ChildrenAllowed,
+		arg.EventsAllowed,
 		arg.ID,
 		arg.OwnerID,
 	)

@@ -123,6 +123,12 @@ type House struct {
 	Lat             *float64
 	Lng             *float64
 	MaxGuests       *int32
+	CheckInAfter    pgtype.Time
+	CheckOutBefore  pgtype.Time
+	SmokingAllowed  *string
+	PetsAllowed     *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
 }
 
 type HouseCategory struct {

@@ -22,6 +22,12 @@ export interface NewListingInput {
   max_guests?: number | null;
   service_ids: number[];
   category_ids: number[];
+  check_in_after?: string | null;
+  check_out_before?: string | null;
+  smoking_allowed?: string | null;
+  pets_allowed?: string | null;
+  children_allowed?: string | null;
+  events_allowed?: string | null;
 }
 
 interface RefResponse {

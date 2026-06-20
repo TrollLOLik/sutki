@@ -5,8 +5,16 @@ import "time"
 // House is a rental listing. It maps onto the legacy `house` table; `City`
 // comes from the legacy `country` column, and Lat/Lng are mobile additions.
 type House struct {
-	ID          int32
-	OwnerID     int32
+	ID                 int32
+	OwnerID            int32
+	OwnerName          string
+	OwnerSurname       string
+	OwnerPhone         string
+	OwnerAvatarURL     string
+	OwnerRating        float64
+	OwnerReviewsCount  int32
+	OwnerListingsCount int32
+	OwnerIsVerified    bool
 	Street      string
 	HouseNumber string
 	Description string
@@ -17,13 +25,19 @@ type House struct {
 	City        string
 	Status      string
 	// MaxGuests is the sleeping capacity; nil means unknown (legacy listings).
-	MaxGuests *int32
-	Lat       *float64
-	Lng       *float64
-	Views     int32
-	CoverPath string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	MaxGuests      *int32
+	Lat            *float64
+	Lng            *float64
+	Views          int32
+	CoverPath      string
+	CheckInAfter   *string
+	CheckOutBefore *string
+	SmokingAllowed *string
+	PetsAllowed    *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 
 	// Rating is the average review score rounded to one decimal (0 when the
 	// listing has no published reviews); ReviewsCount is the published count.
@@ -63,7 +77,13 @@ type NewHouse struct {
 	City        string
 	Lat         *float64
 	Lng         *float64
-	MaxGuests   *int32
-	ServiceIDs  []int32
-	CategoryIDs []int32
+	MaxGuests       *int32
+	ServiceIDs      []int32
+	CategoryIDs     []int32
+	CheckInAfter    *string
+	CheckOutBefore  *string
+	SmokingAllowed  *string
+	PetsAllowed     *string
+	ChildrenAllowed *string
+	EventsAllowed   *string
 }

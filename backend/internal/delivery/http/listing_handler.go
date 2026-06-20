@@ -82,12 +82,27 @@ type listingCardDTO struct {
 
 type listingDetailDTO struct {
 	listingCardDTO
-	Street      string     `json:"street"`
-	HouseNumber string     `json:"house_number"`
-	NumberRoom  string     `json:"number_room"`
-	Photos      []photoDTO `json:"photos"`
-	Services    []refDTO   `json:"services"`
-	Categories  []refDTO   `json:"categories"`
+	OwnerID            int32      `json:"owner_id"`
+	OwnerName          string     `json:"owner_name"`
+	OwnerSurname       string     `json:"owner_surname"`
+	OwnerPhone         string     `json:"owner_phone"`
+	OwnerAvatarURL     string     `json:"owner_avatar_url"`
+	OwnerRating        float64    `json:"owner_rating"`
+	OwnerReviewsCount  int32      `json:"owner_reviews_count"`
+	OwnerListingsCount int32      `json:"owner_listings_count"`
+	OwnerIsVerified    bool       `json:"owner_is_verified"`
+	Street             string     `json:"street"`
+	HouseNumber        string     `json:"house_number"`
+	NumberRoom         string     `json:"number_room"`
+	Photos             []photoDTO `json:"photos"`
+	Services           []refDTO   `json:"services"`
+	Categories         []refDTO   `json:"categories"`
+	CheckInAfter       *string    `json:"check_in_after"`
+	CheckOutBefore     *string    `json:"check_out_before"`
+	SmokingAllowed     *string    `json:"smoking_allowed"`
+	PetsAllowed        *string    `json:"pets_allowed"`
+	ChildrenAllowed    *string    `json:"children_allowed"`
+	EventsAllowed      *string    `json:"events_allowed"`
 }
 
 type listResponse struct {
@@ -127,19 +142,25 @@ func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 type createListingRequest struct {
-	Street      string   `json:"street"`
-	HouseNumber string   `json:"house_number"`
-	City        string   `json:"city"`
-	Description string   `json:"description"`
-	Price       int32    `json:"price"`
-	CountRoom   string   `json:"count_room"`
-	NumberRoom  *string  `json:"number_room"`
-	Area        int32    `json:"area"`
-	Lat         *float64 `json:"lat"`
-	Lng         *float64 `json:"lng"`
-	MaxGuests   *int32   `json:"max_guests"`
-	ServiceIDs  []int32  `json:"service_ids"`
-	CategoryIDs []int32  `json:"category_ids"`
+	Street          string   `json:"street"`
+	HouseNumber     string   `json:"house_number"`
+	City            string   `json:"city"`
+	Description     string   `json:"description"`
+	Price           int32    `json:"price"`
+	CountRoom       string   `json:"count_room"`
+	NumberRoom      *string  `json:"number_room"`
+	Area            int32    `json:"area"`
+	Lat             *float64 `json:"lat"`
+	Lng             *float64 `json:"lng"`
+	MaxGuests       *int32   `json:"max_guests"`
+	ServiceIDs      []int32  `json:"service_ids"`
+	CategoryIDs     []int32  `json:"category_ids"`
+	CheckInAfter    *string  `json:"check_in_after"`
+	CheckOutBefore  *string  `json:"check_out_before"`
+	SmokingAllowed  *string  `json:"smoking_allowed"`
+	PetsAllowed     *string  `json:"pets_allowed"`
+	ChildrenAllowed *string  `json:"children_allowed"`
+	EventsAllowed   *string  `json:"events_allowed"`
 }
 
 // create handles POST /api/v1/listings: the authenticated user publishes a new
@@ -155,20 +176,26 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := domain.NewHouse{
-		OwnerID:     userID,
-		Street:      body.Street,
-		HouseNumber: body.HouseNumber,
-		City:        body.City,
-		Description: body.Description,
-		Price:       body.Price,
-		CountRoom:   body.CountRoom,
-		NumberRoom:  body.NumberRoom,
-		Area:        body.Area,
-		Lat:         body.Lat,
-		Lng:         body.Lng,
-		MaxGuests:   body.MaxGuests,
-		ServiceIDs:  body.ServiceIDs,
-		CategoryIDs: body.CategoryIDs,
+		OwnerID:         userID,
+		Street:          body.Street,
+		HouseNumber:     body.HouseNumber,
+		City:            body.City,
+		Description:     body.Description,
+		Price:           body.Price,
+		CountRoom:       body.CountRoom,
+		NumberRoom:      body.NumberRoom,
+		Area:            body.Area,
+		Lat:             body.Lat,
+		Lng:             body.Lng,
+		MaxGuests:       body.MaxGuests,
+		ServiceIDs:      body.ServiceIDs,
+		CategoryIDs:     body.CategoryIDs,
+		CheckInAfter:    body.CheckInAfter,
+		CheckOutBefore:  body.CheckOutBefore,
+		SmokingAllowed:  body.SmokingAllowed,
+		PetsAllowed:     body.PetsAllowed,
+		ChildrenAllowed: body.ChildrenAllowed,
+		EventsAllowed:   body.EventsAllowed,
 	}
 	hs, err := h.svc.Create(r.Context(), in)
 	if err != nil {
@@ -200,20 +227,26 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := domain.NewHouse{
-		OwnerID:     userID,
-		Street:      body.Street,
-		HouseNumber: body.HouseNumber,
-		City:        body.City,
-		Description: body.Description,
-		Price:       body.Price,
-		CountRoom:   body.CountRoom,
-		NumberRoom:  body.NumberRoom,
-		Area:        body.Area,
-		Lat:         body.Lat,
-		Lng:         body.Lng,
-		MaxGuests:   body.MaxGuests,
-		ServiceIDs:  body.ServiceIDs,
-		CategoryIDs: body.CategoryIDs,
+		OwnerID:         userID,
+		Street:          body.Street,
+		HouseNumber:     body.HouseNumber,
+		City:            body.City,
+		Description:     body.Description,
+		Price:           body.Price,
+		CountRoom:       body.CountRoom,
+		NumberRoom:      body.NumberRoom,
+		Area:            body.Area,
+		Lat:             body.Lat,
+		Lng:             body.Lng,
+		MaxGuests:       body.MaxGuests,
+		ServiceIDs:      body.ServiceIDs,
+		CategoryIDs:     body.CategoryIDs,
+		CheckInAfter:    body.CheckInAfter,
+		CheckOutBefore:  body.CheckOutBefore,
+		SmokingAllowed:  body.SmokingAllowed,
+		PetsAllowed:     body.PetsAllowed,
+		ChildrenAllowed: body.ChildrenAllowed,
+		EventsAllowed:   body.EventsAllowed,
 	}
 	hs, err := h.svc.Update(r.Context(), int32(id), in)
 	if err != nil {
@@ -308,13 +341,28 @@ func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
 		card.CoverURL = photos[0].URL
 	}
 	return listingDetailDTO{
-		listingCardDTO: card,
-		Street:         hs.Street,
-		HouseNumber:    hs.HouseNumber,
-		NumberRoom:     hs.NumberRoom,
-		Photos:         photos,
-		Services:       toRefDTOs(hs.Services),
-		Categories:     toRefDTOs(hs.Categories),
+		listingCardDTO:     card,
+		OwnerID:            hs.OwnerID,
+		OwnerName:          hs.OwnerName,
+		OwnerSurname:       hs.OwnerSurname,
+		OwnerPhone:         hs.OwnerPhone,
+		OwnerAvatarURL:     hs.OwnerAvatarURL,
+		OwnerRating:        hs.OwnerRating,
+		OwnerReviewsCount:  hs.OwnerReviewsCount,
+		OwnerListingsCount: hs.OwnerListingsCount,
+		OwnerIsVerified:    hs.OwnerIsVerified,
+		Street:          hs.Street,
+		HouseNumber:     hs.HouseNumber,
+		NumberRoom:      hs.NumberRoom,
+		Photos:          photos,
+		Services:        toRefDTOs(hs.Services),
+		Categories:      toRefDTOs(hs.Categories),
+		CheckInAfter:    hs.CheckInAfter,
+		CheckOutBefore:  hs.CheckOutBefore,
+		SmokingAllowed:  hs.SmokingAllowed,
+		PetsAllowed:     hs.PetsAllowed,
+		ChildrenAllowed: hs.ChildrenAllowed,
+		EventsAllowed:   hs.EventsAllowed,
 	}
 }
 

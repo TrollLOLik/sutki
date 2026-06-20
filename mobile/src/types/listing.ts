@@ -39,12 +39,27 @@ export interface ListingCard {
 }
 
 export interface ListingDetail extends ListingCard {
+  owner_id: number;
+  owner_name: string;
+  owner_surname: string;
+  owner_phone: string;
+  owner_avatar_url: string;
+  owner_rating: number;
+  owner_reviews_count: number;
+  owner_listings_count: number;
+  owner_is_verified: boolean;
   street?: string;
   house_number?: string;
   number_room: string;
   photos: ListingPhoto[];
   services: ListingRef[];
   categories: ListingRef[];
+  check_in_after?: string | null;
+  check_out_before?: string | null;
+  smoking_allowed?: 'allowed' | 'forbidden' | 'on_balcony' | null;
+  pets_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
+  children_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
+  events_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
 }
 
 export interface ListingsPage {

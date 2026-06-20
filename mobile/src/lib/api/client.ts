@@ -1,5 +1,5 @@
 import { env } from '@/lib/env';
-import { useSessionStore } from '@/store/session';
+import { storeRef } from '@/lib/api/store-ref';
 
 export class ApiError extends Error {
   constructor(
@@ -31,7 +31,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (auth) {
-    const token = useSessionStore.getState().accessToken;
+    const token = storeRef.getState?.()?.accessToken;
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
@@ -42,8 +42,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   if (res.status === 401 && auth) {
-    const state = useSessionStore.getState();
-    const refreshToken = state.refreshToken;
+    const state = storeRef.getState?.();
+    const refreshToken = state?.refreshToken;
     if (refreshToken) {
       try {
         const refreshRes = await fetch(`${env.apiUrl}/api/v1/auth/refresh`, {

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { fetchMe, logout, refreshTokens } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
+import { storeRef } from '@/lib/api/store-ref';
 import { SECURE_KEYS, secureStorage } from '@/lib/secure-storage';
 import type { User } from '@/types/user';
 
@@ -121,3 +122,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ accessToken: null, refreshToken: null, user: null, status: 'unauthenticated' });
   },
 }));
+
+// Set dynamic store state reference for circular-dependency bypass
+storeRef.getState = useSessionStore.getState;
+

@@ -13,6 +13,12 @@ SELECT
   h.lat,
   h.lng,
   h.views,
+  h.check_in_after,
+  h.check_out_before,
+  h.smoking_allowed,
+  h.pets_allowed,
+  h.children_allowed,
+  h.events_allowed,
   h.created_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
@@ -163,6 +169,12 @@ SELECT
   h.lat,
   h.lng,
   h.views,
+  h.check_in_after,
+  h.check_out_before,
+  h.smoking_allowed,
+  h.pets_allowed,
+  h.children_allowed,
+  h.events_allowed,
   h.created_at,
   h.updated_at,
   COALESCE((
@@ -174,8 +186,31 @@ SELECT
     SELECT count(*)
     FROM review rv
     WHERE rv.house_id = h.id AND rv.status = 'active'
-  )::int AS reviews_count
+  )::int AS reviews_count,
+  u.name AS owner_name,
+  u.surname AS owner_surname,
+  u.phone AS owner_phone,
+  u.avatar_url AS owner_avatar_url,
+  u.is_verified AS owner_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house owner_h ON owner_h.id = rv.house_id
+    WHERE owner_h.owner_id = h.owner_id AND rv.status = 'active'
+  ), 0.0)::float8 AS owner_rating,
+  COALESCE((
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house owner_h ON owner_h.id = rv.house_id
+    WHERE owner_h.owner_id = h.owner_id AND rv.status = 'active'
+  ), 0)::int AS owner_reviews_count,
+  COALESCE((
+    SELECT count(*)::int
+    FROM house owner_h
+    WHERE owner_h.owner_id = h.owner_id AND owner_h.deleted = false
+  ), 0)::int AS owner_listings_count
 FROM house h
+JOIN "user" u ON h.owner_id = u.id
 WHERE h.id = $1 AND h.deleted = false;
 
 -- name: ListHousePhotos :many
@@ -217,11 +252,15 @@ ORDER BY name;
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
   area, country, status, deleted, pay, views, lat, lng, max_guests,
+  check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
   created_at, updated_at
 ) VALUES (
   @owner_id, @street, @house_number, @description, @price, @count_room,
   sqlc.narg('number_room'), @area, @country, 'active', false, false, 0,
-  sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('max_guests'), now(), now()
+  sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('max_guests'),
+  sqlc.narg('check_in_after'), sqlc.narg('check_out_before'), sqlc.narg('smoking_allowed'),
+  sqlc.narg('pets_allowed'), sqlc.narg('children_allowed'), sqlc.narg('events_allowed'),
+  now(), now()
 )
 RETURNING id;
 
@@ -240,6 +279,12 @@ SET street = @street,
     lat = sqlc.narg('lat'),
     lng = sqlc.narg('lng'),
     max_guests = sqlc.narg('max_guests'),
+    check_in_after = sqlc.narg('check_in_after'),
+    check_out_before = sqlc.narg('check_out_before'),
+    smoking_allowed = sqlc.narg('smoking_allowed'),
+    pets_allowed = sqlc.narg('pets_allowed'),
+    children_allowed = sqlc.narg('children_allowed'),
+    events_allowed = sqlc.narg('events_allowed'),
     updated_at = now()
 WHERE id = @id AND owner_id = @owner_id AND deleted = false;
 
@@ -274,6 +319,12 @@ SELECT
   h.lat,
   h.lng,
   h.views,
+  h.check_in_after,
+  h.check_out_before,
+  h.smoking_allowed,
+  h.pets_allowed,
+  h.children_allowed,
+  h.events_allowed,
   h.created_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)

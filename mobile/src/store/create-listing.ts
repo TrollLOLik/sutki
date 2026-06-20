@@ -22,6 +22,12 @@ export interface CreateListingDraft {
   description: string;
   /** Local image URIs for preview only. */
   photos: string[];
+  checkInAfter: string;
+  checkOutBefore: string;
+  smokingAllowed: string;
+  petsAllowed: string;
+  childrenAllowed: string;
+  eventsAllowed: string;
 }
 
 const emptyDraft: CreateListingDraft = {
@@ -36,6 +42,12 @@ const emptyDraft: CreateListingDraft = {
   serviceIds: [],
   description: '',
   photos: [],
+  checkInAfter: '',
+  checkOutBefore: '',
+  smokingAllowed: '',
+  petsAllowed: '',
+  childrenAllowed: '',
+  eventsAllowed: '',
 };
 
 interface CreateListingState extends CreateListingDraft {

@@ -31,6 +31,47 @@ const TOTAL_STEPS = 6;
 const LISTING_PRICE_RUB = 199;
 const ROOM_OPTIONS = ['1', '2', '3', '4', '5+'];
 
+const formatTimeInput = (text: string) => {
+  const digits = text.replace(/\D/g, '').split('');
+  const result: string[] = [];
+  
+  for (let i = 0; i < digits.length; i++) {
+    const d = digits[i];
+    const len = result.length;
+    
+    if (len === 0) {
+      if (d >= '3' && d <= '9') {
+        result.push('0');
+        result.push(d);
+      } else {
+        result.push(d);
+      }
+    } else if (len === 1) {
+      const hour = parseInt(result[0] + d, 10);
+      if (hour <= 23) {
+        result.push(d);
+      } else {
+        result[0] = '2';
+        result.push('3');
+      }
+    } else if (len === 2) {
+      if (d >= '0' && d <= '5') {
+        result.push(d);
+      }
+    } else if (len === 3) {
+      result.push(d);
+    }
+    
+    if (result.length >= 4) {
+      break;
+    }
+  }
+  
+  if (result.length === 0) return '';
+  if (result.length <= 2) return result.join('');
+  return `${result.slice(0, 2).join('')}:${result.slice(2).join('')}`;
+};
+
 const STEP_TITLES = [
   'Тип жилья',
   'Адрес',
@@ -74,6 +115,12 @@ export default function CreateListingScreen() {
         serviceIds: editListing.services.map((s) => s.id),
         description: editListing.description,
         photos: editListing.photos.map((p) => p.url),
+        checkInAfter: editListing.check_in_after || '',
+        checkOutBefore: editListing.check_out_before || '',
+        smokingAllowed: editListing.smoking_allowed || '',
+        petsAllowed: editListing.pets_allowed || '',
+        childrenAllowed: editListing.children_allowed || '',
+        eventsAllowed: editListing.events_allowed || '',
       });
       setLoadedEdit(true);
     }
@@ -134,9 +181,17 @@ export default function CreateListingScreen() {
         if (!(Number(draft.area) > 0)) return 'Укажите площадь';
         if (!(Number(draft.price) > 0)) return 'Укажите цену за ночь';
         return null;
-      case 3:
+      case 3: {
         if (draft.description.trim().length < 10) return 'Добавьте описание (минимум 10 символов)';
+        const timeRegex = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+        if (draft.checkInAfter && !timeRegex.test(draft.checkInAfter)) {
+          return 'Время заезда должно быть в формате ЧЧ:ММ (например, 14:00)';
+        }
+        if (draft.checkOutBefore && !timeRegex.test(draft.checkOutBefore)) {
+          return 'Время выезда должно быть в формате ЧЧ:ММ (например, 12:00)';
+        }
         return null;
+      }
       default:
         return null;
     }
@@ -171,6 +226,12 @@ export default function CreateListingScreen() {
       max_guests: draft.maxGuests !== '' ? Math.round(Number(draft.maxGuests)) : null,
       service_ids: draft.serviceIds,
       category_ids: draft.categoryIds,
+      check_in_after: draft.checkInAfter || null,
+      check_out_before: draft.checkOutBefore || null,
+      smoking_allowed: draft.smokingAllowed || null,
+      pets_allowed: draft.petsAllowed || null,
+      children_allowed: draft.childrenAllowed || null,
+      events_allowed: draft.eventsAllowed || null,
     };
 
     if (isEditing) {
@@ -417,6 +478,115 @@ export default function CreateListingScreen() {
                 />
               </View>
               <Text className="text-xs text-ink-muted">{draft.description.trim().length} символов</Text>
+
+              {/* Rules UI */}
+              <View className="mt-4 gap-4">
+                <Text className="text-base font-semibold text-ink">Правила заселения</Text>
+                
+                <View className="flex-row gap-3">
+                  <View className="flex-1 gap-2">
+                    <Text className="text-sm font-medium text-ink-secondary">Заезд после (ЧЧ:ММ)</Text>
+                    <Input
+                      placeholder="14:00"
+                      value={draft.checkInAfter}
+                      onChangeText={(t) => draft.setField('checkInAfter', formatTimeInput(t))}
+                      maxLength={5}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                  <View className="flex-1 gap-2">
+                    <Text className="text-sm font-medium text-ink-secondary">Выезд до (ЧЧ:ММ)</Text>
+                    <Input
+                      placeholder="12:00"
+                      value={draft.checkOutBefore}
+                      onChangeText={(t) => draft.setField('checkOutBefore', formatTimeInput(t))}
+                      maxLength={5}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+
+                {/* Rules options */}
+                <View className="gap-3 mt-2">
+                  <Text className="text-sm font-medium text-ink-secondary">Курение</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {[
+                      { value: 'allowed', label: 'Можно' },
+                      { value: 'forbidden', label: 'Запрещено' },
+                      { value: 'on_balcony', label: 'На балконе' },
+                    ].map((opt) => (
+                      <Chip
+                        key={opt.value}
+                        label={opt.label}
+                        selected={draft.smokingAllowed === opt.value}
+                        onPress={() => {
+                          draft.setField('smokingAllowed', draft.smokingAllowed === opt.value ? '' : opt.value);
+                        }}
+                      />
+                    ))}
+                  </View>
+                </View>
+
+                <View className="gap-3">
+                  <Text className="text-sm font-medium text-ink-secondary">Домашние животные</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {[
+                      { value: 'allowed', label: 'Можно' },
+                      { value: 'forbidden', label: 'Запрещено' },
+                      { value: 'on_request', label: 'По запросу' },
+                    ].map((opt) => (
+                      <Chip
+                        key={opt.value}
+                        label={opt.label}
+                        selected={draft.petsAllowed === opt.value}
+                        onPress={() => {
+                          draft.setField('petsAllowed', draft.petsAllowed === opt.value ? '' : opt.value);
+                        }}
+                      />
+                    ))}
+                  </View>
+                </View>
+
+                <View className="gap-3">
+                  <Text className="text-sm font-medium text-ink-secondary">Можно с детьми</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {[
+                      { value: 'allowed', label: 'Можно' },
+                      { value: 'forbidden', label: 'Запрещено' },
+                      { value: 'on_request', label: 'По запросу' },
+                    ].map((opt) => (
+                      <Chip
+                        key={opt.value}
+                        label={opt.label}
+                        selected={draft.childrenAllowed === opt.value}
+                        onPress={() => {
+                          draft.setField('childrenAllowed', draft.childrenAllowed === opt.value ? '' : opt.value);
+                        }}
+                      />
+                    ))}
+                  </View>
+                </View>
+
+                <View className="gap-3">
+                  <Text className="text-sm font-medium text-ink-secondary">Вечеринки и мероприятия</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {[
+                      { value: 'allowed', label: 'Можно' },
+                      { value: 'forbidden', label: 'Запрещено' },
+                      { value: 'on_request', label: 'По запросу' },
+                    ].map((opt) => (
+                      <Chip
+                        key={opt.value}
+                        label={opt.label}
+                        selected={draft.eventsAllowed === opt.value}
+                        onPress={() => {
+                          draft.setField('eventsAllowed', draft.eventsAllowed === opt.value ? '' : opt.value);
+                        }}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </View>
             </View>
           )}
 
@@ -444,6 +614,8 @@ export default function CreateListingScreen() {
                 <SummaryRow label="Комнат" value={draft.countRoom} />
                 <SummaryRow label="Площадь" value={`${draft.area} м²`} />
                 <SummaryRow label="Цена" value={`${draft.price} ₽ / ночь`} />
+                {draft.checkInAfter ? <SummaryRow label="Заезд после" value={draft.checkInAfter} /> : null}
+                {draft.checkOutBefore ? <SummaryRow label="Выезд до" value={draft.checkOutBefore} /> : null}
               </View>
               {!isEditing && (
                 <View className="flex-row items-center justify-between rounded-card bg-primary-light p-4">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,6 +7,7 @@ import {
   FlatList,
   Pressable,
   ScrollView,
+  Share,
   Text,
   useWindowDimensions,
   View,
@@ -15,13 +16,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui';
-import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListing } from '@/lib/api/listings';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
-import { useMemo } from 'react';
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,22 +32,138 @@ export default function ListingDetailScreen() {
   const isFavorite = favoriteIds?.has(numericId) ?? false;
   const insets = useSafeAreaInsets();
 
-  const { status: authStatus } = useSessionStore();
-  const isAuthenticated = authStatus === 'authenticated';
-  const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated });
+  const { user } = useSessionStore();
+
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const isOwnListing = useMemo(() => {
-    if (!myListingsData || !numericId) return false;
-    return myListingsData.items.some((item) => item.id === numericId);
-  }, [myListingsData, numericId]);
+    if (!data || !user) return false;
+    return data.owner_id === user.id;
+  }, [data, user]);
+
+  const rules = useMemo(() => {
+    if (!data) return [];
+    const list: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [];
+
+    if (data.check_in_after) {
+      const time = data.check_in_after.slice(0, 5);
+      list.push({
+        key: 'check_in',
+        label: `Заезд после ${time}`,
+        icon: 'time-outline',
+      });
+    }
+
+    if (data.check_out_before) {
+      const time = data.check_out_before.slice(0, 5);
+      list.push({
+        key: 'check_out',
+        label: `Выезд до ${time}`,
+        icon: 'time-outline',
+      });
+    }
+
+    if (data.smoking_allowed) {
+      let label = '';
+      let icon: keyof typeof Ionicons.glyphMap = 'flame-outline';
+      if (data.smoking_allowed === 'allowed') {
+        label = 'Курение разрешено';
+      } else if (data.smoking_allowed === 'forbidden') {
+        label = 'Курение запрещено';
+        icon = 'ban-outline';
+      } else if (data.smoking_allowed === 'on_balcony') {
+        label = 'Курение только на балконе';
+      }
+      if (label) {
+        list.push({ key: 'smoking', label, icon });
+      }
+    }
+
+    if (data.pets_allowed) {
+      let label = '';
+      let icon: keyof typeof Ionicons.glyphMap = 'paw-outline';
+      if (data.pets_allowed === 'allowed') {
+        label = 'Можно с питомцами';
+      } else if (data.pets_allowed === 'forbidden') {
+        label = 'Без питомцев';
+        icon = 'ban-outline';
+      } else if (data.pets_allowed === 'on_request') {
+        label = 'Питомцы по запросу';
+      }
+      if (label) {
+        list.push({ key: 'pets', label, icon });
+      }
+    }
+
+    if (data.children_allowed) {
+      let label = '';
+      let icon: keyof typeof Ionicons.glyphMap = 'people-outline';
+      if (data.children_allowed === 'allowed') {
+        label = 'Можно с детьми';
+      } else if (data.children_allowed === 'forbidden') {
+        label = 'Без детей';
+        icon = 'ban-outline';
+      } else if (data.children_allowed === 'on_request') {
+        label = 'Дети по запросу';
+      }
+      if (label) {
+        list.push({ key: 'children', label, icon });
+      }
+    }
+
+    if (data.events_allowed) {
+      let label = '';
+      let icon: keyof typeof Ionicons.glyphMap = 'musical-notes-outline';
+      if (data.events_allowed === 'allowed') {
+        label = 'Вечеринки разрешены';
+      } else if (data.events_allowed === 'forbidden') {
+        label = 'Без вечеринок и мероприятий';
+        icon = 'ban-outline';
+      } else if (data.events_allowed === 'on_request') {
+        label = 'Мероприятия по запросу';
+      }
+      if (label) {
+        list.push({ key: 'events', label, icon });
+      }
+    }
+
+    return list;
+  }, [data]);
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   const onScroll = (event: any) => {
+    if (!isMountedRef.current) return;
     const slideSize = event.nativeEvent.layoutMeasurement.width;
     const index = event.nativeEvent.contentOffset.x / slideSize;
     setActivePhotoIndex(Math.round(index));
+  };
+
+  const handleShare = async () => {
+    if (!data) return;
+    try {
+      const title = getListingTitle();
+      const address = getListingSubtitle();
+      const priceFormatted = formatRub(data.price);
+      const url = `https://sutki.ru/listing/${numericId}`;
+      const message = `${title}\n📍 ${address}\n💵 ${priceFormatted} ₽ / сутки\n\n🔗 ${url}`;
+
+      await Share.share({
+        message,
+        url,
+        title,
+      });
+    } catch (error) {
+      console.log('Error sharing listing:', error);
+    }
   };
 
   const getListingTitle = () => {
@@ -157,18 +272,21 @@ export default function ListingDetailScreen() {
               </Pressable>
 
               <View style={{ top: (insets.top || 0) + 16 }} className="absolute right-4 flex-row items-center gap-2 z-10">
+                {!isOwnListing && (
+                  <Pressable
+                    onPress={() => toggleFavorite.mutate({ id: numericId, isFavorite })}
+                    disabled={numericId <= 0}
+                    accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+                    className="h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:opacity-80">
+                    <Ionicons
+                      name={isFavorite ? 'heart' : 'heart-outline'}
+                      size={20}
+                      color={isFavorite ? palette.primary : palette.ink}
+                    />
+                  </Pressable>
+                )}
                 <Pressable
-                  onPress={() => toggleFavorite.mutate({ id: numericId, isFavorite })}
-                  disabled={numericId <= 0}
-                  accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-                  className="h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:opacity-80">
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isFavorite ? palette.primary : palette.ink}
-                  />
-                </Pressable>
-                <Pressable
+                  onPress={handleShare}
                   accessibilityLabel="Поделиться"
                   className="h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:opacity-80">
                   <Ionicons name="share-outline" size={20} color={palette.ink} />
@@ -259,29 +377,100 @@ export default function ListingDetailScreen() {
                 </View>
               ) : null}
 
+              {rules.length > 0 ? (
+                <View className="border-t border-line pt-4 gap-3">
+                  <Text className="text-base font-bold text-ink">Правила проживания</Text>
+                  <View className="rounded-2xl border border-line bg-surface overflow-hidden">
+                    {rules.map((rule, idx) => (
+                      <View
+                        key={rule.key}
+                        className={`flex-row items-center justify-between p-4 ${
+                          idx < rules.length - 1 ? 'border-b border-line' : ''
+                        }`}>
+                        <View className="flex-row items-center gap-3">
+                          <Ionicons name={rule.icon} size={20} color={palette.primary} />
+                          <Text className="text-sm font-semibold text-ink">{rule.label}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Владелец жилья (Avito Style) */}
               <View className="border-t border-line pt-4 gap-3">
-                <Text className="text-base font-bold text-ink">Правила проживания</Text>
-                <View className="rounded-2xl border border-line bg-surface overflow-hidden">
-                  <View className="flex-row items-center justify-between p-4 border-b border-line">
-                    <View className="flex-row items-center gap-3">
-                      <Ionicons name="time-outline" size={20} color={palette.primary} />
-                      <Text className="text-sm font-semibold text-ink">Заезд после 14:00</Text>
+                <Text className="text-base font-bold text-ink">Владелец жилья</Text>
+                
+                <View className="rounded-2xl border border-line bg-surface p-4">
+                  <View className="flex-row items-start gap-4">
+                    {/* Left: Avatar */}
+                    <View className="w-14 h-14 rounded-full bg-primary-light items-center justify-center flex-shrink-0">
+                      <Text className="text-xl font-bold text-primary">
+                        {(() => {
+                          const nameStr = `${data.owner_name || ''} ${data.owner_surname || ''}`.trim();
+                          const letter = nameStr ? nameStr[0] : (data.owner_phone ? 'Т' : 'А');
+                          return letter.toUpperCase();
+                        })()}
+                      </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
+
+                    {/* Right: Info */}
+                    <View className="flex-1 gap-1">
+                      <Text className="text-xl font-bold text-ink leading-tight">
+                        {(() => {
+                          const nameStr = `${data.owner_name || ''} ${data.owner_surname || ''}`.trim();
+                          return nameStr || 'Арендодатель';
+                        })()}
+                      </Text>
+                      
+                      {/* Rating row */}
+                      <View className="flex-row items-center gap-1.5 mt-0.5">
+                        <Text className="text-sm font-semibold text-ink">
+                          {data.owner_rating > 0 ? data.owner_rating.toFixed(1) : '0.0'}
+                        </Text>
+                        <View className="flex-row items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Ionicons
+                              key={star}
+                              name="star"
+                              size={12}
+                              color={star <= Math.round(data.owner_rating || 0) ? '#FFB400' : '#E4E4E7'}
+                            />
+                          ))}
+                        </View>
+                        <Text className="text-sm text-ink-secondary">
+                          {formatReviewsPlural(data.owner_reviews_count || 0)}
+                        </Text>
+                      </View>
+
+                      {/* Active listings count */}
+                      <Text className="text-sm text-ink-secondary">
+                        {formatListingsPlural(data.owner_listings_count || 0)}
+                      </Text>
+
+                      {/* Subscribe link */}
+                      {!isOwnListing && (
+                        <Pressable onPress={() => setIsSubscribed(!isSubscribed)} className="mt-1 active:opacity-70">
+                          <Text className={`text-sm font-semibold ${isSubscribed ? 'text-ink-muted' : 'text-primary'}`}>
+                            {isSubscribed ? 'Вы подписаны' : 'Подписаться'}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
-                  <View className="flex-row items-center justify-between p-4 border-b border-line">
-                    <View className="flex-row items-center gap-3">
-                      <Ionicons name="time-outline" size={20} color={palette.primary} />
-                      <Text className="text-sm font-semibold text-ink">Выезд до 12:00</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
-                  </View>
-                  <View className="flex-row items-center justify-between p-4">
-                    <View className="flex-row items-center gap-3">
-                      <Ionicons name="ban-outline" size={20} color={palette.primary} />
-                      <Text className="text-sm font-semibold text-ink">Курение запрещено</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
+
+                  {/* Badges block */}
+                  <View className="flex-row flex-wrap gap-2 mt-3 border-t border-line/60 pt-3">
+                    {data.owner_is_verified && (
+                      <View className="bg-success-light px-3 py-1 rounded-pill">
+                        <Text className="text-xs font-semibold text-success">Документы проверены</Text>
+                      </View>
+                    )}
+                    {data.owner_phone ? (
+                      <View className="bg-primary-light px-3 py-1 rounded-pill">
+                        <Text className="text-xs font-semibold text-primary">Телефон подтвержден</Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -318,3 +507,33 @@ export default function ListingDetailScreen() {
     </View>
   );
 }
+
+const formatReviewsPlural = (count: number) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 19) {
+    return `${count} отзывов`;
+  }
+  if (mod10 === 1) {
+    return `${count} отзыв`;
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return `${count} отзыва`;
+  }
+  return `${count} отзывов`;
+};
+
+const formatListingsPlural = (count: number) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod100 >= 11 && mod100 <= 19) {
+    return `${count} объявлений`;
+  }
+  if (mod10 === 1) {
+    return `${count} объявление`;
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return `${count} объявления`;
+  }
+  return `${count} объявлений`;
+};

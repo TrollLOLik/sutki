@@ -3,8 +3,11 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
@@ -26,6 +29,35 @@ func nonNil(ids []int32) []int32 {
 		return []int32{}
 	}
 	return ids
+}
+
+func pgTimePtr(s *string) pgtype.Time {
+	if s == nil || *s == "" {
+		return pgtype.Time{Valid: false}
+	}
+	parts := strings.Split(*s, ":")
+	if len(parts) < 2 {
+		return pgtype.Time{Valid: false}
+	}
+	var hours, minutes int64
+	fmt.Sscanf(parts[0], "%d", &hours)
+	fmt.Sscanf(parts[1], "%d", &minutes)
+	usec := (hours*3600 + minutes*60) * 1000000
+	return pgtype.Time{
+		Microseconds: usec,
+		Valid:        true,
+	}
+}
+
+func pgTimeToStringPtr(pgTime pgtype.Time) *string {
+	if !pgTime.Valid {
+		return nil
+	}
+	totalSeconds := pgTime.Microseconds / 1000000
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	str := fmt.Sprintf("%02d:%02d", hours, minutes)
+	return &str
 }
 
 func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]domain.House, error) {
@@ -61,13 +93,19 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 			City:         row.Country,
 			Status:       row.Status,
 			MaxGuests:    row.MaxGuests,
-			Lat:          row.Lat,
-			Lng:          row.Lng,
-			Views:        row.Views,
-			CoverPath:    row.CoverPath,
-			CreatedAt:    row.CreatedAt.Time,
-			Rating:       row.Rating,
-			ReviewsCount: row.ReviewsCount,
+			Lat:            row.Lat,
+			Lng:            row.Lng,
+			Views:          row.Views,
+			CoverPath:      row.CoverPath,
+			CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
+			CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
+			SmokingAllowed: row.SmokingAllowed,
+			PetsAllowed:    row.PetsAllowed,
+			ChildrenAllowed: row.ChildrenAllowed,
+			EventsAllowed:   row.EventsAllowed,
+			CreatedAt:      row.CreatedAt.Time,
+			Rating:         row.Rating,
+			ReviewsCount:   row.ReviewsCount,
 		})
 	}
 	return houses, nil
@@ -86,9 +124,15 @@ func (r *ListingRepo) Create(ctx context.Context, h domain.NewHouse) (int32, err
 		NumberRoom:  h.NumberRoom,
 		Area:        h.Area,
 		Country:     h.City,
-		Lat:         h.Lat,
-		Lng:         h.Lng,
-		MaxGuests:   h.MaxGuests,
+		Lat:            h.Lat,
+		Lng:            h.Lng,
+		MaxGuests:      h.MaxGuests,
+		CheckInAfter:   pgTimePtr(h.CheckInAfter),
+		CheckOutBefore: pgTimePtr(h.CheckOutBefore),
+		SmokingAllowed: h.SmokingAllowed,
+		PetsAllowed:    h.PetsAllowed,
+		ChildrenAllowed: h.ChildrenAllowed,
+		EventsAllowed:   h.EventsAllowed,
 	})
 	if err != nil {
 		return 0, err
@@ -129,13 +173,19 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 			City:         row.Country,
 			Status:       row.Status,
 			MaxGuests:    row.MaxGuests,
-			Lat:          row.Lat,
-			Lng:          row.Lng,
-			Views:        row.Views,
-			CoverPath:    row.CoverPath,
-			CreatedAt:    row.CreatedAt.Time,
-			Rating:       row.Rating,
-			ReviewsCount: row.ReviewsCount,
+			Lat:            row.Lat,
+			Lng:            row.Lng,
+			Views:          row.Views,
+			CoverPath:      row.CoverPath,
+			CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
+			CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
+			SmokingAllowed: row.SmokingAllowed,
+			PetsAllowed:    row.PetsAllowed,
+			ChildrenAllowed: row.ChildrenAllowed,
+			EventsAllowed:   row.EventsAllowed,
+			CreatedAt:      row.CreatedAt.Time,
+			Rating:         row.Rating,
+			ReviewsCount:   row.ReviewsCount,
 		})
 	}
 	return houses, nil
@@ -170,24 +220,38 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		return domain.House{}, err
 	}
 	h := domain.House{
-		ID:           row.ID,
-		OwnerID:      row.OwnerID,
-		Street:       row.Street,
-		HouseNumber:  row.HouseNumber,
-		Description:  row.Description,
-		Price:        row.Price,
-		CountRoom:    row.CountRoom,
-		Area:         row.Area,
-		City:         row.Country,
-		Status:       row.Status,
-		MaxGuests:    row.MaxGuests,
-		Lat:          row.Lat,
-		Lng:          row.Lng,
-		Views:        row.Views,
-		CreatedAt:    row.CreatedAt.Time,
-		UpdatedAt:    row.UpdatedAt.Time,
-		Rating:       row.Rating,
-		ReviewsCount: row.ReviewsCount,
+		ID:                 row.ID,
+		OwnerID:            row.OwnerID,
+		OwnerName:          stringFromPtr(row.OwnerName),
+		OwnerSurname:       stringFromPtr(row.OwnerSurname),
+		OwnerPhone:         stringFromPtr(row.OwnerPhone),
+		OwnerAvatarURL:     stringFromPtr(row.OwnerAvatarUrl),
+		OwnerRating:        row.OwnerRating,
+		OwnerReviewsCount:  row.OwnerReviewsCount,
+		OwnerListingsCount: row.OwnerListingsCount,
+		OwnerIsVerified:    row.OwnerIsVerified,
+		Street:         row.Street,
+		HouseNumber:    row.HouseNumber,
+		Description:    row.Description,
+		Price:          row.Price,
+		CountRoom:      row.CountRoom,
+		Area:           row.Area,
+		City:           row.Country,
+		Status:         row.Status,
+		MaxGuests:      row.MaxGuests,
+		Lat:            row.Lat,
+		Lng:            row.Lng,
+		Views:          row.Views,
+		CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
+		CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
+		SmokingAllowed: row.SmokingAllowed,
+		PetsAllowed:    row.PetsAllowed,
+		ChildrenAllowed: row.ChildrenAllowed,
+		EventsAllowed:   row.EventsAllowed,
+		CreatedAt:      row.CreatedAt.Time,
+		UpdatedAt:      row.UpdatedAt.Time,
+		Rating:         row.Rating,
+		ReviewsCount:   row.ReviewsCount,
 	}
 	if row.NumberRoom != nil {
 		h.NumberRoom = *row.NumberRoom
@@ -268,11 +332,17 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 		NumberRoom:  h.NumberRoom,
 		Area:        h.Area,
 		Country:     h.City,
-		Lat:         h.Lat,
-		Lng:         h.Lng,
-		MaxGuests:   h.MaxGuests,
-		ID:          id,
-		OwnerID:     h.OwnerID,
+		Lat:            h.Lat,
+		Lng:            h.Lng,
+		MaxGuests:      h.MaxGuests,
+		CheckInAfter:   pgTimePtr(h.CheckInAfter),
+		CheckOutBefore: pgTimePtr(h.CheckOutBefore),
+		SmokingAllowed: h.SmokingAllowed,
+		PetsAllowed:    h.PetsAllowed,
+		ChildrenAllowed: h.ChildrenAllowed,
+		EventsAllowed:   h.EventsAllowed,
+		ID:             id,
+		OwnerID:        h.OwnerID,
 	})
 	if err != nil {
 		return err
@@ -300,4 +370,11 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 	}
 
 	return nil
+}
+
+func stringFromPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
