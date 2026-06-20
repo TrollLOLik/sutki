@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { EmailChangeSheet } from '@/components/EmailChangeSheet';
+import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
 import { Button } from '@/components/ui';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 import { useUpdateMe } from '@/lib/api/auth';
@@ -170,6 +171,7 @@ export default function ProfileScreen() {
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [birthdayPickerVisible, setBirthdayPickerVisible] = useState(false);
   const [emailChangeVisible, setEmailChangeVisible] = useState(false);
+  const [deleteSheetVisible, setDeleteSheetVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -284,28 +286,7 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Удаление аккаунта',
-      'Вы уверены, что хотите безвозвратно удалить свой аккаунт? Это действие нельзя отменить.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('Успешно', 'Запрос на удаление аккаунта отправлен. Вы будете разлогинены.', [
-              {
-                text: 'OK',
-                onPress: () => {
-                  closeSettings();
-                  signOut();
-                },
-              },
-            ]);
-          },
-        },
-      ]
-    );
+    setDeleteSheetVisible(true);
   };
 
   const displayName = user?.name || 'Гость';
@@ -413,6 +394,12 @@ export default function ProfileScreen() {
             title="Входящие заявки"
             subtitle="Новые запросы гостей и подтверждения"
             onPress={() => router.push('/incoming')}
+          />
+          <ProfileAction
+            icon="star-outline"
+            title="Мои отзывы"
+            subtitle="Отзывы, которые вы оставили или получили"
+            onPress={() => router.push('/my-reviews' as any)}
           />
         </View>
 
@@ -754,6 +741,10 @@ export default function ProfileScreen() {
             <EmailChangeSheet
               visible={emailChangeVisible}
               onClose={() => setEmailChangeVisible(false)}
+            />
+            <AccountDeleteSheet
+              visible={deleteSheetVisible}
+              onClose={() => setDeleteSheetVisible(false)}
             />
           </Animated.View>
         </View>

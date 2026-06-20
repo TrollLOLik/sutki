@@ -109,3 +109,31 @@ export function useConfirmEmailChange() {
   });
 }
 
+/** Check if the current user has any active bookings blocking account deletion. */
+export function checkDeleteMe(): Promise<{ has_active_bookings: boolean }> {
+  return api.get<{ has_active_bookings: boolean }>('/api/v1/me/delete/check');
+}
+
+/** Request a 6-digit confirmation code to be sent to the user's email for deletion verification. */
+export function requestDeleteMeCode(): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/delete/request');
+}
+
+/** Confirm account deletion with the 6-digit code. */
+export function confirmDeleteMe(code: string): Promise<void> {
+  return api.post<void>('/api/v1/me/delete/confirm', { code });
+}
+
+export function useCheckDeleteMe() {
+  return useMutation({ mutationFn: checkDeleteMe });
+}
+
+export function useRequestDeleteMeCode() {
+  return useMutation({ mutationFn: requestDeleteMeCode });
+}
+
+export function useConfirmDeleteMe() {
+  return useMutation({ mutationFn: (code: string) => confirmDeleteMe(code) });
+}
+
+

@@ -43,3 +43,10 @@ var (
 	// range or empty body).
 	ErrInvalidReview = errors.New("invalid review")
 )
+
+// Account deletion errors.
+var (
+	// ErrActiveBookings is returned when a user attempts to delete their account with active bookings.
+	ErrActiveBookings = errors.New("cannot delete account with active bookings")
+)
+

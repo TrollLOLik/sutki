@@ -164,3 +164,99 @@ func (h *ReviewHandler) mediaURL(p string) string {
 	clean = strings.TrimLeft(clean, "/")
 	return strings.TrimRight(h.mediaBaseURL, "/") + "/" + clean
 }
+
+type userReviewDTO struct {
+	ID              int32  `json:"id"`
+	Rating          int32  `json:"rating"`
+	Body            string `json:"body"`
+	AuthorName      string `json:"author_name,omitempty"`
+	AuthorAvatarURL string `json:"author_avatar_url,omitempty"`
+	CreatedAt       string `json:"created_at"`
+	HouseID         int32  `json:"house_id"`
+	HouseStreet     string `json:"house_street"`
+	HouseNumber     string `json:"house_number"`
+	HouseCity       string `json:"house_city"`
+	HouseCoverURL   string `json:"house_cover_url"`
+}
+
+type userReviewsListResponse struct {
+	Items  []userReviewDTO `json:"items"`
+	Total  int64           `json:"total"`
+	Limit  int32           `json:"limit"`
+	Offset int32           `json:"offset"`
+}
+
+// ListMineWritten returns reviews written by the authenticated user.
+// GET /api/v1/me/reviews/written (authenticated).
+func (h *ReviewHandler) ListMineWritten(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	res, err := h.svc.ListByAuthor(r.Context(), userID,
+		parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	items := make([]userReviewDTO, 0, len(res.Items))
+	for _, rv := range res.Items {
+		items = append(items, h.userReviewDTO(rv))
+	}
+	writeJSON(w, http.StatusOK, userReviewsListResponse{
+		Items:  items,
+		Total:  res.Total,
+		Limit:  res.Limit,
+		Offset: res.Offset,
+	})
+}
+
+// ListMineReceived returns reviews left on the authenticated host's listings.
+// GET /api/v1/me/reviews/received (authenticated).
+func (h *ReviewHandler) ListMineReceived(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	res, err := h.svc.ListForHost(r.Context(), userID,
+		parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	items := make([]userReviewDTO, 0, len(res.Items))
+	for _, rv := range res.Items {
+		items = append(items, h.userReviewDTO(rv))
+	}
+	writeJSON(w, http.StatusOK, userReviewsListResponse{
+		Items:  items,
+		Total:  res.Total,
+		Limit:  res.Limit,
+		Offset: res.Offset,
+	})
+}
+
+func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
+	createdAt := ""
+	if !rv.CreatedAt.IsZero() {
+		createdAt = rv.CreatedAt.UTC().Format(time.RFC3339)
+	}
+	return userReviewDTO{
+		ID:              rv.ID,
+		Rating:          rv.Rating,
+		Body:            rv.Body,
+		AuthorName:      rv.AuthorName,
+		AuthorAvatarURL: h.mediaURL(rv.AuthorAvatarURL),
+		CreatedAt:       createdAt,
+		HouseID:         rv.HouseID,
+		HouseStreet:     rv.HouseStreet,
+		HouseNumber:     rv.HouseNumber,
+		HouseCity:       rv.HouseCity,
+		HouseCoverURL:   h.mediaURL(rv.HouseCoverPath),
+	}
+}
+

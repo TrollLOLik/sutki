@@ -259,6 +259,87 @@ func (s *Service) DeleteUser(ctx context.Context, id int32) error {
 	return s.users.Delete(ctx, id)
 }
 
+// CheckDeleteAccount checks if the user has any active bookings.
+func (s *Service) CheckDeleteAccount(ctx context.Context, userID int32) (bool, error) {
+	count, err := s.users.CheckActiveBookings(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// RequestDeleteAccountCode requests a confirmation code for deleting the account.
+func (s *Service) RequestDeleteAccountCode(ctx context.Context, userID int32) (RequestCodeResult, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+
+	hasActive, err := s.CheckDeleteAccount(ctx, userID)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	if hasActive {
+		return RequestCodeResult{}, domain.ErrActiveBookings
+	}
+
+	return s.RequestCode(ctx, user.Email)
+}
+
+// ConfirmDeleteAccount confirms deletion by verifying the code and then performing anonymization.
+func (s *Service) ConfirmDeleteAccount(ctx context.Context, userID int32, code string) error {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	hasActive, err := s.CheckDeleteAccount(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if hasActive {
+		return domain.ErrActiveBookings
+	}
+
+	email, err := normalizeEmail(user.Email)
+	if err != nil {
+		return err
+	}
+	code = strings.TrimSpace(code)
+
+	rec, err := s.codes.Get(ctx, email)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrCodeInvalid
+		}
+		return err
+	}
+	if rec.Attempts >= maxAttempts {
+		return domain.ErrTooManyAttempts
+	}
+	if s.now().After(rec.ExpiresAt) {
+		_ = s.codes.Delete(ctx, email)
+		return domain.ErrCodeExpired
+	}
+	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
+		_ = s.codes.IncrementAttempts(ctx, email)
+		return domain.ErrCodeInvalid
+	}
+
+	_ = s.codes.Delete(ctx, email)
+
+	h := sha256.New()
+	h.Write([]byte(email))
+	emailHash := hex.EncodeToString(h.Sum(nil))
+
+	if err := s.users.AnonymizeAndRevoke(ctx, userID, emailHash); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+
 // trimPtr trims a non-nil string pointer in place, leaving nil pointers as-is.
 func trimPtr(s *string) *string {
 	if s == nil {

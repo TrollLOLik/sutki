@@ -36,3 +36,25 @@ export interface CreateReviewBody {
   rating: number;
   body: string;
 }
+
+export interface UserReview {
+  id: number;
+  rating: number;
+  body: string;
+  author_name?: string;
+  author_avatar_url?: string;
+  created_at: string;
+  house_id: number;
+  house_street: string;
+  house_number: string;
+  house_city: string;
+  house_cover_url: string;
+}
+
+export interface UserReviewsPage {
+  items: UserReview[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+

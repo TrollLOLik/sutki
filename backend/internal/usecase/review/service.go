@@ -88,3 +88,38 @@ func (s *Service) Create(ctx context.Context, r domain.NewReview) (domain.Review
 	}
 	return s.repo.Create(ctx, r)
 }
+
+// UserReviewsResult is a page of reviews left by a user or received by a host.
+type UserReviewsResult struct {
+	Items  []domain.Review `json:"items"`
+	Total  int64           `json:"total"`
+	Limit  int32           `json:"limit"`
+	Offset int32           `json:"offset"`
+}
+
+func (s *Service) ListByAuthor(ctx context.Context, userID, limit, offset int32) (UserReviewsResult, error) {
+	limit, offset = clamp(limit, offset)
+	items, err := s.repo.ListByAuthor(ctx, userID, limit, offset)
+	if err != nil {
+		return UserReviewsResult{}, err
+	}
+	total, err := s.repo.CountByAuthor(ctx, userID)
+	if err != nil {
+		return UserReviewsResult{}, err
+	}
+	return UserReviewsResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (s *Service) ListForHost(ctx context.Context, userID, limit, offset int32) (UserReviewsResult, error) {
+	limit, offset = clamp(limit, offset)
+	items, err := s.repo.ListForHost(ctx, userID, limit, offset)
+	if err != nil {
+		return UserReviewsResult{}, err
+	}
+	total, err := s.repo.CountForHost(ctx, userID)
+	if err != nil {
+		return UserReviewsResult{}, err
+	}
+	return UserReviewsResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+}
+

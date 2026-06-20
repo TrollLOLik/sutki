@@ -12,18 +12,23 @@ type Querier interface {
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	AddHouseCategory(ctx context.Context, arg AddHouseCategoryParams) error
 	AddHouseService(ctx context.Context, arg AddHouseServiceParams) error
+	AnonymizeUser(ctx context.Context, id int32) error
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
+	CheckUserActiveBookings(ctx context.Context, userID *int32) (int64, error)
 	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
 	CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
 	CountRequestsByUser(ctx context.Context, arg CountRequestsByUserParams) (int64, error)
 	CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error)
+	CountReviewsByAuthor(ctx context.Context, ownerID int32) (int64, error)
 	CountReviewsByHouse(ctx context.Context, houseID int32) (int64, error)
+	CountReviewsForHost(ctx context.Context, ownerID int32) (int64, error)
 	// Creates a new listing owned by the given user. New listings are published
 	// immediately (status='active') for the MVP; the one-time publication fee is a
 	// front-end stub until YooKassa is wired (then `pay` flips via webhook).
 	CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error)
+	CreatePersonalDataRevocation(ctx context.Context, arg CreatePersonalDataRevocationParams) error
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
@@ -32,6 +37,9 @@ type Querier interface {
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
 	DeleteHouseServices(ctx context.Context, houseID int32) error
 	DeleteUser(ctx context.Context, id int32) error
+	DeleteUserDeviceTokens(ctx context.Context, userID int32) error
+	DeleteUserFavorites(ctx context.Context, userID int32) error
+	DeleteUserRefreshTokens(ctx context.Context, userID int32) error
 	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
@@ -60,11 +68,14 @@ type Querier interface {
 	ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error)
 	ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error)
 	ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error)
+	ListReviewsByAuthor(ctx context.Context, arg ListReviewsByAuthorParams) ([]ListReviewsByAuthorRow, error)
 	ListReviewsByHouse(ctx context.Context, arg ListReviewsByHouseParams) ([]ListReviewsByHouseRow, error)
+	ListReviewsForHost(ctx context.Context, arg ListReviewsForHostParams) ([]ListReviewsForHostRow, error)
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
 	ReviewSummaryByHouse(ctx context.Context, houseID int32) (ReviewSummaryByHouseRow, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	SoftDeleteUserHouses(ctx context.Context, ownerID int32) error
 	// Updates a listing owned by the given user. Returns the number of affected
 	// rows so the caller can distinguish "not found / not owner" (0) from success.
 	UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error)

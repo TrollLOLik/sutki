@@ -323,3 +323,83 @@ func (h *AuthHandler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, toUserDTO(user))
 }
 
+func (h *AuthHandler) CheckDeleteMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	hasActive, err := h.svc.CheckDeleteAccount(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"has_active_bookings": hasActive})
+}
+
+func (h *AuthHandler) RequestDeleteMeCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	res, err := h.svc.RequestDeleteAccountCode(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrActiveBookings) {
+			writeError(w, http.StatusBadRequest, "Невозможно удалить аккаунт: у вас есть активные бронирования.")
+			return
+		}
+		writeAuthErrorRussian(w, err)
+		return
+	}
+	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
+	if res.Exposed {
+		resp["dev_code"] = res.Code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) ConfirmDeleteMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	err := h.svc.ConfirmDeleteAccount(r.Context(), userID, body.Code)
+	if err != nil {
+		if errors.Is(err, domain.ErrActiveBookings) {
+			writeError(w, http.StatusBadRequest, "Невозможно удалить аккаунт: у вас есть активные бронирования.")
+			return
+		}
+		writeAuthErrorRussian(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeAuthErrorRussian(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, domain.ErrInvalidEmail):
+		writeError(w, http.StatusBadRequest, "Некорректный email адрес")
+	case errors.Is(err, domain.ErrCodeInvalid):
+		writeError(w, http.StatusBadRequest, "Неверный код подтверждения")
+	case errors.Is(err, domain.ErrCodeExpired):
+		writeError(w, http.StatusBadRequest, "Срок действия кода истек")
+	case errors.Is(err, domain.ErrTooManyAttempts):
+		writeError(w, http.StatusTooManyRequests, "Превышено количество попыток ввода кода")
+	case errors.Is(err, domain.ErrCodeRequestTooSoon):
+		writeError(w, http.StatusTooManyRequests, "Пожалуйста, подождите перед повторным запросом кода")
+	case errors.Is(err, domain.ErrTokenInvalid):
+		writeError(w, http.StatusUnauthorized, "Неверный токен авторизации")
+	default:
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+	}
+}
+
+

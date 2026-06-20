@@ -67,3 +67,49 @@ SET email = $2,
 WHERE id = $1 AND deleted = false
 RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday;
 
+-- name: CheckUserActiveBookings :one
+SELECT count(*)::bigint
+FROM request r
+JOIN house h ON h.id = r.house_id
+WHERE (r.user_id = $1 OR h.owner_id = $1)
+  AND (
+    r.status = 'in_progress'
+    OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+  );
+
+-- name: CreatePersonalDataRevocation :exec
+INSERT INTO personal_data_revocation (user_id, email_hash, revoked_at)
+VALUES ($1, $2, now());
+
+-- name: SoftDeleteUserHouses :exec
+UPDATE house SET deleted = true, updated_at = now() WHERE owner_id = $1;
+
+-- name: AnonymizeUser :exec
+UPDATE "user" SET
+    email = 'deleted_' || id || '@deleted.sutki.ru',
+    name = 'Удаленный пользователь',
+    surname = '',
+    patronymic = '',
+    password = NULL,
+    google_id = NULL,
+    vk_id = NULL,
+    phone = '',
+    avatar_url = '',
+    birthday = NULL,
+    deleted = true,
+    enable = false,
+    code = NULL,
+    date_code = NULL,
+    updated_at = now()
+WHERE id = $1;
+
+-- name: DeleteUserRefreshTokens :exec
+DELETE FROM refresh_token WHERE user_id = $1;
+
+-- name: DeleteUserFavorites :exec
+DELETE FROM favorite WHERE user_id = $1;
+
+-- name: DeleteUserDeviceTokens :exec
+DELETE FROM device_token WHERE user_id = $1;
+
+

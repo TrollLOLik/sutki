@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api } from '@/lib/api/client';
 import { listingKeys } from '@/lib/api/listings';
-import type { CreateReviewBody, Review, ReviewsPage } from '@/types/review';
+import type { CreateReviewBody, Review, ReviewsPage, UserReviewsPage } from '@/types/review';
 
 export interface ListReviewsParams {
   limit?: number;
@@ -55,3 +55,36 @@ export function useCreateReview(houseId: number) {
     },
   });
 }
+
+export const myReviewKeys = {
+  all: ['my-reviews'] as const,
+  written: (params: ListReviewsParams) => [...myReviewKeys.all, 'written', params] as const,
+  received: (params: ListReviewsParams) => [...myReviewKeys.all, 'received', params] as const,
+};
+
+export function fetchMyWrittenReviews(params: ListReviewsParams = {}): Promise<UserReviewsPage> {
+  return api.get<UserReviewsPage>(`/api/v1/me/reviews/written${buildQuery(params)}`);
+}
+
+export function fetchMyReceivedReviews(params: ListReviewsParams = {}): Promise<UserReviewsPage> {
+  return api.get<UserReviewsPage>(`/api/v1/me/reviews/received${buildQuery(params)}`);
+}
+
+export function useMyWrittenReviews(params: ListReviewsParams = {}, enabled = true) {
+  return useQuery({
+    queryKey: myReviewKeys.written(params),
+    queryFn: () => fetchMyWrittenReviews(params),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMyReceivedReviews(params: ListReviewsParams = {}, enabled = true) {
+  return useQuery({
+    queryKey: myReviewKeys.received(params),
+    queryFn: () => fetchMyReceivedReviews(params),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+

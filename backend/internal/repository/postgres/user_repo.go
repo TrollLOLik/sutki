@@ -139,6 +139,64 @@ func (r *UserRepo) Delete(ctx context.Context, id int32) error {
 	return r.q.DeleteUser(ctx, id)
 }
 
+func (r *UserRepo) CheckActiveBookings(ctx context.Context, id int32) (int64, error) {
+	count, err := r.q.CheckUserActiveBookings(ctx, &id)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *UserRepo) AnonymizeAndRevoke(ctx context.Context, id int32, emailHash string) error {
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	db := r.q.DB()
+	txb, ok := db.(TxBeginner)
+	if !ok {
+		return errors.New("underlying database connection does not support transactions")
+	}
+
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.q.WithTx(tx)
+
+	if err := qtx.CreatePersonalDataRevocation(ctx, sqlc.CreatePersonalDataRevocationParams{
+		UserID:    id,
+		EmailHash: emailHash,
+	}); err != nil {
+		return err
+	}
+
+	if err := qtx.SoftDeleteUserHouses(ctx, id); err != nil {
+		return err
+	}
+
+	if err := qtx.AnonymizeUser(ctx, id); err != nil {
+		return err
+	}
+
+	if err := qtx.DeleteUserRefreshTokens(ctx, id); err != nil {
+		return err
+	}
+
+	if err := qtx.DeleteUserFavorites(ctx, id); err != nil {
+		return err
+	}
+
+	if err := qtx.DeleteUserDeviceTokens(ctx, id); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

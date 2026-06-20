@@ -55,6 +55,10 @@ type ReviewRepository interface {
 	CountByHouse(ctx context.Context, houseID int32) (int64, error)
 	Summary(ctx context.Context, houseID int32) (RatingSummary, error)
 	Create(ctx context.Context, r NewReview) (Review, error)
+	ListByAuthor(ctx context.Context, userID, limit, offset int32) ([]Review, error)
+	CountByAuthor(ctx context.Context, userID int32) (int64, error)
+	ListForHost(ctx context.Context, userID, limit, offset int32) ([]Review, error)
+	CountForHost(ctx context.Context, userID int32) (int64, error)
 }
 
 // FavoriteRepository abstracts persistence for a user's favorite listings.
@@ -75,6 +79,8 @@ type UserRepository interface {
 	UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time) (User, error)
 	UpdateEmail(ctx context.Context, id int32, email string) (User, error)
 	Delete(ctx context.Context, id int32) error
+	CheckActiveBookings(ctx context.Context, id int32) (int64, error)
+	AnonymizeAndRevoke(ctx context.Context, id int32, emailHash string) error
 }
 
 // AuthCodeRepository persists short-lived email login codes.

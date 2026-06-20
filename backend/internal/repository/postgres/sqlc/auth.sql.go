@@ -11,6 +11,64 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const anonymizeUser = `-- name: AnonymizeUser :exec
+UPDATE "user" SET
+    email = 'deleted_' || id || '@deleted.sutki.ru',
+    name = 'Удаленный пользователь',
+    surname = '',
+    patronymic = '',
+    password = NULL,
+    google_id = NULL,
+    vk_id = NULL,
+    phone = '',
+    avatar_url = '',
+    birthday = NULL,
+    deleted = true,
+    enable = false,
+    code = NULL,
+    date_code = NULL,
+    updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) AnonymizeUser(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, anonymizeUser, id)
+	return err
+}
+
+const checkUserActiveBookings = `-- name: CheckUserActiveBookings :one
+SELECT count(*)::bigint
+FROM request r
+JOIN house h ON h.id = r.house_id
+WHERE (r.user_id = $1 OR h.owner_id = $1)
+  AND (
+    r.status = 'in_progress'
+    OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+  )
+`
+
+func (q *Queries) CheckUserActiveBookings(ctx context.Context, userID *int32) (int64, error) {
+	row := q.db.QueryRow(ctx, checkUserActiveBookings, userID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const createPersonalDataRevocation = `-- name: CreatePersonalDataRevocation :exec
+INSERT INTO personal_data_revocation (user_id, email_hash, revoked_at)
+VALUES ($1, $2, now())
+`
+
+type CreatePersonalDataRevocationParams struct {
+	UserID    int32
+	EmailHash string
+}
+
+func (q *Queries) CreatePersonalDataRevocation(ctx context.Context, arg CreatePersonalDataRevocationParams) error {
+	_, err := q.db.Exec(ctx, createPersonalDataRevocation, arg.UserID, arg.EmailHash)
+	return err
+}
+
 const createRefreshToken = `-- name: CreateRefreshToken :exec
 INSERT INTO refresh_token (user_id, token_hash, expires_at, created_at)
 VALUES ($1, $2, $3, now())
@@ -84,6 +142,33 @@ DELETE FROM "user" WHERE id = $1
 
 func (q *Queries) DeleteUser(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
+const deleteUserDeviceTokens = `-- name: DeleteUserDeviceTokens :exec
+DELETE FROM device_token WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserDeviceTokens(ctx context.Context, userID int32) error {
+	_, err := q.db.Exec(ctx, deleteUserDeviceTokens, userID)
+	return err
+}
+
+const deleteUserFavorites = `-- name: DeleteUserFavorites :exec
+DELETE FROM favorite WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserFavorites(ctx context.Context, userID int32) error {
+	_, err := q.db.Exec(ctx, deleteUserFavorites, userID)
+	return err
+}
+
+const deleteUserRefreshTokens = `-- name: DeleteUserRefreshTokens :exec
+DELETE FROM refresh_token WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserRefreshTokens(ctx context.Context, userID int32) error {
+	_, err := q.db.Exec(ctx, deleteUserRefreshTokens, userID)
 	return err
 }
 
@@ -216,6 +301,15 @@ WHERE token_hash = $1 AND revoked_at IS NULL
 
 func (q *Queries) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
 	_, err := q.db.Exec(ctx, revokeRefreshToken, tokenHash)
+	return err
+}
+
+const softDeleteUserHouses = `-- name: SoftDeleteUserHouses :exec
+UPDATE house SET deleted = true, updated_at = now() WHERE owner_id = $1
+`
+
+func (q *Queries) SoftDeleteUserHouses(ctx context.Context, ownerID int32) error {
+	_, err := q.db.Exec(ctx, softDeleteUserHouses, ownerID)
 	return err
 }
 

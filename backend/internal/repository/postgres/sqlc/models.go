@@ -166,6 +166,13 @@ type Payment struct {
 	PaidAt            pgtype.Timestamp
 }
 
+type PersonalDataRevocation struct {
+	ID        int32
+	UserID    int32
+	RevokedAt pgtype.Timestamp
+	EmailHash string
+}
+
 type RefreshToken struct {
 	ID        int64
 	UserID    int32

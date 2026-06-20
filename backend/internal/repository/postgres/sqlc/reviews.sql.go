@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countReviewsByAuthor = `-- name: CountReviewsByAuthor :one
+SELECT count(*)
+FROM review
+WHERE owner_id = $1 AND status = 'active'
+`
+
+func (q *Queries) CountReviewsByAuthor(ctx context.Context, ownerID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, countReviewsByAuthor, ownerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countReviewsByHouse = `-- name: CountReviewsByHouse :one
 SELECT count(*)
 FROM review
@@ -20,6 +33,20 @@ WHERE house_id = $1::int
 
 func (q *Queries) CountReviewsByHouse(ctx context.Context, houseID int32) (int64, error) {
 	row := q.db.QueryRow(ctx, countReviewsByHouse, houseID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countReviewsForHost = `-- name: CountReviewsForHost :one
+SELECT count(*)
+FROM review rv
+JOIN house h ON h.id = rv.house_id
+WHERE h.owner_id = $1 AND rv.status = 'active'
+`
+
+func (q *Queries) CountReviewsForHost(ctx context.Context, ownerID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, countReviewsForHost, ownerID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -92,6 +119,75 @@ func (q *Queries) GetReviewByID(ctx context.Context, id int32) (GetReviewByIDRow
 	return i, err
 }
 
+const listReviewsByAuthor = `-- name: ListReviewsByAuthor :many
+SELECT
+  rv.id,
+  rv.house_id,
+  rv.owner_id AS author_id,
+  rv.rating,
+  rv.body,
+  rv.created_at,
+  h.street AS house_street,
+  h.house_number AS house_number,
+  h.country AS house_city,
+  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
+FROM review rv
+JOIN house h ON h.id = rv.house_id
+WHERE rv.owner_id = $1 AND rv.status = 'active'
+ORDER BY rv.created_at DESC, rv.id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListReviewsByAuthorParams struct {
+	OwnerID      int32
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListReviewsByAuthorRow struct {
+	ID             int32
+	HouseID        int32
+	AuthorID       int32
+	Rating         int32
+	Body           string
+	CreatedAt      pgtype.Timestamp
+	HouseStreet    string
+	HouseNumber    string
+	HouseCity      string
+	HouseCoverPath string
+}
+
+func (q *Queries) ListReviewsByAuthor(ctx context.Context, arg ListReviewsByAuthorParams) ([]ListReviewsByAuthorRow, error) {
+	rows, err := q.db.Query(ctx, listReviewsByAuthor, arg.OwnerID, arg.ResultOffset, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListReviewsByAuthorRow
+	for rows.Next() {
+		var i ListReviewsByAuthorRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.HouseID,
+			&i.AuthorID,
+			&i.Rating,
+			&i.Body,
+			&i.CreatedAt,
+			&i.HouseStreet,
+			&i.HouseNumber,
+			&i.HouseCity,
+			&i.HouseCoverPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReviewsByHouse = `-- name: ListReviewsByHouse :many
 SELECT
   rv.id,
@@ -145,6 +241,82 @@ func (q *Queries) ListReviewsByHouse(ctx context.Context, arg ListReviewsByHouse
 			&i.CreatedAt,
 			&i.AuthorName,
 			&i.AuthorAvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReviewsForHost = `-- name: ListReviewsForHost :many
+SELECT
+  rv.id,
+  rv.house_id,
+  rv.owner_id AS author_id,
+  rv.rating,
+  rv.body,
+  rv.created_at,
+  h.street AS house_street,
+  h.house_number AS house_number,
+  h.country AS house_city,
+  COALESCE(NULLIF(TRIM(COALESCE(u.name, '') || ' ' || COALESCE(u.surname, '')), ''), 'Гость')::text AS author_name,
+  COALESCE(u.avatar_url, '')::text AS author_avatar_url,
+  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
+FROM review rv
+JOIN house h ON h.id = rv.house_id
+LEFT JOIN "user" u ON u.id = rv.owner_id
+WHERE h.owner_id = $1 AND rv.status = 'active'
+ORDER BY rv.created_at DESC, rv.id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListReviewsForHostParams struct {
+	OwnerID      int32
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListReviewsForHostRow struct {
+	ID              int32
+	HouseID         int32
+	AuthorID        int32
+	Rating          int32
+	Body            string
+	CreatedAt       pgtype.Timestamp
+	HouseStreet     string
+	HouseNumber     string
+	HouseCity       string
+	AuthorName      string
+	AuthorAvatarUrl string
+	HouseCoverPath  string
+}
+
+func (q *Queries) ListReviewsForHost(ctx context.Context, arg ListReviewsForHostParams) ([]ListReviewsForHostRow, error) {
+	rows, err := q.db.Query(ctx, listReviewsForHost, arg.OwnerID, arg.ResultOffset, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListReviewsForHostRow
+	for rows.Next() {
+		var i ListReviewsForHostRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.HouseID,
+			&i.AuthorID,
+			&i.Rating,
+			&i.Body,
+			&i.CreatedAt,
+			&i.HouseStreet,
+			&i.HouseNumber,
+			&i.HouseCity,
+			&i.AuthorName,
+			&i.AuthorAvatarUrl,
+			&i.HouseCoverPath,
 		); err != nil {
 			return nil, err
 		}

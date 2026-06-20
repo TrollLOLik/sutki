@@ -86,3 +86,68 @@ func (r *ReviewRepo) Create(ctx context.Context, nr domain.NewReview) (domain.Re
 		CreatedAt:       row.CreatedAt.Time,
 	}, nil
 }
+
+func (r *ReviewRepo) ListByAuthor(ctx context.Context, userID, limit, offset int32) ([]domain.Review, error) {
+	rows, err := r.q.ListReviewsByAuthor(ctx, sqlc.ListReviewsByAuthorParams{
+		OwnerID:      userID,
+		ResultLimit:  limit,
+		ResultOffset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Review, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.Review{
+			ID:             row.ID,
+			HouseID:        row.HouseID,
+			AuthorID:       row.AuthorID,
+			Rating:         row.Rating,
+			Body:           row.Body,
+			CreatedAt:      row.CreatedAt.Time,
+			HouseStreet:    row.HouseStreet,
+			HouseNumber:    row.HouseNumber,
+			HouseCity:      row.HouseCity,
+			HouseCoverPath: row.HouseCoverPath,
+		})
+	}
+	return out, nil
+}
+
+func (r *ReviewRepo) CountByAuthor(ctx context.Context, userID int32) (int64, error) {
+	return r.q.CountReviewsByAuthor(ctx, userID)
+}
+
+func (r *ReviewRepo) ListForHost(ctx context.Context, userID, limit, offset int32) ([]domain.Review, error) {
+	rows, err := r.q.ListReviewsForHost(ctx, sqlc.ListReviewsForHostParams{
+		OwnerID:      userID,
+		ResultLimit:  limit,
+		ResultOffset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Review, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.Review{
+			ID:              row.ID,
+			HouseID:         row.HouseID,
+			AuthorID:        row.AuthorID,
+			AuthorName:      row.AuthorName,
+			AuthorAvatarURL: row.AuthorAvatarUrl,
+			Rating:          row.Rating,
+			Body:            row.Body,
+			CreatedAt:       row.CreatedAt.Time,
+			HouseStreet:     row.HouseStreet,
+			HouseNumber:     row.HouseNumber,
+			HouseCity:       row.HouseCity,
+			HouseCoverPath:  row.HouseCoverPath,
+		})
+	}
+	return out, nil
+}
+
+func (r *ReviewRepo) CountForHost(ctx context.Context, userID int32) (int64, error) {
+	return r.q.CountReviewsForHost(ctx, userID)
+}
+

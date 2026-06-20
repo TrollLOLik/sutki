@@ -15,6 +15,12 @@ type Review struct {
 	Rating          int32
 	Body            string
 	CreatedAt       time.Time
+
+	// Optional house metadata, populated for my reviews pages
+	HouseStreet    string
+	HouseNumber    string
+	HouseCity      string
+	HouseCoverPath string
 }
 
 // RatingSummary aggregates a listing's published reviews. Distribution is
