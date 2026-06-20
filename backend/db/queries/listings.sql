@@ -1,6 +1,7 @@
 -- name: ListHousesFiltered :many
 SELECT
   h.id,
+  h.owner_id,
   h.street,
   h.house_number,
   h.description,

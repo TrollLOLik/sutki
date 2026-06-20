@@ -662,6 +662,7 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 const listHousesFiltered = `-- name: ListHousesFiltered :many
 SELECT
   h.id,
+  h.owner_id,
   h.street,
   h.house_number,
   h.description,
@@ -778,6 +779,7 @@ type ListHousesFilteredParams struct {
 
 type ListHousesFilteredRow struct {
 	ID              int32
+	OwnerID         int32
 	Street          string
 	HouseNumber     string
 	Description     string
@@ -828,6 +830,7 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		var i ListHousesFilteredRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.OwnerID,
 			&i.Street,
 			&i.HouseNumber,
 			&i.Description,

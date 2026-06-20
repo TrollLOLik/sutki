@@ -17,6 +17,7 @@ export interface ListingPhoto {
 
 export interface ListingCard {
   id: number;
+  owner_id: number;
   address: string;
   city: string;
   description: string;

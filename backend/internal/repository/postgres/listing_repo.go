@@ -84,6 +84,7 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 	for _, row := range rows {
 		houses = append(houses, domain.House{
 			ID:           row.ID,
+			OwnerID:      row.OwnerID,
 			Street:       row.Street,
 			HouseNumber:  row.HouseNumber,
 			Description:  row.Description,

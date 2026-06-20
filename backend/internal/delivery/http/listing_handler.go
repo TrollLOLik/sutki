@@ -63,6 +63,7 @@ type photoDTO struct {
 
 type listingCardDTO struct {
 	ID          int32    `json:"id"`
+	OwnerID     int32    `json:"owner_id"`
 	Address     string   `json:"address"`
 	City        string   `json:"city"`
 	Description string   `json:"description"`
@@ -315,6 +316,7 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 	return listingCardDTO{
 		ID:           hs.ID,
+		OwnerID:      hs.OwnerID,
 		Address:      address(hs),
 		City:         hs.City,
 		Description:  hs.Description,

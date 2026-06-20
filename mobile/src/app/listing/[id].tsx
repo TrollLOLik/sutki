@@ -15,9 +15,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { ListingCard } from '@/components/ListingCard';
 import { Button } from '@/components/ui';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
-import { useListing } from '@/lib/api/listings';
+import { useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
@@ -41,6 +42,11 @@ export default function ListingDetailScreen() {
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    setActivePhotoIndex(0);
+    setIsExpanded(false);
+  }, [numericId]);
 
   const isOwnListing = useMemo(() => {
     if (!data || !user) return false;
@@ -139,6 +145,35 @@ export default function ListingDetailScreen() {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
+
+  const similarParams = useMemo<ListListingsParams>(() => {
+    if (!data) return { limit: 0 };
+
+    const rooms = Number.parseInt(data.rooms, 10);
+    const priceWindow = Math.max(Math.round(data.price * 0.25), 1000);
+
+    return {
+      limit: 8,
+      city: data.city || undefined,
+      rooms: Number.isNaN(rooms) ? undefined : [rooms],
+      priceMin: Math.max(0, data.price - priceWindow),
+      priceMax: data.price + priceWindow,
+    };
+  }, [data]);
+
+  const {
+    data: similarData,
+    isLoading: similarLoading,
+    isError: similarError,
+  } = useListings(similarParams, { enabled: !!data });
+
+  const similarListings = useMemo(() => {
+    const items = similarData?.items ?? [];
+    return items
+      .filter((item) => item.id !== numericId)
+      .filter((item) => !user || item.owner_id !== user.id)
+      .slice(0, 4);
+  }, [numericId, similarData?.items, user]);
 
   const onScroll = (event: any) => {
     if (!isMountedRef.current) return;
@@ -486,6 +521,59 @@ export default function ListingDetailScreen() {
                   </Text>
                 </View>
               </View>
+
+              {(similarLoading || (!similarError && similarListings.length > 0)) ? (
+                <View className="border-t border-line pt-4 gap-3">
+                  <View className="flex-row items-end justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="text-base font-bold text-ink">Похожие варианты</Text>
+                      <Text className="mt-1 text-xs text-ink-secondary">
+                        В том же городе и близком бюджете
+                      </Text>
+                    </View>
+                    {similarListings.length > 0 ? (
+                      <View className="rounded-pill bg-primary-light px-3 py-1">
+                        <Text className="text-xs font-bold text-primary">{similarListings.length}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {similarLoading ? (
+                    <View className="gap-3">
+                      {[1, 2].map((item) => (
+                        <View key={item} className="rounded-card border border-line bg-surface p-3">
+                          <View className="flex-row gap-3">
+                            <View className="h-28 w-[45%] rounded-field bg-surface-skeleton" />
+                            <View className="flex-1 justify-between py-1">
+                              <View className="gap-2">
+                                <View className="h-3 w-20 rounded-pill bg-surface-skeleton" />
+                                <View className="h-4 w-full rounded-pill bg-surface-skeleton" />
+                                <View className="h-3 w-28 rounded-pill bg-surface-skeleton" />
+                              </View>
+                              <View className="h-5 w-24 rounded-pill bg-surface-skeleton" />
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View>
+                      {similarListings.map((item) => {
+                        const itemIsFavorite = favoriteIds?.has(item.id) ?? false;
+                        return (
+                          <ListingCard
+                            key={item.id}
+                            listing={item}
+                            isFavorite={itemIsFavorite}
+                            onToggleFavorite={() => toggleFavorite.mutate({ id: item.id, isFavorite: itemIsFavorite })}
+                            onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })}
+                          />
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ) : null}
             </View>
           </ScrollView>
 

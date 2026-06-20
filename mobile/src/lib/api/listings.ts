@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 import { api } from '@/lib/api/client';
 import type { RoomFilter, SearchFilters } from '@/store/filters';
@@ -111,11 +111,15 @@ export function fetchListing(id: number): Promise<ListingDetail> {
   return api.get<ListingDetail>(`/api/v1/listings/${id}`, { auth: false });
 }
 
-export function useListings(params: ListListingsParams = {}) {
+export function useListings(
+  params: ListListingsParams = {},
+  options: Pick<UseQueryOptions<ListingsPage>, 'enabled'> = {},
+) {
   return useQuery({
     queryKey: listingKeys.list(params),
     queryFn: () => fetchListings(params),
     placeholderData: keepPreviousData,
+    ...options,
   });
 }
 
