@@ -45,24 +45,35 @@ type bookingHouseDTO struct {
 	CoverURL string `json:"cover_url"`
 }
 
+type bookingGuestDTO struct {
+	Name         string  `json:"name"`
+	Surname      string  `json:"surname"`
+	AvatarURL    string  `json:"avatar_url"`
+	Phone        string  `json:"phone"`
+	IsVerified   bool    `json:"is_verified"`
+	Rating       float64 `json:"rating"`
+	ReviewsCount int32   `json:"reviews_count"`
+}
+
 type bookingDTO struct {
-	ID              int32            `json:"id"`
-	HouseID         int32            `json:"house_id"`
-	UserID          int32            `json:"user_id"`
-	Name            string           `json:"name"`
-	Surname         string           `json:"surname"`
-	Lastname        string           `json:"lastname"`
-	Count           int32            `json:"count"`
-	Message         string           `json:"message"`
-	Phone           string           `json:"phone"`
-	StartDate       string           `json:"start_date"`
-	EndDate         *string          `json:"end_date"`
-	Status          string           `json:"status"`
-	RejectionReason string           `json:"rejection_reason"`
-	ConfirmedAt     *string          `json:"confirmed_at"`
-	CreatedAt       string           `json:"created_at"`
-	UpdatedAt       string           `json:"updated_at"`
-	House           *bookingHouseDTO `json:"house,omitempty"`
+	ID              int32              `json:"id"`
+	HouseID         int32              `json:"house_id"`
+	UserID          int32              `json:"user_id"`
+	Name            string             `json:"name"`
+	Surname         string             `json:"surname"`
+	Lastname        string             `json:"lastname"`
+	Count           int32              `json:"count"`
+	Message         string             `json:"message"`
+	Phone           string             `json:"phone"`
+	StartDate       string             `json:"start_date"`
+	EndDate         *string            `json:"end_date"`
+	Status          string             `json:"status"`
+	RejectionReason string             `json:"rejection_reason"`
+	ConfirmedAt     *string            `json:"confirmed_at"`
+	CreatedAt       string             `json:"created_at"`
+	UpdatedAt       string             `json:"updated_at"`
+	House           *bookingHouseDTO   `json:"house,omitempty"`
+	Guest           *bookingGuestDTO   `json:"guest,omitempty"`
 }
 
 type bookingListResponse struct {
@@ -330,6 +341,17 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 			City:     b.House.City,
 			Price:    b.House.Price,
 			CoverURL: h.mediaURL(b.House.CoverPath),
+		}
+	}
+	if b.Guest != nil {
+		dto.Guest = &bookingGuestDTO{
+			Name:         b.Guest.Name,
+			Surname:      b.Guest.Surname,
+			AvatarURL:    h.mediaURL(b.Guest.AvatarURL),
+			Phone:        b.Guest.Phone,
+			IsVerified:   b.Guest.IsVerified,
+			Rating:       b.Guest.Rating,
+			ReviewsCount: b.Guest.ReviewsCount,
 		}
 	}
 	return dto

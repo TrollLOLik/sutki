@@ -26,9 +26,28 @@ SELECT
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
   h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
-  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
+  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path,
+  -- guest profile from user table
+  COALESCE(u.name, '')::text       AS guest_name,
+  COALESCE(u.surname, '')::text    AS guest_surname,
+  COALESCE(u.avatar_url, '')::text AS guest_avatar_url,
+  COALESCE(u.phone, '')::text      AS guest_phone_profile,
+  COALESCE(u.is_verified, false)   AS guest_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = r.user_id AND rv.status = 'active'
+  ), 0.0)::float8 AS guest_rating,
+  (
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = r.user_id AND rv.status = 'active'
+  ) AS guest_reviews_count
 FROM request r
 JOIN house h ON h.id = r.house_id
+LEFT JOIN "user" u ON u.id = r.user_id
 WHERE r.id = @id;
 
 -- name: ListRequestsByUser :many

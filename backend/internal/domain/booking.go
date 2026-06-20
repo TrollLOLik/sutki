@@ -33,6 +33,10 @@ type Booking struct {
 	// House is a lightweight summary of the booked listing, populated by
 	// list/detail queries (nil for the create/transition results).
 	House *BookingHouse
+
+	// Guest is the renter's profile data from the user table.
+	// Populated only on the detail query (GET /requests/{id}).
+	Guest *BookingGuest
 }
 
 // BookingHouse is the listing summary attached to a booking.
@@ -44,6 +48,18 @@ type BookingHouse struct {
 	City        string
 	Price       int32
 	CoverPath   string
+}
+
+// BookingGuest is the profile of the user who created the booking,
+// fetched from the user table on the detail endpoint.
+type BookingGuest struct {
+	Name         string
+	Surname      string
+	AvatarURL    string
+	Phone        string
+	IsVerified   bool
+	Rating       float64
+	ReviewsCount int32
 }
 
 // NewBooking carries the validated fields needed to create a booking.

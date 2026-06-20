@@ -266,48 +266,117 @@ export default function IncomingBookingDetailScreen() {
               })() : null}
 
               {/* Контакты гостя */}
-              <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 16, gap: 12 }}>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+              <View style={{ backgroundColor: palette.surface }}>
+                <Text style={{
+                  fontSize: 15, fontWeight: '700', color: palette.ink,
+                  paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
+                }}>
                   Контакты гостя
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+
+                {/* Avatar + name row */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  paddingHorizontal: 16, paddingBottom: 14, gap: 14,
+                }}>
                   {/* Avatar */}
-                  <View
-                    style={{
-                      width: 48, height: 48,
-                      borderRadius: 24,
-                      backgroundColor: palette.surfaceMuted,
-                      alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Ionicons name="person" size={22} color={palette.inkMuted} />
+                  <View style={{
+                    width: 56, height: 56, borderRadius: 28,
+                    backgroundColor: palette.surfaceMuted,
+                    overflow: 'hidden', flexShrink: 0,
+                  }}>
+                    {data.guest?.avatar_url ? (
+                      <Image
+                        source={{ uri: data.guest.avatar_url }}
+                        style={{ width: 56, height: 56 }}
+                        contentFit="cover"
+                        transition={150}
+                      />
+                    ) : (
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="person" size={26} color={palette.inkMuted} />
+                      </View>
+                    )}
                   </View>
-                  {/* Name + rating + phone */}
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
-                        {fullName(data.name, data.surname, data.lastname)}
+
+                  {/* Name + verified + rating */}
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>
+                        {data.guest
+                          ? fullName(data.guest.name, data.guest.surname, '')
+                          : fullName(data.name, data.surname, data.lastname)}
                       </Text>
-                      <Ionicons name="star" size={13} color="#FFB400" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: palette.ink }}>4.8</Text>
+                      {data.guest?.is_verified && (
+                        <View style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 3,
+                          backgroundColor: '#E8F5E9', borderRadius: 999,
+                          paddingHorizontal: 7, paddingVertical: 2,
+                        }}>
+                          <Ionicons name="checkmark-circle" size={13} color="#2EAD6B" />
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#2EAD6B' }}>
+                            Верифицирован
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                    <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
-                      {data.phone || '+7 *** ***-**-**'}
-                    </Text>
+
+                    {/* Rating */}
+                    {data.guest && data.guest.reviews_count > 0 ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="star" size={13} color="#FFB400" />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: palette.ink }}>
+                          {data.guest.rating.toFixed(1)}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: palette.inkMuted }}>
+                          · {data.guest.reviews_count} {reviewWord(data.guest.reviews_count)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 12, color: palette.inkMuted }}>Нет отзывов</Text>
+                    )}
                   </View>
                 </View>
-                {data.message ? (
-                  <View style={{ marginTop: 4, backgroundColor: palette.surfaceMuted, padding: 12, borderRadius: 8 }}>
-                    <Text style={{ fontSize: 13, color: palette.inkSecondary, fontWeight: '600', marginBottom: 2 }}>
-                      Комментарий гостя
-                    </Text>
-                    <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 18 }}>
-                      {data.message}
-                    </Text>
+
+                {/* Divider */}
+                <View style={{ height: 1, backgroundColor: palette.line, marginHorizontal: 16 }} />
+
+                {/* Phone */}
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+                }}>
+                  <View style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: palette.surfaceMuted,
+                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Ionicons name="call-outline" size={18} color={palette.inkSecondary} />
                   </View>
+                  <Text style={{ flex: 1, fontSize: 14, color: palette.inkSecondary }}>Телефон</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: palette.ink }}>
+                    {(data.guest?.phone && data.guest.phone !== '')
+                      ? data.guest.phone
+                      : (data.phone || '—')}
+                  </Text>
+                </View>
+
+                {/* Guest comment */}
+                {data.message ? (
+                  <>
+                    <View style={{ height: 1, backgroundColor: palette.line, marginHorizontal: 16 }} />
+                    <View style={{ paddingHorizontal: 16, paddingVertical: 14, gap: 4 }}>
+                      <Text style={{ fontSize: 12, color: palette.inkMuted, fontWeight: '600' }}>
+                        Комментарий
+                      </Text>
+                      <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 20 }}>
+                        {data.message}
+                      </Text>
+                    </View>
+                  </>
                 ) : null}
               </View>
+
 
               {/* Правила отмены */}
               <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 16, gap: 6 }}>
@@ -517,4 +586,14 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
       </Text>
     </View>
   );
+}
+
+/** Russian pluralisation for «отзыв». */
+function reviewWord(n: number): string {
+  const abs = Math.abs(n) % 100;
+  const mod = abs % 10;
+  if (abs >= 11 && abs <= 19) return 'отзывов';
+  if (mod === 1) return 'отзыв';
+  if (mod >= 2 && mod <= 4) return 'отзыва';
+  return 'отзывов';
 }

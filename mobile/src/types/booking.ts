@@ -16,6 +16,17 @@ export interface BookingHouse {
   cover_url: string;
 }
 
+/** Guest profile from the user table, available on the detail endpoint. */
+export interface BookingGuest {
+  name: string;
+  surname: string;
+  avatar_url: string;
+  phone: string;
+  is_verified: boolean;
+  rating: number;
+  reviews_count: number;
+}
+
 export interface Booking {
   id: number;
   house_id: number;
@@ -38,6 +49,8 @@ export interface Booking {
   created_at: string;
   updated_at: string;
   house?: BookingHouse;
+  /** Guest profile from user table; only present on GET /requests/{id}. */
+  guest?: BookingGuest;
 }
 
 export interface BookingsPage {
