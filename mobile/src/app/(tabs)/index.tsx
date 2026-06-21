@@ -27,7 +27,7 @@ import { CalendarRange, type DateRange } from '@/components/CalendarRange';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
-import { Button, Chip } from '@/components/ui';
+import { Button, Chip, BottomSheet } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
@@ -185,84 +185,24 @@ export default function SearchScreen() {
   const [tempRange, setTempRange] = useState<DateRange>({ start: null, end: null });
   const [tempGuests, setTempGuests] = useState(filters.guests);
 
-  const dateFade = useRef(new Animated.Value(0)).current;
-  const dateSlide = useRef(new Animated.Value(600)).current;
-
-  const guestFade = useRef(new Animated.Value(0)).current;
-  const guestSlide = useRef(new Animated.Value(400)).current;
-
   const openDateModal = () => {
     const start = filters.checkIn ? parseISO(filters.checkIn) : null;
     const end = filters.checkOut ? parseISO(filters.checkOut) : null;
     setTempRange({ start, end });
     setDateModalVisible(true);
-    Animated.parallel([
-      Animated.timing(dateFade, {
-        toValue: 0.4,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(dateSlide, {
-        toValue: 0,
-        duration: 250,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const closeDateModal = () => {
-    Animated.parallel([
-      Animated.timing(dateFade, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(dateSlide, {
-        toValue: 600,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setDateModalVisible(false);
-    });
+    setDateModalVisible(false);
   };
 
   const openGuestModal = () => {
     setTempGuests(filters.guests);
     setGuestModalVisible(true);
-    Animated.parallel([
-      Animated.timing(guestFade, {
-        toValue: 0.4,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(guestSlide, {
-        toValue: 0,
-        duration: 250,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const closeGuestModal = () => {
-    Animated.parallel([
-      Animated.timing(guestFade, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(guestSlide, {
-        toValue: 400,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setGuestModalVisible(false);
-    });
+    setGuestModalVisible(false);
   };
 
   const handleApplyDates = () => {
@@ -545,125 +485,65 @@ export default function SearchScreen() {
       )}
 
       {/* Date Picker Bottom Sheet Modal */}
-      {dateModalVisible && (
-        <Modal visible={true} transparent animationType="none">
-          <View className="flex-1 justify-end">
-            {/* Animated Backdrop */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'black',
-                opacity: dateFade,
-              }}
-            >
-              <Pressable style={{ flex: 1 }} onPress={closeDateModal} />
-            </Animated.View>
+      <BottomSheet visible={dateModalVisible} onClose={closeDateModal}>
+        {/* Header */}
+        <View className="flex-row items-center justify-between pb-4 border-b border-line mb-4">
+          <TouchableOpacity onPress={() => setTempRange({ start: null, end: null })} className="min-w-[80px] py-1">
+            <Text className="text-sm font-semibold text-primary">Сбросить</Text>
+          </TouchableOpacity>
+          <Text className="text-lg font-bold text-ink">Выберите даты</Text>
+          <TouchableOpacity onPress={closeDateModal} className="min-w-[80px] py-1 items-end">
+            <Ionicons name="close" size={24} color={palette.ink} />
+          </TouchableOpacity>
+        </View>
 
-            {/* Animated Bottom Sheet Container */}
-            <Animated.View
-              style={{
-                transform: [{ translateY: dateSlide }],
-                backgroundColor: palette.surface,
-                borderTopLeftRadius: radii.card,
-                borderTopRightRadius: radii.card,
-              }}
-              className="px-4 pb-8 pt-4"
-            >
-              {/* Header */}
-              <View className="flex-row items-center justify-between pb-4 border-b border-line mb-4">
-                <TouchableOpacity onPress={() => setTempRange({ start: null, end: null })} className="min-w-[80px] py-1">
-                  <Text className="text-sm font-semibold text-primary">Сбросить</Text>
-                </TouchableOpacity>
-                <Text className="text-lg font-bold text-ink">Выберите даты</Text>
-                <TouchableOpacity onPress={closeDateModal} className="min-w-[80px] py-1 items-end">
-                  <Ionicons name="close" size={24} color={palette.ink} />
-                </TouchableOpacity>
-              </View>
+        {/* Calendar component from booking screen */}
+        <View className="py-2">
+          <CalendarRange value={tempRange} onChange={setTempRange} />
+        </View>
 
-              {/* Calendar component from booking screen */}
-              <View className="py-2">
-                <CalendarRange value={tempRange} onChange={setTempRange} />
-              </View>
-
-              {/* Apply Button */}
-              <View className="mt-4">
-                <Button label="Применить" onPress={handleApplyDates} />
-              </View>
-            </Animated.View>
-          </View>
-        </Modal>
-      )}
+        {/* Apply Button */}
+        <View className="mt-4">
+          <Button label="Применить" onPress={handleApplyDates} />
+        </View>
+      </BottomSheet>
 
       {/* Guest Picker Bottom Sheet Modal */}
-      {guestModalVisible && (
-        <Modal visible={true} transparent animationType="none">
-          <View className="flex-1 justify-end">
-            {/* Animated Backdrop */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'black',
-                opacity: guestFade,
-              }}
-            >
-              <Pressable style={{ flex: 1 }} onPress={closeGuestModal} />
-            </Animated.View>
+      <BottomSheet visible={guestModalVisible} onClose={closeGuestModal}>
+        {/* Header */}
+        <View className="flex-row items-center justify-between pb-4 border-b border-line mb-6">
+          <View className="w-10" />
+          <Text className="text-lg font-bold text-ink">Количество гостей</Text>
+          <TouchableOpacity onPress={closeGuestModal} className="w-10 items-end">
+            <Ionicons name="close" size={24} color={palette.ink} />
+          </TouchableOpacity>
+        </View>
 
-            {/* Animated Bottom Sheet Container */}
-            <Animated.View
-              style={{
-                transform: [{ translateY: guestSlide }],
-                backgroundColor: palette.surface,
-                borderTopLeftRadius: radii.card,
-                borderTopRightRadius: radii.card,
-              }}
-              className="px-4 pb-8 pt-4"
-            >
-              {/* Header */}
-              <View className="flex-row items-center justify-between pb-4 border-b border-line mb-6">
-                <View className="w-10" />
-                <Text className="text-lg font-bold text-ink">Количество гостей</Text>
-                <TouchableOpacity onPress={closeGuestModal} className="w-10 items-end">
-                  <Ionicons name="close" size={24} color={palette.ink} />
-                </TouchableOpacity>
-              </View>
+        {/* Counter Row */}
+        <View className="flex-row items-center justify-center gap-6 py-6 mb-4">
+          <TouchableOpacity
+            disabled={tempGuests <= 1}
+            onPress={() => setTempGuests((g) => Math.max(1, g - 1))}
+            className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted disabled:opacity-40"
+          >
+            <Ionicons name="remove" size={24} color={palette.ink} />
+          </TouchableOpacity>
+          
+          <Text className="min-w-16 text-center text-3xl font-extrabold text-ink">
+            {tempGuests}
+          </Text>
 
-              {/* Counter Row */}
-              <View className="flex-row items-center justify-center gap-6 py-6 mb-4">
-                <TouchableOpacity
-                  disabled={tempGuests <= 1}
-                  onPress={() => setTempGuests((g) => Math.max(1, g - 1))}
-                  className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted disabled:opacity-40"
-                >
-                  <Ionicons name="remove" size={24} color={palette.ink} />
-                </TouchableOpacity>
-                
-                <Text className="min-w-16 text-center text-3xl font-extrabold text-ink">
-                  {tempGuests}
-                </Text>
+          <TouchableOpacity
+            onPress={() => setTempGuests((g) => g + 1)}
+            className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted"
+          >
+            <Ionicons name="add" size={24} color={palette.ink} />
+          </TouchableOpacity>
+        </View>
 
-                <TouchableOpacity
-                  onPress={() => setTempGuests((g) => g + 1)}
-                  className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted"
-                >
-                  <Ionicons name="add" size={24} color={palette.ink} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Apply Button */}
-              <Button label="Применить" onPress={handleApplyGuests} />
-            </Animated.View>
-          </View>
-        </Modal>
-      )}
+        {/* Apply Button */}
+        <Button label="Применить" onPress={handleApplyGuests} />
+      </BottomSheet>
 
       {/* City / free-text Search Overlay Modal */}
       <SearchModal

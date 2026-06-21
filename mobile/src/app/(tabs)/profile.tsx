@@ -32,7 +32,6 @@ const LOGIN_DEVICES = [
   { name: 'Android приложение', place: 'Казань, Россия', date: '12 июня, 09:42', current: false },
 ] as const;
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 function valueOrPlaceholder(value: string | number | boolean | null | undefined, placeholder = 'Не заполнено') {
   if (typeof value === 'boolean') return value ? 'Да' : 'Нет';
@@ -273,8 +272,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const [settingsFade] = useState(() => new Animated.Value(0));
-  const [settingsSlide] = useState(() => new Animated.Value(SCREEN_HEIGHT));
   const handleScroll = useScrollHideTabBar();
 
   const horizontalScrollRef = useRef<ScrollView>(null);
@@ -306,48 +303,16 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (settingsVisible) {
-      settingsFade.setValue(0);
-      settingsSlide.setValue(SCREEN_HEIGHT);
-      requestAnimationFrame(() => {
-        // Ensure scroll view is immediately in the correct page state before slide-in starts
-        horizontalScrollRef.current?.scrollTo({
-          x: settingsTab === 'basic' ? 0 : containerWidth,
-          animated: false,
-        });
-
-        Animated.parallel([
-          Animated.timing(settingsFade, {
-            toValue: 0.4,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-          Animated.timing(settingsSlide, {
-            toValue: 0,
-            duration: 250,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]).start();
+      // Ensure scroll view is immediately in the correct page state
+      horizontalScrollRef.current?.scrollTo({
+        x: settingsTab === 'basic' ? 0 : containerWidth,
+        animated: false,
       });
     }
   }, [settingsVisible, settingsTab, containerWidth]);
 
   const closeSettings = () => {
-    Animated.parallel([
-      Animated.timing(settingsFade, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(settingsSlide, {
-        toValue: SCREEN_HEIGHT,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setSettingsVisible(false);
-    });
+    setSettingsVisible(false);
   };
 
   const handleDeleteAccount = () => {
@@ -591,33 +556,13 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={settingsVisible} transparent animationType="none" onRequestClose={closeSettings}>
-        <View className="flex-1 justify-end">
-          {/* Animated Backdrop */}
-          <Animated.View
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'black',
-              opacity: settingsFade,
-            }}
-          >
-            <Pressable style={{ flex: 1 }} onPress={closeSettings} />
-          </Animated.View>
-
-          {/* Animated Full Screen Container */}
-          <Animated.View
-            className="px-4 pt-2 pb-6"
-            style={{
-              transform: [{ translateY: settingsSlide }],
-              backgroundColor: palette.surface,
-              height: '100%',
-            }}
-          >
-            <SafeAreaView edges={['top', 'bottom']} className="flex-1">
+      <Modal
+        visible={settingsVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={closeSettings}
+      >
+        <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface px-4 pt-2 pb-6">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-baseline gap-1.5">
                   <Text className="text-2xl font-extrabold text-ink">Профиль</Text>
@@ -887,7 +832,7 @@ export default function ProfileScreen() {
               visible={cityPickerVisible}
               onClose={() => setCityPickerVisible(false)}
               onSelect={(city) => {
-                setFormCity(city);
+                if (city) setFormCity(city);
                 setCityPickerVisible(false);
               }}
               selectedCity={formCity}
@@ -909,8 +854,6 @@ export default function ProfileScreen() {
               visible={deleteSheetVisible}
               onClose={() => setDeleteSheetVisible(false)}
             />
-          </Animated.View>
-        </View>
       </Modal>
     </SafeAreaView>
   );

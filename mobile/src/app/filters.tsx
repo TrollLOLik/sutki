@@ -5,8 +5,6 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -16,12 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
-import { Button, Chip } from '@/components/ui';
-import { useCitySuggestions } from '@/lib/api/cities';
+import { Button, Chip, BottomSheet } from '@/components/ui';
+import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useServices } from '@/lib/api/create-listing';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { useFiltersStore, type RoomFilter, type SearchFilters } from '@/store/filters';
-import { palette, radii } from '@/theme/tokens';
+import { palette } from '@/theme/tokens';
 
 const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
   { label: 'Студия', value: 'studio' },
@@ -70,14 +68,14 @@ export default function FiltersScreen() {
   const [priceMin, setPriceMin] = useState(store.priceMin?.toString() ?? '');
   const [priceMax, setPriceMax] = useState(store.priceMax?.toString() ?? '');
   const [guests, setGuests] = useState(store.guests);
+  const [petsAllowed, setPetsAllowed] = useState(store.petsAllowed);
+  const [childrenAllowed, setChildrenAllowed] = useState(store.childrenAllowed);
+  const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
 
   // Pickers
   const [citySheet, setCitySheet] = useState(false);
-  const [cityQuery, setCityQuery] = useState('');
   const [dateSheet, setDateSheet] = useState(false);
   const [tempRange, setTempRange] = useState<DateRange>({ start: null, end: null });
-
-  const { data: citySuggestions, isFetching: cityLoading } = useCitySuggestions(cityQuery);
 
   const draftFilters: SearchFilters = useMemo(
     () => ({
@@ -90,8 +88,11 @@ export default function FiltersScreen() {
       rooms,
       serviceIds,
       favoritesOnly: false,
+      petsAllowed,
+      childrenAllowed,
+      eventsAllowed,
     }),
-    [city, checkIn, checkOut, guests, priceMin, priceMax, rooms, serviceIds],
+    [city, checkIn, checkOut, guests, priceMin, priceMax, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
   // Live result count for the CTA. limit:1 keeps the payload small; total is
@@ -117,6 +118,9 @@ export default function FiltersScreen() {
       guests,
       priceMin: priceMin !== '' ? Number(priceMin) : null,
       priceMax: priceMax !== '' ? Number(priceMax) : null,
+      petsAllowed,
+      childrenAllowed,
+      eventsAllowed,
     });
     router.back();
   };
@@ -130,6 +134,9 @@ export default function FiltersScreen() {
     setPriceMin('');
     setPriceMax('');
     setGuests(2);
+    setPetsAllowed(false);
+    setChildrenAllowed(false);
+    setEventsAllowed(false);
   };
 
   const openDateSheet = () => {
@@ -179,7 +186,6 @@ export default function FiltersScreen() {
           <Text className="text-base font-semibold text-ink">Город</Text>
           <Pressable
             onPress={() => {
-              setCityQuery('');
               setCitySheet(true);
             }}
             className="h-12 flex-row items-center justify-between rounded-field border border-line px-3 active:bg-surface-muted">
@@ -309,6 +315,28 @@ export default function FiltersScreen() {
           </View>
         </View>
 
+        {/* House Rules */}
+        <View className="gap-2">
+          <Text className="text-base font-semibold text-ink">Правила дома</Text>
+          <View className="flex-row flex-wrap gap-2">
+            <Chip
+              label="Можно с животными"
+              selected={petsAllowed}
+              onPress={() => setPetsAllowed(!petsAllowed)}
+            />
+            <Chip
+              label="Можно с детьми"
+              selected={childrenAllowed}
+              onPress={() => setChildrenAllowed(!childrenAllowed)}
+            />
+            <Chip
+              label="Разрешены мероприятия"
+              selected={eventsAllowed}
+              onPress={() => setEventsAllowed(!eventsAllowed)}
+            />
+          </View>
+        </View>
+
         {/* Amenities (from the /services catalog) */}
         <View className="gap-2">
           <Text className="text-base font-semibold text-ink">Удобства</Text>
@@ -339,87 +367,33 @@ export default function FiltersScreen() {
       </View>
 
       {/* City picker bottom sheet */}
-      <Modal visible={citySheet} transparent animationType="slide" onRequestClose={() => setCitySheet(false)}>
-        <View className="flex-1 justify-end">
-          <Pressable className="absolute inset-0 bg-black/40" onPress={() => setCitySheet(false)} />
-          <View
-            style={{ borderTopLeftRadius: radii.card, borderTopRightRadius: radii.card }}
-            className="max-h-[80%] bg-surface px-4 pb-8 pt-4">
-            <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-lg font-bold text-ink">Выберите город</Text>
-              <Pressable onPress={() => setCitySheet(false)} hitSlop={8}>
-                <Ionicons name="close" size={24} color={palette.ink} />
-              </Pressable>
-            </View>
-            <View className="h-12 flex-row items-center rounded-field border border-line px-3">
-              <Ionicons name="search" size={18} color={palette.inkMuted} />
-              <TextInput
-                value={cityQuery}
-                onChangeText={setCityQuery}
-                placeholder="Начните вводить город"
-                placeholderTextColor={palette.inkMuted}
-                autoFocus
-                className="ml-2 flex-1 text-base text-ink"
-              />
-              {cityLoading ? <ActivityIndicator color={palette.primary} /> : null}
-            </View>
-            <Pressable
-              onPress={() => {
-                setCity(null);
-                setCitySheet(false);
-              }}
-              className="flex-row items-center gap-2 border-b border-line py-3">
-              <Ionicons name="globe-outline" size={18} color={palette.primary} />
-              <Text className="text-base text-ink">Любой город</Text>
-            </Pressable>
-            <FlatList
-              data={citySuggestions ?? []}
-              keyExtractor={(item) => item}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => {
-                    setCity(item);
-                    setCitySheet(false);
-                  }}
-                  className="flex-row items-center gap-2 border-b border-line py-3 active:bg-surface-muted">
-                  <Ionicons name="location-outline" size={18} color={palette.inkMuted} />
-                  <Text className="text-base text-ink">{item}</Text>
-                </Pressable>
-              )}
-              ListEmptyComponent={
-                cityQuery.trim().length > 0 && !cityLoading ? (
-                  <Text className="py-4 text-center text-sm text-ink-muted">Ничего не найдено</Text>
-                ) : null
-              }
-            />
-          </View>
-        </View>
-      </Modal>
+      <CityPickerSheet
+        visible={citySheet}
+        onClose={() => setCitySheet(false)}
+        onSelect={(selectedCity) => {
+          setCity(selectedCity);
+          setCitySheet(false);
+        }}
+        selectedCity={city}
+        allowAnyCity={true}
+      />
 
       {/* Date picker bottom sheet */}
-      <Modal visible={dateSheet} transparent animationType="slide" onRequestClose={() => setDateSheet(false)}>
-        <View className="flex-1 justify-end">
-          <Pressable className="absolute inset-0 bg-black/40" onPress={() => setDateSheet(false)} />
-          <View
-            style={{ borderTopLeftRadius: radii.card, borderTopRightRadius: radii.card }}
-            className="bg-surface px-4 pb-8 pt-4">
-            <View className="mb-4 flex-row items-center justify-between border-b border-line pb-4">
-              <Pressable onPress={() => setTempRange({ start: null, end: null })}>
-                <Text className="text-sm font-semibold text-primary">Сбросить</Text>
-              </Pressable>
-              <Text className="text-lg font-bold text-ink">Выберите даты</Text>
-              <Pressable onPress={() => setDateSheet(false)} hitSlop={8}>
-                <Ionicons name="close" size={24} color={palette.ink} />
-              </Pressable>
-            </View>
-            <CalendarRange value={tempRange} onChange={setTempRange} />
-            <View className="mt-4">
-              <Button label="Применить" onPress={applyDates} />
-            </View>
-          </View>
+      <BottomSheet visible={dateSheet} onClose={() => setDateSheet(false)}>
+        <View className="mb-4 flex-row items-center justify-between border-b border-line pb-4">
+          <Pressable onPress={() => setTempRange({ start: null, end: null })}>
+            <Text className="text-sm font-semibold text-primary">Сбросить</Text>
+          </Pressable>
+          <Text className="text-lg font-bold text-ink">Выберите даты</Text>
+          <Pressable onPress={() => setDateSheet(false)} hitSlop={8}>
+            <Ionicons name="close" size={24} color={palette.ink} />
+          </Pressable>
         </View>
-      </Modal>
+        <CalendarRange value={tempRange} onChange={setTempRange} />
+        <View className="mt-4">
+          <Button label="Применить" onPress={applyDates} />
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }

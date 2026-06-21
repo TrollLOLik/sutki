@@ -32,7 +32,12 @@ export async function suggestCities(query: string, signal?: AbortSignal): Promis
         .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
     }
   } catch (err) {
-    if ((err as Error)?.name !== 'AbortError') {
+    const error = err as Error | undefined;
+    const isAbort =
+      error?.name === 'AbortError' ||
+      error?.message?.toLowerCase().includes('cancel') ||
+      error?.message?.toLowerCase().includes('abort');
+    if (!isAbort) {
       console.error('City suggest error:', err);
     }
   }

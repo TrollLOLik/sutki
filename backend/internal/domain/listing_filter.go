@@ -37,6 +37,9 @@ type ListFilter struct {
 	// Guests, when set, keeps listings whose max_guests is unknown (legacy rows)
 	// or at least this large.
 	Guests *int32
+	PetsAllowed     *bool
+	ChildrenAllowed *bool
+	EventsAllowed   *bool
 	Sort   ListSort
 	Limit  int32
 	Offset int32

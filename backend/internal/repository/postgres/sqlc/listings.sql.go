@@ -110,20 +110,26 @@ WHERE h.deleted = false
     OR h.max_guests IS NULL
     OR h.max_guests >= $11
   )
+  AND ($12::boolean IS NULL OR ($12::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
 `
 
 type CountHousesFilteredParams struct {
-	Query    *string
-	City     *string
-	PriceMin *int32
-	PriceMax *int32
-	Rooms    []int32
-	RoomsMin *int32
-	Services []int32
-	Category *int32
-	CheckIn  pgtype.Date
-	CheckOut pgtype.Date
-	Guests   *int32
+	Query           *string
+	City            *string
+	PriceMin        *int32
+	PriceMax        *int32
+	Rooms           []int32
+	RoomsMin        *int32
+	Services        []int32
+	Category        *int32
+	CheckIn         pgtype.Date
+	CheckOut        pgtype.Date
+	Guests          *int32
+	PetsAllowed     *bool
+	ChildrenAllowed *bool
+	EventsAllowed   *bool
 }
 
 func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error) {
@@ -139,6 +145,9 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 		arg.CheckIn,
 		arg.CheckOut,
 		arg.Guests,
+		arg.PetsAllowed,
+		arg.ChildrenAllowed,
+		arg.EventsAllowed,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -751,30 +760,36 @@ WHERE h.deleted = false
     OR h.max_guests IS NULL
     OR h.max_guests >= $11
   )
+  AND ($12::boolean IS NULL OR ($12::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
 ORDER BY
-  CASE WHEN $12::text = 'price_asc' THEN h.price END ASC NULLS LAST,
-  CASE WHEN $12::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN $12::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN $15::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $15::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $15::text = 'newest' THEN h.created_at END DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
   h.created_at DESC
-LIMIT $14 OFFSET $13
+LIMIT $17 OFFSET $16
 `
 
 type ListHousesFilteredParams struct {
-	Query        *string
-	City         *string
-	PriceMin     *int32
-	PriceMax     *int32
-	Rooms        []int32
-	RoomsMin     *int32
-	Services     []int32
-	Category     *int32
-	CheckIn      pgtype.Date
-	CheckOut     pgtype.Date
-	Guests       *int32
-	Sort         string
-	ResultOffset int32
-	ResultLimit  int32
+	Query           *string
+	City            *string
+	PriceMin        *int32
+	PriceMax        *int32
+	Rooms           []int32
+	RoomsMin        *int32
+	Services        []int32
+	Category        *int32
+	CheckIn         pgtype.Date
+	CheckOut        pgtype.Date
+	Guests          *int32
+	PetsAllowed     *bool
+	ChildrenAllowed *bool
+	EventsAllowed   *bool
+	Sort            string
+	ResultOffset    int32
+	ResultLimit     int32
 }
 
 type ListHousesFilteredRow struct {
@@ -817,6 +832,9 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		arg.CheckIn,
 		arg.CheckOut,
 		arg.Guests,
+		arg.PetsAllowed,
+		arg.ChildrenAllowed,
+		arg.EventsAllowed,
 		arg.Sort,
 		arg.ResultOffset,
 		arg.ResultLimit,

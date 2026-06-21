@@ -4,13 +4,15 @@ import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { MotiView } from 'moti';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withTiming,
+  withSpring,
   Easing,
+  interpolateColor,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,9 +27,6 @@ interface TabMeta {
   activeIcon: IoniconName;
 }
 
-// Metadata for the four real tabs. The center "+" (create listing) is injected
-// between the two groups and is not a real tab route — tapping it opens the
-// create-listing modal instead of switching tabs.
 const TAB_META: Record<string, TabMeta> = {
   index: { label: 'Поиск', icon: 'search-outline', activeIcon: 'search' },
   map: { label: 'Карта', icon: 'map-outline', activeIcon: 'map' },
@@ -38,18 +37,100 @@ const TAB_META: Record<string, TabMeta> = {
 const LEFT_TABS = ['index', 'map'];
 const RIGHT_TABS = ['messages', 'profile'];
 
-/**
- * Custom bottom tab bar with a raised, animated center "+" button (TikTok
- * style) that opens the create-listing flow. Избранное is no longer a tab — it
- * lives as a heart filter on the home screen — so the bar shows four tabs split
- * around the central action button.
- */
+interface TabButtonProps {
+  focused: boolean;
+  meta: TabMeta;
+  onPress: () => void;
+  reduceMotion: boolean;
+}
+
+function TabButton({ focused, meta, onPress, reduceMotion }: TabButtonProps) {
+  const focusAnim = useSharedValue(focused ? 1 : 0);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      focusAnim.value = focused ? 1 : 0;
+    } else {
+      focusAnim.value = withSpring(focused ? 1 : 0, {
+        damping: 15,
+        stiffness: 150,
+        mass: 0.8,
+      });
+    }
+  }, [focused, reduceMotion]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const scale = 1 + focusAnim.value * 0.12;
+    
+    return {
+      transform: [{ scale }],
+    };
+  });
+
+  const activeIconStyle = useAnimatedStyle(() => {
+    return {
+      opacity: focusAnim.value,
+    };
+  });
+
+  const inactiveIconStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - focusAnim.value,
+    };
+  });
+
+  const textStyle = useAnimatedStyle(() => {
+    const color = interpolateColor(
+      focusAnim.value,
+      [0, 1],
+      [palette.inkMuted, palette.primary]
+    );
+
+    return {
+      color,
+    };
+  });
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={focused ? { selected: true } : {}}
+      onPress={onPress}
+      className="flex-1 items-center justify-end gap-1 pt-2 pb-1 active:opacity-70">
+      <Animated.View style={[{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }, animatedStyle]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, inactiveIconStyle]}>
+          <Ionicons name={meta.icon} size={24} color={palette.inkMuted} />
+        </Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, activeIconStyle]}>
+          <Ionicons name={meta.activeIcon} size={24} color={palette.primary} />
+        </Animated.View>
+      </Animated.View>
+      <Animated.Text
+        style={[
+          { fontSize: 11, fontWeight: focused ? '600' : '500' },
+          textStyle,
+        ]}>
+        {meta.label}
+      </Animated.Text>
+    </Pressable>
+  );
+}
+
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const [pressed, setPressed] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const pulse = useSharedValue(0);
   const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      sub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     pulse.value = withRepeat(
@@ -98,8 +179,9 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     const route = routeByName[name];
     const meta = TAB_META[name];
     if (!route || !meta) return null;
-    const focused = activeName === name;
-    const color = focused ? palette.primary : palette.inkMuted;
+
+    const routeIndex = state.routes.findIndex((r) => r.name === name);
+    const focused = state.index === routeIndex;
 
     const onPress = () => {
       const event = navigation.emit({
@@ -113,15 +195,13 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     };
 
     return (
-      <Pressable
+      <TabButton
         key={name}
-        accessibilityRole="button"
-        accessibilityState={focused ? { selected: true } : {}}
+        focused={focused}
+        meta={meta}
         onPress={onPress}
-        className="flex-1 items-center justify-end gap-1 pt-2 active:opacity-70">
-        <Ionicons name={focused ? meta.activeIcon : meta.icon} size={24} color={color} />
-        <Text style={{ fontSize: 11, fontWeight: '500', color }}>{meta.label}</Text>
-      </Pressable>
+        reduceMotion={reduceMotion}
+      />
     );
   };
 
@@ -138,6 +218,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         tabBarStyle,
       ]}
       className="flex-row items-end border-t border-line bg-surface pb-1">
+
       {LEFT_TABS.map(renderTab)}
 
       {/* Center "+" — raised, animated create-listing action */}

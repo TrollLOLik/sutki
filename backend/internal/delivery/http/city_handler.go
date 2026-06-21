@@ -42,6 +42,9 @@ func (h *CityHandler) Suggest(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
 		writeError(w, http.StatusBadGateway, "dadata request failed")
 		return
 	}
@@ -89,6 +92,9 @@ func (h *CityHandler) IPLocate(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
 		writeError(w, http.StatusBadGateway, "dadata request failed")
 		return
 	}

@@ -69,13 +69,16 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 		Rooms:        nonNil(filter.Rooms),
 		RoomsMin:     filter.RoomsMin,
 		Services:     nonNil(filter.Services),
-		Category:     filter.Category,
-		CheckIn:      dateParamPtr(filter.CheckIn),
-		CheckOut:     dateParamPtr(filter.CheckOut),
-		Guests:       filter.Guests,
-		Sort:         string(filter.Sort),
-		ResultLimit:  filter.Limit,
-		ResultOffset: filter.Offset,
+		Category:        filter.Category,
+		CheckIn:         dateParamPtr(filter.CheckIn),
+		CheckOut:        dateParamPtr(filter.CheckOut),
+		Guests:          filter.Guests,
+		PetsAllowed:     filter.PetsAllowed,
+		ChildrenAllowed: filter.ChildrenAllowed,
+		EventsAllowed:   filter.EventsAllowed,
+		Sort:            string(filter.Sort),
+		ResultLimit:     filter.Limit,
+		ResultOffset:    filter.Offset,
 	})
 	if err != nil {
 		return nil, err
@@ -205,10 +208,13 @@ func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int6
 		Rooms:    nonNil(filter.Rooms),
 		RoomsMin: filter.RoomsMin,
 		Services: nonNil(filter.Services),
-		Category: filter.Category,
-		CheckIn:  dateParamPtr(filter.CheckIn),
-		CheckOut: dateParamPtr(filter.CheckOut),
-		Guests:   filter.Guests,
+		Category:        filter.Category,
+		CheckIn:         dateParamPtr(filter.CheckIn),
+		CheckOut:        dateParamPtr(filter.CheckOut),
+		Guests:          filter.Guests,
+		PetsAllowed:     filter.PetsAllowed,
+		ChildrenAllowed: filter.ChildrenAllowed,
+		EventsAllowed:   filter.EventsAllowed,
 	})
 }
 

@@ -480,6 +480,24 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 	}
 	f.Sort = sort
 
+	for _, p := range []struct {
+		key string
+		dst **bool
+	}{
+		{"pets_allowed", &f.PetsAllowed},
+		{"children_allowed", &f.ChildrenAllowed},
+		{"events_allowed", &f.EventsAllowed},
+	} {
+		b, ok := parseOptBool(q.Get(p.key))
+		if !ok {
+			return domain.ListFilter{}, "invalid " + p.key
+		}
+		if b != nil && !*b {
+			b = nil
+		}
+		*p.dst = b
+	}
+
 	return f, ""
 }
 
@@ -527,4 +545,18 @@ func parseNonNegInt32CSV(s string) ([]int32, bool) {
 		out = append(out, int32(n))
 	}
 	return out, true
+}
+
+// parseOptBool parses an optional boolean. Empty → (nil, true);
+// a valid value → (&v, true); anything else → (nil, false).
+func parseOptBool(s string) (*bool, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, true
+	}
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		return nil, false
+	}
+	return &b, true
 }

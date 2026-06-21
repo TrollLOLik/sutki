@@ -90,6 +90,9 @@ WHERE h.deleted = false
     OR h.max_guests IS NULL
     OR h.max_guests >= sqlc.narg('guests')
   )
+  AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+  AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+  AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
 ORDER BY
   CASE WHEN @sort::text = 'price_asc' THEN h.price END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price_desc' THEN h.price END DESC NULLS LAST,
@@ -151,7 +154,10 @@ WHERE h.deleted = false
     sqlc.narg('guests')::int IS NULL
     OR h.max_guests IS NULL
     OR h.max_guests >= sqlc.narg('guests')
-  );
+  )
+  AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+  AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+  AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')));
 
 -- name: GetHouseByID :one
 SELECT

@@ -23,6 +23,9 @@ export interface ListListingsParams {
   checkIn?: string;
   checkOut?: string;
   sort?: string;
+  petsAllowed?: boolean;
+  childrenAllowed?: boolean;
+  eventsAllowed?: boolean;
 }
 
 export const listingKeys = {
@@ -48,6 +51,9 @@ function buildQuery(params: ListListingsParams): string {
   if (params.checkIn) sp.set('check_in', params.checkIn);
   if (params.checkOut) sp.set('check_out', params.checkOut);
   if (params.sort) sp.set('sort', params.sort);
+  if (params.petsAllowed) sp.set('pets_allowed', 'true');
+  if (params.childrenAllowed) sp.set('children_allowed', 'true');
+  if (params.eventsAllowed) sp.set('events_allowed', 'true');
   const qs = sp.toString();
   return qs ? `?${qs}` : '';
 }
@@ -99,6 +105,9 @@ export function filtersToListParams(
     guests: filters.guests,
     checkIn: filters.checkIn && filters.checkOut ? filters.checkIn : undefined,
     checkOut: filters.checkIn && filters.checkOut ? filters.checkOut : undefined,
+    petsAllowed: filters.petsAllowed || undefined,
+    childrenAllowed: filters.childrenAllowed || undefined,
+    eventsAllowed: filters.eventsAllowed || undefined,
   };
 }
 

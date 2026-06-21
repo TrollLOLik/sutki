@@ -18,7 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
-import { Button, ScreenContainer } from '@/components/ui';
+import { Button, ScreenContainer, BottomSheet } from '@/components/ui';
+import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useDeleteMe, useUpdateMe } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { env } from '@/lib/env';
@@ -46,35 +47,6 @@ const MONTH_NAMES = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const fetchDadataCities = async (query: string): Promise<string[]> => {
-  try {
-    const response = await fetch(
-      `${env.apiUrl}/api/v1/cities/suggest`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          query: query,
-          from_bound: { value: 'city' },
-          to_bound: { value: 'city' },
-        }),
-      },
-    );
-    const data = await response.json();
-    if (data && data.suggestions) {
-      return data.suggestions
-        .map((s: any) => s.data.city)
-        .filter((c: any) => c != null && c.length > 0)
-        .filter((v: any, i: any, a: any) => a.indexOf(v) === i);
-    }
-  } catch (err) {
-    console.error('Dadata fetch error:', err);
-  }
-  return [];
-};
 
 const detectCityByIP = async (): Promise<string | null> => {
   try {
@@ -128,23 +100,15 @@ export default function ProfileSetupScreen() {
   const monthScrollRef = useRef<ScrollView>(null);
   const yearScrollRef = useRef<ScrollView>(null);
 
-  // Modal States with Animations
+  // Modal States
   const [datePickerVisible, setDatePickerVisible] = useState(false);
-  const [datePickerFade] = useState(() => new Animated.Value(0));
-  const [datePickerSlide] = useState(() => new Animated.Value(400));
-
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
-  const [cityPickerFade] = useState(() => new Animated.Value(0));
-  const [cityPickerSlide] = useState(() => new Animated.Value(600));
 
   const [tempDay, setTempDay] = useState(12);
   const [tempMonth, setTempMonth] = useState(4); // May (0-indexed)
   const [tempYear, setTempYear] = useState(CURRENT_YEAR - 20);
 
-  // City Picker States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [detectedCity, setDetectedCity] = useState<string | null>(null);
+
 
   const {
     control,
@@ -162,69 +126,29 @@ export default function ProfileSetupScreen() {
   const cityVal = watch('city');
   const birthdayVal = watch('birthday');
 
-  // Trigger animations after Modal renders to avoid skipped frames and abrupt jumps
+  // Centering the wheels once bottom sheet slide animation resolves
   useEffect(() => {
     if (datePickerVisible) {
-      datePickerFade.setValue(0);
-      datePickerSlide.setValue(400);
-      requestAnimationFrame(() => {
-        Animated.parallel([
-          Animated.timing(datePickerFade, {
-            toValue: 0.4,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-          Animated.timing(datePickerSlide, {
-            toValue: 0,
-            duration: 250,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          // Centering the wheels once bottom sheet slide animation resolves
-          setTimeout(() => {
-            if (birthdayVal) {
-              const parts = birthdayVal.split('.');
-              if (parts.length === 3) {
-                const d = parseInt(parts[0], 10);
-                const m = parseInt(parts[1], 10) - 1;
-                const y = parseInt(parts[2], 10);
-                dayScrollRef.current?.scrollTo({ y: (d - 1) * 40, animated: false });
-                monthScrollRef.current?.scrollTo({ y: m * 40, animated: false });
-                yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - y) * 40, animated: false });
-              }
-            } else {
-              dayScrollRef.current?.scrollTo({ y: (12 - 1) * 40, animated: false });
-              monthScrollRef.current?.scrollTo({ y: 4 * 40, animated: false });
-              yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - (CURRENT_YEAR - 20)) * 40, animated: false });
-            }
-          }, 100);
-        });
-      });
+      const timer = setTimeout(() => {
+        if (birthdayVal) {
+          const parts = birthdayVal.split('.');
+          if (parts.length === 3) {
+            const d = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const y = parseInt(parts[2], 10);
+            dayScrollRef.current?.scrollTo({ y: (d - 1) * 40, animated: false });
+            monthScrollRef.current?.scrollTo({ y: m * 40, animated: false });
+            yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - y) * 40, animated: false });
+          }
+        } else {
+          dayScrollRef.current?.scrollTo({ y: (12 - 1) * 40, animated: false });
+          monthScrollRef.current?.scrollTo({ y: 4 * 40, animated: false });
+          yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - (CURRENT_YEAR - 20)) * 40, animated: false });
+        }
+      }, 350); // 350ms ensures bottom sheet open animation (250ms) has fully finished
+      return () => clearTimeout(timer);
     }
-  }, [datePickerVisible]);
-
-  useEffect(() => {
-    if (cityPickerVisible) {
-      cityPickerFade.setValue(0);
-      cityPickerSlide.setValue(600);
-      requestAnimationFrame(() => {
-        Animated.parallel([
-          Animated.timing(cityPickerFade, {
-            toValue: 0.4,
-            duration: 250,
-            useNativeDriver: true,
-          }),
-          Animated.timing(cityPickerSlide, {
-            toValue: 0,
-            duration: 250,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]).start();
-      });
-    }
-  }, [cityPickerVisible]);
+  }, [datePickerVisible, birthdayVal]);
 
   const openDatePicker = () => {
     if (birthdayVal) {
@@ -246,21 +170,7 @@ export default function ProfileSetupScreen() {
   };
 
   const closeDatePicker = () => {
-    Animated.parallel([
-      Animated.timing(datePickerFade, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(datePickerSlide, {
-        toValue: 400,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setDatePickerVisible(false);
-    });
+    setDatePickerVisible(false);
   };
 
   const openCityPicker = () => {
@@ -268,21 +178,7 @@ export default function ProfileSetupScreen() {
   };
 
   const closeCityPicker = () => {
-    Animated.parallel([
-      Animated.timing(cityPickerFade, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(cityPickerSlide, {
-        toValue: 600,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setCityPickerVisible(false);
-    });
+    setCityPickerVisible(false);
   };
 
   // Auto-detect city by IP on first load
@@ -291,29 +187,11 @@ export default function ProfileSetupScreen() {
       const detected = await detectCityByIP();
       if (detected) {
         setValue('city', detected);
-        setDetectedCity(detected);
-        setSuggestions([detected]);
       }
     };
     autoDetect();
   }, []);
 
-  // Load city suggestions based on search query
-  useEffect(() => {
-    const loadSuggestions = async () => {
-      if (searchQuery.trim() === '') {
-        setSuggestions(detectedCity ? [detectedCity] : []);
-      } else {
-        const fetched = await fetchDadataCities(searchQuery);
-        setSuggestions(fetched);
-      }
-    };
-    const delayDebounce = setTimeout(() => {
-      loadSuggestions();
-    }, 300);
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery, detectedCity]);
 
   const toggleAvatar = () => {
     if (avatarUri) {
@@ -583,205 +461,111 @@ export default function ProfileSetupScreen() {
       </View>
 
       {/* Date Picker Bottom Sheet Modal */}
-      {datePickerVisible && (
-        <Modal visible={true} transparent animationType="none">
-          <View className="flex-1 justify-end">
-            {/* Animated Backdrop */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'black',
-                opacity: datePickerFade,
-              }}
-            >
-              <Pressable style={{ flex: 1 }} onPress={closeDatePicker} />
-            </Animated.View>
+      <BottomSheet visible={datePickerVisible} onClose={closeDatePicker}>
+        {/* Header */}
+        <View className="items-center pb-4 border-b border-line">
+          <View className="h-1 w-12 rounded-full bg-line mb-3" />
+          <Text className="text-lg font-bold text-ink">Выберите дату рождения</Text>
+        </View>
 
-            {/* Animated Bottom Sheet Container */}
-            <Animated.View
-              style={{
-                transform: [{ translateY: datePickerSlide }],
-                backgroundColor: palette.surface,
-                borderTopLeftRadius: radii.card,
-                borderTopRightRadius: radii.card,
-              }}
-              className="px-4 pb-8 pt-4"
-            >
-              {/* Header */}
-              <View className="items-center pb-4 border-b border-line">
-                <View className="h-1 w-12 rounded-full bg-line mb-3" />
-                <Text className="text-lg font-bold text-ink">Выберите дату рождения</Text>
-              </View>
-
-              {/* Scrollable Wheels Container */}
-              <View className="flex-row justify-center py-6 h-48">
-                {/* Day Column */}
-                <ScrollView
-                  ref={dayScrollRef}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
-                  className="w-16"
+        {/* Scrollable Wheels Container */}
+        <View className="flex-row justify-center py-6 h-48">
+          {/* Day Column */}
+          <ScrollView
+            ref={dayScrollRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
+            className="w-16"
+          >
+            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+              <TouchableOpacity
+                key={d}
+                onPress={() => handleSelectDay(d)}
+                style={{ height: 40 }}
+                className="w-full items-center justify-center"
+              >
+                <Text
+                  className={`text-lg ${
+                    tempDay === d ? 'font-bold text-primary' : 'text-ink-secondary'
+                  }`}
+                  style={tempDay === d ? { color: palette.primary } : {}}
                 >
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                    <TouchableOpacity
-                      key={d}
-                      onPress={() => handleSelectDay(d)}
-                      style={{ height: 40 }}
-                      className="w-full items-center justify-center"
-                    >
-                      <Text
-                        className={`text-lg ${
-                          tempDay === d ? 'font-bold text-primary' : 'text-ink-secondary'
-                        }`}
-                        style={tempDay === d ? { color: palette.primary } : {}}
-                      >
-                        {d}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                  {d}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-                {/* Month Column */}
-                <ScrollView
-                  ref={monthScrollRef}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
-                  className="flex-1"
+          {/* Month Column */}
+          <ScrollView
+            ref={monthScrollRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
+            className="flex-1"
+          >
+            {MONTH_NAMES.map((m, idx) => (
+              <TouchableOpacity
+                key={m}
+                onPress={() => handleSelectMonth(idx)}
+                style={{ height: 40 }}
+                className="w-full items-center justify-center"
+              >
+                <Text
+                  className={`text-lg capitalize ${
+                    tempMonth === idx ? 'font-bold text-primary' : 'text-ink-secondary'
+                  }`}
+                  style={tempMonth === idx ? { color: palette.primary } : {}}
                 >
-                  {MONTH_NAMES.map((m, idx) => (
-                    <TouchableOpacity
-                      key={m}
-                      onPress={() => handleSelectMonth(idx)}
-                      style={{ height: 40 }}
-                      className="w-full items-center justify-center"
-                    >
-                      <Text
-                        className={`text-lg capitalize ${
-                          tempMonth === idx ? 'font-bold text-primary' : 'text-ink-secondary'
-                        }`}
-                        style={tempMonth === idx ? { color: palette.primary } : {}}
-                      >
-                        {m}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                  {m}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-                {/* Year Column */}
-                <ScrollView
-                  ref={yearScrollRef}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
-                  className="w-24"
+          {/* Year Column */}
+          <ScrollView
+            ref={yearScrollRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
+            className="w-24"
+          >
+            {Array.from({ length: 80 }, (_, i) => CURRENT_YEAR - i).map((y) => (
+              <TouchableOpacity
+                key={y}
+                onPress={() => handleSelectYear(y)}
+                style={{ height: 40 }}
+                className="w-full items-center justify-center"
+              >
+                <Text
+                  className={`text-lg ${
+                    tempYear === y ? 'font-bold text-primary' : 'text-ink-secondary'
+                  }`}
+                  style={tempYear === y ? { color: palette.primary } : {}}
                 >
-                  {Array.from({ length: 80 }, (_, i) => CURRENT_YEAR - i).map((y) => (
-                    <TouchableOpacity
-                      key={y}
-                      onPress={() => handleSelectYear(y)}
-                      style={{ height: 40 }}
-                      className="w-full items-center justify-center"
-                    >
-                      <Text
-                        className={`text-lg ${
-                          tempYear === y ? 'font-bold text-primary' : 'text-ink-secondary'
-                        }`}
-                        style={tempYear === y ? { color: palette.primary } : {}}
-                      >
-                        {y}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
+                  {y}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
-              {/* Apply Button */}
-              <Button label="Применить" onPress={handleApplyDate} />
-            </Animated.View>
-          </View>
-        </Modal>
-      )}
+        {/* Apply Button */}
+        <Button label="Применить" onPress={handleApplyDate} />
+      </BottomSheet>
 
       {/* City Autocomplete Bottom Sheet Modal */}
-      {cityPickerVisible && (
-        <Modal visible={true} transparent animationType="none">
-          <View className="flex-1 justify-end">
-            {/* Animated Backdrop */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'black',
-                opacity: cityPickerFade,
-              }}
-            >
-              <Pressable style={{ flex: 1 }} onPress={closeCityPicker} />
-            </Animated.View>
-
-            {/* Animated Bottom Sheet Container */}
-            <Animated.View
-              style={{
-                transform: [{ translateY: cityPickerSlide }],
-                backgroundColor: palette.surface,
-                borderTopLeftRadius: radii.card,
-                borderTopRightRadius: radii.card,
-                height: '70%',
-              }}
-              className="px-4 pb-8 pt-4"
-            >
-              {/* Header */}
-              <View className="items-center pb-4">
-                <View className="h-1 w-12 rounded-full bg-line mb-3" />
-                <Text className="text-lg font-bold text-ink">Выберите город</Text>
-              </View>
-
-              {/* Search Input */}
-              <View className="h-12 flex-row items-center rounded-field border border-line bg-surface-muted px-3 mb-4">
-                <Ionicons name="search" size={20} color={palette.inkMuted} />
-                <TextInput
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholder="Поиск города..."
-                  placeholderTextColor={palette.inkMuted}
-                  className="ml-2 flex-1 text-base text-ink"
-                />
-                {searchQuery.length > 0 ? (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {/* Suggestions list */}
-              <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
-                {suggestions.map((city) => (
-                  <TouchableOpacity
-                    key={city}
-                    onPress={() => handleSelectCity(city)}
-                    className="py-4 border-b border-line flex-row items-center justify-between"
-                  >
-                    <Text className="text-base text-ink">{city}</Text>
-                    {cityVal === city ? (
-                      <Ionicons name="checkmark" size={20} color={palette.primary} />
-                    ) : null}
-                  </TouchableOpacity>
-                ))}
-                {suggestions.length === 0 ? (
-                  <Text className="text-center text-base text-ink-muted py-6">
-                    Города не найдены
-                  </Text>
-                ) : null}
-              </ScrollView>
-            </Animated.View>
-          </View>
-        </Modal>
-      )}
+      <CityPickerSheet
+        visible={cityPickerVisible}
+        onClose={closeCityPicker}
+        onSelect={(city) => {
+          if (city) {
+            handleSelectCity(city);
+          } else {
+            closeCityPicker();
+          }
+        }}
+        selectedCity={cityVal}
+      />
     </ScreenContainer>
   );
 }

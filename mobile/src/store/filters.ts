@@ -15,6 +15,9 @@ export interface SearchFilters {
   serviceIds: number[];
   /** When true, the feed shows only listings the user has favorited. */
   favoritesOnly: boolean;
+  petsAllowed: boolean;
+  childrenAllowed: boolean;
+  eventsAllowed: boolean;
 }
 
 export const defaultFilters: SearchFilters = {
@@ -27,6 +30,9 @@ export const defaultFilters: SearchFilters = {
   rooms: [],
   serviceIds: [],
   favoritesOnly: false,
+  petsAllowed: false,
+  childrenAllowed: false,
+  eventsAllowed: false,
 };
 
 interface FiltersState extends SearchFilters {
@@ -65,6 +71,9 @@ export function countActiveFilters(f: SearchFilters): number {
     (f.city != null ? 1 : 0) +
     (f.checkIn != null && f.checkOut != null ? 1 : 0) +
     (f.priceMin != null || f.priceMax != null ? 1 : 0) +
-    (f.guests !== defaultFilters.guests ? 1 : 0)
+    (f.guests !== defaultFilters.guests ? 1 : 0) +
+    (f.petsAllowed ? 1 : 0) +
+    (f.childrenAllowed ? 1 : 0) +
+    (f.eventsAllowed ? 1 : 0)
   );
 }
