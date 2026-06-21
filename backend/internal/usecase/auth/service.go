@@ -250,8 +250,8 @@ func (s *Service) GetUser(ctx context.Context, id int32) (domain.User, error) {
 
 // UpdateProfile updates the provided profile fields for a user. nil fields are
 // left unchanged (PATCH semantics).
-func (s *Service) UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
-	return s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(phone), trimPtr(city), trimPtr(avatarURL), birthday, vkID, vkIDDoNull)
+func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
+	return s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), trimPtr(avatarURL), birthday, vkID, vkIDDoNull)
 }
 
 // DeleteUser deletes a user account (e.g. if they abort onboarding).

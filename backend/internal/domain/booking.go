@@ -55,6 +55,7 @@ type BookingHouse struct {
 type BookingGuest struct {
 	Name         string
 	Surname      string
+	Patronymic   string
 	AvatarURL    string
 	Phone        string
 	IsVerified   bool

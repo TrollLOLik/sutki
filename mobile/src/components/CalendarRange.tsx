@@ -116,7 +116,8 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
         {days.map((day) => {
           const outside = !isSameMonth(day, month);
           const blocked = isDateDisabled?.(day) ?? false;
-          const disabled = isBefore(day, min) || blocked;
+          const isPast = isBefore(day, min);
+          const disabled = isPast || blocked;
           const isStart = value.start != null && isSameDay(day, value.start);
           const isEnd = value.end != null && isSameDay(day, value.end);
           const inRange =
@@ -129,20 +130,24 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
             <View key={day.toISOString()} className="items-center" style={{ width: `${100 / 7}%` }}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityState={{ disabled: disabled || outside }}
                 disabled={disabled || outside}
                 onPress={() => onDayPress(day)}
                 className={cn(
                   'my-0.5 h-10 w-10 items-center justify-center rounded-full',
                   inRange && !endpoint && 'bg-primary-light',
                   endpoint && 'bg-primary',
+                  blocked && !outside && 'bg-danger-light',
                 )}>
                 <Text
                   className={cn(
                     'text-sm',
-                    endpoint ? 'font-bold text-white' : 'text-ink',
+                    endpoint && 'font-bold text-white',
                     inRange && !endpoint && 'text-primary',
-                    (disabled || outside) && 'text-ink-muted opacity-40',
-                    blocked && !outside && 'line-through',
+                    !disabled && !outside && !inRange && 'text-ink',
+                    outside && 'text-ink-muted opacity-20',
+                    isPast && !outside && 'text-ink-muted opacity-40',
+                    blocked && !outside && 'text-danger font-semibold line-through',
                   )}>
                   {format(day, 'd')}
                 </Text>

@@ -19,13 +19,13 @@ UPDATE email_login_code SET attempts = attempts + 1 WHERE email = $1;
 DELETE FROM email_login_code WHERE email = $1;
 
 -- name: GetUserByEmail :one
-SELECT id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
 FROM "user"
 WHERE email = $1 AND deleted = false;
 
 -- name: GetUserByID :one
 SELECT 
-  u.id, u.name, u.surname, u.email, u.phone, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
+  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
   (
     SELECT count(*)::int
     FROM house h
@@ -43,11 +43,13 @@ WHERE u.id = $1 AND u.deleted = false;
 -- name: CreateUser :one
 INSERT INTO "user" (email, roles, deleted, is_verified, enable, created_at, updated_at)
 VALUES ($1, $2, false, true, true, now(), now())
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
+RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
 
 -- name: UpdateUserProfile :one
 UPDATE "user"
 SET name = COALESCE(sqlc.narg('name'), name),
+    surname = CASE WHEN sqlc.narg('surname')::text = '' THEN NULL ELSE COALESCE(sqlc.narg('surname')::text, surname) END,
+    patronymic = CASE WHEN sqlc.narg('patronymic')::text = '' THEN NULL ELSE COALESCE(sqlc.narg('patronymic')::text, patronymic) END,
     phone = COALESCE(sqlc.narg('phone'), phone),
     city = COALESCE(sqlc.narg('city'), city),
     birthday = COALESCE(sqlc.narg('birthday'), birthday),
@@ -55,7 +57,7 @@ SET name = COALESCE(sqlc.narg('name'), name),
     vk_id = CASE WHEN sqlc.narg('vk_id_do_null')::boolean = true THEN NULL ELSE COALESCE(sqlc.narg('vk_id'), vk_id) END,
     updated_at = now()
 WHERE id = sqlc.arg('id') AND deleted = false
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
+RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
 
 -- name: CreateRefreshToken :exec
 INSERT INTO refresh_token (user_id, token_hash, expires_at, created_at)
@@ -78,7 +80,7 @@ UPDATE "user"
 SET email = $2,
     updated_at = now()
 WHERE id = $1 AND deleted = false
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
+RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
 
 -- name: CheckUserActiveBookings :one
 SELECT count(*)::bigint

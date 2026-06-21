@@ -9,6 +9,7 @@ type House struct {
 	OwnerID            int32
 	OwnerName          string
 	OwnerSurname       string
+	OwnerPatronymic    string
 	OwnerPhone         string
 	OwnerAvatarURL     string
 	OwnerRating        float64

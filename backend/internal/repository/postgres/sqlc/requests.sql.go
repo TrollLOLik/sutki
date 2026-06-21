@@ -273,6 +273,7 @@ SELECT
   -- guest profile from user table
   COALESCE(u.name, '')::text       AS guest_name,
   COALESCE(u.surname, '')::text    AS guest_surname,
+  COALESCE(u.patronymic, '')::text AS guest_patronymic,
   COALESCE(u.avatar_url, '')::text AS guest_avatar_url,
   COALESCE(u.phone, '')::text      AS guest_phone_profile,
   COALESCE(u.is_verified, false)   AS guest_is_verified,
@@ -319,6 +320,7 @@ type GetRequestByIDRow struct {
 	HouseCoverPath    string
 	GuestName         string
 	GuestSurname      string
+	GuestPatronymic   string
 	GuestAvatarUrl    string
 	GuestPhoneProfile string
 	GuestIsVerified   bool
@@ -354,6 +356,7 @@ func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDR
 		&i.HouseCoverPath,
 		&i.GuestName,
 		&i.GuestSurname,
+		&i.GuestPatronymic,
 		&i.GuestAvatarUrl,
 		&i.GuestPhoneProfile,
 		&i.GuestIsVerified,

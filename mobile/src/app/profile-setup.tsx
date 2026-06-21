@@ -70,6 +70,7 @@ const detectCityByIP = async (): Promise<string | null> => {
 
 const schema = z.object({
   name: z.string().trim().min(2, 'Введите имя'),
+  surname: z.string().trim().optional(),
   city: z.string().trim().min(2, 'Выберите город'),
   birthday: z.string().trim().optional(),
 });
@@ -119,7 +120,7 @@ export default function ProfileSetupScreen() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', city: '', birthday: '' },
+    defaultValues: { name: '', surname: '', city: '', birthday: '' },
   });
 
   const nameVal = watch('name');
@@ -201,7 +202,7 @@ export default function ProfileSetupScreen() {
     }
   };
 
-  const onSubmit = handleSubmit(async ({ name, city, birthday }) => {
+  const onSubmit = handleSubmit(async ({ name, surname, city, birthday }) => {
     try {
       // Send birthday formatted as YYYY-MM-DD
       let formattedBirthday = '';
@@ -212,6 +213,7 @@ export default function ProfileSetupScreen() {
 
       const user = await updateMe.mutateAsync({
         name,
+        surname: surname || undefined,
         city,
         birthday: formattedBirthday || undefined,
         avatar_url: avatarUri || undefined,
@@ -385,6 +387,46 @@ export default function ProfileSetupScreen() {
             {errors.name ? (
               <Text className="mt-1.5 px-1 text-xs font-medium text-danger">
                 {errors.name.message}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Surname input */}
+          <View className="w-full">
+            <Controller
+              control={control}
+              name="surname"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <View
+                  className={`h-14 flex-row items-center rounded-field border bg-surface px-4 ${
+                    errors.surname ? 'border-danger' : 'border-line'
+                  }`}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={errors.surname ? palette.primary : palette.inkMuted}
+                    style={{ marginRight: 10 }}
+                  />
+                  <TextInput
+                    placeholder="Фамилия (необязательно)"
+                    placeholderTextColor={palette.inkMuted}
+                    className="flex-1 text-base text-ink"
+                    value={value || ''}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                  />
+                  {value && value.length > 0 ? (
+                    <TouchableOpacity onPress={() => setValue('surname', '')}>
+                      <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+            />
+            {errors.surname ? (
+              <Text className="mt-1.5 px-1 text-xs font-medium text-danger">
+                {errors.surname.message}
               </Text>
             ) : null}
           </View>

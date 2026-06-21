@@ -196,6 +196,7 @@ SELECT
   )::int AS reviews_count,
   u.name AS owner_name,
   u.surname AS owner_surname,
+  u.patronymic AS owner_patronymic,
   u.phone AS owner_phone,
   u.avatar_url AS owner_avatar_url,
   u.is_verified AS owner_is_verified,

@@ -36,6 +36,8 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (domain.User, e
 		ID:            row.ID,
 		Email:         row.Email,
 		Name:          deref(row.Name),
+		Surname:       deref(row.Surname),
+		Patronymic:    deref(row.Patronymic),
 		Phone:         deref(row.Phone),
 		City:          deref(row.City),
 		AvatarURL:     deref(row.AvatarUrl),
@@ -58,6 +60,8 @@ func (r *UserRepo) GetByID(ctx context.Context, id int32) (domain.User, error) {
 		ID:            row.ID,
 		Email:         row.Email,
 		Name:          deref(row.Name),
+		Surname:       deref(row.Surname),
+		Patronymic:    deref(row.Patronymic),
 		Phone:         deref(row.Phone),
 		City:          deref(row.City),
 		AvatarURL:     deref(row.AvatarUrl),
@@ -77,6 +81,8 @@ func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error
 		ID:            row.ID,
 		Email:         row.Email,
 		Name:          deref(row.Name),
+		Surname:       deref(row.Surname),
+		Patronymic:    deref(row.Patronymic),
 		Phone:         deref(row.Phone),
 		City:          deref(row.City),
 		AvatarURL:     deref(row.AvatarUrl),
@@ -87,7 +93,7 @@ func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error
 	}, nil
 }
 
-func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
+func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
 	var pgBirthday pgtype.Date
 	if birthday != nil {
 		pgBirthday = pgtype.Date{Time: *birthday, Valid: true}
@@ -95,6 +101,8 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, phone, cit
 	_, err := r.q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
 		ID:         id,
 		Name:       name,
+		Surname:    surname,
+		Patronymic: patronymic,
 		Phone:      phone,
 		City:       city,
 		Birthday:   pgBirthday,

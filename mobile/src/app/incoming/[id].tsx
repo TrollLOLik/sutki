@@ -304,8 +304,8 @@ export default function IncomingBookingDetailScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>
                         {data.guest
-                          ? fullName(data.guest.name, data.guest.surname, '')
-                          : fullName(data.name, data.surname, data.lastname)}
+                          ? fullName(data.guest.name, data.guest.patronymic || '', data.guest.surname)
+                          : fullName(data.name, data.lastname, data.surname)}
                       </Text>
                       {data.guest?.is_verified && (
                         <View style={{
@@ -544,8 +544,8 @@ export default function IncomingBookingDetailScreen() {
   );
 }
 
-function fullName(name: string, surname: string, lastname: string): string {
-  const full = [surname, name, lastname]
+function fullName(name: string, patronymic: string, surname: string): string {
+  const full = [name, patronymic, surname]
     .map((p) => p.trim())
     .filter(Boolean)
     .join(' ');

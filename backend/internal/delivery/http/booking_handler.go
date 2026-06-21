@@ -48,6 +48,7 @@ type bookingHouseDTO struct {
 type bookingGuestDTO struct {
 	Name         string  `json:"name"`
 	Surname      string  `json:"surname"`
+	Patronymic   string  `json:"patronymic"`
 	AvatarURL    string  `json:"avatar_url"`
 	Phone        string  `json:"phone"`
 	IsVerified   bool    `json:"is_verified"`
@@ -347,6 +348,7 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 		dto.Guest = &bookingGuestDTO{
 			Name:         b.Guest.Name,
 			Surname:      b.Guest.Surname,
+			Patronymic:   b.Guest.Patronymic,
 			AvatarURL:    h.mediaURL(b.Guest.AvatarURL),
 			Phone:        b.Guest.Phone,
 			IsVerified:   b.Guest.IsVerified,

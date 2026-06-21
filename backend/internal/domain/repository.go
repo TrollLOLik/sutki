@@ -76,7 +76,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (User, error)
 	GetByID(ctx context.Context, id int32) (User, error)
 	Create(ctx context.Context, email string) (User, error)
-	UpdateProfile(ctx context.Context, id int32, name, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (User, error)
+	UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (User, error)
 	UpdateEmail(ctx context.Context, id int32, email string) (User, error)
 	Delete(ctx context.Context, id int32) error
 	CheckActiveBookings(ctx context.Context, id int32) (int64, error)

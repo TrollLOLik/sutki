@@ -29,6 +29,8 @@ export interface RequestCodeResponse {
 /** Partial profile update body for PATCH /api/v1/me. */
 export interface UpdateProfileBody {
   name?: string;
+  surname?: string;
+  patronymic?: string;
   phone?: string;
   city?: string;
   birthday?: string;

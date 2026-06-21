@@ -16,6 +16,7 @@ import { ApiError } from '@/lib/api/client';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 import type { UpdateProfileBody } from '@/types/auth';
+import type { User } from '@/types/user';
 
 type SettingsTab = 'basic' | 'security';
 
@@ -39,10 +40,11 @@ function valueOrPlaceholder(value: string | number | boolean | null | undefined,
   return String(value);
 }
 
-function initials(name: string | undefined) {
-  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
+function initials(user: User | null | undefined) {
+  if (!user) return 'ДР';
+  const parts = [user.name, user.surname].filter((p): p is string => !!p);
   if (parts.length === 0) return 'ДР';
-  return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return parts.map((part) => part.trim()[0]).join('').toUpperCase();
 }
 
 function SettingsField({ label, value, icon }: { label: string; value: string; icon: keyof typeof Ionicons.glyphMap }) {
@@ -200,6 +202,8 @@ export default function ProfileScreen() {
 
   // Editable "Основное" form state (initialised from the cached user on open).
   const [formName, setFormName] = useState('');
+  const [formSurname, setFormSurname] = useState('');
+  const [formPatronymic, setFormPatronymic] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formCity, setFormCity] = useState('');
   const [formBirthday, setFormBirthday] = useState(''); // YYYY-MM-DD
@@ -212,6 +216,8 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (settingsVisible) {
       setFormName(user?.name ?? '');
+      setFormSurname(user?.surname ?? '');
+      setFormPatronymic(user?.patronymic ?? '');
       setFormPhone(user?.phone ?? '');
       setFormCity(user?.city ?? '');
       setFormBirthday(user?.birthday ?? '');
@@ -227,6 +233,8 @@ export default function ProfileScreen() {
   const handleSaveProfile = async () => {
     if (!user) return;
     const name = formName.trim();
+    const surname = formSurname.trim();
+    const patronymic = formPatronymic.trim();
     const phone = formPhone.trim();
     const city = formCity.trim();
     if (name.length < 2) {
@@ -237,6 +245,8 @@ export default function ProfileScreen() {
     // "unchanged" server-side), so only send it when set and different.
     const body: UpdateProfileBody = {};
     if (name !== (user.name ?? '')) body.name = name;
+    if (surname !== (user.surname ?? '')) body.surname = surname;
+    if (patronymic !== (user.patronymic ?? '')) body.patronymic = patronymic;
     if (phone !== (user.phone ?? '')) body.phone = phone;
     if (city !== (user.city ?? '')) body.city = city;
     if (formBirthday && formBirthday !== (user.birthday ?? '')) body.birthday = formBirthday;
@@ -319,7 +329,9 @@ export default function ProfileScreen() {
     setDeleteSheetVisible(true);
   };
 
-  const displayName = user?.name || 'Гость';
+  const displayName = user
+    ? [user.name, user.patronymic, user.surname].filter(Boolean).join(' ')
+    : 'Гость';
   const avatarUrl = user?.avatar_url || FALLBACK_AVATAR;
   const completionItems = useMemo(() => {
     if (!user) return [];
@@ -400,7 +412,7 @@ export default function ProfileScreen() {
               {avatarUrl ? (
                 <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
               ) : (
-                <Text className="text-xl font-extrabold text-primary">{initials(user?.name)}</Text>
+                <Text className="text-xl font-extrabold text-primary">{initials(user)}</Text>
               )}
             </View>
 
@@ -671,6 +683,20 @@ export default function ProfileScreen() {
                     onChangeText={setFormName}
                     icon="person-outline"
                     placeholder="Ваше имя"
+                  />
+                  <EditableField
+                    label="Фамилия"
+                    value={formSurname}
+                    onChangeText={setFormSurname}
+                    icon="person-outline"
+                    placeholder="Ваша фамилия (необязательно)"
+                  />
+                  <EditableField
+                    label="Отчество"
+                    value={formPatronymic}
+                    onChangeText={setFormPatronymic}
+                    icon="person-outline"
+                    placeholder="Ваше отчество (необязательно)"
                   />
                   <EditableField
                     label="Телефон"

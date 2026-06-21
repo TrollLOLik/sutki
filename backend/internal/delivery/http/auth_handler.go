@@ -32,6 +32,8 @@ type userDTO struct {
 	ID            int32   `json:"id"`
 	Email         string  `json:"email"`
 	Name          string  `json:"name"`
+	Surname       string  `json:"surname"`
+	Patronymic    string  `json:"patronymic"`
 	Phone         string  `json:"phone"`
 	City          string  `json:"city"`
 	AvatarURL     string  `json:"avatar_url"`
@@ -51,6 +53,8 @@ func toUserDTO(u domain.User) userDTO {
 		ID:            u.ID,
 		Email:         u.Email,
 		Name:          u.Name,
+		Surname:       u.Surname,
+		Patronymic:    u.Patronymic,
 		Phone:         u.Phone,
 		City:          u.City,
 		AvatarURL:     u.AvatarURL,
@@ -173,6 +177,8 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	// empty" so PATCH does not clobber fields the client didn't send.
 	var body struct {
 		Name         *string `json:"name"`
+		Surname      *string `json:"surname"`
+		Patronymic   *string `json:"patronymic"`
 		Phone        *string `json:"phone"`
 		City         *string `json:"city"`
 		Birthday     *string `json:"birthday"`
@@ -196,7 +202,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		}
 		bday = &t
 	}
-	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Phone, body.City, body.AvatarURL, bday, body.VKID, body.VKIDDoNull)
+	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Surname, body.Patronymic, body.Phone, body.City, body.AvatarURL, bday, body.VKID, body.VKIDDoNull)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")

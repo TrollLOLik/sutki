@@ -43,6 +43,7 @@ export interface ListingDetail extends ListingCard {
   owner_id: number;
   owner_name: string;
   owner_surname: string;
+  owner_patronymic: string;
   owner_phone: string;
   owner_avatar_url: string;
   owner_rating: number;

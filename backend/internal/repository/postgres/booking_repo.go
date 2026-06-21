@@ -110,6 +110,7 @@ func (r *BookingRepo) GetByID(ctx context.Context, id int32) (domain.Booking, er
 	b.Guest = &domain.BookingGuest{
 		Name:         row.GuestName,
 		Surname:      row.GuestSurname,
+		Patronymic:   row.GuestPatronymic,
 		AvatarURL:    row.GuestAvatarUrl,
 		Phone:        row.GuestPhoneProfile,
 		IsVerified:   row.GuestIsVerified,

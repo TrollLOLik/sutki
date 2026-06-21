@@ -133,6 +133,7 @@ export default function BookingScreen() {
       await createBooking.mutateAsync({
         count,
         name: values.name,
+        surname: user?.surname || undefined,
         phone: toFullPhone(values.phone),
         message: values.message || undefined,
         start_date: format(range.start, ISO),
@@ -221,13 +222,15 @@ export default function BookingScreen() {
               </View>
             ) : null}
 
-            {/* Dates */}
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Даты</Text>
               <CalendarRange value={range} onChange={setRange} isDateDisabled={isDateDisabled} />
-              <Text style={{ fontSize: 12, color: palette.inkMuted }}>
-                Занятые даты недоступны для выбора.
-              </Text>
+              <View className="flex-row items-center gap-1.5 mt-0.5 px-0.5">
+                <View className="h-2.5 w-2.5 rounded-full bg-danger-light border border-danger/30" />
+                <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
+                  Занятые даты
+                </Text>
+              </View>
               {dateError ? (
                 <Text style={{ fontSize: 13, color: palette.danger }}>{dateError}</Text>
               ) : null}

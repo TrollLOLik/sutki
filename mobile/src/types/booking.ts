@@ -20,6 +20,7 @@ export interface BookingHouse {
 export interface BookingGuest {
   name: string;
   surname: string;
+  patronymic?: string;
   avatar_url: string;
   phone: string;
   is_verified: boolean;

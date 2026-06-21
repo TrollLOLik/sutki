@@ -231,6 +231,7 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		OwnerID:            row.OwnerID,
 		OwnerName:          stringFromPtr(row.OwnerName),
 		OwnerSurname:       stringFromPtr(row.OwnerSurname),
+		OwnerPatronymic:    stringFromPtr(row.OwnerPatronymic),
 		OwnerPhone:         stringFromPtr(row.OwnerPhone),
 		OwnerAvatarURL:     stringFromPtr(row.OwnerAvatarUrl),
 		OwnerRating:        row.OwnerRating,

@@ -88,7 +88,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO "user" (email, roles, deleted, is_verified, enable, created_at, updated_at)
 VALUES ($1, $2, false, true, true, now(), now())
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
 `
 
 type CreateUserParams struct {
@@ -100,6 +100,7 @@ type CreateUserRow struct {
 	ID         int32
 	Name       *string
 	Surname    *string
+	Patronymic *string
 	Email      string
 	Phone      *string
 	City       *string
@@ -117,6 +118,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.ID,
 		&i.Name,
 		&i.Surname,
+		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
 		&i.City,
@@ -214,7 +216,7 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (Refres
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
 FROM "user"
 WHERE email = $1 AND deleted = false
 `
@@ -223,6 +225,7 @@ type GetUserByEmailRow struct {
 	ID         int32
 	Name       *string
 	Surname    *string
+	Patronymic *string
 	Email      string
 	Phone      *string
 	City       *string
@@ -240,6 +243,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.ID,
 		&i.Name,
 		&i.Surname,
+		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
 		&i.City,
@@ -254,7 +258,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT 
-  u.id, u.name, u.surname, u.email, u.phone, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
+  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
   (
     SELECT count(*)::int
     FROM house h
@@ -274,6 +278,7 @@ type GetUserByIDRow struct {
 	ID            int32
 	Name          *string
 	Surname       *string
+	Patronymic    *string
 	Email         string
 	Phone         *string
 	City          *string
@@ -293,6 +298,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, er
 		&i.ID,
 		&i.Name,
 		&i.Surname,
+		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
 		&i.City,
@@ -340,7 +346,7 @@ UPDATE "user"
 SET email = $2,
     updated_at = now()
 WHERE id = $1 AND deleted = false
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
 `
 
 type UpdateUserEmailParams struct {
@@ -352,6 +358,7 @@ type UpdateUserEmailRow struct {
 	ID         int32
 	Name       *string
 	Surname    *string
+	Patronymic *string
 	Email      string
 	Phone      *string
 	City       *string
@@ -369,6 +376,7 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.ID,
 		&i.Name,
 		&i.Surname,
+		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
 		&i.City,
@@ -384,18 +392,22 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE "user"
 SET name = COALESCE($1, name),
-    phone = COALESCE($2, phone),
-    city = COALESCE($3, city),
-    birthday = COALESCE($4, birthday),
-    avatar_url = COALESCE($5, avatar_url),
-    vk_id = CASE WHEN $6::boolean = true THEN NULL ELSE COALESCE($7, vk_id) END,
+    surname = CASE WHEN $2::text = '' THEN NULL ELSE COALESCE($2::text, surname) END,
+    patronymic = CASE WHEN $3::text = '' THEN NULL ELSE COALESCE($3::text, patronymic) END,
+    phone = COALESCE($4, phone),
+    city = COALESCE($5, city),
+    birthday = COALESCE($6, birthday),
+    avatar_url = COALESCE($7, avatar_url),
+    vk_id = CASE WHEN $8::boolean = true THEN NULL ELSE COALESCE($9, vk_id) END,
     updated_at = now()
-WHERE id = $8 AND deleted = false
-RETURNING id, name, surname, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+WHERE id = $10 AND deleted = false
+RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
 `
 
 type UpdateUserProfileParams struct {
 	Name       *string
+	Surname    *string
+	Patronymic *string
 	Phone      *string
 	City       *string
 	Birthday   pgtype.Date
@@ -409,6 +421,7 @@ type UpdateUserProfileRow struct {
 	ID         int32
 	Name       *string
 	Surname    *string
+	Patronymic *string
 	Email      string
 	Phone      *string
 	City       *string
@@ -422,6 +435,8 @@ type UpdateUserProfileRow struct {
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
 	row := q.db.QueryRow(ctx, updateUserProfile,
 		arg.Name,
+		arg.Surname,
+		arg.Patronymic,
 		arg.Phone,
 		arg.City,
 		arg.Birthday,
@@ -435,6 +450,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.ID,
 		&i.Name,
 		&i.Surname,
+		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
 		&i.City,

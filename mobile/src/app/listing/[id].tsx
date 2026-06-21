@@ -442,7 +442,7 @@ export default function ListingDetailScreen() {
                     <View className="w-14 h-14 rounded-full bg-primary-light items-center justify-center flex-shrink-0">
                       <Text className="text-xl font-bold text-primary">
                         {(() => {
-                          const nameStr = `${data.owner_name || ''} ${data.owner_surname || ''}`.trim();
+                          const nameStr = [data.owner_name, data.owner_patronymic, data.owner_surname].filter(Boolean).join(' ');
                           const letter = nameStr ? nameStr[0] : (data.owner_phone ? 'Т' : 'А');
                           return letter.toUpperCase();
                         })()}
@@ -453,7 +453,7 @@ export default function ListingDetailScreen() {
                     <View className="flex-1 gap-1">
                       <Text className="text-xl font-bold text-ink leading-tight">
                         {(() => {
-                          const nameStr = `${data.owner_name || ''} ${data.owner_surname || ''}`.trim();
+                          const nameStr = [data.owner_name, data.owner_patronymic, data.owner_surname].filter(Boolean).join(' ');
                           return nameStr || 'Арендодатель';
                         })()}
                       </Text>

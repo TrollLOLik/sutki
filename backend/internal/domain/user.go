@@ -8,6 +8,8 @@ type User struct {
 	ID            int32
 	Email         string
 	Name          string
+	Surname       string
+	Patronymic    string
 	Phone         string
 	City          string
 	AvatarURL     string

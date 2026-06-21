@@ -6,7 +6,7 @@ SELECT
   rv.rating,
   rv.body,
   rv.created_at,
-  COALESCE(NULLIF(TRIM(COALESCE(u.name, '') || ' ' || COALESCE(u.surname, '')), ''), 'Гость')::text AS author_name,
+  COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url
 FROM review rv
 LEFT JOIN "user" u ON u.id = rv.owner_id
@@ -42,7 +42,7 @@ SELECT
   rv.rating,
   rv.body,
   rv.created_at,
-  COALESCE(NULLIF(TRIM(COALESCE(u.name, '') || ' ' || COALESCE(u.surname, '')), ''), 'Гость')::text AS author_name,
+  COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url
 FROM review rv
 LEFT JOIN "user" u ON u.id = rv.owner_id
@@ -87,7 +87,7 @@ SELECT
   h.street AS house_street,
   h.house_number AS house_number,
   h.country AS house_city,
-  COALESCE(NULLIF(TRIM(COALESCE(u.name, '') || ' ' || COALESCE(u.surname, '')), ''), 'Гость')::text AS author_name,
+  COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM review rv

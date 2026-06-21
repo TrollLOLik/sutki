@@ -86,6 +86,7 @@ type listingDetailDTO struct {
 	OwnerID            int32      `json:"owner_id"`
 	OwnerName          string     `json:"owner_name"`
 	OwnerSurname       string     `json:"owner_surname"`
+	OwnerPatronymic    string     `json:"owner_patronymic"`
 	OwnerPhone         string     `json:"owner_phone"`
 	OwnerAvatarURL     string     `json:"owner_avatar_url"`
 	OwnerRating        float64    `json:"owner_rating"`
@@ -347,6 +348,7 @@ func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
 		OwnerID:            hs.OwnerID,
 		OwnerName:          hs.OwnerName,
 		OwnerSurname:       hs.OwnerSurname,
+		OwnerPatronymic:    hs.OwnerPatronymic,
 		OwnerPhone:         hs.OwnerPhone,
 		OwnerAvatarURL:     hs.OwnerAvatarURL,
 		OwnerRating:        hs.OwnerRating,
