@@ -49,16 +49,18 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	HouseExists(ctx context.Context, id int32) (bool, error)
-	// Reports whether the house already has a confirmed request overlapping the
-	// requested [range_start, range_end) date range. The caller passes the
-	// exclusive end (for a single-night request, range_start + 1 day).
+	// Reports whether the house already has a confirmed or active request overlapping
+	// the requested [range_start, range_end) date range (half-open: end_date = checkout,
+	// free for next guest). The caller passes the exclusive end (start+1 for single night).
 	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
 	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)
-	// Confirmed (occupied) date ranges for a house, used to block taken dates in
-	// the booking calendar. Past ranges are omitted.
-	ListConfirmedRangesForHouse(ctx context.Context, houseID *int32) ([]ListConfirmedRangesForHouseRow, error)
+	// All active/pending date ranges for a house so the booking calendar can
+	// distinguish BLOCK ranges (confirmed, active) from WARN ranges (in_progress,
+	// pending). Interval is half-open [start_date, end_date): end_date = checkout
+	// day, free for same-day turnover. Past ranges are omitted.
+	ListBlockingRangesForHouse(ctx context.Context, houseID *int32) ([]ListBlockingRangesForHouseRow, error)
 	ListFavoriteHouses(ctx context.Context, arg ListFavoriteHousesParams) ([]ListFavoriteHousesRow, error)
 	ListFavoriteIDs(ctx context.Context, userID int32) ([]int32, error)
 	ListHouseCategories(ctx context.Context, houseID int32) ([]ListHouseCategoriesRow, error)

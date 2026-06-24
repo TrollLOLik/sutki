@@ -45,16 +45,17 @@ func (r *BookingRepo) HasConfirmedOverlap(ctx context.Context, houseID int32, st
 	})
 }
 
-func (r *BookingRepo) ConfirmedRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
-	rows, err := r.q.ListConfirmedRangesForHouse(ctx, &houseID)
+func (r *BookingRepo) BlockingRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
+	rows, err := r.q.ListBlockingRangesForHouse(ctx, &houseID)
 	if err != nil {
 		return nil, err
 	}
 	ranges := make([]domain.BookedRange, 0, len(rows))
 	for _, row := range rows {
 		ranges = append(ranges, domain.BookedRange{
-			Start: row.StartDate.Time,
-			End:   dateToPtr(row.EndDate),
+			Start:  row.StartDate.Time,
+			End:    dateToPtr(row.EndDate),
+			Status: row.Status,
 		})
 	}
 	return ranges, nil
@@ -104,7 +105,8 @@ func (r *BookingRepo) GetByID(ctx context.Context, id int32) (domain.Booking, er
 	})
 	b.House = &domain.BookingHouse{
 		ID: row.HouseID, OwnerID: row.HouseOwnerID, Street: row.HouseStreet,
-		HouseNumber: row.HouseNumber, City: row.HouseCity, Price: row.HousePrice,
+		HouseNumber: row.HouseNumber, NumberRoom: row.HouseNumberRoom,
+		City: row.HouseCity, Price: row.HousePrice,
 		CoverPath: row.HouseCoverPath,
 	}
 	b.Guest = &domain.BookingGuest{
@@ -139,7 +141,8 @@ func (r *BookingRepo) ListByUser(ctx context.Context, userID, limit, offset int3
 		})
 		b.House = &domain.BookingHouse{
 			ID: row.HouseID, OwnerID: row.HouseOwnerID, Street: row.HouseStreet,
-			HouseNumber: row.HouseNumber, City: row.HouseCity, Price: row.HousePrice,
+			HouseNumber: row.HouseNumber, NumberRoom: row.HouseNumberRoom,
+			City: row.HouseCity, Price: row.HousePrice,
 			CoverPath: row.HouseCoverPath,
 		}
 		out = append(out, b)
@@ -170,7 +173,8 @@ func (r *BookingRepo) ListForOwner(ctx context.Context, ownerID, limit, offset i
 		})
 		b.House = &domain.BookingHouse{
 			ID: row.HouseID, OwnerID: row.HouseOwnerID, Street: row.HouseStreet,
-			HouseNumber: row.HouseNumber, City: row.HouseCity, Price: row.HousePrice,
+			HouseNumber: row.HouseNumber, NumberRoom: row.HouseNumberRoom,
+			City: row.HouseCity, Price: row.HousePrice,
 			CoverPath: row.HouseCoverPath,
 		}
 		out = append(out, b)

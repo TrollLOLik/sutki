@@ -7,6 +7,7 @@ import "time"
 const (
 	BookingPending   = "in_progress"
 	BookingConfirmed = "confirmed"
+	BookingActive    = "active"
 	BookingCancelled = "cancelled"
 )
 
@@ -45,6 +46,9 @@ type BookingHouse struct {
 	OwnerID     int32
 	Street      string
 	HouseNumber string
+	// NumberRoom is the apartment/room number (кв. N). Hidden in DTOs until
+	// the booking is confirmed or active to protect the guest's privacy pre-approval.
+	NumberRoom  string
 	City        string
 	Price       int32
 	CoverPath   string

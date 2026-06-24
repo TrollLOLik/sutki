@@ -38,11 +38,12 @@ func (h *BookingHandler) Routes(r chi.Router) {
 }
 
 type bookingHouseDTO struct {
-	ID       int32  `json:"id"`
-	Address  string `json:"address"`
-	City     string `json:"city"`
-	Price    int32  `json:"price"`
-	CoverURL string `json:"cover_url"`
+	ID         int32  `json:"id"`
+	Address    string `json:"address"`
+	NumberRoom string `json:"number_room,omitempty"`
+	City       string `json:"city"`
+	Price      int32  `json:"price"`
+	CoverURL   string `json:"cover_url"`
 }
 
 type bookingGuestDTO struct {
@@ -89,6 +90,7 @@ type bookingListResponse struct {
 type availabilityRangeDTO struct {
 	StartDate string  `json:"start_date"`
 	EndDate   *string `json:"end_date"`
+	Status    string  `json:"status"`
 }
 
 type availabilityResponse struct {
@@ -103,7 +105,7 @@ func (h *BookingHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	ranges, err := h.svc.ConfirmedRanges(r.Context(), int32(houseID))
+	ranges, err := h.svc.BlockingRanges(r.Context(), int32(houseID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load availability")
 		return
@@ -118,6 +120,7 @@ func (h *BookingHandler) Availability(w http.ResponseWriter, r *http.Request) {
 		items = append(items, availabilityRangeDTO{
 			StartDate: rg.Start.Format(dateLayout),
 			EndDate:   end,
+			Status:    rg.Status,
 		})
 	}
 	writeJSON(w, http.StatusOK, availabilityResponse{Ranges: items})
@@ -336,12 +339,19 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 		dto.ConfirmedAt = &s
 	}
 	if b.House != nil {
+		address := strings.TrimSpace(strings.TrimSpace(b.House.Street) + " " + strings.TrimSpace(b.House.HouseNumber))
+		var numRoom string
+		if (b.Status == domain.BookingConfirmed || b.Status == domain.BookingActive) && b.House.NumberRoom != "" {
+			address += ", кв. " + b.House.NumberRoom
+			numRoom = b.House.NumberRoom
+		}
 		dto.House = &bookingHouseDTO{
-			ID:       b.House.ID,
-			Address:  strings.TrimSpace(strings.TrimSpace(b.House.Street) + " " + strings.TrimSpace(b.House.HouseNumber)),
-			City:     b.House.City,
-			Price:    b.House.Price,
-			CoverURL: h.mediaURL(b.House.CoverPath),
+			ID:         b.House.ID,
+			Address:    address,
+			NumberRoom: numRoom,
+			City:       b.House.City,
+			Price:      b.House.Price,
+			CoverURL:   h.mediaURL(b.House.CoverPath),
 		}
 	}
 	if b.Guest != nil {

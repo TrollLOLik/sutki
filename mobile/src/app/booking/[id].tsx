@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addDays, differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns';
+import { ru } from 'date-fns/locale';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -15,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
@@ -23,7 +25,7 @@ import { Button, Input } from '@/components/ui';
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
-import { formatGuests, formatPricePerNight, formatRub } from '@/lib/format';
+import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 
@@ -98,17 +100,43 @@ export default function BookingScreen() {
     return formatPhoneMask(normalizePhoneDigits(user.phone));
   }, [user?.phone]);
 
+  const insets = useSafeAreaInsets();
+
+  const blockRanges = useMemo(() => {
+    return (availability?.ranges ?? [])
+      .filter((r) => r.status === 'confirmed' || r.status === 'active')
+      .map((r) => {
+        const start = startOfDay(parseISO(r.start_date));
+        const end = r.end_date ? startOfDay(parseISO(r.end_date)) : addDays(start, 1);
+        return { start, end };
+      });
+  }, [availability]);
+
+  const warnRanges = useMemo(() => {
+    return (availability?.ranges ?? [])
+      .filter((r) => r.status === 'in_progress' || r.status === 'pending')
+      .map((r) => {
+        const start = startOfDay(parseISO(r.start_date));
+        const end = r.end_date ? startOfDay(parseISO(r.end_date)) : addDays(start, 1);
+        return { start, end };
+      });
+  }, [availability]);
+
   const isDateDisabled = useMemo(() => {
-    const ranges = (availability?.ranges ?? []).map((r) => {
-      const start = startOfDay(parseISO(r.start_date));
-      const end = r.end_date ? startOfDay(parseISO(r.end_date)) : addDays(start, 1);
-      return { start, end };
-    });
     return (day: Date) => {
       const d = startOfDay(day);
-      return ranges.some((r) => d >= r.start && d < r.end);
+      return blockRanges.some((r) => d >= r.start && d < r.end);
     };
-  }, [availability]);
+  }, [blockRanges]);
+
+  const hasWarnOverlap = useMemo(() => {
+    if (!range.start || !range.end) return false;
+    const start = startOfDay(range.start);
+    const end = startOfDay(range.end);
+    return warnRanges.some((r) => start < r.end && end > r.start);
+  }, [range, warnRanges]);
+
+  const maxGuests = listing?.max_guests ?? MAX_GUESTS;
 
   const {
     control,
@@ -134,6 +162,7 @@ export default function BookingScreen() {
         count,
         name: values.name,
         surname: user?.surname || undefined,
+        lastname: user?.patronymic || undefined,
         phone: toFullPhone(values.phone),
         message: values.message || undefined,
         start_date: format(range.start, ISO),
@@ -212,25 +241,109 @@ export default function BookingScreen() {
             keyboardShouldPersistTaps="handled">
 
             {listing ? (
-              <View style={{ gap: 2 }}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
-                  {listing.address}
-                </Text>
-                <Text style={{ fontSize: 14, color: palette.primary }}>
-                  {formatPricePerNight(listing.price)}
-                </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: 12,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: palette.line,
+                  backgroundColor: palette.surface,
+                  padding: 12,
+                }}
+              >
+                {/* Thumbnail Image */}
+                <Image
+                  source={{ uri: listing.cover_url }}
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 10,
+                    backgroundColor: palette.surfaceSkeleton,
+                  }}
+                  contentFit="cover"
+                />
+
+                {/* Listing Details */}
+                <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                  <View style={{ gap: 2 }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}
+                    >
+                      {(() => {
+                        const roomsNum = parseInt(listing.rooms, 10);
+                        if (isNaN(roomsNum) || roomsNum <= 0) {
+                          return 'Современная студия';
+                        }
+                        return `Уютная ${roomsNum}-комн. квартира`;
+                      })()}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 13, color: palette.inkSecondary }}
+                    >
+                      {listing.city}, {listing.address}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: palette.primary }}>
+                    {formatPricePerNight(listing.price)}
+                  </Text>
+                </View>
               </View>
             ) : null}
 
             <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Даты</Text>
               <CalendarRange value={range} onChange={setRange} isDateDisabled={isDateDisabled} />
-              <View className="flex-row items-center gap-1.5 mt-0.5 px-0.5">
-                <View className="h-2.5 w-2.5 rounded-full bg-danger-light border border-danger/30" />
-                <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
+              <View className="flex-row items-center gap-2 mt-1 px-0.5">
+                <View
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    backgroundColor: '#FFF0F0',
+                    borderWidth: 1,
+                    borderColor: '#FAD2D2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}
+                >
+                  <View
+                    style={{
+                      position: 'absolute',
+                      width: 18,
+                      height: 1.5,
+                      backgroundColor: '#C92A2A',
+                      transform: [{ rotate: '-45deg' }],
+                    }}
+                  />
+                </View>
+                <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
                   Занятые даты
                 </Text>
               </View>
+              {hasWarnOverlap ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 8,
+                    borderRadius: 12,
+                    backgroundColor: '#FFF8EC',
+                    borderWidth: 1,
+                    borderColor: '#FFE0B2',
+                    padding: 12,
+                    marginTop: 4,
+                  }}
+                >
+                  <Ionicons name="warning-outline" size={18} color="#E65100" style={{ marginTop: 1 }} />
+                  <Text style={{ flex: 1, fontSize: 13, color: '#E65100', lineHeight: 18 }}>
+                    Выбранные даты пересекаются с другой заявкой на рассмотрении. Решение о подтверждении остаётся за владельцем.
+                  </Text>
+                </View>
+              ) : null}
               {dateError ? (
                 <Text style={{ fontSize: 13, color: palette.danger }}>{dateError}</Text>
               ) : null}
@@ -263,8 +376,8 @@ export default function BookingScreen() {
                   </Text>
                   <Stepper
                     icon="add"
-                    disabled={count >= MAX_GUESTS}
-                    onPress={() => setCount((c) => Math.min(MAX_GUESTS, c + 1))}
+                    disabled={count >= maxGuests}
+                    onPress={() => setCount((c) => Math.min(maxGuests, c + 1))}
                   />
                 </View>
               </View>
@@ -321,37 +434,52 @@ export default function BookingScreen() {
                 )}
               />
             </View>
-
-            {/* Price breakdown */}
-            {nights > 0 && listing ? (
-              <View
-                style={{
-                  gap: 8,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: palette.line,
-                  padding: 16,
-                }}
-              >
-                <Row
-                  label={`${formatPricePerNight(listing.price)} × ${nights}`}
-                  value={`${formatRub(total)}\u00A0₽`}
-                />
-                <View style={{ height: 1, backgroundColor: palette.line }} />
-                <Row label="Итого" value={`${formatRub(total)}\u00A0₽`} bold />
-              </View>
-            ) : null}
           </ScrollView>
 
           <View
             style={{
               borderTopWidth: 1,
               borderTopColor: palette.line,
+              backgroundColor: palette.surface,
               paddingHorizontal: 16,
               paddingTop: 12,
-              paddingBottom: 8,
+              paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
             }}
           >
+            {nights > 0 && listing ? (
+              <View
+                style={{
+                  marginBottom: 12,
+                  padding: 12,
+                  borderRadius: 12,
+                  backgroundColor: palette.surfaceMuted,
+                  borderWidth: 1,
+                  borderColor: palette.line,
+                  gap: 4,
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: palette.ink }}>
+                    {range.start && range.end ? (() => {
+                      const start = range.start;
+                      const end = range.end;
+                      if (start.getMonth() === end.getMonth()) {
+                        return `${format(start, 'd', { locale: ru })}–${format(end, 'd MMMM', { locale: ru })}`;
+                      }
+                      return `${format(start, 'd MMMM', { locale: ru })} – ${format(end, 'd MMMM', { locale: ru })}`;
+                    })() : ''}
+                    {' · '}
+                    {formatNights(nights)}
+                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: palette.ink }}>
+                    {formatRub(total)} ₽
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
+                  {formatRub(listing.price)} ₽ × {formatNights(nights)}
+                </Text>
+              </View>
+            ) : null}
             <Button label="Отправить заявку" loading={createBooking.isPending} onPress={onSubmit} />
           </View>
         </KeyboardAvoidingView>

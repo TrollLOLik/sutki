@@ -137,7 +137,7 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
                   'my-0.5 h-10 w-10 items-center justify-center rounded-full',
                   inRange && !endpoint && 'bg-primary-light',
                   endpoint && 'bg-primary',
-                  blocked && !outside && 'bg-danger-light',
+                  blocked && !outside && 'bg-[#FFF0F0] border border-[#FAD2D2]',
                 )}>
                 <Text
                   className={cn(
@@ -147,7 +147,7 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
                     !disabled && !outside && !inRange && 'text-ink',
                     outside && 'text-ink-muted opacity-20',
                     isPast && !outside && 'text-ink-muted opacity-40',
-                    blocked && !outside && 'text-danger font-semibold line-through',
+                    blocked && !outside && 'text-[#C92A2A] font-semibold line-through',
                   )}>
                   {format(day, 'd')}
                 </Text>

@@ -68,10 +68,11 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	return s.repo.Create(ctx, b)
 }
 
-// ConfirmedRanges returns the confirmed (occupied) date ranges for a house so
-// clients can block taken dates. It is public information about a listing.
-func (s *Service) ConfirmedRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
-	return s.repo.ConfirmedRanges(ctx, houseID)
+// BlockingRanges returns all non-terminal date ranges for a house so clients
+// can separate BLOCK (confirmed, active) from WARN (in_progress, pending)
+// ranges in the booking calendar. Public listing information.
+func (s *Service) BlockingRanges(ctx context.Context, houseID int32) ([]domain.BookedRange, error) {
+	return s.repo.BlockingRanges(ctx, houseID)
 }
 
 // Get returns a booking visible to actorID (its author or the listing owner).

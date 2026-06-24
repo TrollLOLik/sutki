@@ -268,6 +268,7 @@ SELECT
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
+  COALESCE(h.number_room, '')::text AS house_number_room,
   h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path,
   -- guest profile from user table
@@ -314,6 +315,7 @@ type GetRequestByIDRow struct {
 	RejectionReason   *string
 	HouseStreet       string
 	HouseNumber       string
+	HouseNumberRoom   string
 	HouseCity         string
 	HousePrice        int32
 	HouseOwnerID      int32
@@ -350,6 +352,7 @@ func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDR
 		&i.RejectionReason,
 		&i.HouseStreet,
 		&i.HouseNumber,
+		&i.HouseNumberRoom,
 		&i.HouseCity,
 		&i.HousePrice,
 		&i.HouseOwnerID,
@@ -371,7 +374,7 @@ SELECT EXISTS (
   SELECT 1
   FROM request rq
   WHERE rq.house_id = $1::int
-    AND rq.status = 'confirmed'
+    AND rq.status IN ('confirmed', 'active')
     AND rq.start_date < $2::date
     AND COALESCE(rq.end_date, rq.start_date + 1) > $3::date
 ) AS has_overlap
@@ -383,9 +386,9 @@ type HouseHasConfirmedOverlapParams struct {
 	RangeStart pgtype.Date
 }
 
-// Reports whether the house already has a confirmed request overlapping the
-// requested [range_start, range_end) date range. The caller passes the
-// exclusive end (for a single-night request, range_start + 1 day).
+// Reports whether the house already has a confirmed or active request overlapping
+// the requested [range_start, range_end) date range (half-open: end_date = checkout,
+// free for next guest). The caller passes the exclusive end (start+1 for single night).
 func (q *Queries) HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error) {
 	row := q.db.QueryRow(ctx, houseHasConfirmedOverlap, arg.HouseID, arg.RangeEnd, arg.RangeStart)
 	var has_overlap bool
@@ -393,32 +396,35 @@ func (q *Queries) HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConf
 	return has_overlap, err
 }
 
-const listConfirmedRangesForHouse = `-- name: ListConfirmedRangesForHouse :many
-SELECT start_date, end_date
+const listBlockingRangesForHouse = `-- name: ListBlockingRangesForHouse :many
+SELECT start_date, end_date, status
 FROM request
 WHERE house_id = $1
-  AND status = 'confirmed'
+  AND status IN ('confirmed', 'active', 'in_progress', 'pending')
   AND (end_date IS NULL OR end_date >= CURRENT_DATE)
 ORDER BY start_date
 `
 
-type ListConfirmedRangesForHouseRow struct {
+type ListBlockingRangesForHouseRow struct {
 	StartDate pgtype.Date
 	EndDate   pgtype.Date
+	Status    string
 }
 
-// Confirmed (occupied) date ranges for a house, used to block taken dates in
-// the booking calendar. Past ranges are omitted.
-func (q *Queries) ListConfirmedRangesForHouse(ctx context.Context, houseID *int32) ([]ListConfirmedRangesForHouseRow, error) {
-	rows, err := q.db.Query(ctx, listConfirmedRangesForHouse, houseID)
+// All active/pending date ranges for a house so the booking calendar can
+// distinguish BLOCK ranges (confirmed, active) from WARN ranges (in_progress,
+// pending). Interval is half-open [start_date, end_date): end_date = checkout
+// day, free for same-day turnover. Past ranges are omitted.
+func (q *Queries) ListBlockingRangesForHouse(ctx context.Context, houseID *int32) ([]ListBlockingRangesForHouseRow, error) {
+	rows, err := q.db.Query(ctx, listBlockingRangesForHouse, houseID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListConfirmedRangesForHouseRow
+	var items []ListBlockingRangesForHouseRow
 	for rows.Next() {
-		var i ListConfirmedRangesForHouseRow
-		if err := rows.Scan(&i.StartDate, &i.EndDate); err != nil {
+		var i ListBlockingRangesForHouseRow
+		if err := rows.Scan(&i.StartDate, &i.EndDate, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -436,6 +442,7 @@ SELECT
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
+  COALESCE(h.number_room, '')::text AS house_number_room,
   h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM request r
@@ -482,6 +489,7 @@ type ListRequestsByUserRow struct {
 	RejectionReason *string
 	HouseStreet     string
 	HouseNumber     string
+	HouseNumberRoom string
 	HouseCity       string
 	HousePrice      int32
 	HouseOwnerID    int32
@@ -521,6 +529,7 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, arg ListRequestsByUser
 			&i.RejectionReason,
 			&i.HouseStreet,
 			&i.HouseNumber,
+			&i.HouseNumberRoom,
 			&i.HouseCity,
 			&i.HousePrice,
 			&i.HouseOwnerID,
@@ -543,6 +552,7 @@ SELECT
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
+  COALESCE(h.number_room, '')::text AS house_number_room,
   h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM request r
@@ -577,6 +587,7 @@ type ListRequestsForOwnerRow struct {
 	RejectionReason *string
 	HouseStreet     string
 	HouseNumber     string
+	HouseNumberRoom string
 	HouseCity       string
 	HousePrice      int32
 	HouseOwnerID    int32
@@ -611,6 +622,7 @@ func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForO
 			&i.RejectionReason,
 			&i.HouseStreet,
 			&i.HouseNumber,
+			&i.HouseNumberRoom,
 			&i.HouseCity,
 			&i.HousePrice,
 			&i.HouseOwnerID,

@@ -5,11 +5,15 @@ import (
 	"time"
 )
 
-// BookedRange is a confirmed occupancy window on a listing. End is nil for a
-// single-night booking.
+// BookedRange is an occupancy window on a listing returned by
+// BlockingRanges. Status distinguishes BLOCK (confirmed, active) from
+// WARN (in_progress, pending) ranges.
+// Interval is half-open [Start, End): End is the checkout day, free for
+// same-day turnover. End is nil only for legacy single-night rows.
 type BookedRange struct {
-	Start time.Time
-	End   *time.Time
+	Start  time.Time
+	End    *time.Time
+	Status string
 }
 
 // ListingRepository abstracts persistence for rental listings.
@@ -34,9 +38,10 @@ type BookingRepository interface {
 	// HasConfirmedOverlap reports whether the house already has a confirmed
 	// booking overlapping [start, end). A nil end means a single night.
 	HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error)
-	// ConfirmedRanges returns the house's confirmed (occupied) date ranges,
-	// used to block taken dates in the booking calendar.
-	ConfirmedRanges(ctx context.Context, houseID int32) ([]BookedRange, error)
+	// BlockingRanges returns the house's date ranges across all non-terminal
+	// statuses so the client can separate BLOCK (confirmed, active) from WARN
+	// (in_progress, pending) ranges for calendar display.
+	BlockingRanges(ctx context.Context, houseID int32) ([]BookedRange, error)
 	Create(ctx context.Context, b NewBooking) (Booking, error)
 	GetByID(ctx context.Context, id int32) (Booking, error)
 	ListByUser(ctx context.Context, userID, limit, offset int32, scope string) ([]Booking, error)

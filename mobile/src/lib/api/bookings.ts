@@ -35,6 +35,7 @@ export function createBooking(listingId: number, body: CreateBookingBody): Promi
 export interface BookedRange {
   start_date: string;
   end_date: string | null;
+  status: string;
 }
 
 interface AvailabilityResponse {
