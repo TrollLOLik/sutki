@@ -4,8 +4,8 @@ import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { Button, Input } from '@/components/ui';
@@ -20,6 +20,14 @@ function formatDateShort(date: Date): string {
   return format(date, 'd MMMM', { locale: ru });
 }
 
+function formatNightsPlural(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} ночь`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} ночи`;
+  return `${n} ночей`;
+}
+
 const statusColors: Record<string, string> = {
   in_progress: '#FF9500',
   confirmed:   '#2EAD6B',
@@ -32,6 +40,7 @@ export default function IncomingBookingDetailScreen() {
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
   const confirm = useConfirmBooking();
   const reject = useRejectBooking();
+  const insets = useSafeAreaInsets();
 
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
@@ -161,11 +170,22 @@ export default function IncomingBookingDetailScreen() {
                 const start = parseISO(data.start_date);
                 const end = data.end_date ? parseISO(data.end_date) : null;
                 const nights = end ? differenceInCalendarDays(end, start) : 0;
-                const total = nights > 0 ? data.house.price * nights : data.house.price;
 
                 return (
-                  <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 14 }}>
-                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(data.house!.id) } })}
+                    activeOpacity={0.7}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: '#E8E8E8',
+                      marginHorizontal: 16,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                       {/* Cover image */}
                       <View
                         style={{
@@ -190,7 +210,7 @@ export default function IncomingBookingDetailScreen() {
                       </View>
 
                       {/* Info */}
-                      <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
+                      <View style={{ flex: 1, justifyContent: 'center', gap: 3, paddingRight: 8 }}>
                         <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink, lineHeight: 21 }}
                           numberOfLines={2}>
                           {data.house.address}
@@ -198,17 +218,29 @@ export default function IncomingBookingDetailScreen() {
                         <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
                           {data.house.city}
                         </Text>
-                        <Text style={{ fontSize: 17, fontWeight: '800', color: palette.ink, marginTop: 4 }}>
-                          {formatRub(total)} ₽
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: palette.inkSecondary, marginTop: 4 }}>
+                          {formatRub(data.house.price)} ₽ × {formatNightsPlural(nights)}
                         </Text>
                       </View>
+
+                      {/* Chevron to indicate clickable link */}
+                      <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })() : null}
 
               {/* Details block */}
-              <View style={{ backgroundColor: palette.surface }}>
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#E8E8E8',
+                  marginHorizontal: 16,
+                  paddingVertical: 4,
+                }}
+              >
                 <InfoRow
                   icon="calendar-outline"
                   label="Заезд — выезд"
@@ -249,7 +281,11 @@ export default function IncomingBookingDetailScreen() {
                 return (
                   <View
                     style={{
-                      backgroundColor: palette.surface,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: '#E8E8E8',
+                      marginHorizontal: 16,
                       flexDirection: 'row',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -266,18 +302,26 @@ export default function IncomingBookingDetailScreen() {
               })() : null}
 
               {/* Контакты гостя */}
-              <View style={{ backgroundColor: palette.surface }}>
-                <Text style={{
-                  fontSize: 15, fontWeight: '700', color: palette.ink,
-                  paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12,
-                }}>
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#E8E8E8',
+                  marginHorizontal: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  gap: 12,
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
                   Контакты гостя
                 </Text>
 
                 {/* Avatar + name row */}
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  paddingHorizontal: 16, paddingBottom: 14, gap: 14,
+                  paddingBottom: 14, gap: 14,
                 }}>
                   {/* Avatar */}
                   <View style={{
@@ -339,33 +383,53 @@ export default function IncomingBookingDetailScreen() {
                 </View>
 
                 {/* Divider */}
-                <View style={{ height: 1, backgroundColor: palette.line, marginHorizontal: 16 }} />
+                <View style={{ height: 1, backgroundColor: palette.line }} />
 
                 {/* Phone */}
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  paddingHorizontal: 16, paddingVertical: 14, gap: 12,
-                }}>
-                  <View style={{
-                    width: 36, height: 36, borderRadius: 10,
-                    backgroundColor: palette.surfaceMuted,
-                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <Ionicons name="call-outline" size={18} color={palette.inkSecondary} />
+                <TouchableOpacity
+                  onPress={() => {
+                    const phone = (data.guest?.phone && data.guest.phone !== '') ? data.guest.phone : data.phone;
+                    if (phone) {
+                      Linking.openURL(`tel:${phone}`).catch(() => {
+                        Alert.alert('Ошибка', 'Не удалось открыть приложение для звонков.');
+                      });
+                    }
+                  }}
+                  disabled={!((data.guest?.phone && data.guest.phone !== '') || data.phone)}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      backgroundColor: palette.surfaceMuted,
+                      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <Ionicons name="call-outline" size={18} color={palette.inkSecondary} />
+                    </View>
+                    <Text style={{ fontSize: 14, color: palette.inkSecondary }}>Телефон</Text>
                   </View>
-                  <Text style={{ flex: 1, fontSize: 14, color: palette.inkSecondary }}>Телефон</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: palette.ink }}>
-                    {(data.guest?.phone && data.guest.phone !== '')
-                      ? data.guest.phone
-                      : (data.phone || '—')}
-                  </Text>
-                </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: palette.inkSecondary }}>
+                      {(data.guest?.phone && data.guest.phone !== '')
+                        ? data.guest.phone
+                        : (data.phone || '—')}
+                    </Text>
+                    {((data.guest?.phone && data.guest.phone !== '') || data.phone) ? (
+                      <Ionicons name="chevron-forward" size={16} color={palette.inkSecondary} />
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
 
                 {/* Guest comment */}
                 {data.message ? (
                   <>
-                    <View style={{ height: 1, backgroundColor: palette.line, marginHorizontal: 16 }} />
-                    <View style={{ paddingHorizontal: 16, paddingVertical: 14, gap: 4 }}>
+                    <View style={{ height: 1, backgroundColor: palette.line }} />
+                    <View style={{ gap: 4 }}>
                       <Text style={{ fontSize: 12, color: palette.inkMuted, fontWeight: '600' }}>
                         Комментарий
                       </Text>
@@ -379,7 +443,18 @@ export default function IncomingBookingDetailScreen() {
 
 
               {/* Правила отмены */}
-              <View style={{ backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 16, gap: 6 }}>
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#E8E8E8',
+                  marginHorizontal: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  gap: 6,
+                }}
+              >
                 <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
                   Правила отмены
                 </Text>
@@ -426,7 +501,7 @@ export default function IncomingBookingDetailScreen() {
                 borderTopColor: palette.line,
                 paddingHorizontal: 16,
                 paddingTop: 12,
-                paddingBottom: 8,
+                paddingBottom: insets.bottom > 0 ? insets.bottom : 16,
                 gap: 10,
               }}
             >

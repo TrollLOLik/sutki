@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
@@ -12,6 +12,7 @@ import { palette } from '@/theme/tokens';
 export default function MyListingsScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useMyListings({ limit: 50 });
   const items = data?.items ?? [];
+  const insets = useSafeAreaInsets();
 
   return (
     <View className="flex-1 bg-surface">
@@ -32,7 +33,10 @@ export default function MyListingsScreen() {
             <ActivityIndicator color={palette.primary} />
           </View>
         ) : isError ? (
-          <View className="flex-1 justify-center gap-4 px-4">
+          <View 
+            style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }}
+            className="flex-1 justify-center gap-4 px-4"
+          >
             <EmptyState
               icon="cloud-offline-outline"
               title="Не удалось загрузить"
@@ -41,7 +45,10 @@ export default function MyListingsScreen() {
             <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
           </View>
         ) : items.length === 0 ? (
-          <View className="flex-1 justify-center gap-4 px-4">
+          <View 
+            style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }}
+            className="flex-1 justify-center gap-4 px-4"
+          >
             <EmptyState
               icon="home-outline"
               title="Пока нет объявлений"

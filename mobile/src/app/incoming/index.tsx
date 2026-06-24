@@ -16,14 +16,15 @@ export default function IncomingBookingsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center gap-3 px-4 py-2">
+        <View className="flex-row items-center px-4 py-2">
           <Pressable
             onPress={() => router.back()}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
-          <Text className="text-lg font-semibold text-ink">Входящие заявки</Text>
+          <Text className="flex-1 text-center text-lg font-semibold text-ink">Входящие заявки</Text>
+          <View className="h-10 w-10" />
         </View>
 
         {isLoading ? (

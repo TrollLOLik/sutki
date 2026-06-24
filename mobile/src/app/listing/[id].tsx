@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Pressable,
   ScrollView,
@@ -146,6 +147,54 @@ export default function ListingDetailScreen() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
 
+  const animVisible = useRef(new Animated.Value(0)).current;
+  const isHeaderVisibleRef = useRef(false);
+  const titleBottomRef = useRef(368);
+
+  const headerBgOpacity = animVisible;
+  const titleOpacity = animVisible;
+
+  const buttonBgOpacity = useMemo(() => {
+    return animVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    });
+  }, [animVisible]);
+
+  const titleTranslateY = useMemo(() => {
+    return animVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: [10, 0],
+    });
+  }, [animVisible]);
+
+  const handleMainScroll = (event: any) => {
+    if (!isMountedRef.current) return;
+    const y = event.nativeEvent.contentOffset.y;
+    // Threshold (310px) ensures that the page's original title is completely scrolled past/under
+    // the header layout before we start fading in the sticky header elements.
+    const threshold = 310;
+    if (y >= threshold) {
+      if (!isHeaderVisibleRef.current) {
+        isHeaderVisibleRef.current = true;
+        Animated.timing(animVisible, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }).start();
+      }
+    } else {
+      if (isHeaderVisibleRef.current) {
+        isHeaderVisibleRef.current = false;
+        Animated.timing(animVisible, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  };
+
   const similarParams = useMemo<ListListingsParams>(() => {
     if (!data) return { limit: 0 };
 
@@ -272,7 +321,128 @@ export default function ListingDetailScreen() {
         </SafeAreaView>
       ) : (
         <>
-          <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Sticky Header */}
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 20,
+              paddingTop: (insets.top || 0) + 12,
+              paddingBottom: 12,
+            }}
+            className="flex-row items-center px-4"
+          >
+            {/* Animated Solid Background Overlay */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: palette.surface,
+                borderBottomWidth: 1,
+                borderBottomColor: palette.line,
+                opacity: headerBgOpacity,
+              }}
+            />
+
+            {/* Back Button */}
+            <Pressable
+              onPress={() => router.back()}
+              accessibilityLabel="Назад"
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+            >
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 999,
+                  backgroundColor: palette.surface,
+                  opacity: buttonBgOpacity,
+                }}
+                className="shadow-md"
+              />
+              <Ionicons name="chevron-back" size={22} color={palette.ink} style={{ zIndex: 1 }} />
+            </Pressable>
+
+            {/* Title in center */}
+            <View className="flex-1 px-3 justify-center">
+              <Animated.View
+                style={{
+                  opacity: titleOpacity,
+                  transform: [{ translateY: titleTranslateY }],
+                }}
+              >
+                <Text numberOfLines={1} className="text-base font-bold text-ink">
+                  {getListingTitle()}
+                </Text>
+              </Animated.View>
+            </View>
+
+            {/* Action Buttons */}
+            <View className="flex-row items-center gap-2">
+              {!isOwnListing && (
+                <Pressable
+                  onPress={() => toggleFavorite.mutate({ id: numericId, isFavorite })}
+                  disabled={numericId <= 0}
+                  accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+                  className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+                >
+                  <Animated.View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      borderRadius: 999,
+                      backgroundColor: palette.surface,
+                      opacity: buttonBgOpacity,
+                    }}
+                    className="shadow-md"
+                  />
+                  <Ionicons
+                    name={isFavorite ? 'heart' : 'heart-outline'}
+                    size={20}
+                    color={isFavorite ? palette.primary : palette.ink}
+                    style={{ zIndex: 1 }}
+                  />
+                </Pressable>
+              )}
+              <Pressable
+                onPress={handleShare}
+                accessibilityLabel="Поделиться"
+                className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+              >
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    borderRadius: 999,
+                    backgroundColor: palette.surface,
+                    opacity: buttonBgOpacity,
+                  }}
+                  className="shadow-md"
+                />
+                <Ionicons name="share-outline" size={20} color={palette.ink} style={{ zIndex: 1 }} />
+              </Pressable>
+            </View>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            onScroll={handleMainScroll}
+            scrollEventThrottle={16}
+          >
             <View className="relative h-[320px] bg-surface-skeleton">
               {data.photos.length > 0 ? (
                 <FlatList
@@ -298,36 +468,6 @@ export default function ListingDetailScreen() {
                 </View>
               )}
 
-              <Pressable
-                onPress={() => router.back()}
-                accessibilityLabel="Назад"
-                style={{ top: (insets.top || 0) + 16 }}
-                className="absolute left-4 h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:opacity-80 z-10">
-                <Ionicons name="chevron-back" size={22} color={palette.ink} />
-              </Pressable>
-
-              <View style={{ top: (insets.top || 0) + 16 }} className="absolute right-4 flex-row items-center gap-2 z-10">
-                {!isOwnListing && (
-                  <Pressable
-                    onPress={() => toggleFavorite.mutate({ id: numericId, isFavorite })}
-                    disabled={numericId <= 0}
-                    accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-                    className="h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:opacity-80">
-                    <Ionicons
-                      name={isFavorite ? 'heart' : 'heart-outline'}
-                      size={20}
-                      color={isFavorite ? palette.primary : palette.ink}
-                    />
-                  </Pressable>
-                )}
-                <Pressable
-                  onPress={handleShare}
-                  accessibilityLabel="Поделиться"
-                  className="h-10 w-10 items-center justify-center rounded-full bg-white shadow-md active:opacity-80">
-                  <Ionicons name="share-outline" size={20} color={palette.ink} />
-                </Pressable>
-              </View>
-
               {data.photos.length > 0 && (
                 <View className="absolute bottom-8 right-4 bg-black/40 px-2.5 py-1 rounded-full">
                   <Text className="text-[11px] font-semibold text-white">
@@ -338,7 +478,14 @@ export default function ListingDetailScreen() {
             </View>
 
             <View className="bg-surface rounded-t-[24px] mt-[-20px] px-4 pt-5 pb-8 gap-5">
-              <View className="gap-1">
+              <View
+                className="gap-1"
+                onLayout={(event) => {
+                  const { y, height } = event.nativeEvent.layout;
+                  // parent container starts at y = 300px (320px image slider height minus 20px negative margin)
+                  titleBottomRef.current = 300 + y + height;
+                }}
+              >
                 <Text className="text-xl font-bold text-ink leading-tight">{getListingTitle()}</Text>
                 <Text className="text-sm text-ink-secondary">{getListingSubtitle()}</Text>
               </View>
