@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { parseISO, format, addDays } from 'date-fns';
+import { parseISO, format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
 import { useMemo, useState, useRef, useEffect } from 'react';
@@ -23,7 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 
-import { CalendarRange, type DateRange } from '@/components/CalendarRange';
+import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
@@ -182,19 +182,7 @@ export default function SearchScreen() {
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [guestModalVisible, setGuestModalVisible] = useState(false);
 
-  const [tempRange, setTempRange] = useState<DateRange>({ start: null, end: null });
   const [tempGuests, setTempGuests] = useState(filters.guests);
-
-  const openDateModal = () => {
-    const start = filters.checkIn ? parseISO(filters.checkIn) : null;
-    const end = filters.checkOut ? parseISO(filters.checkOut) : null;
-    setTempRange({ start, end });
-    setDateModalVisible(true);
-  };
-
-  const closeDateModal = () => {
-    setDateModalVisible(false);
-  };
 
   const openGuestModal = () => {
     setTempGuests(filters.guests);
@@ -203,23 +191,6 @@ export default function SearchScreen() {
 
   const closeGuestModal = () => {
     setGuestModalVisible(false);
-  };
-
-  const handleApplyDates = () => {
-    if (tempRange.start) {
-      const startStr = format(tempRange.start, 'yyyy-MM-dd');
-      let endStr: string | null = null;
-      if (tempRange.end) {
-        endStr = format(tempRange.end, 'yyyy-MM-dd');
-      } else {
-        const nextDay = addDays(tempRange.start, 1);
-        endStr = format(nextDay, 'yyyy-MM-dd');
-      }
-      filters.setFilters({ checkIn: startStr, checkOut: endStr });
-    } else {
-      filters.setFilters({ checkIn: null, checkOut: null });
-    }
-    closeDateModal();
   };
 
   const handleApplyGuests = () => {
@@ -384,7 +355,7 @@ export default function SearchScreen() {
           <View style={{ marginTop: 10 }} className="flex-row items-center gap-2">
             {/* Dates Button */}
             <Pressable
-              onPress={openDateModal}
+              onPress={() => setDateModalVisible(true)}
               className="flex-1 h-12 flex-row items-center justify-between rounded-field border border-line bg-surface px-3 active:bg-surface-muted">
               <View className="flex-row items-center gap-2">
                 <Ionicons name="calendar-outline" size={18} color={palette.primary} />
@@ -485,28 +456,15 @@ export default function SearchScreen() {
       )}
 
       {/* Date Picker Bottom Sheet Modal */}
-      <BottomSheet visible={dateModalVisible} onClose={closeDateModal}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between pb-4 border-b border-line mb-4">
-          <TouchableOpacity onPress={() => setTempRange({ start: null, end: null })} className="min-w-[80px] py-1">
-            <Text className="text-sm font-semibold text-primary">Сбросить</Text>
-          </TouchableOpacity>
-          <Text className="text-lg font-bold text-ink">Выберите даты</Text>
-          <TouchableOpacity onPress={closeDateModal} className="min-w-[80px] py-1 items-end">
-            <Ionicons name="close" size={24} color={palette.ink} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Calendar component from booking screen */}
-        <View className="py-2">
-          <CalendarRange value={tempRange} onChange={setTempRange} />
-        </View>
-
-        {/* Apply Button */}
-        <View className="mt-4">
-          <Button label="Применить" onPress={handleApplyDates} />
-        </View>
-      </BottomSheet>
+      <DatePickerSheet
+        visible={dateModalVisible}
+        onClose={() => setDateModalVisible(false)}
+        onApply={(checkIn, checkOut) => {
+          filters.setFilters({ checkIn, checkOut });
+        }}
+        checkIn={filters.checkIn}
+        checkOut={filters.checkOut}
+      />
 
       {/* Guest Picker Bottom Sheet Modal */}
       <BottomSheet visible={guestModalVisible} onClose={closeGuestModal}>

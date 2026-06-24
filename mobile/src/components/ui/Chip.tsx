@@ -1,6 +1,6 @@
 import { Pressable, Text } from 'react-native';
 
-import { cn } from '@/lib/cn';
+import { palette } from '@/theme/tokens';
 
 interface ChipProps {
   label: string;
@@ -14,11 +14,25 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      className={cn(
-        'h-9 items-center justify-center rounded-pill border px-4',
-        selected ? 'border-primary bg-primary' : 'border-line bg-surface',
-      )}>
-      <Text className={cn('text-sm font-medium', selected ? 'text-white' : 'text-ink')}>{label}</Text>
+      style={{
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 999,
+        borderWidth: 1,
+        paddingHorizontal: 16,
+        backgroundColor: selected ? palette.primaryLight : '#FFFFFF',
+        borderColor: selected ? palette.primary : '#E0E0E0',
+      }}>
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: selected ? '600' : '400',
+          color: selected ? palette.primary : palette.inkSecondary,
+        }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
+

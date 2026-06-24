@@ -5,3 +5,5 @@ export { Input } from './Input';
 export { ScreenContainer } from './ScreenContainer';
 export { Skeleton } from './Skeleton';
 export { BottomSheet } from './BottomSheet';
+export { RangeSlider } from './RangeSlider';
+

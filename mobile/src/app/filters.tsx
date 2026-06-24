@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { format, parseISO, addDays } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,15 +11,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CalendarRange, type DateRange } from '@/components/CalendarRange';
-import { Button, Chip, BottomSheet } from '@/components/ui';
+import { DatePickerSheet } from '@/components/DatePickerSheet';
+import { Button, Chip, RangeSlider } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useServices } from '@/lib/api/create-listing';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { useFiltersStore, type RoomFilter, type SearchFilters } from '@/store/filters';
+import { formatGuests } from '@/lib/format';
 import { palette } from '@/theme/tokens';
+
 
 const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
   { label: 'Студия', value: 'studio' },
@@ -58,6 +60,7 @@ function dateRangeLabel(checkIn: string | null, checkOut: string | null): string
 export default function FiltersScreen() {
   const store = useFiltersStore();
   const { data: services } = useServices();
+  const insets = useSafeAreaInsets();
 
   // Local draft state; only committed to the store on "Показать".
   const [city, setCity] = useState<string | null>(store.city);
@@ -72,10 +75,29 @@ export default function FiltersScreen() {
   const [childrenAllowed, setChildrenAllowed] = useState(store.childrenAllowed);
   const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
 
+  // Price formatting helper
+  const formatPriceString = (val: string) => {
+    const digits = val.replace(/\D/g, '');
+    if (!digits) return '';
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  };
+
+  // Internal inputs string states
+  const [priceMinInput, setPriceMinInput] = useState(priceMin ? formatPriceString(priceMin) : '');
+  const [priceMaxInput, setPriceMaxInput] = useState(priceMax ? formatPriceString(priceMax) : '');
+
+  // Synchronise RangeSlider updates to inputs
+  useEffect(() => {
+    setPriceMinInput(priceMin ? formatPriceString(priceMin) : '');
+  }, [priceMin]);
+
+  useEffect(() => {
+    setPriceMaxInput(priceMax ? formatPriceString(priceMax) : '');
+  }, [priceMax]);
+
   // Pickers
   const [citySheet, setCitySheet] = useState(false);
   const [dateSheet, setDateSheet] = useState(false);
-  const [tempRange, setTempRange] = useState<DateRange>({ start: null, end: null });
 
   const draftFilters: SearchFilters = useMemo(
     () => ({
@@ -95,18 +117,13 @@ export default function FiltersScreen() {
     [city, checkIn, checkOut, guests, priceMin, priceMax, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
-  // Live result count for the CTA. limit:1 keeps the payload small; total is
-  // the full match count.
+  // Live result count for the CTA.
   const countParams = useMemo(
     () => filtersToListParams(draftFilters, '', { limit: 1 }),
     [draftFilters],
   );
   const { data: countData, isFetching: countLoading } = useListings(countParams);
   const total = countData?.total;
-
-  const priceActive = (min: number | null, max: number | null) =>
-    (priceMin !== '' ? Number(priceMin) : null) === min &&
-    (priceMax !== '' ? Number(priceMax) : null) === max;
 
   const apply = () => {
     store.setFilters({
@@ -133,34 +150,14 @@ export default function FiltersScreen() {
     setServiceIds([]);
     setPriceMin('');
     setPriceMax('');
+    setPriceMinInput('');
+    setPriceMaxInput('');
     setGuests(2);
     setPetsAllowed(false);
     setChildrenAllowed(false);
     setEventsAllowed(false);
   };
 
-  const openDateSheet = () => {
-    setTempRange({
-      start: checkIn ? parseISO(checkIn) : null,
-      end: checkOut ? parseISO(checkOut) : null,
-    });
-    setDateSheet(true);
-  };
-
-  const applyDates = () => {
-    if (tempRange.start) {
-      const startStr = format(tempRange.start, 'yyyy-MM-dd');
-      const endStr = tempRange.end
-        ? format(tempRange.end, 'yyyy-MM-dd')
-        : format(addDays(tempRange.start, 1), 'yyyy-MM-dd');
-      setCheckIn(startStr);
-      setCheckOut(endStr);
-    } else {
-      setCheckIn(null);
-      setCheckOut(null);
-    }
-    setDateSheet(false);
-  };
 
   const ctaLabel = countLoading
     ? 'Загрузка…'
@@ -170,120 +167,196 @@ export default function FiltersScreen() {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface">
-      <View className="flex-row items-center justify-between px-4 py-2">
-        <Text className="text-lg font-bold text-ink">Фильтры</Text>
+      {/* Header bar styled like mock */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: palette.line,
+        }}
+      >
         <Pressable
           accessibilityLabel="Закрыть"
           onPress={() => router.back()}
-          className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
-          <Ionicons name="close" size={22} color={palette.ink} />
+          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Ionicons name="close" size={24} color={palette.ink} />
+        </Pressable>
+
+        <Text style={{ fontSize: 17, fontWeight: '700', color: palette.ink }}>
+          Фильтры
+        </Text>
+
+        <Pressable
+          accessibilityLabel="Сбросить все фильтры"
+          onPress={reset}
+          style={{ paddingHorizontal: 4 }}
+        >
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.primary }}>
+            Сбросить
+          </Text>
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="gap-6 px-4 py-4">
-        {/* City */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Город</Text>
-          <Pressable
-            onPress={() => {
-              setCitySheet(true);
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingVertical: 16 }}>
+        {/* City Card */}
+        <Pressable
+          onPress={() => setCitySheet(true)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#FFFFFF',
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: '#E8E8E8',
+            padding: 14,
+            gap: 14,
+          }}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#F5F6F8',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-            className="h-12 flex-row items-center justify-between rounded-field border border-line px-3 active:bg-surface-muted">
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="location-outline" size={18} color={palette.primary} />
-              <Text className={`text-base ${city ? 'text-ink' : 'text-ink-muted'}`}>
-                {city ?? 'Любой город'}
-              </Text>
-            </View>
-            {city ? (
-              <Pressable accessibilityLabel="Очистить город" onPress={() => setCity(null)} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-              </Pressable>
-            ) : (
-              <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
-            )}
-          </Pressable>
-        </View>
+          >
+            <Ionicons name="location-outline" size={20} color={palette.inkSecondary} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 13, color: palette.inkMuted }}>Город</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
+              {city ?? 'Любой'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+        </Pressable>
 
-        {/* Dates */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Даты</Text>
-          <Pressable
-            onPress={openDateSheet}
-            className="h-12 flex-row items-center justify-between rounded-field border border-line px-3 active:bg-surface-muted">
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="calendar-outline" size={18} color={palette.primary} />
-              <Text className={`text-base ${checkIn ? 'text-ink' : 'text-ink-muted'}`}>
-                {dateRangeLabel(checkIn, checkOut)}
-              </Text>
-            </View>
-            {checkIn ? (
-              <Pressable
-                accessibilityLabel="Очистить даты"
-                onPress={() => {
-                  setCheckIn(null);
-                  setCheckOut(null);
-                }}
-                hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-              </Pressable>
-            ) : (
-              <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
-            )}
-          </Pressable>
-        </View>
+        {/* Dates Card */}
+        <Pressable
+          onPress={() => setDateSheet(true)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#FFFFFF',
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: '#E8E8E8',
+            padding: 14,
+            gap: 14,
+          }}
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#F5F6F8',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="calendar-outline" size={20} color={palette.inkSecondary} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 13, color: palette.inkMuted }}>Даты проживания</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
+              {dateRangeLabel(checkIn, checkOut)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+        </Pressable>
 
-        {/* Price */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Цена за сутки, ₽</Text>
-          <View className="flex-row items-center gap-3">
-            <View className="h-12 flex-1 flex-row items-center rounded-field border border-line px-3">
-              <Text className="mr-1 text-base text-ink-muted">от</Text>
+        {/* Price Section */}
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Цена за сутки, ₽</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {/* Min Price Input */}
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E8E8E8', paddingHorizontal: 16, height: 48 }}>
+              <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>от</Text>
               <TextInput
-                value={priceMin}
-                onChangeText={(t) => setPriceMin(t.replace(/[^0-9]/g, ''))}
+                value={priceMinInput}
+                onChangeText={(t) => {
+                  const cleaned = t.replace(/\D/g, '');
+                  setPriceMinInput(formatPriceString(cleaned));
+                  setPriceMin(cleaned);
+                }}
+                onBlur={() => {
+                  const minVal = priceMin !== '' ? Number(priceMin) : 0;
+                  const maxVal = priceMax !== '' ? Number(priceMax) : 15000;
+                  const clampedMin = Math.min(Math.max(0, minVal), 15000);
+                  setPriceMin(clampedMin.toString());
+                  setPriceMinInput(formatPriceString(clampedMin.toString()));
+
+                  if (clampedMin > maxVal - 500) {
+                    const newMax = Math.min(15000, clampedMin + 500);
+                    setPriceMax(newMax.toString());
+                    setPriceMaxInput(formatPriceString(newMax.toString()));
+                  }
+                }}
                 keyboardType="number-pad"
                 placeholder="0"
                 placeholderTextColor={palette.inkMuted}
-                className="flex-1 text-base text-ink"
+                style={{ flex: 1, fontSize: 15, fontWeight: '700', color: palette.ink }}
               />
             </View>
-            <View className="h-12 flex-1 flex-row items-center rounded-field border border-line px-3">
-              <Text className="mr-1 text-base text-ink-muted">до</Text>
+
+            {/* Max Price Input */}
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E8E8E8', paddingHorizontal: 16, height: 48 }}>
+              <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>до</Text>
               <TextInput
-                value={priceMax}
-                onChangeText={(t) => setPriceMax(t.replace(/[^0-9]/g, ''))}
-                keyboardType="number-pad"
-                placeholder="∞"
-                placeholderTextColor={palette.inkMuted}
-                className="flex-1 text-base text-ink"
-              />
-            </View>
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-            {PRICE_PRESETS.map((p) => (
-              <Chip
-                key={p.label}
-                label={p.label}
-                selected={priceActive(p.min, p.max)}
-                onPress={() => {
-                  if (priceActive(p.min, p.max)) {
-                    setPriceMin('');
-                    setPriceMax('');
-                  } else {
-                    setPriceMin(p.min != null ? String(p.min) : '');
-                    setPriceMax(p.max != null ? String(p.max) : '');
+                value={priceMaxInput}
+                onChangeText={(t) => {
+                  const cleaned = t.replace(/\D/g, '');
+                  setPriceMaxInput(formatPriceString(cleaned));
+                  setPriceMax(cleaned);
+                }}
+                onBlur={() => {
+                  const minVal = priceMin !== '' ? Number(priceMin) : 0;
+                  const maxVal = priceMax !== '' ? Number(priceMax) : 15000;
+                  const clampedMax = Math.min(Math.max(0, maxVal), 15000);
+                  setPriceMax(clampedMax.toString());
+                  setPriceMaxInput(formatPriceString(clampedMax.toString()));
+
+                  if (clampedMax < minVal + 500) {
+                    const newMin = Math.max(0, clampedMax - 500);
+                    setPriceMin(newMin.toString());
+                    setPriceMinInput(formatPriceString(newMin.toString()));
                   }
                 }}
+                keyboardType="number-pad"
+                placeholder="15 000"
+                placeholderTextColor={palette.inkMuted}
+                style={{ flex: 1, fontSize: 15, fontWeight: '700', color: palette.ink }}
               />
-            ))}
+            </View>
           </View>
+
+          {/* Custom Range Slider */}
+          <RangeSlider
+            min={0}
+            max={15000}
+            valueMin={priceMin !== '' ? Number(priceMin) : 0}
+            valueMax={priceMax !== '' ? Number(priceMax) : 15000}
+            onValueChange={({ min: newMin, max: newMax }) => {
+              setPriceMin(newMin.toString());
+              setPriceMax(newMax.toString());
+            }}
+            step={100}
+            minDistance={500}
+          />
         </View>
 
         {/* Rooms */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Комнаты</Text>
-          <View className="flex-row flex-wrap gap-2">
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Комнаты</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {ROOM_OPTIONS.map((o) => (
               <Chip
                 key={o.value}
@@ -296,29 +369,69 @@ export default function FiltersScreen() {
         </View>
 
         {/* Guests */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Гостей</Text>
-          <View className="flex-row items-center gap-4">
-            <Pressable
-              accessibilityLabel="Меньше гостей"
-              onPress={() => setGuests((g) => Math.max(1, g - 1))}
-              className="h-10 w-10 items-center justify-center rounded-full border border-line">
-              <Ionicons name="remove" size={20} color={palette.ink} />
-            </Pressable>
-            <Text className="min-w-6 text-center text-base font-semibold text-ink">{guests}</Text>
-            <Pressable
-              accessibilityLabel="Больше гостей"
-              onPress={() => setGuests((g) => g + 1)}
-              className="h-10 w-10 items-center justify-center rounded-full border border-line">
-              <Ionicons name="add" size={20} color={palette.ink} />
-            </Pressable>
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Гости</Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#E8E8E8',
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+            }}
+          >
+            <Text style={{ fontSize: 15, color: palette.ink }}>{formatGuests(guests)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Меньше гостей"
+                disabled={guests <= 1}
+                onPress={() => setGuests((g) => Math.max(1, g - 1))}
+                style={[
+                  {
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: '#E8E8E8',
+                  },
+                  guests <= 1 ? { opacity: 0.4 } : undefined,
+                ]}
+              >
+                <Ionicons name="remove" size={18} color={palette.ink} />
+              </Pressable>
+              <Text style={{ width: 24, textAlign: 'center', fontSize: 15, fontWeight: '600', color: palette.ink }}>
+                {guests}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Больше гостей"
+                onPress={() => setGuests((g) => g + 1)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: '#E8E8E8',
+                }}
+              >
+                <Ionicons name="add" size={18} color={palette.ink} />
+              </Pressable>
+            </View>
           </View>
         </View>
 
         {/* House Rules */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Правила дома</Text>
-          <View className="flex-row flex-wrap gap-2">
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Правила дома</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Chip
               label="Можно с животными"
               selected={petsAllowed}
@@ -337,13 +450,13 @@ export default function FiltersScreen() {
           </View>
         </View>
 
-        {/* Amenities (from the /services catalog) */}
-        <View className="gap-2">
-          <Text className="text-base font-semibold text-ink">Удобства</Text>
+        {/* Amenities */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Удобства</Text>
           {services == null ? (
             <ActivityIndicator color={palette.primary} />
           ) : (
-            <View className="flex-row flex-wrap gap-2">
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {services.map((s) => (
                 <Chip
                   key={s.id}
@@ -357,13 +470,18 @@ export default function FiltersScreen() {
         </View>
       </ScrollView>
 
-      <View className="flex-row gap-3 border-t border-line px-4 py-3">
-        <View className="flex-1">
-          <Button label="Сбросить" variant="secondary" onPress={reset} />
-        </View>
-        <View className="flex-[2]">
-          <Button label={ctaLabel} onPress={apply} />
-        </View>
+      {/* Sticky footer action button */}
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: palette.line,
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+          backgroundColor: palette.surface,
+        }}
+      >
+        <Button label={ctaLabel} loading={countLoading} onPress={apply} />
       </View>
 
       {/* City picker bottom sheet */}
@@ -378,22 +496,17 @@ export default function FiltersScreen() {
         allowAnyCity={true}
       />
 
-      {/* Date picker bottom sheet */}
-      <BottomSheet visible={dateSheet} onClose={() => setDateSheet(false)}>
-        <View className="mb-4 flex-row items-center justify-between border-b border-line pb-4">
-          <Pressable onPress={() => setTempRange({ start: null, end: null })}>
-            <Text className="text-sm font-semibold text-primary">Сбросить</Text>
-          </Pressable>
-          <Text className="text-lg font-bold text-ink">Выберите даты</Text>
-          <Pressable onPress={() => setDateSheet(false)} hitSlop={8}>
-            <Ionicons name="close" size={24} color={palette.ink} />
-          </Pressable>
-        </View>
-        <CalendarRange value={tempRange} onChange={setTempRange} />
-        <View className="mt-4">
-          <Button label="Применить" onPress={applyDates} />
-        </View>
-      </BottomSheet>
+      {/* Date picker */}
+      <DatePickerSheet
+        visible={dateSheet}
+        onClose={() => setDateSheet(false)}
+        onApply={(ci, co) => {
+          setCheckIn(ci);
+          setCheckOut(co);
+        }}
+        checkIn={checkIn}
+        checkOut={checkOut}
+      />
     </SafeAreaView>
   );
 }
