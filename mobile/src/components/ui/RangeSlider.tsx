@@ -7,6 +7,7 @@ interface RangeSliderProps {
   valueMin: number;
   valueMax: number;
   onValueChange: (range: { min: number; max: number }) => void;
+  onSlidingComplete?: (range: { min: number; max: number }) => void;
   step?: number;
   minDistance?: number;
 }
@@ -17,11 +18,35 @@ export function RangeSlider({
   valueMin,
   valueMax,
   onValueChange,
+  onSlidingComplete,
   step = 100,
   minDistance = 500,
 }: RangeSliderProps) {
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
+
+  // Synchronous tracking of latest values for the PanResponder thread
+  const latestValueMinRef = useRef(valueMin);
+  const latestValueMaxRef = useRef(valueMax);
+
+  useEffect(() => {
+    latestValueMinRef.current = valueMin;
+  }, [valueMin]);
+
+  useEffect(() => {
+    latestValueMaxRef.current = valueMax;
+  }, [valueMax]);
+
+  const onValueChangeRef = useRef(onValueChange);
+  const onSlidingCompleteRef = useRef(onSlidingComplete);
+
+  useEffect(() => {
+    onValueChangeRef.current = onValueChange;
+  }, [onValueChange]);
+
+  useEffect(() => {
+    onSlidingCompleteRef.current = onSlidingComplete;
+  }, [onSlidingComplete]);
 
   // Keep latest values in ref to avoid capturing stale values in PanResponder closures
   const stateRef = useRef({ min, max, valueMin, valueMax, trackWidth, step, minDistance });
@@ -50,16 +75,29 @@ export function RangeSlider({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        minStartPx.current = valueToPx(stateRef.current.valueMin);
+        minStartPx.current = valueToPx(latestValueMinRef.current);
       },
       onPanResponderMove: (_, gestureState) => {
         const newPx = Math.max(0, minStartPx.current + gestureState.dx);
         const newValue = pxToValue(newPx);
         const clampedValue = Math.max(
           stateRef.current.min,
-          Math.min(stateRef.current.valueMax - stateRef.current.minDistance, newValue)
+          Math.min(latestValueMaxRef.current - stateRef.current.minDistance, newValue)
         );
-        onValueChange({ min: clampedValue, max: stateRef.current.valueMax });
+        latestValueMinRef.current = clampedValue;
+        if (onValueChangeRef.current) {
+          onValueChangeRef.current({ min: clampedValue, max: latestValueMaxRef.current });
+        }
+      },
+      onPanResponderRelease: () => {
+        if (onSlidingCompleteRef.current) {
+          onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (onSlidingCompleteRef.current) {
+          onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
+        }
       },
     })
   ).current;
@@ -69,16 +107,29 @@ export function RangeSlider({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        maxStartPx.current = valueToPx(stateRef.current.valueMax);
+        maxStartPx.current = valueToPx(latestValueMaxRef.current);
       },
       onPanResponderMove: (_, gestureState) => {
         const newPx = Math.max(0, maxStartPx.current + gestureState.dx);
         const newValue = pxToValue(newPx);
         const clampedValue = Math.min(
           stateRef.current.max,
-          Math.max(stateRef.current.valueMin + stateRef.current.minDistance, newValue)
+          Math.max(latestValueMinRef.current + stateRef.current.minDistance, newValue)
         );
-        onValueChange({ min: stateRef.current.valueMin, max: clampedValue });
+        latestValueMaxRef.current = clampedValue;
+        if (onValueChangeRef.current) {
+          onValueChangeRef.current({ min: latestValueMinRef.current, max: clampedValue });
+        }
+      },
+      onPanResponderRelease: () => {
+        if (onSlidingCompleteRef.current) {
+          onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (onSlidingCompleteRef.current) {
+          onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
+        }
       },
     })
   ).current;

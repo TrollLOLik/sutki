@@ -70,6 +70,8 @@ export default function FiltersScreen() {
   const [serviceIds, setServiceIds] = useState<number[]>(store.serviceIds);
   const [priceMin, setPriceMin] = useState(store.priceMin?.toString() ?? '');
   const [priceMax, setPriceMax] = useState(store.priceMax?.toString() ?? '');
+  const [priceMinQuery, setPriceMinQuery] = useState(store.priceMin?.toString() ?? '');
+  const [priceMaxQuery, setPriceMaxQuery] = useState(store.priceMax?.toString() ?? '');
   const [guests, setGuests] = useState(store.guests);
   const [petsAllowed, setPetsAllowed] = useState(store.petsAllowed);
   const [childrenAllowed, setChildrenAllowed] = useState(store.childrenAllowed);
@@ -105,8 +107,8 @@ export default function FiltersScreen() {
       checkIn,
       checkOut,
       guests,
-      priceMin: priceMin !== '' ? Number(priceMin) : null,
-      priceMax: priceMax !== '' ? Number(priceMax) : null,
+      priceMin: priceMinQuery !== '' ? Number(priceMinQuery) : null,
+      priceMax: priceMaxQuery !== '' ? Number(priceMaxQuery) : null,
       rooms,
       serviceIds,
       favoritesOnly: false,
@@ -114,7 +116,7 @@ export default function FiltersScreen() {
       childrenAllowed,
       eventsAllowed,
     }),
-    [city, checkIn, checkOut, guests, priceMin, priceMax, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
+    [city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
   // Live result count for the CTA.
@@ -150,6 +152,8 @@ export default function FiltersScreen() {
     setServiceIds([]);
     setPriceMin('');
     setPriceMax('');
+    setPriceMinQuery('');
+    setPriceMaxQuery('');
     setPriceMinInput('');
     setPriceMaxInput('');
     setGuests(2);
@@ -286,6 +290,7 @@ export default function FiltersScreen() {
                   const cleaned = t.replace(/\D/g, '');
                   setPriceMinInput(formatPriceString(cleaned));
                   setPriceMin(cleaned);
+                  setPriceMinQuery(cleaned);
                 }}
                 onBlur={() => {
                   const minVal = priceMin !== '' ? Number(priceMin) : 0;
@@ -293,11 +298,13 @@ export default function FiltersScreen() {
                   const clampedMin = Math.min(Math.max(0, minVal), 15000);
                   setPriceMin(clampedMin.toString());
                   setPriceMinInput(formatPriceString(clampedMin.toString()));
+                  setPriceMinQuery(clampedMin.toString());
 
                   if (clampedMin > maxVal - 500) {
                     const newMax = Math.min(15000, clampedMin + 500);
                     setPriceMax(newMax.toString());
                     setPriceMaxInput(formatPriceString(newMax.toString()));
+                    setPriceMaxQuery(newMax.toString());
                   }
                 }}
                 keyboardType="number-pad"
@@ -316,6 +323,7 @@ export default function FiltersScreen() {
                   const cleaned = t.replace(/\D/g, '');
                   setPriceMaxInput(formatPriceString(cleaned));
                   setPriceMax(cleaned);
+                  setPriceMaxQuery(cleaned);
                 }}
                 onBlur={() => {
                   const minVal = priceMin !== '' ? Number(priceMin) : 0;
@@ -323,11 +331,13 @@ export default function FiltersScreen() {
                   const clampedMax = Math.min(Math.max(0, maxVal), 15000);
                   setPriceMax(clampedMax.toString());
                   setPriceMaxInput(formatPriceString(clampedMax.toString()));
+                  setPriceMaxQuery(clampedMax.toString());
 
                   if (clampedMax < minVal + 500) {
                     const newMin = Math.max(0, clampedMax - 500);
                     setPriceMin(newMin.toString());
                     setPriceMinInput(formatPriceString(newMin.toString()));
+                    setPriceMinQuery(newMin.toString());
                   }
                 }}
                 keyboardType="number-pad"
@@ -347,6 +357,10 @@ export default function FiltersScreen() {
             onValueChange={({ min: newMin, max: newMax }) => {
               setPriceMin(newMin.toString());
               setPriceMax(newMax.toString());
+            }}
+            onSlidingComplete={({ min: newMin, max: newMax }) => {
+              setPriceMinQuery(newMin.toString());
+              setPriceMaxQuery(newMax.toString());
             }}
             step={100}
             minDistance={500}

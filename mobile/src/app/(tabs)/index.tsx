@@ -357,9 +357,9 @@ export default function SearchScreen() {
             <Pressable
               onPress={() => setDateModalVisible(true)}
               className="flex-1 h-12 flex-row items-center justify-between rounded-field border border-line bg-surface px-3 active:bg-surface-muted">
-              <View className="flex-row items-center gap-2">
+              <View className="flex-row items-center gap-2 flex-1 mr-1">
                 <Ionicons name="calendar-outline" size={18} color={palette.primary} />
-                <Text className="text-sm font-medium text-ink">{dateLabel}</Text>
+                <Text className="text-xs font-medium text-ink" numberOfLines={1}>{dateLabel}</Text>
               </View>
               <Ionicons name="chevron-down" size={16} color={palette.inkMuted} />
             </Pressable>
@@ -368,9 +368,9 @@ export default function SearchScreen() {
             <Pressable
               onPress={openGuestModal}
               className="flex-1 h-12 flex-row items-center justify-between rounded-field border border-line bg-surface px-3 active:bg-surface-muted">
-              <View className="flex-row items-center gap-2">
+              <View className="flex-row items-center gap-2 flex-1 mr-1">
                 <Ionicons name="person-outline" size={18} color={palette.primary} />
-                <Text className="text-sm font-medium text-ink">{formatGuests(filters.guests)}</Text>
+                <Text className="text-xs font-medium text-ink" numberOfLines={1}>{formatGuests(filters.guests)}</Text>
               </View>
               <Ionicons name="chevron-down" size={16} color={palette.inkMuted} />
             </Pressable>
