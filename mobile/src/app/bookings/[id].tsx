@@ -27,6 +27,22 @@ function formatNightsPlural(n: number): string {
   return `${n} ночей`;
 }
 
+function fullName(name: string, patronymic: string, surname: string): string {
+  const full = [name, patronymic, surname]
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join(' ');
+  return full || 'Гость';
+}
+
+function reviewWord(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'отзыв';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'отзыва';
+  return 'отзывов';
+}
+
 const statusColors: Record<string, string> = {
   in_progress: '#FF9500',
   confirmed:   '#2EAD6B',
@@ -59,13 +75,6 @@ export default function BookingDetailScreen() {
     ]);
   };
 
-  const handleCall = () => {
-    if (data?.phone) {
-      Linking.openURL(`tel:${data.phone}`).catch(() => {
-        Alert.alert('Ошибка', 'Не удалось открыть приложение для звонков.');
-      });
-    }
-  };
 
   return (
     <View className="flex-1 bg-surface">
@@ -225,6 +234,29 @@ export default function BookingDetailScreen() {
                 );
               })() : null}
 
+              {/* Rejection reason */}
+              {data.status === 'cancelled' && data.rejection_reason ? (
+                <View
+                  style={{
+                    backgroundColor: '#FDECEC',
+                    marginHorizontal: 16,
+                    borderRadius: 16,
+                    padding: 16,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={palette.danger} />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: palette.danger }}>
+                      Причина отклонения
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 20 }}>
+                    {data.rejection_reason}
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Details block */}
               <View
                 style={{
@@ -313,9 +345,114 @@ export default function BookingDetailScreen() {
                   Контакты владельца
                 </Text>
 
+                {/* Avatar + name row (Clickable to view Owner Profile) */}
                 <TouchableOpacity
-                  onPress={handleCall}
-                  disabled={!data.phone}
+                  onPress={() => {
+                    if (data.house?.owner_id) {
+                      router.push({
+                        pathname: '/profile/[id]',
+                        params: {
+                          id: String(data.house.owner_id),
+                          name: data.house.owner_name,
+                          surname: data.house.owner_surname,
+                          patronymic: data.house.owner_patronymic,
+                          phone: data.house.owner_phone,
+                          avatarUrl: data.house.owner_avatar_url,
+                          rating: data.house.owner_rating != null ? String(data.house.owner_rating) : undefined,
+                          reviewsCount: data.house.owner_reviews_count != null ? String(data.house.owner_reviews_count) : undefined,
+                          isVerified: data.house.owner_is_verified ? 'true' : 'false',
+                          city: data.house.city,
+                        },
+                      } as any);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingBottom: 14,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+                    {/* Avatar */}
+                    <View style={{
+                      width: 56, height: 56, borderRadius: 28,
+                      backgroundColor: palette.surfaceMuted,
+                      overflow: 'hidden', flexShrink: 0,
+                    }}>
+                      {data.house?.owner_avatar_url ? (
+                        <Image
+                          source={{ uri: data.house.owner_avatar_url }}
+                          style={{ width: 56, height: 56 }}
+                          contentFit="cover"
+                          transition={150}
+                        />
+                      ) : (
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="person" size={26} color={palette.inkMuted} />
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Name + verified + rating */}
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>
+                          {data.house
+                            ? fullName(data.house.owner_name || 'Владелец', data.house.owner_patronymic || '', data.house.owner_surname || '')
+                            : 'Владелец'}
+                        </Text>
+                        {data.house?.owner_is_verified && (
+                          <View style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 3,
+                            backgroundColor: '#E8F5E9', borderRadius: 999,
+                            paddingHorizontal: 7, paddingVertical: 2,
+                          }}>
+                            <Ionicons name="checkmark-circle" size={13} color="#2EAD6B" />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#2EAD6B' }}>
+                              Верифицирован
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Rating */}
+                      {data.house && data.house.owner_rating != null && data.house.owner_rating > 0 ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="star" size={13} color="#FFB400" />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: palette.ink }}>
+                            {data.house.owner_rating.toFixed(1)}
+                          </Text>
+                          {data.house.owner_reviews_count != null && data.house.owner_reviews_count > 0 && (
+                            <Text style={{ fontSize: 12, color: palette.inkMuted }}>
+                              · {data.house.owner_reviews_count} {reviewWord(data.house.owner_reviews_count)}
+                            </Text>
+                          )}
+                        </View>
+                      ) : (
+                        <Text style={{ fontSize: 12, color: palette.inkMuted }}>Нет отзывов</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={20} color={palette.inkSecondary} />
+                </TouchableOpacity>
+
+                {/* Divider */}
+                <View style={{ height: 1, backgroundColor: palette.line }} />
+
+                {/* Phone */}
+                <TouchableOpacity
+                  onPress={() => {
+                    const phone = data.house?.owner_phone;
+                    if (phone) {
+                      Linking.openURL(`tel:${phone}`).catch(() => {
+                        Alert.alert('Ошибка', 'Не удалось открыть приложение для звонков.');
+                      });
+                    }
+                  }}
+                  disabled={!data.house?.owner_phone}
                   activeOpacity={0.7}
                   style={{
                     flexDirection: 'row',
@@ -324,35 +461,23 @@ export default function BookingDetailScreen() {
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    {/* Avatar */}
-                    <View
-                      style={{
-                        width: 44, height: 44,
-                        borderRadius: 22,
-                        backgroundColor: palette.surfaceMuted,
-                        alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Ionicons name="person" size={20} color={palette.inkMuted} />
+                    <View style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      backgroundColor: palette.surfaceMuted,
+                      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <Ionicons name="call-outline" size={18} color={palette.inkSecondary} />
                     </View>
-                    {/* Name + rating + phone */}
-                    <View style={{ gap: 2, flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
-                          {data.name || 'Владелец'}
-                        </Text>
-                        <Ionicons name="star" size={13} color="#FFB400" />
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: palette.ink }}>4,9</Text>
-                      </View>
-                      <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
-                        {data.phone || '+7 *** ***-**-**'}
-                      </Text>
-                    </View>
+                    <Text style={{ fontSize: 14, color: palette.inkSecondary }}>Телефон</Text>
                   </View>
-                  {data.phone ? (
-                    <Ionicons name="chevron-forward" size={20} color={palette.inkSecondary} />
-                  ) : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: palette.inkSecondary }}>
+                      {data.house?.owner_phone || '—'}
+                    </Text>
+                    {data.house?.owner_phone ? (
+                      <Ionicons name="chevron-forward" size={16} color={palette.inkSecondary} />
+                    ) : null}
+                  </View>
                 </TouchableOpacity>
               </View>
 
@@ -382,29 +507,6 @@ export default function BookingDetailScreen() {
                   })()}
                 </Text>
               </View>
-
-              {/* Rejection reason */}
-              {data.status === 'cancelled' && data.rejection_reason ? (
-                <View
-                  style={{
-                    backgroundColor: '#FDECEC',
-                    marginHorizontal: 16,
-                    borderRadius: 16,
-                    padding: 16,
-                    gap: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="close-circle" size={18} color={palette.danger} />
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: palette.danger }}>
-                      Причина отклонения
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 20 }}>
-                    {data.rejection_reason}
-                  </Text>
-                </View>
-              ) : null}
             </ScrollView>
 
             {/* Bottom actions */}

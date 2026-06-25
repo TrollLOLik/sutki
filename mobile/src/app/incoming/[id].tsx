@@ -230,6 +230,29 @@ export default function IncomingBookingDetailScreen() {
                 );
               })() : null}
 
+              {/* Rejection reason */}
+              {data.status === 'cancelled' && data.rejection_reason ? (
+                <View
+                  style={{
+                    backgroundColor: '#FDECEC',
+                    marginHorizontal: 16,
+                    borderRadius: 16,
+                    padding: 16,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={palette.danger} />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: palette.danger }}>
+                      Причина отклонения
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 20 }}>
+                    {data.rejection_reason}
+                  </Text>
+                </View>
+              ) : null}
+
               {/* Details block */}
               <View
                 style={{
@@ -318,69 +341,96 @@ export default function IncomingBookingDetailScreen() {
                   Контакты гостя
                 </Text>
 
-                {/* Avatar + name row */}
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  paddingBottom: 14, gap: 14,
-                }}>
-                  {/* Avatar */}
-                  <View style={{
-                    width: 56, height: 56, borderRadius: 28,
-                    backgroundColor: palette.surfaceMuted,
-                    overflow: 'hidden', flexShrink: 0,
-                  }}>
-                    {data.guest?.avatar_url ? (
-                      <Image
-                        source={{ uri: data.guest.avatar_url }}
-                        style={{ width: 56, height: 56 }}
-                        contentFit="cover"
-                        transition={150}
-                      />
-                    ) : (
-                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="person" size={26} color={palette.inkMuted} />
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Name + verified + rating */}
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>
-                        {data.guest
-                          ? fullName(data.guest.name, data.guest.patronymic || '', data.guest.surname)
-                          : fullName(data.name, data.lastname, data.surname)}
-                      </Text>
-                      {data.guest?.is_verified && (
-                        <View style={{
-                          flexDirection: 'row', alignItems: 'center', gap: 3,
-                          backgroundColor: '#E8F5E9', borderRadius: 999,
-                          paddingHorizontal: 7, paddingVertical: 2,
-                        }}>
-                          <Ionicons name="checkmark-circle" size={13} color="#2EAD6B" />
-                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#2EAD6B' }}>
-                            Верифицирован
-                          </Text>
+                {/* Avatar + name row (Clickable to view Guest Profile) */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (data.user_id) {
+                      router.push({
+                        pathname: '/profile/[id]',
+                        params: {
+                          id: String(data.user_id),
+                          name: data.guest?.name || data.name || '',
+                          surname: data.guest?.surname || data.surname || '',
+                          patronymic: data.guest?.patronymic || data.lastname || '',
+                          phone: data.guest?.phone || data.phone || '',
+                          avatarUrl: data.guest?.avatar_url || '',
+                          rating: data.guest?.rating != null ? String(data.guest.rating) : undefined,
+                          reviewsCount: data.guest?.reviews_count != null ? String(data.guest.reviews_count) : undefined,
+                          isVerified: data.guest?.is_verified ? 'true' : 'false',
+                        },
+                      } as any);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingBottom: 14,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+                    {/* Avatar */}
+                    <View style={{
+                      width: 56, height: 56, borderRadius: 28,
+                      backgroundColor: palette.surfaceMuted,
+                      overflow: 'hidden', flexShrink: 0,
+                    }}>
+                      {data.guest?.avatar_url ? (
+                        <Image
+                          source={{ uri: data.guest.avatar_url }}
+                          style={{ width: 56, height: 56 }}
+                          contentFit="cover"
+                          transition={150}
+                        />
+                      ) : (
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="person" size={26} color={palette.inkMuted} />
                         </View>
                       )}
                     </View>
 
-                    {/* Rating */}
-                    {data.guest && data.guest.reviews_count > 0 ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Ionicons name="star" size={13} color="#FFB400" />
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: palette.ink }}>
-                          {data.guest.rating.toFixed(1)}
+                    {/* Name + verified + rating */}
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: palette.ink }}>
+                          {data.guest
+                            ? fullName(data.guest.name, data.guest.patronymic || '', data.guest.surname)
+                            : fullName(data.name, data.lastname, data.surname)}
                         </Text>
-                        <Text style={{ fontSize: 12, color: palette.inkMuted }}>
-                          · {data.guest.reviews_count} {reviewWord(data.guest.reviews_count)}
-                        </Text>
+                        {data.guest?.is_verified && (
+                          <View style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 3,
+                            backgroundColor: '#E8F5E9', borderRadius: 999,
+                            paddingHorizontal: 7, paddingVertical: 2,
+                          }}>
+                            <Ionicons name="checkmark-circle" size={13} color="#2EAD6B" />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#2EAD6B' }}>
+                              Верифицирован
+                            </Text>
+                          </View>
+                        )}
                       </View>
-                    ) : (
-                      <Text style={{ fontSize: 12, color: palette.inkMuted }}>Нет отзывов</Text>
-                    )}
+
+                      {/* Rating */}
+                      {data.guest && data.guest.reviews_count > 0 ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="star" size={13} color="#FFB400" />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: palette.ink }}>
+                            {data.guest.rating.toFixed(1)}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: palette.inkMuted }}>
+                            · {data.guest.reviews_count} {reviewWord(data.guest.reviews_count)}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={{ fontSize: 12, color: palette.inkMuted }}>Нет отзывов</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
+
+                  <Ionicons name="chevron-forward" size={20} color={palette.inkSecondary} />
+                </TouchableOpacity>
 
                 {/* Divider */}
                 <View style={{ height: 1, backgroundColor: palette.line }} />
@@ -469,28 +519,6 @@ export default function IncomingBookingDetailScreen() {
                 </Text>
               </View>
 
-              {/* Rejection reason */}
-              {data.status === 'cancelled' && data.rejection_reason ? (
-                <View
-                  style={{
-                    backgroundColor: '#FDECEC',
-                    marginHorizontal: 16,
-                    borderRadius: 16,
-                    padding: 16,
-                    gap: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="close-circle" size={18} color={palette.danger} />
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: palette.danger }}>
-                      Причина отклонения
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 14, color: palette.ink, lineHeight: 20 }}>
-                    {data.rejection_reason}
-                  </Text>
-                </View>
-              ) : null}
             </ScrollView>
 
             {/* Bottom actions */}

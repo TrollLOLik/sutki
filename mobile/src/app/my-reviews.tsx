@@ -1,14 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui';
 import { useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
-import { cn } from '@/lib/cn';
 import { palette } from '@/theme/tokens';
 import type { UserReview } from '@/types/review';
 
@@ -41,24 +50,44 @@ function formatDate(dateStr: string): string {
 
 export default function MyReviewsScreen() {
   const [tab, setTab] = useState<ReviewTab>('written');
+  const pageWidth = Dimensions.get('window').width;
+  const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
+  const tabAnim = useRef(new Animated.Value(0)).current;
+  const horizontalScrollRef = useRef<ScrollView>(null);
 
-  const writtenQuery = useMyWrittenReviews({}, tab === 'written');
-  const receivedQuery = useMyReceivedReviews({}, tab === 'received');
+  const writtenQuery = useMyWrittenReviews({});
+  const receivedQuery = useMyReceivedReviews({});
 
-  const isLoading = tab === 'written' ? writtenQuery.isLoading : receivedQuery.isLoading;
-  const isError = tab === 'written' ? writtenQuery.isError : receivedQuery.isError;
-  const data = tab === 'written' ? writtenQuery.data : receivedQuery.data;
+  const writtenItems = writtenQuery.data?.items ?? [];
+  const receivedItems = receivedQuery.data?.items ?? [];
+
+  const isLoading = writtenQuery.isLoading || receivedQuery.isLoading;
+  const isError = writtenQuery.isError || receivedQuery.isError;
 
   const handleRefresh = () => {
-    if (tab === 'written') {
-      writtenQuery.refetch();
-    } else {
-      receivedQuery.refetch();
-    }
+    writtenQuery.refetch();
+    receivedQuery.refetch();
   };
 
-  const renderItem = ({ item }: { item: UserReview }) => {
-    if (tab === 'written') {
+  useEffect(() => {
+    Animated.timing(tabAnim, {
+      toValue: tab === 'written' ? 0 : 1,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [tab]);
+
+  const handleTabChange = (nextTab: ReviewTab) => {
+    setTab(nextTab);
+    horizontalScrollRef.current?.scrollTo({
+      x: nextTab === 'written' ? 0 : pageWidth,
+      animated: true,
+    });
+  };
+
+  const renderItem = ({ item, isWritten }: { item: UserReview; isWritten: boolean }) => {
+    if (isWritten) {
       return (
         <View className="mb-3 rounded-card border border-line bg-surface p-3 gap-3">
           <View className="flex-row items-center gap-3">
@@ -174,9 +203,52 @@ export default function MyReviewsScreen() {
         </View>
 
         {/* Tab switch */}
-        <View className="flex-row gap-1 rounded-pill bg-surface-muted p-1 mx-4 mb-2">
-          <Segment label="Оставленные" active={tab === 'written'} onPress={() => setTab('written')} />
-          <Segment label="Полученные" active={tab === 'received'} onPress={() => setTab('received')} />
+        <View
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+          className="flex-row rounded-pill bg-surface-muted p-1 mx-4 mb-2 relative"
+        >
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: 4,
+              left: 4,
+              bottom: 4,
+              width: (containerWidth - 8) / 2,
+              transform: [{
+                translateX: tabAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, (containerWidth - 8) / 2],
+                })
+              }],
+              backgroundColor: palette.surface,
+              borderRadius: 9999,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 4,
+              elevation: 2,
+            }}
+          />
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'written' }}
+            onPress={() => handleTabChange('written')}
+            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+          >
+            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'written' ? 'text-ink' : 'text-ink-secondary'}`}>
+              Оставленные
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'received' }}
+            onPress={() => handleTabChange('received')}
+            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+          >
+            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'received' ? 'text-ink' : 'text-ink-secondary'}`}>
+              Полученные
+            </Text>
+          </Pressable>
         </View>
 
         {/* Content list */}
@@ -195,47 +267,77 @@ export default function MyReviewsScreen() {
               <Button label="Повторить" variant="secondary" onPress={handleRefresh} />
             </View>
           </View>
-        ) : !data || data.items.length === 0 ? (
-          <EmptyState
-            icon="star-outline"
-            title={tab === 'written' ? 'Вы еще не оставляли отзывы' : 'У вас еще нет полученных отзывов'}
-            subtitle={tab === 'written' ? 'Ваши отзывы помогут другим пользователям сделать правильный выбор' : 'Отзывы гостей о ваших объявлениях будут появляться здесь'}
-          />
         ) : (
-          <FlatList
-            data={data.items}
-            renderItem={renderItem}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerClassName="px-4 pb-6 pt-1"
-            showsVerticalScrollIndicator={false}
-          />
+          <ScrollView
+            ref={horizontalScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(e) => {
+              const offsetX = e.nativeEvent.contentOffset.x;
+              const page = Math.round(offsetX / pageWidth);
+              const nextTab = page === 0 ? 'written' : 'received';
+              if (tab !== nextTab) {
+                setTab(nextTab);
+              }
+            }}
+            className="flex-1"
+          >
+            {/* Written Reviews Page */}
+            <View style={{ width: pageWidth }}>
+              {writtenItems.length === 0 ? (
+                <EmptyState
+                  icon="star-outline"
+                  title="Вы еще не оставляли отзывы"
+                  subtitle="Ваши отзывы помогут другим пользователям сделать правильный выбор"
+                />
+              ) : (
+                <FlatList
+                  data={writtenItems}
+                  renderItem={({ item }) => renderItem({ item, isWritten: true })}
+                  keyExtractor={(item) => String(item.id)}
+                  contentContainerClassName="px-4 pb-6 pt-1"
+                  showsVerticalScrollIndicator={false}
+                  ListFooterComponent={
+                    writtenItems.length > 0 ? (
+                      <View className="py-6 items-center">
+                        <Text className="text-xs text-ink-muted">Это все отзывы</Text>
+                      </View>
+                    ) : null
+                  }
+                />
+              )}
+            </View>
+
+            {/* Received Reviews Page */}
+            <View style={{ width: pageWidth }}>
+              {receivedItems.length === 0 ? (
+                <EmptyState
+                  icon="star-outline"
+                  title="У вас еще нет полученных отзывов"
+                  subtitle="Отзывы гостей о ваших объявлениях будут появляться здесь"
+                />
+              ) : (
+                <FlatList
+                  data={receivedItems}
+                  renderItem={({ item }) => renderItem({ item, isWritten: false })}
+                  keyExtractor={(item) => String(item.id)}
+                  contentContainerClassName="px-4 pb-6 pt-1"
+                  showsVerticalScrollIndicator={false}
+                  ListFooterComponent={
+                    receivedItems.length > 0 ? (
+                      <View className="py-6 items-center">
+                        <Text className="text-xs text-ink-muted">Это все отзывы</Text>
+                      </View>
+                    ) : null
+                  }
+                />
+              )}
+            </View>
+          </ScrollView>
         )}
       </SafeAreaView>
     </View>
-  );
-}
-
-function Segment({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      className={cn(
-        'flex-1 items-center justify-center rounded-pill py-2',
-        active ? 'bg-surface' : 'bg-transparent',
-      )}>
-      <Text className={cn('text-sm font-semibold', active ? 'text-ink' : 'text-ink-secondary')}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }

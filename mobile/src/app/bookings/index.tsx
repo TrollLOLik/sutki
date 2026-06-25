@@ -1,7 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookingCard } from '@/components/BookingCard';
@@ -9,7 +20,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { HistoryBookingCard } from '@/components/HistoryBookingCard';
 import { Button } from '@/components/ui';
 import { useMyBookings } from '@/lib/api/bookings';
-import { cn } from '@/lib/cn';
 import { palette } from '@/theme/tokens';
 import type { Booking } from '@/types/booking';
 
@@ -17,9 +27,42 @@ type Tab = 'active' | 'history';
 
 export default function MyBookingsScreen() {
   const [tab, setTab] = useState<Tab>('active');
-  const query = useMyBookings({ limit: 50, scope: tab });
-  const { data, isLoading, isError, refetch, isRefetching } = query;
-  const items = data?.items ?? [];
+  const pageWidth = Dimensions.get('window').width;
+  const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
+  const tabAnim = useRef(new Animated.Value(0)).current;
+  const horizontalScrollRef = useRef<ScrollView>(null);
+
+  const activeQuery = useMyBookings({ limit: 50, scope: 'active' });
+  const historyQuery = useMyBookings({ limit: 50, scope: 'history' });
+
+  const activeItems = activeQuery.data?.items ?? [];
+  const historyItems = historyQuery.data?.items ?? [];
+
+  const isLoading = activeQuery.isLoading || historyQuery.isLoading;
+  const isError = activeQuery.isError || historyQuery.isError;
+  const isRefetching = activeQuery.isRefetching || historyQuery.isRefetching;
+
+  const refetch = () => {
+    activeQuery.refetch();
+    historyQuery.refetch();
+  };
+
+  useEffect(() => {
+    Animated.timing(tabAnim, {
+      toValue: tab === 'active' ? 0 : 1,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [tab]);
+
+  const handleTabChange = (nextTab: Tab) => {
+    setTab(nextTab);
+    horizontalScrollRef.current?.scrollTo({
+      x: nextTab === 'active' ? 0 : pageWidth,
+      animated: true,
+    });
+  };
 
   const repeat = (b: Booking) =>
     router.push({ pathname: '/booking/[id]', params: { id: String(b.house_id) } });
@@ -43,9 +86,52 @@ export default function MyBookingsScreen() {
           <View className="h-10 w-10" />
         </View>
 
-        <View className="flex-row gap-1 rounded-pill bg-surface-muted p-1 mx-4 mb-2">
-          <Segment label="Мои заявки" active={tab === 'active'} onPress={() => setTab('active')} />
-          <Segment label="История" active={tab === 'history'} onPress={() => setTab('history')} />
+        <View
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+          className="flex-row rounded-pill bg-surface-muted p-1 mx-4 mb-2 relative"
+        >
+          <Animated.View
+            style={{
+              position: 'absolute',
+              top: 4,
+              left: 4,
+              bottom: 4,
+              width: (containerWidth - 8) / 2,
+              transform: [{
+                translateX: tabAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, (containerWidth - 8) / 2],
+                })
+              }],
+              backgroundColor: palette.surface,
+              borderRadius: 9999,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 4,
+              elevation: 2,
+            }}
+          />
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'active' }}
+            onPress={() => handleTabChange('active')}
+            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+          >
+            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'active' ? 'text-ink' : 'text-ink-secondary'}`}>
+              Мои заявки
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'history' }}
+            onPress={() => handleTabChange('history')}
+            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+          >
+            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'history' ? 'text-ink' : 'text-ink-secondary'}`}>
+              История
+            </Text>
+          </Pressable>
         </View>
 
         {isLoading ? (
@@ -63,77 +149,104 @@ export default function MyBookingsScreen() {
               <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
             </View>
           </View>
-        ) : items.length === 0 ? (
-          tab === 'active' ? (
-            <EmptyState
-              icon="reader-outline"
-              title="Активных заявок нет"
-              subtitle="Выберите объявление и оставьте заявку на аренду."
-            />
-          ) : (
-            <EmptyState
-              icon="time-outline"
-              title="История пуста"
-              subtitle="Здесь появятся завершённые и отменённые заявки."
-            />
-          )
         ) : (
-          <FlatList
-            data={items}
-            keyExtractor={(item) => String(item.id)}
-            contentContainerClassName="px-4 pb-6 pt-1"
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefetching}
-                onRefresh={() => refetch()}
-                tintColor={palette.primary}
-              />
-            }
-            renderItem={({ item }) =>
-              tab === 'history' ? (
-                <HistoryBookingCard
-                  booking={item}
-                  onPress={() => open(item)}
-                  onRepeat={() => repeat(item)}
-                  onReview={() => review(item)}
+          <ScrollView
+            ref={horizontalScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(e) => {
+              const offsetX = e.nativeEvent.contentOffset.x;
+              const page = Math.round(offsetX / pageWidth);
+              const nextTab = page === 0 ? 'active' : 'history';
+              if (tab !== nextTab) {
+                setTab(nextTab);
+              }
+            }}
+            className="flex-1"
+          >
+            {/* Active Tab Page */}
+            <View style={{ width: pageWidth }}>
+              {activeItems.length === 0 ? (
+                <EmptyState
+                  icon="reader-outline"
+                  title="Активных заявок нет"
+                  subtitle="Выберите объявление и оставьте заявку на аренду."
                 />
               ) : (
-                <BookingCard
-                  booking={item}
-                  onPress={() => open(item)}
-                  onRepeat={() => repeat(item)}
+                <FlatList
+                  data={activeItems}
+                  keyExtractor={(item) => String(item.id)}
+                  contentContainerClassName="px-4 pb-6 pt-1"
+                  showsVerticalScrollIndicator={false}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={isRefetching}
+                      onRefresh={() => refetch()}
+                      tintColor={palette.primary}
+                    />
+                  }
+                  renderItem={({ item }) => (
+                    <BookingCard
+                      booking={item}
+                      onPress={() => open(item)}
+                      onRepeat={() => repeat(item)}
+                    />
+                  )}
+                  ListFooterComponent={
+                    activeItems.length > 0 ? (
+                      <View className="py-6 items-center">
+                        <Text className="text-xs text-ink-muted">Это все заявки</Text>
+                      </View>
+                    ) : null
+                  }
                 />
-              )
-            }
-          />
+              )}
+            </View>
+
+            {/* History Tab Page */}
+            <View style={{ width: pageWidth }}>
+              {historyItems.length === 0 ? (
+                <EmptyState
+                  icon="time-outline"
+                  title="История пуста"
+                  subtitle="Здесь появятся завершённые и отменённые заявки."
+                />
+              ) : (
+                <FlatList
+                  data={historyItems}
+                  keyExtractor={(item) => String(item.id)}
+                  contentContainerClassName="px-4 pb-6 pt-1"
+                  showsVerticalScrollIndicator={false}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={isRefetching}
+                      onRefresh={() => refetch()}
+                      tintColor={palette.primary}
+                    />
+                  }
+                  renderItem={({ item }) => (
+                    <HistoryBookingCard
+                      booking={item}
+                      onPress={() => open(item)}
+                      onRepeat={() => repeat(item)}
+                      onReview={() => review(item)}
+                    />
+                  )}
+                  ListFooterComponent={
+                    historyItems.length > 0 ? (
+                      <View className="py-6 items-center">
+                        <Text className="text-xs text-ink-muted">Это все заявки</Text>
+                      </View>
+                    ) : null
+                  }
+                />
+              )}
+            </View>
+          </ScrollView>
         )}
       </SafeAreaView>
     </View>
-  );
-}
-
-function Segment({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      className={cn(
-        'flex-1 items-center justify-center rounded-pill py-2',
-        active ? 'bg-surface' : 'bg-transparent',
-      )}>
-      <Text className={cn('text-sm font-semibold', active ? 'text-ink' : 'text-ink-secondary')}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }

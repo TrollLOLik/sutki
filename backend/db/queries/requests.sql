@@ -46,10 +46,30 @@ SELECT
     FROM review rv
     JOIN house hh ON hh.id = rv.house_id
     WHERE hh.owner_id = r.user_id AND rv.status = 'active'
-  ) AS guest_reviews_count
+  ) AS guest_reviews_count,
+  -- owner profile from user table
+  COALESCE(owner_u.name, '')::text       AS owner_name,
+  COALESCE(owner_u.surname, '')::text    AS owner_surname,
+  COALESCE(owner_u.patronymic, '')::text AS owner_patronymic,
+  COALESCE(owner_u.avatar_url, '')::text AS owner_avatar_url,
+  COALESCE(owner_u.phone, '')::text      AS owner_phone,
+  COALESCE(owner_u.is_verified, false)   AS owner_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = h.owner_id AND rv.status = 'active'
+  ), 0.0)::float8 AS owner_rating,
+  (
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = h.owner_id AND rv.status = 'active'
+  ) AS owner_reviews_count
 FROM request r
 JOIN house h ON h.id = r.house_id
 LEFT JOIN "user" u ON u.id = r.user_id
+LEFT JOIN "user" owner_u ON owner_u.id = h.owner_id
 WHERE r.id = @id;
 
 -- name: ListRequestsByUser :many
@@ -104,9 +124,29 @@ SELECT
   h.street AS house_street, h.house_number AS house_number,
   COALESCE(h.number_room, '')::text AS house_number_room,
   h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
-  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
+  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path,
+  -- guest profile from user table
+  COALESCE(u.name, '')::text       AS guest_name,
+  COALESCE(u.surname, '')::text    AS guest_surname,
+  COALESCE(u.patronymic, '')::text AS guest_patronymic,
+  COALESCE(u.avatar_url, '')::text AS guest_avatar_url,
+  COALESCE(u.phone, '')::text      AS guest_phone_profile,
+  COALESCE(u.is_verified, false)   AS guest_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = r.user_id AND rv.status = 'active'
+  ), 0.0)::float8 AS guest_rating,
+  (
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = r.user_id AND rv.status = 'active'
+  ) AS guest_reviews_count
 FROM request r
 JOIN house h ON h.id = r.house_id
+JOIN "user" u ON u.id = r.user_id
 WHERE h.owner_id = @owner_id
 ORDER BY r.created_at DESC
 LIMIT @result_limit OFFSET @result_offset;
@@ -120,7 +160,7 @@ WHERE h.owner_id = @owner_id;
 -- name: ConfirmRequest :one
 UPDATE request
 SET status = 'confirmed', confirmed_at = now(), updated_at = now()
-WHERE id = @id
+WHERE id = @id AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
@@ -129,7 +169,7 @@ RETURNING
 -- name: RejectRequest :one
 UPDATE request
 SET status = 'cancelled', rejection_reason = sqlc.narg('rejection_reason'), updated_at = now()
-WHERE id = @id
+WHERE id = @id AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   name, surname, lastname, count, message, phone, start_date, end_date, status,

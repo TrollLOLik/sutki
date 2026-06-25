@@ -38,12 +38,21 @@ func (h *BookingHandler) Routes(r chi.Router) {
 }
 
 type bookingHouseDTO struct {
-	ID         int32  `json:"id"`
-	Address    string `json:"address"`
-	NumberRoom string `json:"number_room,omitempty"`
-	City       string `json:"city"`
-	Price      int32  `json:"price"`
-	CoverURL   string `json:"cover_url"`
+	ID                int32   `json:"id"`
+	OwnerID           int32   `json:"owner_id"`
+	Address           string  `json:"address"`
+	NumberRoom        string  `json:"number_room,omitempty"`
+	City              string  `json:"city"`
+	Price             int32   `json:"price"`
+	CoverURL          string  `json:"cover_url"`
+	OwnerName         string  `json:"owner_name"`
+	OwnerSurname      string  `json:"owner_surname"`
+	OwnerPatronymic   string  `json:"owner_patronymic"`
+	OwnerPhone        string  `json:"owner_phone"`
+	OwnerAvatarURL     string  `json:"owner_avatar_url"`
+	OwnerRating       float64 `json:"owner_rating"`
+	OwnerReviewsCount int32   `json:"owner_reviews_count"`
+	OwnerIsVerified   bool    `json:"owner_is_verified"`
 }
 
 type bookingGuestDTO struct {
@@ -346,12 +355,21 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 			numRoom = b.House.NumberRoom
 		}
 		dto.House = &bookingHouseDTO{
-			ID:         b.House.ID,
-			Address:    address,
-			NumberRoom: numRoom,
-			City:       b.House.City,
-			Price:      b.House.Price,
-			CoverURL:   h.mediaURL(b.House.CoverPath),
+			ID:                b.House.ID,
+			OwnerID:           b.House.OwnerID,
+			Address:           address,
+			NumberRoom:        numRoom,
+			City:              b.House.City,
+			Price:             b.House.Price,
+			CoverURL:          h.mediaURL(b.House.CoverPath),
+			OwnerName:         b.House.OwnerName,
+			OwnerSurname:      b.House.OwnerSurname,
+			OwnerPatronymic:   b.House.OwnerPatronymic,
+			OwnerPhone:        b.House.OwnerPhone,
+			OwnerAvatarURL:    h.mediaURL(b.House.OwnerAvatarURL),
+			OwnerRating:       b.House.OwnerRating,
+			OwnerReviewsCount: b.House.OwnerReviewsCount,
+			OwnerIsVerified:   b.House.OwnerIsVerified,
 		}
 	}
 	if b.Guest != nil {

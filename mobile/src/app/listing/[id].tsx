@@ -145,7 +145,6 @@ export default function ListingDetailScreen() {
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
 
   const animVisible = useRef(new Animated.Value(0)).current;
   const isHeaderVisibleRef = useRef(false);
@@ -654,16 +653,6 @@ export default function ListingDetailScreen() {
                     </View>
                   </Pressable>
 
-                  {/* Subscribe link */}
-                  {!isOwnListing && (
-                    <View style={{ paddingLeft: 72 }} className="mt-2">
-                      <Pressable onPress={() => setIsSubscribed(!isSubscribed)} className="self-start active:opacity-70">
-                        <Text className={`text-sm font-semibold ${isSubscribed ? 'text-ink-muted' : 'text-primary'}`}>
-                          {isSubscribed ? 'Вы подписаны' : 'Подписаться'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  )}
 
                   {/* Badges block */}
                   <View className="flex-row flex-wrap gap-2 mt-3 border-t border-line/60 pt-3">

@@ -9,11 +9,20 @@ export type BookingStatus = 'in_progress' | 'confirmed' | 'cancelled';
 /** Brief listing card embedded in booking list/detail responses. */
 export interface BookingHouse {
   id: number;
+  owner_id: number;
   address: string;
   city: string;
   /** Price per night, in rubles. */
   price: number;
   cover_url: string;
+  owner_name?: string;
+  owner_surname?: string;
+  owner_patronymic?: string;
+  owner_phone?: string;
+  owner_avatar_url?: string;
+  owner_rating?: number;
+  owner_reviews_count?: number;
+  owner_is_verified?: boolean;
 }
 
 /** Guest profile from the user table, available on the detail endpoint. */

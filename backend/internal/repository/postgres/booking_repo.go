@@ -108,6 +108,10 @@ func (r *BookingRepo) GetByID(ctx context.Context, id int32) (domain.Booking, er
 		HouseNumber: row.HouseNumber, NumberRoom: row.HouseNumberRoom,
 		City: row.HouseCity, Price: row.HousePrice,
 		CoverPath: row.HouseCoverPath,
+		OwnerName: row.OwnerName, OwnerSurname: row.OwnerSurname,
+		OwnerPatronymic: row.OwnerPatronymic, OwnerPhone: row.OwnerPhone,
+		OwnerAvatarURL: row.OwnerAvatarUrl, OwnerRating: row.OwnerRating,
+		OwnerReviewsCount: row.OwnerReviewsCount, OwnerIsVerified: row.OwnerIsVerified,
 	}
 	b.Guest = &domain.BookingGuest{
 		Name:         row.GuestName,
@@ -177,6 +181,16 @@ func (r *BookingRepo) ListForOwner(ctx context.Context, ownerID, limit, offset i
 			City: row.HouseCity, Price: row.HousePrice,
 			CoverPath: row.HouseCoverPath,
 		}
+		b.Guest = &domain.BookingGuest{
+			Name:         row.GuestName,
+			Surname:      row.GuestSurname,
+			Patronymic:   row.GuestPatronymic,
+			AvatarURL:    row.GuestAvatarUrl,
+			Phone:        row.GuestPhoneProfile,
+			IsVerified:   row.GuestIsVerified,
+			Rating:       row.GuestRating,
+			ReviewsCount: row.GuestReviewsCount,
+		}
 		out = append(out, b)
 	}
 	return out, nil
@@ -189,6 +203,9 @@ func (r *BookingRepo) CountForOwner(ctx context.Context, ownerID int32) (int64, 
 func (r *BookingRepo) Confirm(ctx context.Context, id int32) (domain.Booking, error) {
 	row, err := r.q.ConfirmRequest(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Booking{}, domain.ErrBookingNotPending
+		}
 		return domain.Booking{}, err
 	}
 	return buildBooking(bookingFields{
@@ -204,6 +221,9 @@ func (r *BookingRepo) Confirm(ctx context.Context, id int32) (domain.Booking, er
 func (r *BookingRepo) Reject(ctx context.Context, id int32, reason string) (domain.Booking, error) {
 	row, err := r.q.RejectRequest(ctx, sqlc.RejectRequestParams{ID: id, RejectionReason: strToPtr(reason)})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Booking{}, domain.ErrBookingNotPending
+		}
 		return domain.Booking{}, err
 	}
 	return buildBooking(bookingFields{

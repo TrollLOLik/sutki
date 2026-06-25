@@ -67,7 +67,7 @@ func (q *Queries) CancelRequest(ctx context.Context, id int32) (CancelRequestRow
 const confirmRequest = `-- name: ConfirmRequest :one
 UPDATE request
 SET status = 'confirmed', confirmed_at = now(), updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
@@ -289,10 +289,30 @@ SELECT
     FROM review rv
     JOIN house hh ON hh.id = rv.house_id
     WHERE hh.owner_id = r.user_id AND rv.status = 'active'
-  ) AS guest_reviews_count
+  ) AS guest_reviews_count,
+  -- owner profile from user table
+  COALESCE(owner_u.name, '')::text       AS owner_name,
+  COALESCE(owner_u.surname, '')::text    AS owner_surname,
+  COALESCE(owner_u.patronymic, '')::text AS owner_patronymic,
+  COALESCE(owner_u.avatar_url, '')::text AS owner_avatar_url,
+  COALESCE(owner_u.phone, '')::text      AS owner_phone,
+  COALESCE(owner_u.is_verified, false)   AS owner_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = h.owner_id AND rv.status = 'active'
+  ), 0.0)::float8 AS owner_rating,
+  (
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = h.owner_id AND rv.status = 'active'
+  ) AS owner_reviews_count
 FROM request r
 JOIN house h ON h.id = r.house_id
 LEFT JOIN "user" u ON u.id = r.user_id
+LEFT JOIN "user" owner_u ON owner_u.id = h.owner_id
 WHERE r.id = $1
 `
 
@@ -328,6 +348,14 @@ type GetRequestByIDRow struct {
 	GuestIsVerified   bool
 	GuestRating       float64
 	GuestReviewsCount int32
+	OwnerName         string
+	OwnerSurname      string
+	OwnerPatronymic   string
+	OwnerAvatarUrl    string
+	OwnerPhone        string
+	OwnerIsVerified   bool
+	OwnerRating       float64
+	OwnerReviewsCount int32
 }
 
 func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error) {
@@ -365,6 +393,14 @@ func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDR
 		&i.GuestIsVerified,
 		&i.GuestRating,
 		&i.GuestReviewsCount,
+		&i.OwnerName,
+		&i.OwnerSurname,
+		&i.OwnerPatronymic,
+		&i.OwnerAvatarUrl,
+		&i.OwnerPhone,
+		&i.OwnerIsVerified,
+		&i.OwnerRating,
+		&i.OwnerReviewsCount,
 	)
 	return i, err
 }
@@ -554,9 +590,29 @@ SELECT
   h.street AS house_street, h.house_number AS house_number,
   COALESCE(h.number_room, '')::text AS house_number_room,
   h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
-  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
+  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path,
+  -- guest profile from user table
+  COALESCE(u.name, '')::text       AS guest_name,
+  COALESCE(u.surname, '')::text    AS guest_surname,
+  COALESCE(u.patronymic, '')::text AS guest_patronymic,
+  COALESCE(u.avatar_url, '')::text AS guest_avatar_url,
+  COALESCE(u.phone, '')::text      AS guest_phone_profile,
+  COALESCE(u.is_verified, false)   AS guest_is_verified,
+  COALESCE((
+    SELECT round(avg(rv.rating)::numeric, 1)
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = r.user_id AND rv.status = 'active'
+  ), 0.0)::float8 AS guest_rating,
+  (
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house hh ON hh.id = rv.house_id
+    WHERE hh.owner_id = r.user_id AND rv.status = 'active'
+  ) AS guest_reviews_count
 FROM request r
 JOIN house h ON h.id = r.house_id
+JOIN "user" u ON u.id = r.user_id
 WHERE h.owner_id = $1
 ORDER BY r.created_at DESC
 LIMIT $3 OFFSET $2
@@ -569,29 +625,37 @@ type ListRequestsForOwnerParams struct {
 }
 
 type ListRequestsForOwnerRow struct {
-	ID              int32
-	HouseID         int32
-	UserID          int32
-	Name            string
-	Surname         string
-	Lastname        string
-	Count           int32
-	Message         *string
-	Phone           string
-	StartDate       pgtype.Date
-	EndDate         pgtype.Date
-	Status          string
-	CreatedAt       pgtype.Timestamp
-	UpdatedAt       pgtype.Timestamp
-	ConfirmedAt     pgtype.Timestamp
-	RejectionReason *string
-	HouseStreet     string
-	HouseNumber     string
-	HouseNumberRoom string
-	HouseCity       string
-	HousePrice      int32
-	HouseOwnerID    int32
-	HouseCoverPath  string
+	ID                int32
+	HouseID           int32
+	UserID            int32
+	Name              string
+	Surname           string
+	Lastname          string
+	Count             int32
+	Message           *string
+	Phone             string
+	StartDate         pgtype.Date
+	EndDate           pgtype.Date
+	Status            string
+	CreatedAt         pgtype.Timestamp
+	UpdatedAt         pgtype.Timestamp
+	ConfirmedAt       pgtype.Timestamp
+	RejectionReason   *string
+	HouseStreet       string
+	HouseNumber       string
+	HouseNumberRoom   string
+	HouseCity         string
+	HousePrice        int32
+	HouseOwnerID      int32
+	HouseCoverPath    string
+	GuestName         string
+	GuestSurname      string
+	GuestPatronymic   string
+	GuestAvatarUrl    string
+	GuestPhoneProfile string
+	GuestIsVerified   bool
+	GuestRating       float64
+	GuestReviewsCount int32
 }
 
 func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error) {
@@ -627,6 +691,14 @@ func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForO
 			&i.HousePrice,
 			&i.HouseOwnerID,
 			&i.HouseCoverPath,
+			&i.GuestName,
+			&i.GuestSurname,
+			&i.GuestPatronymic,
+			&i.GuestAvatarUrl,
+			&i.GuestPhoneProfile,
+			&i.GuestIsVerified,
+			&i.GuestRating,
+			&i.GuestReviewsCount,
 		); err != nil {
 			return nil, err
 		}
@@ -641,7 +713,7 @@ func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForO
 const rejectRequest = `-- name: RejectRequest :one
 UPDATE request
 SET status = 'cancelled', rejection_reason = $1, updated_at = now()
-WHERE id = $2
+WHERE id = $2 AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   name, surname, lastname, count, message, phone, start_date, end_date, status,

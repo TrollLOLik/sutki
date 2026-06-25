@@ -42,16 +42,24 @@ type Booking struct {
 
 // BookingHouse is the listing summary attached to a booking.
 type BookingHouse struct {
-	ID          int32
-	OwnerID     int32
-	Street      string
-	HouseNumber string
+	ID                int32
+	OwnerID           int32
+	Street            string
+	HouseNumber       string
 	// NumberRoom is the apartment/room number (кв. N). Hidden in DTOs until
 	// the booking is confirmed or active to protect the guest's privacy pre-approval.
-	NumberRoom  string
-	City        string
-	Price       int32
-	CoverPath   string
+	NumberRoom        string
+	City              string
+	Price             int32
+	CoverPath         string
+	OwnerName         string
+	OwnerSurname      string
+	OwnerPatronymic   string
+	OwnerPhone        string
+	OwnerAvatarURL    string
+	OwnerRating       float64
+	OwnerReviewsCount int32
+	OwnerIsVerified   bool
 }
 
 // BookingGuest is the profile of the user who created the booking,
