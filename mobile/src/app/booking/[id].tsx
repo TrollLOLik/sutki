@@ -25,8 +25,10 @@ import { Button, Input } from '@/components/ui';
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
+import { requestEmailCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
+import { initGuestId } from '@/lib/guestId';
 import { palette } from '@/theme/tokens';
 
 const ISO = 'yyyy-MM-dd';
@@ -66,7 +68,7 @@ function toFullPhone(masked: string): string {
 // Validation schema
 // ---------------------------------------------------------------------------
 
-const schema = z.object({
+const baseSchema = z.object({
   name: z.string().trim().min(1, 'Укажите имя'),
   /** Stores masked value like "(999) 888-77-66" – must contain exactly 10 digits. */
   phone: z.string().refine(
@@ -74,9 +76,15 @@ const schema = z.object({
     'Укажите полный номер (10 цифр)',
   ),
   message: z.string().trim().optional(),
+  email: z.string().trim().optional(),
 });
 
-type FormValues = z.infer<typeof schema>;
+/** Schema with email required for guests. */
+const guestSchema = baseSchema.extend({
+  email: z.string().trim().email('Введите корректный email'),
+});
+
+type FormValues = z.infer<typeof baseSchema>;
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -86,6 +94,8 @@ export default function BookingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const listingId = Number(id);
   const user = useSessionStore((s) => s.user);
+  const status = useSessionStore((s) => s.status);
+  const isGuest = status === 'guest';
   const { data: listing } = useListing(listingId);
   const { data: availability } = useListingAvailability(listingId);
   const createBooking = useCreateBooking(listingId);
@@ -143,8 +153,8 @@ export default function BookingScreen() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: user?.name ?? '', phone: initialPhone, message: '' },
+    resolver: zodResolver(isGuest ? guestSchema : baseSchema),
+    defaultValues: { name: user?.name ?? '', phone: initialPhone, message: '', email: '' },
   });
 
   const nights =
@@ -158,6 +168,7 @@ export default function BookingScreen() {
     }
     setDateError(null);
     try {
+      const guestId = isGuest ? await initGuestId() : undefined;
       await createBooking.mutateAsync({
         count,
         name: values.name,
@@ -167,7 +178,25 @@ export default function BookingScreen() {
         message: values.message || undefined,
         start_date: format(range.start, ISO),
         end_date: format(range.end, ISO),
+        ...(isGuest && values.email ? { email: values.email.trim().toLowerCase() } : {}),
+        ...(guestId ? { guest_id: guestId } : {}),
       });
+
+      if (isGuest && values.email) {
+        // Guest: trigger OTP so they can verify their account
+        try {
+          const res = await requestEmailCode(values.email.trim().toLowerCase());
+          router.replace({
+            pathname: '/code',
+            params: { email: values.email.trim().toLowerCase(), devCode: res.dev_code ?? '', fromBooking: 'true' },
+          } as any);
+        } catch {
+          // If OTP request fails, still go to bookings
+          router.replace('/bookings');
+        }
+        return;
+      }
+
       Alert.alert('Заявка отправлена', 'Владелец рассмотрит её в ближайшее время.', [
         { text: 'OK', onPress: () => router.replace('/bookings') },
       ]);
@@ -418,6 +447,26 @@ export default function BookingScreen() {
                   />
                 )}
               />
+
+              {/* Email — required for guests */}
+              {isGuest && (
+                <Controller
+                  control={control}
+                  name="email"
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      icon="mail-outline"
+                      placeholder="Email (для подтверждения)"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      error={errors.email?.message}
+                    />
+                  )}
+                />
+              )}
 
               {/* Comment */}
               <Controller

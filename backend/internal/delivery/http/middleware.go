@@ -54,6 +54,38 @@ func AuthMiddleware(tm *auth.TokenManager, sv SessionValidator) func(http.Handle
 	}
 }
 
+// OptionalAuthMiddleware attempts to validate the Bearer access token.
+// If valid, it stores userID and sessionID in the context.
+// If invalid or missing, it passes the request along without storing them and without failing.
+func OptionalAuthMiddleware(tm *auth.TokenManager, sv SessionValidator) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			header := r.Header.Get("Authorization")
+			token, ok := bearerToken(header)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			userID, sid, err := tm.Parse(token)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if !sv.IsValidSession(r.Context(), sid) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			sv.UpdateSessionActiveTime(r.Context(), sid)
+
+			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			ctx = context.WithValue(ctx, sessionIDKey, sid)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func bearerToken(header string) (string, bool) {
 	const prefix = "Bearer "
 	if len(header) <= len(prefix) || !strings.EqualFold(header[:len(prefix)], prefix) {

@@ -2,6 +2,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api } from '@/lib/api/client';
 import type { ListingsPage } from '@/types/listing';
+import { useIsGuest } from '@/store/session';
+import { readLocalFavorites, writeLocalFavorites } from '@/lib/localFavorites';
 
 export interface ListFavoritesParams {
   limit?: number;
@@ -54,9 +56,15 @@ export function useFavorites(params: ListFavoritesParams = {}) {
 
 /** The set of favorited listing IDs, for O(1) heart-state lookups. */
 export function useFavoriteIds() {
+  const isGuest = useIsGuest();
   return useQuery({
-    queryKey: favoriteKeys.ids(),
-    queryFn: fetchFavoriteIds,
+    queryKey: [...favoriteKeys.ids(), isGuest],
+    queryFn: async () => {
+      if (isGuest) {
+        return readLocalFavorites();
+      }
+      return fetchFavoriteIds();
+    },
     select: (ids) => new Set(ids),
   });
 }
@@ -68,20 +76,32 @@ export function useFavoriteIds() {
  */
 export function useToggleFavorite() {
   const qc = useQueryClient();
+  const isGuest = useIsGuest();
   return useMutation({
-    mutationFn: ({ id, isFavorite }: { id: number; isFavorite: boolean }) =>
-      isFavorite ? removeFavorite(id) : addFavorite(id),
+    mutationFn: async ({ id, isFavorite }: { id: number; isFavorite: boolean }) => {
+      if (isGuest) {
+        const current = await readLocalFavorites();
+        const next = isFavorite
+          ? current.filter((x) => x !== id)
+          : [id, ...current.filter((x) => x !== id)];
+        await writeLocalFavorites(next);
+        return;
+      }
+      return isFavorite ? removeFavorite(id) : addFavorite(id);
+    },
     onMutate: async ({ id, isFavorite }) => {
-      await qc.cancelQueries({ queryKey: favoriteKeys.ids() });
-      const previous = qc.getQueryData<number[]>(favoriteKeys.ids());
-      qc.setQueryData<number[]>(favoriteKeys.ids(), (ids) => {
+      const idsKey = [...favoriteKeys.ids(), isGuest];
+      await qc.cancelQueries({ queryKey: idsKey });
+      const previous = qc.getQueryData<number[]>(idsKey);
+      qc.setQueryData<number[]>(idsKey, (ids) => {
         const without = (ids ?? []).filter((x) => x !== id);
         return isFavorite ? without : [id, ...without];
       });
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.previous !== undefined) qc.setQueryData(favoriteKeys.ids(), ctx.previous);
+      const idsKey = [...favoriteKeys.ids(), isGuest];
+      if (ctx?.previous !== undefined) qc.setQueryData(idsKey, ctx.previous);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: favoriteKeys.all }),
   });

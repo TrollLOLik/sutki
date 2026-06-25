@@ -88,11 +88,32 @@ export function rejectBooking(id: number, reason?: string): Promise<Booking> {
   return api.post<Booking>(`/api/v1/requests/${id}/reject`, trimmed ? { reason: trimmed } : undefined);
 }
 
-export function useMyBookings(params: ListBookingsParams = {}) {
+export function useMyBookings(
+  params: ListBookingsParams = {},
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: bookingKeys.list(params),
     queryFn: () => fetchMyBookings(params),
     placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+/** My bookings as a guest. */
+export function fetchGuestBookings(params: ListBookingsParams = {}): Promise<BookingsPage> {
+  return api.get<BookingsPage>(`/api/v1/guest/requests${buildQuery(params)}`);
+}
+
+export function useGuestRequests(
+  params: ListBookingsParams = {},
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: [...bookingKeys.all, 'guest', params] as const,
+    queryFn: () => fetchGuestBookings(params),
+    placeholderData: keepPreviousData,
+    ...options,
   });
 }
 

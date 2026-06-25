@@ -62,60 +62,65 @@ FROM house h
 WHERE h.deleted = false
   AND h.status = 'active'
   AND (
-    $1::text IS NULL
-    OR h.street ILIKE '%' || $1 || '%'
-    OR h.house_number ILIKE '%' || $1 || '%'
-    OR h.description ILIKE '%' || $1 || '%'
-    OR h.country ILIKE '%' || $1 || '%'
+    cardinality($1::int[]) = 0
+    OR h.id = ANY($1::int[])
   )
-  AND ($2::text IS NULL OR h.country = $2)
-  AND ($3::int IS NULL OR h.price >= $3)
-  AND ($4::int IS NULL OR h.price <= $4)
   AND (
-    (cardinality($5::int[]) = 0 AND $6::int IS NULL)
-    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($5::int[])
+    $2::text IS NULL
+    OR h.street ILIKE '%' || $2 || '%'
+    OR h.house_number ILIKE '%' || $2 || '%'
+    OR h.description ILIKE '%' || $2 || '%'
+    OR h.country ILIKE '%' || $2 || '%'
+  )
+  AND ($3::text IS NULL OR h.country = $3)
+  AND ($4::int IS NULL OR h.price >= $4)
+  AND ($5::int IS NULL OR h.price <= $5)
+  AND (
+    (cardinality($6::int[]) = 0 AND $7::int IS NULL)
+    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($6::int[])
     OR (
-      $6::int IS NOT NULL
-      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $6
+      $7::int IS NOT NULL
+      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $7
     )
   )
   AND (
-    cardinality($7::int[]) = 0
+    cardinality($8::int[]) = 0
     OR (
       SELECT count(DISTINCT hhs.service_id)
       FROM house_house_service hhs
-      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($7::int[])
-    ) = cardinality($7::int[])
+      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($8::int[])
+    ) = cardinality($8::int[])
   )
   AND (
-    $8::int IS NULL
+    $9::int IS NULL
     OR EXISTS (
       SELECT 1 FROM house_house_category hhc
-      WHERE hhc.house_id = h.id AND hhc.house_category_id = $8
+      WHERE hhc.house_id = h.id AND hhc.house_category_id = $9
     )
   )
   AND (
-    $9::date IS NULL
-    OR $10::date IS NULL
+    $10::date IS NULL
+    OR $11::date IS NULL
     OR NOT EXISTS (
       SELECT 1 FROM request rq
       WHERE rq.house_id = h.id
         AND rq.status = 'confirmed'
-        AND rq.start_date < $10::date
-        AND COALESCE(rq.end_date, rq.start_date + 1) > $9::date
+        AND rq.start_date < $11::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > $10::date
     )
   )
   AND (
-    $11::int IS NULL
+    $12::int IS NULL
     OR h.max_guests IS NULL
-    OR h.max_guests >= $11
+    OR h.max_guests >= $12
   )
-  AND ($12::boolean IS NULL OR ($12::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
-  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
-  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+  AND ($15::boolean IS NULL OR ($15::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
 `
 
 type CountHousesFilteredParams struct {
+	HouseIds        []int32
 	Query           *string
 	City            *string
 	PriceMin        *int32
@@ -134,6 +139,7 @@ type CountHousesFilteredParams struct {
 
 func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countHousesFiltered,
+		arg.HouseIds,
 		arg.Query,
 		arg.City,
 		arg.PriceMin,
@@ -715,67 +721,72 @@ FROM house h
 WHERE h.deleted = false
   AND h.status = 'active'
   AND (
-    $1::text IS NULL
-    OR h.street ILIKE '%' || $1 || '%'
-    OR h.house_number ILIKE '%' || $1 || '%'
-    OR h.description ILIKE '%' || $1 || '%'
-    OR h.country ILIKE '%' || $1 || '%'
+    cardinality($1::int[]) = 0
+    OR h.id = ANY($1::int[])
   )
-  AND ($2::text IS NULL OR h.country = $2)
-  AND ($3::int IS NULL OR h.price >= $3)
-  AND ($4::int IS NULL OR h.price <= $4)
   AND (
-    (cardinality($5::int[]) = 0 AND $6::int IS NULL)
-    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($5::int[])
+    $2::text IS NULL
+    OR h.street ILIKE '%' || $2 || '%'
+    OR h.house_number ILIKE '%' || $2 || '%'
+    OR h.description ILIKE '%' || $2 || '%'
+    OR h.country ILIKE '%' || $2 || '%'
+  )
+  AND ($3::text IS NULL OR h.country = $3)
+  AND ($4::int IS NULL OR h.price >= $4)
+  AND ($5::int IS NULL OR h.price <= $5)
+  AND (
+    (cardinality($6::int[]) = 0 AND $7::int IS NULL)
+    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($6::int[])
     OR (
-      $6::int IS NOT NULL
-      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $6
+      $7::int IS NOT NULL
+      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $7
     )
   )
   AND (
-    cardinality($7::int[]) = 0
+    cardinality($8::int[]) = 0
     OR (
       SELECT count(DISTINCT hhs.service_id)
       FROM house_house_service hhs
-      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($7::int[])
-    ) = cardinality($7::int[])
+      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($8::int[])
+    ) = cardinality($8::int[])
   )
   AND (
-    $8::int IS NULL
+    $9::int IS NULL
     OR EXISTS (
       SELECT 1 FROM house_house_category hhc
-      WHERE hhc.house_id = h.id AND hhc.house_category_id = $8
+      WHERE hhc.house_id = h.id AND hhc.house_category_id = $9
     )
   )
   AND (
-    $9::date IS NULL
-    OR $10::date IS NULL
+    $10::date IS NULL
+    OR $11::date IS NULL
     OR NOT EXISTS (
       SELECT 1 FROM request rq
       WHERE rq.house_id = h.id
         AND rq.status = 'confirmed'
-        AND rq.start_date < $10::date
-        AND COALESCE(rq.end_date, rq.start_date + 1) > $9::date
+        AND rq.start_date < $11::date
+        AND COALESCE(rq.end_date, rq.start_date + 1) > $10::date
     )
   )
   AND (
-    $11::int IS NULL
+    $12::int IS NULL
     OR h.max_guests IS NULL
-    OR h.max_guests >= $11
+    OR h.max_guests >= $12
   )
-  AND ($12::boolean IS NULL OR ($12::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
-  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
-  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+  AND ($15::boolean IS NULL OR ($15::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
 ORDER BY
-  CASE WHEN $15::text = 'price_asc' THEN h.price END ASC NULLS LAST,
-  CASE WHEN $15::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN $15::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN $16::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $16::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $16::text = 'newest' THEN h.created_at END DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
   h.created_at DESC
-LIMIT $17 OFFSET $16
+LIMIT $18 OFFSET $17
 `
 
 type ListHousesFilteredParams struct {
+	HouseIds        []int32
 	Query           *string
 	City            *string
 	PriceMin        *int32
@@ -824,6 +835,7 @@ type ListHousesFilteredRow struct {
 
 func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error) {
 	rows, err := q.db.Query(ctx, listHousesFiltered,
+		arg.HouseIds,
 		arg.Query,
 		arg.City,
 		arg.PriceMin,

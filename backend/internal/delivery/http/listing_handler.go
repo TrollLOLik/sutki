@@ -458,6 +458,12 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 	}
 	f.Services = services
 
+	houseIDs, ok := parseNonNegInt32CSV(q.Get("house_ids"))
+	if !ok {
+		return domain.ListFilter{}, "invalid house_ids"
+	}
+	f.HouseIDs = houseIDs
+
 	checkIn, ok := parseOptDate(q.Get("check_in"))
 	if !ok {
 		return domain.ListFilter{}, "invalid check_in"

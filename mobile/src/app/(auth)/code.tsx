@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
@@ -7,12 +7,13 @@ import { requestEmailCode, useVerifyEmailCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useSessionStore } from '@/store/session';
+import { setGlobalFromBooking } from '@/lib/requireAuth';
 
 const CODE_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
 export default function CodeScreen() {
-  const { email, devCode } = useLocalSearchParams<{ email?: string; devCode?: string }>();
+  const { email, devCode, fromBooking } = useLocalSearchParams<{ email?: string; devCode?: string; fromBooking?: string }>();
   const [code, setCode] = useState('');
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
   const [error, setError] = useState<string | null>(null);
@@ -31,12 +32,20 @@ export default function CodeScreen() {
     setError(null);
     try {
       const res = await verify.mutateAsync({ email, code });
+      if (fromBooking === 'true') {
+        setGlobalFromBooking(true);
+      }
       // beginSession sets status to 'onboarding' (incomplete profile) or
       // 'authenticated'; the root layout guard swaps stacks accordingly.
-      await beginSession(
+      const needsProfile = await beginSession(
         { accessToken: res.access_token, refreshToken: res.refresh_token },
         res.user,
       );
+      if (!needsProfile && fromBooking === 'true') {
+        setTimeout(() => {
+          router.replace('/bookings');
+        }, 100);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось проверить код. Попробуйте снова.');
     }

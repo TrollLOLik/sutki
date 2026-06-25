@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { z } from 'zod';
@@ -15,6 +15,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function EmailScreen() {
+  const { fromBooking } = useLocalSearchParams<{ fromBooking?: string }>();
   const {
     control,
     handleSubmit,
@@ -27,7 +28,14 @@ export default function EmailScreen() {
     const normalized = email.trim().toLowerCase();
     try {
       const res = await requestCode.mutateAsync(normalized);
-      router.push({ pathname: '/code', params: { email: normalized, devCode: res.dev_code ?? '' } });
+      router.push({
+        pathname: '/code',
+        params: {
+          email: normalized,
+          devCode: res.dev_code ?? '',
+          fromBooking: fromBooking ?? '',
+        },
+      });
     } catch (err) {
       const message =
         err instanceof ApiError && err.status === 429

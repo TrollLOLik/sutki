@@ -194,6 +194,14 @@ func (r *UserRepo) AnonymizeAndRevoke(ctx context.Context, id int32, emailHash s
 	return tx.Commit(ctx)
 }
 
+func (r *UserRepo) LinkGuestRequests(ctx context.Context, userID int32, email string) error {
+	return r.q.LinkGuestRequests(ctx, sqlc.LinkGuestRequestsParams{
+		UserID: userID,
+		Email:  email,
+	})
+}
+
+
 
 func deref(s *string) string {
 	if s == nil {

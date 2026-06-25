@@ -31,10 +31,8 @@ func NewBookingHandler(svc *booking.Service, mediaBaseURL string) *BookingHandle
 func (h *BookingHandler) Routes(r chi.Router) {
 	r.Get("/", h.listMine)
 	r.Get("/incoming", h.listIncoming)
-	r.Get("/{id}", h.get)
 	r.Post("/{id}/confirm", h.confirm)
 	r.Post("/{id}/reject", h.reject)
-	r.Post("/{id}/cancel", h.cancel)
 }
 
 type bookingHouseDTO struct {
@@ -136,8 +134,9 @@ func (h *BookingHandler) Availability(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userIDFromContext(r.Context())
-	if !ok {
+	userID, _ := userIDFromContext(r.Context())
+	guestID := r.Header.Get("X-Guest-Id")
+	if userID == 0 && guestID == "" {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -156,6 +155,7 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Message   string  `json:"message"`
 		StartDate string  `json:"start_date"`
 		EndDate   *string `json:"end_date"`
+		Email     string  `json:"email"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -164,12 +164,18 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	nb := domain.NewBooking{
 		HouseID:  int32(houseID),
 		UserID:   userID,
+		GuestID:  guestID,
+		Email:    strings.ToLower(strings.TrimSpace(body.Email)),
 		Name:     strings.TrimSpace(body.Name),
 		Surname:  strings.TrimSpace(body.Surname),
 		Lastname: strings.TrimSpace(body.Lastname),
 		Count:    body.Count,
 		Message:  strings.TrimSpace(body.Message),
 		Phone:    strings.TrimSpace(body.Phone),
+	}
+	if userID == 0 && nb.Email == "" {
+		writeError(w, http.StatusBadRequest, "email is required for guest booking")
+		return
 	}
 	if nb.Count < 1 {
 		writeError(w, http.StatusBadRequest, "invalid count")
@@ -238,11 +244,14 @@ func (h *BookingHandler) listIncoming(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) get(w http.ResponseWriter, r *http.Request) {
-	userID, id, ok := h.actorAndID(w, r)
-	if !ok {
+	userID, _ := userIDFromContext(r.Context())
+	guestID := r.Header.Get("X-Guest-Id")
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	b, err := h.svc.Get(r.Context(), id, userID)
+	b, err := h.svc.Get(r.Context(), int32(id), userID, guestID)
 	if err != nil {
 		h.writeBookingError(w, err, "booking not found")
 		return
@@ -283,16 +292,33 @@ func (h *BookingHandler) reject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) cancel(w http.ResponseWriter, r *http.Request) {
-	userID, id, ok := h.actorAndID(w, r)
-	if !ok {
+	userID, _ := userIDFromContext(r.Context())
+	guestID := r.Header.Get("X-Guest-Id")
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	b, err := h.svc.Cancel(r.Context(), id, userID)
+	b, err := h.svc.Cancel(r.Context(), int32(id), userID, guestID)
 	if err != nil {
 		h.writeBookingError(w, err, "booking not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.bookingDTO(b))
+}
+
+func (h *BookingHandler) ListGuest(w http.ResponseWriter, r *http.Request) {
+	guestID := r.Header.Get("X-Guest-Id")
+	if guestID == "" {
+		writeError(w, http.StatusBadRequest, "X-Guest-Id header is required")
+		return
+	}
+	res, err := h.svc.ListGuest(r.Context(), guestID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	h.writeList(w, res)
 }
 
 func (h *BookingHandler) actorAndID(w http.ResponseWriter, r *http.Request) (int32, int32, bool) {

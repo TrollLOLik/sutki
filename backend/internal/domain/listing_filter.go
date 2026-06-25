@@ -16,6 +16,7 @@ const (
 // ListFilter holds the optional search/filter criteria for active listings.
 // Nil pointers and empty slices mean "no constraint" for that field.
 type ListFilter struct {
+	HouseIDs []int32
 	Query    *string
 	City     *string
 	PriceMin *int32

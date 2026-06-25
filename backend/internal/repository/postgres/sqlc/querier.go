@@ -6,6 +6,8 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -19,6 +21,7 @@ type Querier interface {
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
 	CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
+	CountRequestsByGuest(ctx context.Context, arg CountRequestsByGuestParams) (int64, error)
 	CountRequestsByUser(ctx context.Context, arg CountRequestsByUserParams) (int64, error)
 	CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountReviewsByAuthor(ctx context.Context, ownerID int32) (int64, error)
@@ -34,6 +37,7 @@ type Querier interface {
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteEmailLoginCode(ctx context.Context, email string) error
+	DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
 	DeleteHouseServices(ctx context.Context, houseID int32) error
 	DeleteUser(ctx context.Context, id int32) error
@@ -55,6 +59,7 @@ type Querier interface {
 	// free for next guest). The caller passes the exclusive end (start+1 for single night).
 	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
+	LinkGuestRequests(ctx context.Context, arg LinkGuestRequestsParams) error
 	ListActiveRefreshTokens(ctx context.Context, userID int32) ([]RefreshToken, error)
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
 	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)
@@ -70,6 +75,7 @@ type Querier interface {
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
 	ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerParams) ([]ListHousesByOwnerRow, error)
 	ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error)
+	ListRequestsByGuest(ctx context.Context, arg ListRequestsByGuestParams) ([]ListRequestsByGuestRow, error)
 	ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error)
 	ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error)
 	ListReviewsByAuthor(ctx context.Context, arg ListReviewsByAuthorParams) ([]ListReviewsByAuthorRow, error)

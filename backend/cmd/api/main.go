@@ -66,7 +66,14 @@ func main() {
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 
 	bookingRepo := postgres.NewBookingRepo(queries)
-	bookingSvc := booking.New(bookingRepo)
+	bookingSvc := booking.New(bookingRepo, booking.Config{
+		SMTPHost:     cfg.SMTPHost,
+		SMTPPort:     cfg.SMTPPort,
+		SMTPUsername: cfg.SMTPUsername,
+		SMTPPassword: cfg.SMTPPassword,
+		SMTPFrom:     cfg.SMTPFrom,
+	})
+	bookingSvc.StartCleanupJob(ctx, 1*time.Hour)
 	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
 
 	favoriteRepo := postgres.NewFavoriteRepo(queries)

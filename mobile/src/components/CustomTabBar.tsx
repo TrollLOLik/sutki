@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabBarStore } from '@/store/tabbar';
 import { palette } from '@/theme/tokens';
+import { requireAuth } from '@/lib/requireAuth';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -228,7 +229,11 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           accessibilityLabel="Разместить объявление"
           onPressIn={() => setPressed(true)}
           onPressOut={() => setPressed(false)}
-          onPress={() => router.push('/create')}
+          onPress={() => {
+            if (requireAuth('listing')) {
+              router.push('/create');
+            }
+          }}
           style={{ marginTop: -18 }}
           className="items-center justify-center">
           <Animated.View

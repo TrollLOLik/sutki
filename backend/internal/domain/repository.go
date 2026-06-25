@@ -48,6 +48,9 @@ type BookingRepository interface {
 	CountByUser(ctx context.Context, userID int32, scope string) (int64, error)
 	ListForOwner(ctx context.Context, ownerID, limit, offset int32) ([]Booking, error)
 	CountForOwner(ctx context.Context, ownerID int32) (int64, error)
+	ListByGuest(ctx context.Context, guestID string, limit, offset int32) ([]Booking, error)
+	CountByGuest(ctx context.Context, guestID string) (int64, error)
+	DeleteExpiredPendingRequests(ctx context.Context, before time.Time) error
 	Confirm(ctx context.Context, id int32) (Booking, error)
 	Reject(ctx context.Context, id int32, reason string) (Booking, error)
 	Cancel(ctx context.Context, id int32) (Booking, error)
@@ -84,6 +87,7 @@ type UserRepository interface {
 	Create(ctx context.Context, email string) (User, error)
 	UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (User, error)
 	UpdateEmail(ctx context.Context, id int32, email string) (User, error)
+	LinkGuestRequests(ctx context.Context, userID int32, email string) error
 	Delete(ctx context.Context, id int32) error
 	CheckActiveBookings(ctx context.Context, id int32) (int64, error)
 	AnonymizeAndRevoke(ctx context.Context, id int32, emailHash string) error

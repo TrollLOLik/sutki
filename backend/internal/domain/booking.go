@@ -5,10 +5,11 @@ import "time"
 // Booking statuses. These are stored in the legacy `request.status` varchar
 // (no DB constraint); `confirmed` is a mobile addition to the legacy set.
 const (
-	BookingPending   = "in_progress"
-	BookingConfirmed = "confirmed"
-	BookingActive    = "active"
-	BookingCancelled = "cancelled"
+	BookingPending             = "in_progress"
+	BookingPendingVerification = "pending_verification"
+	BookingConfirmed           = "confirmed"
+	BookingActive              = "active"
+	BookingCancelled           = "cancelled"
 )
 
 // Booking is a rental request. It maps onto the legacy `request` table.
@@ -17,6 +18,8 @@ type Booking struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -79,6 +82,8 @@ type BookingGuest struct {
 type NewBooking struct {
 	HouseID   int32
 	UserID    int32
+	GuestID   string
+	Email     string
 	Name      string
 	Surname   string
 	Lastname  string

@@ -22,6 +22,7 @@ import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 import type { UpdateProfileBody } from '@/types/auth';
 import type { User } from '@/types/user';
+import { GuestProfile } from '@/components/profile/GuestProfile';
 
 type SettingsTab = 'basic' | 'security';
 
@@ -174,6 +175,7 @@ export default function ProfileScreen() {
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
   const setUser = useSessionStore((s) => s.setUser);
+  const status = useSessionStore((s) => s.status);
   const updateMe = useUpdateMe();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('basic');
@@ -550,12 +552,21 @@ export default function ProfileScreen() {
           accessibilityLabel="В поиск"
           className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
         >
-          <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-          </Animated.View>
-          <Animated.View style={{ opacity: animVisible }}>
-            <Ionicons name="chevron-back" size={24} color={palette.ink} />
-          </Animated.View>
+          {status === 'guest' ? (
+            // Guest has no gradient banner — always show dark icon on muted bg
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
+              <Ionicons name="chevron-back" size={24} color={palette.ink} />
+            </View>
+          ) : (
+            <>
+              <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
+                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              </Animated.View>
+              <Animated.View style={{ opacity: animVisible }}>
+                <Ionicons name="chevron-back" size={24} color={palette.ink} />
+              </Animated.View>
+            </>
+          )}
         </Pressable>
 
         {/* Title in center */}
@@ -573,26 +584,36 @@ export default function ProfileScreen() {
         </View>
 
         {/* Settings Button */}
-        <Pressable
-          accessibilityLabel="Настройки профиля"
-          accessibilityRole="button"
-          onPress={() => setSettingsVisible(true)}
-          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
-        >
-          <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
-            <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
-          </Animated.View>
-          <Animated.View style={{ opacity: animVisible }}>
-            <Ionicons name="settings-outline" size={22} color={palette.ink} />
-          </Animated.View>
-        </Pressable>
+        {status !== 'guest' ? (
+          <Pressable
+            accessibilityLabel="Настройки профиля"
+            accessibilityRole="button"
+            onPress={() => setSettingsVisible(true)}
+            className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
+          >
+            <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
+              <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
+            </Animated.View>
+            <Animated.View style={{ opacity: animVisible }}>
+              <Ionicons name="settings-outline" size={22} color={palette.ink} />
+            </Animated.View>
+          </Pressable>
+        ) : (
+          <View className="h-10 w-10" />
+        )}
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerClassName="pb-28"
-        onScroll={handleMainScroll}
-        scrollEventThrottle={16}
+      {status === 'guest' ? (
+        <GuestProfile
+          topInset={(insets.top || 0) + 56}
+          onScroll={handleMainScroll as any}
+        />
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerClassName="pb-28"
+          onScroll={handleMainScroll}
+          scrollEventThrottle={16}
       >
         <AnimatedLinearGradient
           colors={['#FF8E53', '#FF5A1F', '#FF2D55']}
@@ -772,8 +793,28 @@ export default function ProfileScreen() {
           <View className="mt-6">
             <Button label="Выйти" variant="secondary" onPress={signOut} />
           </View>
+
+          <View className="mt-6 border border-line bg-surface p-4 rounded-card"
+            style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10 }}>
+            <Text className="text-sm font-extrabold text-ink mb-3">О приложении</Text>
+            <View className="gap-3">
+              <View className="flex-row justify-between py-1 border-b border-line pb-2">
+                <Text className="text-sm text-ink-secondary">Версия</Text>
+                <Text className="text-sm text-ink font-semibold">1.0.0</Text>
+              </View>
+              <View className="flex-row justify-between py-1 border-b border-line pb-2">
+                <Text className="text-sm text-ink-secondary">Поддержка</Text>
+                <Text className="text-sm text-primary font-bold">support@domryadom.ru</Text>
+              </View>
+              <View className="flex-row justify-between py-1">
+                <Text className="text-sm text-ink-secondary">Язык</Text>
+                <Text className="text-sm text-ink font-semibold">Русский</Text>
+              </View>
+            </View>
+          </View>
         </View>
       </ScrollView>
+      )}
 
       <Modal
         visible={settingsVisible}

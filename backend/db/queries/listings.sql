@@ -42,6 +42,10 @@ FROM house h
 WHERE h.deleted = false
   AND h.status = 'active'
   AND (
+    cardinality(@house_ids::int[]) = 0
+    OR h.id = ANY(@house_ids::int[])
+  )
+  AND (
     sqlc.narg('query')::text IS NULL
     OR h.street ILIKE '%' || sqlc.narg('query') || '%'
     OR h.house_number ILIKE '%' || sqlc.narg('query') || '%'
@@ -106,6 +110,10 @@ SELECT count(*)
 FROM house h
 WHERE h.deleted = false
   AND h.status = 'active'
+  AND (
+    cardinality(@house_ids::int[]) = 0
+    OR h.id = ANY(@house_ids::int[])
+  )
   AND (
     sqlc.narg('query')::text IS NULL
     OR h.street ILIKE '%' || sqlc.narg('query') || '%'

@@ -11,6 +11,7 @@ const META: Record<BookingStatus, StatusMeta> = {
   in_progress: { label: 'На рассмотрении', tone: 'info' },
   confirmed: { label: 'Подтверждена', tone: 'success' },
   cancelled: { label: 'Отклонена', tone: 'neutral' },
+  pending_verification: { label: 'Ожидает OTP', tone: 'primary' },
 };
 
 const FALLBACK: StatusMeta = { label: 'Неизвестно', tone: 'neutral' };

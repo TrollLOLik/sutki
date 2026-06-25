@@ -62,9 +62,20 @@ func (r *BookingRepo) BlockingRanges(ctx context.Context, houseID int32) ([]doma
 }
 
 func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.Booking, error) {
+	status := domain.BookingPending
+	if b.UserID == 0 {
+		status = domain.BookingPendingVerification
+	}
 	row, err := r.q.CreateRequest(ctx, sqlc.CreateRequestParams{
 		HouseID:   b.HouseID,
-		UserID:    b.UserID,
+		UserID:    func() *int32 {
+			if b.UserID == 0 {
+				return nil
+			}
+			return &b.UserID
+		}(),
+		GuestID:   strToPtr(b.GuestID),
+		Email:     strToPtr(b.Email),
 		Name:      b.Name,
 		Surname:   b.Surname,
 		Lastname:  b.Lastname,
@@ -73,12 +84,14 @@ func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.B
 		Phone:     b.Phone,
 		StartDate: dateParam(b.StartDate),
 		EndDate:   dateParamPtr(b.EndDate),
+		Status:    status,
 	})
 	if err != nil {
 		return domain.Booking{}, err
 	}
 	return buildBooking(bookingFields{
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 		Count: row.Count, Message: row.Message, Phone: row.Phone,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -97,6 +110,7 @@ func (r *BookingRepo) GetByID(ctx context.Context, id int32) (domain.Booking, er
 	}
 	b := buildBooking(bookingFields{
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 		Count: row.Count, Message: row.Message, Phone: row.Phone,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -137,6 +151,7 @@ func (r *BookingRepo) ListByUser(ctx context.Context, userID, limit, offset int3
 	for _, row := range rows {
 		b := buildBooking(bookingFields{
 			ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+			GuestID: row.GuestID, Email: row.Email,
 			Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 			Count: row.Count, Message: row.Message, Phone: row.Phone,
 			StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -169,6 +184,7 @@ func (r *BookingRepo) ListForOwner(ctx context.Context, ownerID, limit, offset i
 	for _, row := range rows {
 		b := buildBooking(bookingFields{
 			ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+			GuestID: row.GuestID, Email: row.Email,
 			Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 			Count: row.Count, Message: row.Message, Phone: row.Phone,
 			StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -210,6 +226,7 @@ func (r *BookingRepo) Confirm(ctx context.Context, id int32) (domain.Booking, er
 	}
 	return buildBooking(bookingFields{
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 		Count: row.Count, Message: row.Message, Phone: row.Phone,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -228,6 +245,7 @@ func (r *BookingRepo) Reject(ctx context.Context, id int32, reason string) (doma
 	}
 	return buildBooking(bookingFields{
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 		Count: row.Count, Message: row.Message, Phone: row.Phone,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -243,6 +261,7 @@ func (r *BookingRepo) Cancel(ctx context.Context, id int32) (domain.Booking, err
 	}
 	return buildBooking(bookingFields{
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
 		Count: row.Count, Message: row.Message, Phone: row.Phone,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
@@ -251,12 +270,60 @@ func (r *BookingRepo) Cancel(ctx context.Context, id int32) (domain.Booking, err
 	}), nil
 }
 
+func (r *BookingRepo) ListByGuest(ctx context.Context, guestID string, limit, offset int32) ([]domain.Booking, error) {
+	rows, err := r.q.ListRequestsByGuest(ctx, sqlc.ListRequestsByGuestParams{
+		GuestID:      guestID,
+		Scope:        "all",
+		ResultLimit:  limit,
+		ResultOffset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Booking, 0, len(rows))
+	for _, row := range rows {
+		b := buildBooking(bookingFields{
+			ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
+			GuestID: row.GuestID, Email: row.Email,
+			Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
+			Count: row.Count, Message: row.Message, Phone: row.Phone,
+			StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
+			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
+		})
+		b.House = &domain.BookingHouse{
+			ID: row.HouseID, OwnerID: row.HouseOwnerID, Street: row.HouseStreet,
+			HouseNumber: row.HouseNumber, NumberRoom: row.HouseNumberRoom,
+			City: row.HouseCity, Price: row.HousePrice,
+			CoverPath: row.HouseCoverPath,
+		}
+		out = append(out, b)
+	}
+	return out, nil
+}
+
+func (r *BookingRepo) CountByGuest(ctx context.Context, guestID string) (int64, error) {
+	return r.q.CountRequestsByGuest(ctx, sqlc.CountRequestsByGuestParams{
+		GuestID: guestID,
+		Scope:   "all",
+	})
+}
+
+func (r *BookingRepo) DeleteExpiredPendingRequests(ctx context.Context, before time.Time) error {
+	var pgBefore pgtype.Timestamp
+	pgBefore.Time = before
+	pgBefore.Valid = true
+	return r.q.DeleteExpiredPendingRequests(ctx, pgBefore)
+}
+
 // bookingFields holds the shared columns of the `request` table as produced by
 // the various sqlc row types, so a single builder can map any of them.
 type bookingFields struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -277,6 +344,8 @@ func buildBooking(f bookingFields) domain.Booking {
 		ID:              f.ID,
 		HouseID:         f.HouseID,
 		UserID:          f.UserID,
+		GuestID:         f.GuestID,
+		Email:           f.Email,
 		Name:            f.Name,
 		Surname:         f.Surname,
 		Lastname:        f.Lastname,

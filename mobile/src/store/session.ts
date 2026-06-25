@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 
-import { fetchMe, logout, refreshTokens } from '@/lib/api/auth';
+import { fetchMe, logout as apiLogout, refreshTokens } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { storeRef } from '@/lib/api/store-ref';
 import { SECURE_KEYS, secureStorage } from '@/lib/secure-storage';
+import { initGuestId, getGuestId } from '@/lib/guestId';
+import { readLocalFavorites, writeLocalFavorites } from '@/lib/localFavorites';
+import { addFavorite, fetchFavoriteIds } from '@/lib/api/favorites';
 import type { User } from '@/types/user';
 
-export type AuthStatus = 'loading' | 'authenticated' | 'onboarding' | 'unauthenticated';
+export type AuthStatus = 'loading' | 'authenticated' | 'onboarding' | 'guest' | 'unauthenticated';
 
 interface Tokens {
   accessToken: string;
@@ -23,8 +26,10 @@ interface SessionState {
   accessToken: string | null;
   refreshToken: string | null;
   user: User | null;
+  guestId: string | null;
   /** Restore the session on app start: read tokens, then fetch /me. */
   hydrate: () => Promise<void>;
+  bootstrap: () => Promise<void>;
   /**
    * Persist tokens after a successful code verification. Returns true when the
    * user still needs to complete onboarding (no name yet). The status is set to
@@ -32,11 +37,14 @@ interface SessionState {
    * mounts profile-setup or the tabs — no manual navigation needed.
    */
   beginSession: (tokens: Tokens, user: User) => Promise<boolean>;
+  loginSuccess: (tokens: Tokens, user: User) => Promise<boolean>;
   /** Finish onboarding (profile created) → authenticated. */
   completeOnboarding: (user: User) => void;
   /** Replace the cached user after a profile update (PATCH /me). */
   setUser: (user: User) => void;
   signOut: () => Promise<void>;
+  logout: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
 }
 
 async function persistTokens(accessToken: string, refreshToken: string) {
@@ -53,29 +61,45 @@ async function clearTokens() {
   ]);
 }
 
-export const useSessionStore = create<SessionState>((set, get) => ({
-  status: 'loading',
-  accessToken: null,
-  refreshToken: null,
-  user: null,
+export const useSessionStore = create<SessionState>((set, get) => {
+  const mergeLocalFavorites = async () => {
+    try {
+      const localIds = await readLocalFavorites();
+      if (localIds.length === 0) return;
+      const serverIds = await fetchFavoriteIds().catch(() => [] as number[]);
+      const serverIdSet = new Set(serverIds);
+      const toAdd = localIds.filter((id) => !serverIdSet.has(id));
+      if (toAdd.length > 0) {
+        await Promise.all(toAdd.map((id) => addFavorite(id).catch(() => undefined)));
+      }
+      await writeLocalFavorites([]);
+    } catch (e) {
+      console.error('Failed to merge local favorites', e);
+    }
+  };
 
-  hydrate: async () => {
-    const [accessToken, refreshToken] = await Promise.all([
+  const hydrateFn = async () => {
+    const guestId = await initGuestId();
+    set({ guestId });
+
+    const [accessToken, refreshToken, hasChosenGuest] = await Promise.all([
       secureStorage.get(SECURE_KEYS.accessToken),
       secureStorage.get(SECURE_KEYS.refreshToken),
+      secureStorage.get('sutki.hasChosenGuest'),
     ]);
+
     if (!accessToken && !refreshToken) {
-      set({ status: 'unauthenticated' });
+      set({ status: hasChosenGuest === 'true' ? 'guest' : 'unauthenticated' });
       return;
     }
-    // Expose the token to the API client before calling /me.
+
     set({ accessToken, refreshToken });
     try {
       const user = await fetchMe();
       set({ user, status: needsOnboarding(user) ? 'onboarding' : 'authenticated' });
+      await mergeLocalFavorites();
       return;
     } catch (err) {
-      // Access token expired/invalid: attempt a one-shot refresh.
       if (err instanceof ApiError && err.status === 401 && refreshToken) {
         try {
           const res = await refreshTokens(refreshToken);
@@ -86,17 +110,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             user: res.user,
             status: needsOnboarding(res.user) ? 'onboarding' : 'authenticated',
           });
+          await mergeLocalFavorites();
           return;
         } catch {
-          // refresh failed → fall through to sign-out
+          // refresh failed
         }
       }
       await clearTokens();
-      set({ accessToken: null, refreshToken: null, user: null, status: 'unauthenticated' });
+      set({
+        accessToken: null,
+        refreshToken: null,
+        user: null,
+        status: hasChosenGuest === 'true' ? 'guest' : 'unauthenticated',
+      });
     }
-  },
+  };
 
-  beginSession: async ({ accessToken, refreshToken }, user) => {
+  const beginSessionFn = async ({ accessToken, refreshToken }: Tokens, user: User) => {
     await persistTokens(accessToken, refreshToken);
     const needsProfile = needsOnboarding(user);
     set({
@@ -105,24 +135,56 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       user,
       status: needsProfile ? 'onboarding' : 'authenticated',
     });
+    await mergeLocalFavorites();
     return needsProfile;
-  },
+  };
 
-  completeOnboarding: (user) => set({ user, status: 'authenticated' }),
-
-  setUser: (user) => set({ user }),
-
-  signOut: async () => {
+  const signOutFn = async () => {
     const { refreshToken } = get();
     if (refreshToken) {
-      // Best-effort revoke; ignore network/server errors on the way out.
-      await logout(refreshToken).catch(() => undefined);
+      await apiLogout(refreshToken).catch(() => undefined);
     }
     await clearTokens();
-    set({ accessToken: null, refreshToken: null, user: null, status: 'unauthenticated' });
-  },
-}));
+    const hasChosenGuest = await secureStorage.get('sutki.hasChosenGuest');
+    set({
+      accessToken: null,
+      refreshToken: null,
+      user: null,
+      status: hasChosenGuest === 'true' ? 'guest' : 'unauthenticated',
+    });
+  };
 
-// Set dynamic store state reference for circular-dependency bypass
+  return {
+    status: 'loading',
+    accessToken: null,
+    refreshToken: null,
+    user: null,
+    guestId: null,
+
+    hydrate: hydrateFn,
+    bootstrap: hydrateFn,
+
+    beginSession: beginSessionFn,
+    loginSuccess: beginSessionFn,
+
+    completeOnboarding: (user) => set({ user, status: 'authenticated' }),
+
+    setUser: (user) => set({ user }),
+
+    signOut: signOutFn,
+    logout: signOutFn,
+
+    continueAsGuest: async () => {
+      const guestId = await initGuestId();
+      await secureStorage.set('sutki.hasChosenGuest', 'true');
+      set({ status: 'guest', guestId });
+    },
+  };
+});
+
 storeRef.getState = useSessionStore.getState;
+
+export function useIsGuest(): boolean {
+  return useSessionStore((state) => state.status === 'guest');
+}
 

@@ -26,6 +26,7 @@ import { env } from '@/lib/env';
 import { useSessionStore } from '@/store/session';
 import { palette, radii } from '@/theme/tokens';
 import type { User } from '@/types/user';
+import { getGlobalFromBooking, setGlobalFromBooking } from '@/lib/requireAuth';
 
 // Mock Premium Avatar URL
 const MOCK_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop';
@@ -296,7 +297,15 @@ export default function ProfileSetupScreen() {
         <View className="w-full pb-6 px-4">
           <Button
             label="Начать"
-            onPress={() => completeOnboarding(createdUser)}
+            onPress={() => {
+              completeOnboarding(createdUser);
+              if (getGlobalFromBooking()) {
+                setGlobalFromBooking(false);
+                setTimeout(() => {
+                  router.replace('/bookings');
+                }, 100);
+              }
+            }}
           />
         </View>
       </ScreenContainer>

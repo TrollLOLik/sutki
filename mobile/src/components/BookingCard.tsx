@@ -16,12 +16,14 @@ interface BookingCardProps {
   onRepeat?: () => void;
   /** Owner inbox: lead with the requester's name instead of the listing. */
   showRequester?: boolean;
+  onVerifyEmail?: () => void;
 }
 
 const statusColors: Record<string, string> = {
   in_progress: '#FF9500',
   confirmed:   '#2EAD6B',
   cancelled:   '#9AA0A6',
+  pending_verification: '#FF2D55',
 };
 
 export function BookingCard({
@@ -29,6 +31,7 @@ export function BookingCard({
   onPress,
   onRepeat,
   showRequester = false,
+  onVerifyEmail,
 }: BookingCardProps) {
   const { width: screenWidth } = useWindowDimensions();
 
@@ -188,31 +191,9 @@ export function BookingCard({
 
         {/* Row 2: action buttons */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {/* Открыть чат — always shown */}
-          <TouchableOpacity
-            onPress={(e) => { e.stopPropagation(); onPress(); }}
-            style={{
-              flex: 1,
-              borderWidth: 1,
-              borderColor: palette.line,
-              borderRadius: 999,
-              paddingVertical: 9,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-            }}
-          >
-            <Ionicons name="chatbubble-outline" size={14} color={palette.ink} />
-            <Text style={{ fontSize: 13, fontWeight: '600', color: palette.ink }}>
-              Открыть чат
-            </Text>
-          </TouchableOpacity>
-
-          {/* Повторить */}
-          {onRepeat ? (
+          {booking.status === 'pending_verification' && onVerifyEmail ? (
             <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); onRepeat(); }}
+              onPress={(e) => { e.stopPropagation(); onVerifyEmail(); }}
               style={{
                 flex: 1,
                 backgroundColor: palette.primary,
@@ -223,10 +204,52 @@ export function BookingCard({
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>
-                Повторить
+                Подтвердить почту
               </Text>
             </TouchableOpacity>
-          ) : null}
+          ) : (
+            <>
+              {/* Открыть чат — always shown */}
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation(); onPress(); }}
+                style={{
+                  flex: 1,
+                  borderWidth: 1,
+                  borderColor: palette.line,
+                  borderRadius: 999,
+                  paddingVertical: 9,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Ionicons name="chatbubble-outline" size={14} color={palette.ink} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: palette.ink }}>
+                  Открыть чат
+                </Text>
+              </TouchableOpacity>
+
+              {/* Повторить */}
+              {onRepeat ? (
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); onRepeat(); }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: palette.primary,
+                    borderRadius: 999,
+                    paddingVertical: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>
+                    Повторить
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
+          )}
         </View>
       </View>
 

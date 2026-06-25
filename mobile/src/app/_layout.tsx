@@ -11,12 +11,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { queryClient } from '@/lib/query';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
+import { useAuthGateStore } from '@/lib/requireAuth';
+import { AuthGateSheet } from '@/components/AuthGateSheet';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const status = useSessionStore((s) => s.status);
   const hydrate = useSessionStore((s) => s.hydrate);
+  const { visible, context, closeGate } = useAuthGateStore();
 
   useEffect(() => {
     hydrate().finally(() => SplashScreen.hideAsync());
@@ -30,7 +33,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.surface } }}>
-            <Stack.Protected guard={status === 'authenticated'}>
+            <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
               <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
@@ -48,10 +51,11 @@ export default function RootLayout() {
             <Stack.Protected guard={status === 'onboarding'}>
               <Stack.Screen name="profile-setup" />
             </Stack.Protected>
-            <Stack.Protected guard={status === 'unauthenticated'}>
+            <Stack.Protected guard={status === 'unauthenticated' || status === 'guest'}>
               <Stack.Screen name="(auth)" />
             </Stack.Protected>
           </Stack>
+          <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

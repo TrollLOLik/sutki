@@ -34,6 +34,7 @@ import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recent-searches';
+import { requireAuth } from '@/lib/requireAuth';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { useTabBarStore } from '@/store/tabbar';
@@ -146,16 +147,28 @@ export default function SearchScreen() {
   });
 
   const listPaddingTop = insets.top + 182;
-  const listParams = useMemo(
-    () => filtersToListParams(filters, query, { limit: 50 }),
-    [filters, query],
-  );
-  const { data, isLoading, isError, refetch, isRefetching } = useListings(listParams);
+
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
 
   const { status: authStatus } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
+  const isGuest = authStatus === 'guest';
+
+  const isFavoritesOnlyEmpty = filters.favoritesOnly && (!favoriteIds || favoriteIds.size === 0);
+
+  const listParams = useMemo(() => {
+    const params = filtersToListParams(filters, query, { limit: 50 });
+    if (filters.favoritesOnly && favoriteIds) {
+      params.houseIds = Array.from(favoriteIds);
+    }
+    return params;
+  }, [filters, query, filters.favoritesOnly, favoriteIds]);
+
+  const { data, isLoading, isError, refetch, isRefetching } = useListings(listParams, {
+    enabled: !isFavoritesOnlyEmpty,
+  });
+
   const { data: myListingsData } = useMyListings({ limit: 50 }, { enabled: isAuthenticated });
 
   const myListingsIds = useMemo(() => {
@@ -163,6 +176,7 @@ export default function SearchScreen() {
   }, [myListingsData]);
 
   const visible = useMemo(() => {
+    if (isFavoritesOnlyEmpty) return [];
     // Filtering (text, city, price, rooms, amenities, guests, dates) is done
     // server-side; only the favorites toggle and hiding the user's own
     // listings remain client-side.
@@ -174,7 +188,30 @@ export default function SearchScreen() {
       list = list.filter((item) => !myListingsIds.has(item.id));
     }
     return list;
-  }, [data?.items, filters.favoritesOnly, favoriteIds, isAuthenticated, myListingsIds]);
+  }, [data?.items, filters.favoritesOnly, favoriteIds, isAuthenticated, myListingsIds, isFavoritesOnlyEmpty]);
+
+  const renderListHeader = () => {
+    if (isGuest && filters.favoritesOnly) {
+      return (
+        <Pressable
+          onPress={() => requireAuth('favorites_cloud')}
+          className="mb-4 flex-row items-center gap-3 rounded-card bg-primary-light border border-primary/20 p-4 active:opacity-90"
+        >
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+            <Ionicons name="cloud-upload-outline" size={20} color={palette.primary} />
+          </View>
+          <View className="flex-1">
+            <Text className="text-sm font-bold text-ink">Синхронизируйте избранное</Text>
+            <Text className="text-xs text-ink-secondary mt-0.5">
+              Войдите в аккаунт, чтобы сохранить избранное в облаке и видеть его на других устройствах.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={palette.primary} />
+        </Pressable>
+      );
+    }
+    return null;
+  };
 
   const activeFilters = countActiveFilters(filters);
 
@@ -414,7 +451,8 @@ export default function SearchScreen() {
           </View>
         </View>
       ) : visible.length === 0 ? (
-        <View style={{ paddingTop: listPaddingTop }} className="flex-1">
+        <View style={{ paddingTop: listPaddingTop }} className="flex-1 px-4">
+          {renderListHeader()}
           <EmptyState
             icon="search-outline"
             title="Ничего не найдено"
@@ -430,6 +468,7 @@ export default function SearchScreen() {
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          ListHeaderComponent={renderListHeader}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}

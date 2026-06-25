@@ -218,6 +218,12 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 	if err != nil {
 		return AuthResult{}, err
 	}
+
+	// Link guest requests and change their status to in_progress
+	if err := s.users.LinkGuestRequests(ctx, user.ID, email); err != nil {
+		log.Printf("auth: failed to link guest requests for user %d (email %s): %v", user.ID, email, err)
+	}
+
 	return s.issueTokens(ctx, user, info)
 }
 

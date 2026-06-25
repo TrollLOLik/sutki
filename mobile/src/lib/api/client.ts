@@ -1,6 +1,7 @@
 import { env } from '@/lib/env';
 import { storeRef } from '@/lib/api/store-ref';
 import { getDeviceMetadata } from '@/lib/device';
+import { getGuestId } from '@/lib/guestId';
 
 export class ApiError extends Error {
   constructor(
@@ -29,6 +30,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     'X-App-Version': metadata.appVersion,
     ...(headers as Record<string, string> | undefined),
   };
+
+  const guestId = getGuestId();
+  if (guestId) {
+    finalHeaders['X-Guest-Id'] = guestId;
+  }
 
   if (body !== undefined) {
     finalHeaders['Content-Type'] = 'application/json';

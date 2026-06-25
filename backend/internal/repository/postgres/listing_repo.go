@@ -62,6 +62,7 @@ func pgTimeToStringPtr(pgTime pgtype.Time) *string {
 
 func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]domain.House, error) {
 	rows, err := r.q.ListHousesFiltered(ctx, sqlc.ListHousesFilteredParams{
+		HouseIds:     nonNil(filter.HouseIDs),
 		Query:        filter.Query,
 		City:         filter.City,
 		PriceMin:     filter.PriceMin,
@@ -201,6 +202,7 @@ func (r *ListingRepo) CountByOwner(ctx context.Context, ownerID int32) (int64, e
 
 func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int64, error) {
 	return r.q.CountHousesFiltered(ctx, sqlc.CountHousesFilteredParams{
+		HouseIds: nonNil(filter.HouseIDs),
 		Query:    filter.Query,
 		City:     filter.City,
 		PriceMin: filter.PriceMin,

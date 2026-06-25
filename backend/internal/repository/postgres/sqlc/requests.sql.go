@@ -17,6 +17,7 @@ SET status = 'cancelled', updated_at = now()
 WHERE id = $1
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
+  COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
@@ -25,6 +26,8 @@ type CancelRequestRow struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -47,6 +50,8 @@ func (q *Queries) CancelRequest(ctx context.Context, id int32) (CancelRequestRow
 		&i.ID,
 		&i.HouseID,
 		&i.UserID,
+		&i.GuestID,
+		&i.Email,
 		&i.Name,
 		&i.Surname,
 		&i.Lastname,
@@ -70,6 +75,7 @@ SET status = 'confirmed', confirmed_at = now(), updated_at = now()
 WHERE id = $1 AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
+  COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
@@ -78,6 +84,8 @@ type ConfirmRequestRow struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -100,6 +108,8 @@ func (q *Queries) ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestR
 		&i.ID,
 		&i.HouseID,
 		&i.UserID,
+		&i.GuestID,
+		&i.Email,
 		&i.Name,
 		&i.Surname,
 		&i.Lastname,
@@ -115,6 +125,35 @@ func (q *Queries) ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestR
 		&i.RejectionReason,
 	)
 	return i, err
+}
+
+const countRequestsByGuest = `-- name: CountRequestsByGuest :one
+SELECT count(*) FROM request r
+WHERE r.guest_id = $1::text
+  AND (
+    $2::text = 'all'
+    OR ($2::text = 'active' AND (
+      r.status = 'in_progress'
+      OR r.status = 'pending_verification'
+      OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+    ))
+    OR ($2::text = 'history' AND (
+      r.status = 'cancelled'
+      OR (r.status = 'confirmed' AND r.end_date IS NOT NULL AND r.end_date < CURRENT_DATE)
+    ))
+  )
+`
+
+type CountRequestsByGuestParams struct {
+	GuestID string
+	Scope   string
+}
+
+func (q *Queries) CountRequestsByGuest(ctx context.Context, arg CountRequestsByGuestParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRequestsByGuest, arg.GuestID, arg.Scope)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countRequestsByUser = `-- name: CountRequestsByUser :one
@@ -150,6 +189,7 @@ SELECT count(*)
 FROM request r
 JOIN house h ON h.id = r.house_id
 WHERE h.owner_id = $1
+  AND r.status != 'pending_verification'
 `
 
 func (q *Queries) CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error) {
@@ -161,23 +201,27 @@ func (q *Queries) CountRequestsForOwner(ctx context.Context, ownerID int32) (int
 
 const createRequest = `-- name: CreateRequest :one
 INSERT INTO request (
-  house_id, user_id, name, surname, lastname, count, message, phone,
+  house_id, user_id, guest_id, email, name, surname, lastname, count, message, phone,
   start_date, end_date, status, created_at, updated_at
 )
 VALUES (
-  $1::int, $2::int, $3, $4, $5, $6::int,
-  $7, $8, $9, $10,
-  'in_progress', now(), now()
+  $1::int, $2, $3, LOWER(TRIM($4)),
+  $5, $6, $7, $8::int,
+  $9, $10, $11, $12,
+  $13::text, now(), now()
 )
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
+  COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
 
 type CreateRequestParams struct {
 	HouseID   int32
-	UserID    int32
+	UserID    *int32
+	GuestID   *string
+	Email     *string
 	Name      string
 	Surname   string
 	Lastname  string
@@ -186,12 +230,15 @@ type CreateRequestParams struct {
 	Phone     string
 	StartDate pgtype.Date
 	EndDate   pgtype.Date
+	Status    string
 }
 
 type CreateRequestRow struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -211,6 +258,8 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (C
 	row := q.db.QueryRow(ctx, createRequest,
 		arg.HouseID,
 		arg.UserID,
+		arg.GuestID,
+		arg.Email,
 		arg.Name,
 		arg.Surname,
 		arg.Lastname,
@@ -219,12 +268,15 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (C
 		arg.Phone,
 		arg.StartDate,
 		arg.EndDate,
+		arg.Status,
 	)
 	var i CreateRequestRow
 	err := row.Scan(
 		&i.ID,
 		&i.HouseID,
 		&i.UserID,
+		&i.GuestID,
+		&i.Email,
 		&i.Name,
 		&i.Surname,
 		&i.Lastname,
@@ -240,6 +292,17 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (C
 		&i.RejectionReason,
 	)
 	return i, err
+}
+
+const deleteExpiredPendingRequests = `-- name: DeleteExpiredPendingRequests :exec
+DELETE FROM request
+WHERE status = 'pending_verification'
+  AND created_at < $1::timestamp
+`
+
+func (q *Queries) DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error {
+	_, err := q.db.Exec(ctx, deleteExpiredPendingRequests, before)
+	return err
 }
 
 const getHouseForBooking = `-- name: GetHouseForBooking :one
@@ -264,6 +327,7 @@ func (q *Queries) GetHouseForBooking(ctx context.Context, id int32) (GetHouseFor
 const getRequestByID = `-- name: GetRequestByID :one
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
+  COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
   r.name, r.surname, r.lastname, r.count, r.message, r.phone,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
@@ -320,6 +384,8 @@ type GetRequestByIDRow struct {
 	ID                int32
 	HouseID           int32
 	UserID            int32
+	GuestID           string
+	Email             string
 	Name              string
 	Surname           string
 	Lastname          string
@@ -365,6 +431,8 @@ func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDR
 		&i.ID,
 		&i.HouseID,
 		&i.UserID,
+		&i.GuestID,
+		&i.Email,
 		&i.Name,
 		&i.Surname,
 		&i.Lastname,
@@ -432,6 +500,24 @@ func (q *Queries) HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConf
 	return has_overlap, err
 }
 
+const linkGuestRequests = `-- name: LinkGuestRequests :exec
+UPDATE request
+SET user_id = $1::int, status = 'in_progress', updated_at = now()
+WHERE LOWER(TRIM(email)) = LOWER(TRIM($2))
+  AND user_id IS NULL
+  AND status = 'pending_verification'
+`
+
+type LinkGuestRequestsParams struct {
+	UserID int32
+	Email  string
+}
+
+func (q *Queries) LinkGuestRequests(ctx context.Context, arg LinkGuestRequestsParams) error {
+	_, err := q.db.Exec(ctx, linkGuestRequests, arg.UserID, arg.Email)
+	return err
+}
+
 const listBlockingRangesForHouse = `-- name: ListBlockingRangesForHouse :many
 SELECT start_date, end_date, status
 FROM request
@@ -471,9 +557,126 @@ func (q *Queries) ListBlockingRangesForHouse(ctx context.Context, houseID *int32
 	return items, nil
 }
 
+const listRequestsByGuest = `-- name: ListRequestsByGuest :many
+SELECT
+  r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
+  COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
+  r.confirmed_at, r.rejection_reason,
+  h.street AS house_street, h.house_number AS house_number,
+  COALESCE(h.number_room, '')::text AS house_number_room,
+  h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
+  COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
+FROM request r
+JOIN house h ON h.id = r.house_id
+WHERE r.guest_id = $1::text
+  AND (
+    $2::text = 'all'
+    OR ($2::text = 'active' AND (
+      r.status = 'in_progress'
+      OR r.status = 'pending_verification'
+      OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
+    ))
+    OR ($2::text = 'history' AND (
+      r.status = 'cancelled'
+      OR (r.status = 'confirmed' AND r.end_date IS NOT NULL AND r.end_date < CURRENT_DATE)
+    ))
+  )
+ORDER BY r.created_at DESC
+LIMIT $4 OFFSET $3
+`
+
+type ListRequestsByGuestParams struct {
+	GuestID      string
+	Scope        string
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListRequestsByGuestRow struct {
+	ID              int32
+	HouseID         int32
+	UserID          int32
+	GuestID         string
+	Email           string
+	Name            string
+	Surname         string
+	Lastname        string
+	Count           int32
+	Message         *string
+	Phone           string
+	StartDate       pgtype.Date
+	EndDate         pgtype.Date
+	Status          string
+	CreatedAt       pgtype.Timestamp
+	UpdatedAt       pgtype.Timestamp
+	ConfirmedAt     pgtype.Timestamp
+	RejectionReason *string
+	HouseStreet     string
+	HouseNumber     string
+	HouseNumberRoom string
+	HouseCity       string
+	HousePrice      int32
+	HouseOwnerID    int32
+	HouseCoverPath  string
+}
+
+func (q *Queries) ListRequestsByGuest(ctx context.Context, arg ListRequestsByGuestParams) ([]ListRequestsByGuestRow, error) {
+	rows, err := q.db.Query(ctx, listRequestsByGuest,
+		arg.GuestID,
+		arg.Scope,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRequestsByGuestRow
+	for rows.Next() {
+		var i ListRequestsByGuestRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.HouseID,
+			&i.UserID,
+			&i.GuestID,
+			&i.Email,
+			&i.Name,
+			&i.Surname,
+			&i.Lastname,
+			&i.Count,
+			&i.Message,
+			&i.Phone,
+			&i.StartDate,
+			&i.EndDate,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ConfirmedAt,
+			&i.RejectionReason,
+			&i.HouseStreet,
+			&i.HouseNumber,
+			&i.HouseNumberRoom,
+			&i.HouseCity,
+			&i.HousePrice,
+			&i.HouseOwnerID,
+			&i.HouseCoverPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRequestsByUser = `-- name: ListRequestsByUser :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
+  COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
   r.name, r.surname, r.lastname, r.count, r.message, r.phone,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
@@ -510,6 +713,8 @@ type ListRequestsByUserRow struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -550,6 +755,8 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, arg ListRequestsByUser
 			&i.ID,
 			&i.HouseID,
 			&i.UserID,
+			&i.GuestID,
+			&i.Email,
 			&i.Name,
 			&i.Surname,
 			&i.Lastname,
@@ -584,6 +791,7 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, arg ListRequestsByUser
 const listRequestsForOwner = `-- name: ListRequestsForOwner :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
+  COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
   r.name, r.surname, r.lastname, r.count, r.message, r.phone,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
@@ -612,8 +820,9 @@ SELECT
   ) AS guest_reviews_count
 FROM request r
 JOIN house h ON h.id = r.house_id
-JOIN "user" u ON u.id = r.user_id
+LEFT JOIN "user" u ON u.id = r.user_id
 WHERE h.owner_id = $1
+  AND r.status != 'pending_verification'
 ORDER BY r.created_at DESC
 LIMIT $3 OFFSET $2
 `
@@ -628,6 +837,8 @@ type ListRequestsForOwnerRow struct {
 	ID                int32
 	HouseID           int32
 	UserID            int32
+	GuestID           string
+	Email             string
 	Name              string
 	Surname           string
 	Lastname          string
@@ -671,6 +882,8 @@ func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForO
 			&i.ID,
 			&i.HouseID,
 			&i.UserID,
+			&i.GuestID,
+			&i.Email,
 			&i.Name,
 			&i.Surname,
 			&i.Lastname,
@@ -716,6 +929,7 @@ SET status = 'cancelled', rejection_reason = $1, updated_at = now()
 WHERE id = $2 AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
+  COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
   name, surname, lastname, count, message, phone, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
@@ -729,6 +943,8 @@ type RejectRequestRow struct {
 	ID              int32
 	HouseID         int32
 	UserID          int32
+	GuestID         string
+	Email           string
 	Name            string
 	Surname         string
 	Lastname        string
@@ -751,6 +967,8 @@ func (q *Queries) RejectRequest(ctx context.Context, arg RejectRequestParams) (R
 		&i.ID,
 		&i.HouseID,
 		&i.UserID,
+		&i.GuestID,
+		&i.Email,
 		&i.Name,
 		&i.Surname,
 		&i.Lastname,

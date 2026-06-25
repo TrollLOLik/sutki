@@ -26,6 +26,7 @@ export interface ListListingsParams {
   petsAllowed?: boolean;
   childrenAllowed?: boolean;
   eventsAllowed?: boolean;
+  houseIds?: number[];
 }
 
 export const listingKeys = {
@@ -46,6 +47,9 @@ function buildQuery(params: ListListingsParams): string {
   if (params.roomsMin != null) sp.set('rooms_min', String(params.roomsMin));
   if (params.serviceIds && params.serviceIds.length > 0) {
     sp.set('services', params.serviceIds.join(','));
+  }
+  if (params.houseIds && params.houseIds.length > 0) {
+    sp.set('house_ids', params.houseIds.join(','));
   }
   if (params.guests != null) sp.set('guests', String(params.guests));
   if (params.checkIn) sp.set('check_in', params.checkIn);

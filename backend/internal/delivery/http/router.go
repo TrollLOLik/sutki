@@ -36,10 +36,15 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 				r.Post("/", listingHandler.create)
 				r.Put("/{id}", listingHandler.update)
 				r.Get("/mine", listingHandler.listMine)
-				r.Post("/{id}/requests", bookingHandler.Create)
 				r.Post("/{id}/reviews", reviewHandler.Create)
 				r.Post("/{id}/favorite", favoriteHandler.Add)
 				r.Delete("/{id}/favorite", favoriteHandler.Remove)
+			})
+
+			// Endpoints with optional authentication under /listings
+			r.Group(func(r chi.Router) {
+				r.Use(OptionalAuthMiddleware(authSvc.TokenManager(), authSvc))
+				r.Post("/{id}/requests", bookingHandler.Create)
 			})
 		})
 
@@ -50,6 +55,15 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Get("/cities/iplocate", cityHandler.IPLocate)
 		r.Get("/users/{id}/reviews", reviewHandler.ListForUser)
 
+		// Public/Guest endpoints
+		r.Get("/guest/requests", bookingHandler.ListGuest)
+
+		// Endpoints with optional authentication
+		r.Group(func(r chi.Router) {
+			r.Use(OptionalAuthMiddleware(authSvc.TokenManager(), authSvc))
+			r.Get("/requests/{id}", bookingHandler.get)
+			r.Post("/requests/{id}/cancel", bookingHandler.cancel)
+		})
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
