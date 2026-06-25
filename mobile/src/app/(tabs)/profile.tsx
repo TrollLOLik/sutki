@@ -2,16 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
-import { Button } from '@/components/ui';
+import { Button, MetricTile, PastelIcon } from '@/components/ui';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
-import { useUpdateMe, fetchMe } from '@/lib/api/auth';
+import { useShimmer } from '@/hooks/useShimmer';
+import { useUpdateMe, fetchMe, useSessions, useRevokeSession, useRevokeOtherSessions, Session } from '@/lib/api/auth';
+import { formatDistanceToNow, parseISO } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { ApiError } from '@/lib/api/client';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
@@ -27,12 +32,22 @@ const TRUST_ITEMS = [
   { icon: 'chatbubbles-outline', label: 'Ответы хозяев', value: '12 мин' },
 ] as const;
 
-const LOGIN_DEVICES = [
-  { name: 'iPhone 15 Pro', place: 'Москва, Россия', date: 'Сейчас', current: true },
-  { name: 'Chrome на Windows', place: 'Санкт-Петербург, Россия', date: 'Вчера, 20:14', current: false },
-  { name: 'Android приложение', place: 'Казань, Россия', date: '12 июня, 09:42', current: false },
-] as const;
+const formatRelativeTime = (isoString: string) => {
+  try {
+    const date = parseISO(isoString);
+    return formatDistanceToNow(date, { addSuffix: true, locale: ru });
+  } catch {
+    return 'недавно';
+  }
+};
 
+const getDeviceIcon = (os: string): keyof typeof Ionicons.glyphMap => {
+  const osLower = os.toLowerCase();
+  if (osLower.includes('ios') || osLower.includes('android')) {
+    return 'phone-portrait-outline';
+  }
+  return 'desktop-outline';
+};
 
 function valueOrPlaceholder(value: string | number | boolean | null | undefined, placeholder = 'Не заполнено') {
   if (typeof value === 'boolean') return value ? 'Да' : 'Нет';
@@ -164,6 +179,56 @@ export default function ProfileScreen() {
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('basic');
   const vkLinked = !!user?.vk_id;
 
+  const { data: sessionsData, refetch: refetchSessions, isLoading: sessionsLoading } = useSessions();
+  const revokeSession = useRevokeSession();
+  const revokeOtherSessions = useRevokeOtherSessions();
+
+  const handleRevokeOther = () => {
+    Alert.alert(
+      'Завершить другие сеансы',
+      'Вы уверены, что хотите завершить все остальные сеансы? Вы выйдете из аккаунта на всех устройствах, кроме этого.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Завершить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await revokeOtherSessions.mutateAsync();
+              refetchSessions();
+              Alert.alert('Успешно', 'Все остальные сеансы успешно завершены.');
+            } catch (err) {
+              Alert.alert('Ошибка', 'Не удалось завершить сеансы.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRevokeOne = (session: Session) => {
+    Alert.alert(
+      'Завершить сеанс',
+      `Завершить сеанс на устройстве ${session.device_name} (${session.device_os})?`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Завершить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await revokeSession.mutateAsync(session.id);
+              refetchSessions();
+              Alert.alert('Успешно', 'Сеанс успешно завершен.');
+            } catch (err) {
+              Alert.alert('Ошибка', 'Не удалось завершить сеанс.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Auto-refresh profile on screen focus
   useFocusEffect(
     useCallback(() => {
@@ -177,28 +242,16 @@ export default function ProfileScreen() {
         .catch((err) => {
           console.warn('Failed to refresh user profile:', err);
         });
+      refetchSessions().catch(() => {});
       return () => {
         active = false;
       };
-    }, [setUser])
+    }, [setUser, refetchSessions])
   );
 
   // User card shimmer sweep animation (блеск/переливание)
-  const shimmerAnim = useRef(new Animated.Value(-1)).current;
-  useEffect(() => {
-    shimmerAnim.setValue(-1);
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1.5,
-          duration: 3000,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.delay(1000),
-      ])
-    ).start();
-  }, [shimmerAnim]);
+  const shimmerAnim = useShimmer();
+
 
   // Editable "Основное" form state (initialised from the cached user on open).
   const [formName, setFormName] = useState('');
@@ -282,7 +335,87 @@ export default function ProfileScreen() {
     }
   };
 
+  const insets = useSafeAreaInsets();
   const handleScroll = useScrollHideTabBar();
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const bannerScale = scrollY.interpolate({
+    inputRange: [-150, 0],
+    outputRange: [1.2, 1],
+    extrapolateRight: 'clamp',
+  });
+
+  const bannerTranslateY = scrollY.interpolate({
+    inputRange: [-150, 0, 250],
+    outputRange: [0, 0, 75],
+    extrapolate: 'clamp',
+  });
+
+  const bannerOpacity = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const isHeaderVisibleRef = useRef(false);
+  const animVisible = useRef(new Animated.Value(0)).current;
+
+  const headerBgOpacity = animVisible;
+  const titleOpacity = animVisible;
+
+  const buttonBgOpacity = useMemo(() => {
+    return animVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0],
+    });
+  }, [animVisible]);
+
+  const titleTranslateY = useMemo(() => {
+    return animVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: [10, 0],
+    });
+  }, [animVisible]);
+
+  const iconColor = useMemo(() => {
+    return animVisible.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['#FFFFFF', palette.ink],
+    });
+  }, [animVisible]);
+
+  const handleMainScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (event: any) => {
+        const y = event.nativeEvent.contentOffset.y;
+        handleScroll(event);
+
+        const threshold = 120;
+        if (y >= threshold) {
+          if (!isHeaderVisibleRef.current) {
+            isHeaderVisibleRef.current = true;
+            Animated.timing(animVisible, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: false,
+            }).start();
+          }
+        } else {
+          if (isHeaderVisibleRef.current) {
+            isHeaderVisibleRef.current = false;
+            Animated.timing(animVisible, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            }).start();
+          }
+        }
+      },
+    }
+  );
 
   const horizontalScrollRef = useRef<ScrollView>(null);
   const tabAnim = useRef(new Animated.Value(0)).current;
@@ -382,46 +515,124 @@ export default function ProfileScreen() {
   }, [completionItems]);
 
   return (
-    <SafeAreaView edges={['top']} className="flex-1 bg-surface-muted">
-      <View className="flex-row items-center justify-between px-4 pb-4 pt-2">
-        <View>
-          <Text className="text-2xl font-extrabold text-ink">Личный кабинет</Text>
+    <View className="flex-1 bg-surface-muted">
+      {/* Sticky Header */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 20,
+          paddingTop: (insets.top || 0) + 12,
+          paddingBottom: 12,
+        }}
+        className="flex-row items-center px-4"
+      >
+        {/* Animated Solid Background Overlay */}
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: palette.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: palette.line,
+            opacity: headerBgOpacity,
+          }}
+        />
+
+        {/* Back to Search Button */}
+        <Pressable
+          onPress={() => router.navigate('/')}
+          accessibilityLabel="В поиск"
+          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
+        >
+          <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </Animated.View>
+          <Animated.View style={{ opacity: animVisible }}>
+            <Ionicons name="chevron-back" size={24} color={palette.ink} />
+          </Animated.View>
+        </Pressable>
+
+        {/* Title in center */}
+        <View className="flex-1 px-3 justify-center items-center">
+          <Animated.View
+            style={{
+              opacity: titleOpacity,
+              transform: [{ translateY: titleTranslateY }],
+            }}
+          >
+            <Text numberOfLines={1} className="text-base font-bold text-ink">
+              Личный кабинет
+            </Text>
+          </Animated.View>
         </View>
+
+        {/* Settings Button */}
         <Pressable
           accessibilityLabel="Настройки профиля"
           accessibilityRole="button"
           onPress={() => setSettingsVisible(true)}
-          className="h-12 w-12 items-center justify-center rounded-full border border-line bg-surface active:bg-surface-muted">
-          <Ionicons name="settings-outline" size={22} color={palette.ink} />
+          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
+        >
+          <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
+            <Ionicons name="settings-outline" size={22} color="#FFFFFF" />
+          </Animated.View>
+          <Animated.View style={{ opacity: animVisible }}>
+            <Ionicons name="settings-outline" size={22} color={palette.ink} />
+          </Animated.View>
         </Pressable>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerClassName="px-4 pb-28"
-        onScroll={handleScroll}
+        contentContainerClassName="pb-28"
+        onScroll={handleMainScroll}
         scrollEventThrottle={16}
       >
-        <LinearGradient
-          colors={[palette.primary, palette.primaryPressed]}
+        <AnimatedLinearGradient
+          colors={['#FF8E53', '#FF5A1F', '#FF2D55']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 24, padding: 20, overflow: 'hidden', position: 'relative' }}>
+          style={{
+            borderBottomLeftRadius: 32,
+            borderBottomRightRadius: 32,
+            paddingTop: (insets.top || 0) + 64,
+            paddingBottom: 24,
+            paddingHorizontal: 20,
+            overflow: 'hidden',
+            position: 'relative',
+            transform: [
+              { scale: bannerScale },
+              { translateY: bannerTranslateY },
+            ],
+            opacity: bannerOpacity,
+          }}
+        >
           <View className="flex-row items-center gap-4">
-            <View className="h-20 w-20 items-center justify-center rounded-full border-2 border-white bg-primary-light overflow-hidden">
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
-              ) : (
-                <Text className="text-xl font-extrabold text-primary">{initials(user)}</Text>
-              )}
+            {/* Avatar container with double white border rings */}
+            <View className="h-[84px] w-[84px] items-center justify-center rounded-full border border-white/40 p-[3px] flex-shrink-0">
+              <View className="h-full w-full items-center justify-center rounded-full border-2 border-white bg-primary-light overflow-hidden">
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
+                ) : (
+                  <Text className="text-xl font-extrabold text-primary">{initials(user)}</Text>
+                )}
+              </View>
             </View>
 
-            <View className="flex-1">
+            <View className="flex-1 justify-center">
               <View className="self-start rounded-pill bg-white/20 px-3 py-1">
                 <Text className="text-xs font-bold text-white">Дом рядом</Text>
               </View>
-              <Text className="mt-2 text-2xl font-extrabold leading-8 text-white">{displayName}</Text>
-              <Text className="mt-1 text-sm leading-5 text-white opacity-95">
+              <Text numberOfLines={2} className="mt-1 text-2xl font-extrabold leading-8 text-white">
+                {displayName}
+              </Text>
+              <Text numberOfLines={1} className="mt-0.5 text-sm leading-5 text-white opacity-95">
                 {user?.city ? `${user.city} · ` : ''}Путешественник и хозяин
               </Text>
             </View>
@@ -445,126 +656,122 @@ export default function ProfileScreen() {
               style={{ flex: 1 }}
             />
           </Animated.View>
-        </LinearGradient>
+        </AnimatedLinearGradient>
 
-        <View className="mt-4 flex-row gap-3">
-          <View className="flex-1 rounded-card border border-line bg-surface p-4"
-            style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
-            <Text className="text-xl font-extrabold text-ink">{user?.listings_count ?? 0}</Text>
-            <Text className="text-xs font-semibold text-ink-secondary">объявления</Text>
-          </View>
-          <View className="flex-1 rounded-card border border-line bg-surface p-4"
-            style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
-            <Text className="text-xl font-extrabold text-ink">
-              {user?.rating && user.rating > 0 ? user.rating.toFixed(1) : '0.0'}
-            </Text>
-            <Text className="text-xs font-semibold text-ink-secondary">рейтинг</Text>
-          </View>
-        </View>
-
-        <View className="mt-5 flex-row gap-3">
-          {TRUST_ITEMS.map((item) => (
-            <View key={item.label} className="flex-1 rounded-card border border-line bg-surface p-3"
-              style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}>
-              <View className="mb-3 h-9 w-9 items-center justify-center rounded-full bg-primary-light">
-                <Ionicons name={item.icon} size={18} color={palette.primary} />
-              </View>
-              <Text className="text-lg font-extrabold text-ink">{item.value}</Text>
-              <Text className="mt-1 text-xs leading-4 text-ink-secondary">{item.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View className="mt-6 gap-3">
-          <ProfileAction
-            icon="home-outline"
-            title="Мои объявления"
-            subtitle="Управляйте объектами, ценами и календарём"
-            onPress={() => router.push('/my-listings' as any)}
-          />
-          <ProfileAction
-            icon="reader-outline"
-            title="Мои брони"
-            subtitle="История поездок, чеки и отзывы"
-            onPress={() => router.push('/bookings')}
-          />
-          <ProfileAction
-            icon="file-tray-full-outline"
-            title="Входящие заявки"
-            subtitle="Новые запросы гостей и подтверждения"
-            onPress={() => router.push('/incoming')}
-          />
-          <ProfileAction
-            icon="star-outline"
-            title="Мои отзывы"
-            subtitle="Отзывы, которые вы оставили или получили"
-            onPress={() => router.push('/my-reviews' as any)}
-          />
-        </View>
-
-        <View className="mt-6 border border-line bg-surface p-4"
-          style={{ borderRadius: 24, shadowColor: palette.ink, shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }}>
-          <View className="flex-row items-center justify-between">
-            <Text className="text-sm font-semibold text-ink-secondary">Заполнение профиля</Text>
-            <Text className="text-sm font-extrabold text-primary">{completion}%</Text>
-          </View>
-          <View className="mt-3 h-2 overflow-hidden rounded-pill bg-surface-muted">
-            <View className="h-full rounded-pill bg-primary" style={{ width: `${completion}%` }} />
+        <View className="px-4">
+          <View className="mt-4 flex-row gap-3">
+            <MetricTile
+              label="объявления"
+              value={user?.listings_count ?? 0}
+            />
+            <MetricTile
+              label="рейтинг"
+              value={user?.rating && user.rating > 0 ? user.rating.toFixed(1) : '—'}
+            />
           </View>
 
-          {/* Checklist of completion tasks */}
-          <View className="mt-4 gap-3">
-            {completionItems.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={item.onPress}
-                className="flex-row items-center justify-between rounded-field bg-surface-muted px-4 py-3 active:opacity-80"
-              >
-                <View className="flex-row items-center gap-3 flex-1 pr-2">
-                  <Ionicons
-                    name={item.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={20}
-                    color={item.completed ? palette.success : palette.inkMuted}
-                  />
-                  <Text className={`text-sm ${item.completed ? 'text-ink-secondary line-through' : 'text-ink font-semibold'}`}>
-                    {item.label}
-                  </Text>
-                </View>
-                {!item.completed && (
-                  <View className="flex-row items-center gap-1">
-                    <Text className="text-xs text-primary font-bold">Заполнить</Text>
-                    <Ionicons name="chevron-forward" size={12} color={palette.primary} />
-                  </View>
-                )}
-              </Pressable>
+          <View className="mt-5 flex-row gap-3">
+            {TRUST_ITEMS.map((item) => (
+              <MetricTile
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                icon={<PastelIcon name={item.icon} />}
+              />
             ))}
           </View>
-        </View>
 
-        <View className="mt-4 border border-line bg-surface p-5"
-          style={{ borderRadius: 24, shadowColor: palette.ink, shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }}>
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 pr-4">
-              <Text className="text-xl font-extrabold text-ink">Сделайте профиль заметнее</Text>
-              <Text className="mt-2 text-sm leading-5 text-ink-secondary">
-                Добавьте фото, город и дату рождения. Хозяева быстрее подтверждают заявки с заполненным профилем.
-              </Text>
+          <View className="mt-6 gap-3">
+            <ProfileAction
+              icon="home-outline"
+              title="Мои объявления"
+              subtitle="Управляйте объектами, ценами и календарём"
+              onPress={() => router.push('/my-listings' as any)}
+            />
+            <ProfileAction
+              icon="reader-outline"
+              title="Мои брони"
+              subtitle="История поездок, чеки и отзывы"
+              onPress={() => router.push('/bookings')}
+            />
+            <ProfileAction
+              icon="file-tray-full-outline"
+              title="Входящие заявки"
+              subtitle="Новые запросы гостей и подтверждения"
+              onPress={() => router.push('/incoming')}
+            />
+            <ProfileAction
+              icon="star-outline"
+              title="Мои отзывы"
+              subtitle="Отзывы, которые вы оставили или получили"
+              onPress={() => router.push('/my-reviews' as any)}
+            />
+          </View>
+
+          <View className="mt-6 border border-line bg-surface p-4"
+            style={{ borderRadius: 24, shadowColor: palette.ink, shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }}>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-sm font-semibold text-ink-secondary">Заполнение профиля</Text>
+              <Text className="text-sm font-extrabold text-primary">{completion}%</Text>
             </View>
-            <View className="h-16 w-16 items-center justify-center rounded-[22px] bg-primary-light">
-              <Ionicons name="sparkles-outline" size={30} color={palette.primary} />
+            <View className="mt-3 h-2 overflow-hidden rounded-pill bg-surface-muted">
+              <View className="h-full rounded-pill bg-primary" style={{ width: `${completion}%` }} />
+            </View>
+
+            {/* Checklist of completion tasks */}
+            <View className="mt-4 gap-3">
+              {completionItems.map((item) => (
+                <Pressable
+                  key={item.id}
+                  onPress={item.onPress}
+                  className="flex-row items-center justify-between rounded-field bg-surface-muted px-4 py-3 active:opacity-80"
+                >
+                  <View className="flex-row items-center gap-3 flex-1 pr-2">
+                    <Ionicons
+                      name={item.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={item.completed ? palette.success : palette.inkMuted}
+                    />
+                    <Text className={`text-sm ${item.completed ? 'text-ink-secondary line-through' : 'text-ink font-semibold'}`}>
+                      {item.label}
+                    </Text>
+                  </View>
+                  {!item.completed && (
+                    <View className="flex-row items-center gap-1">
+                      <Text className="text-xs text-primary font-bold">Заполнить</Text>
+                      <Ionicons name="chevron-forward" size={12} color={palette.primary} />
+                    </View>
+                  )}
+                </Pressable>
+              ))}
             </View>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setSettingsVisible(true)}
-            className="mt-4 h-12 flex-row items-center justify-center rounded-field bg-ink active:opacity-90">
-            <Ionicons name="create-outline" size={18} color={palette.surface} />
-            <Text className="ml-2 text-base font-bold text-white">Открыть настройки</Text>
-          </Pressable>
-        </View>
 
-        <View className="mt-6">
-          <Button label="Выйти" variant="secondary" onPress={signOut} />
+          <View className="mt-4 border border-line bg-surface p-5"
+            style={{ borderRadius: 24, shadowColor: palette.ink, shadowOpacity: 0.04, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } }}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-1 pr-4">
+                <Text className="text-xl font-extrabold text-ink">Сделайте профиль заметнее</Text>
+                <Text className="mt-2 text-sm leading-5 text-ink-secondary">
+                  Добавьте фото, город и дату рождения. Хозяева быстрее подтверждают заявки с заполненным профилем.
+                </Text>
+              </View>
+              <View className="h-16 w-16 items-center justify-center rounded-[22px] bg-primary-light">
+                <Ionicons name="sparkles-outline" size={30} color={palette.primary} />
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSettingsVisible(true)}
+              className="mt-4 h-12 flex-row items-center justify-center rounded-field bg-ink active:opacity-90">
+              <Ionicons name="create-outline" size={18} color={palette.surface} />
+              <Text className="ml-2 text-base font-bold text-white">Открыть настройки</Text>
+            </Pressable>
+          </View>
+
+          <View className="mt-6">
+            <Button label="Выйти" variant="secondary" onPress={signOut} />
+          </View>
         </View>
       </ScrollView>
 
@@ -794,26 +1001,79 @@ export default function ProfileScreen() {
 
                   <View className="gap-3">
                     <Text className="text-lg font-extrabold text-ink">Устройства входа</Text>
-                    {LOGIN_DEVICES.map((device) => (
-                      <View key={`${device.name}-${device.date}`} className="flex-row items-center gap-3 rounded-card border border-line bg-surface p-4">
-                        <View className="h-11 w-11 items-center justify-center rounded-full bg-surface-muted">
-                          <Ionicons name={device.current ? 'phone-portrait-outline' : 'desktop-outline'} size={21} color={palette.primary} />
-                        </View>
-                        <View className="flex-1">
-                          <View className="flex-row items-center gap-2">
-                            <Text className="font-bold text-ink">{device.name}</Text>
-                            {device.current ? (
-                              <View className="rounded-pill bg-success-light px-2 py-0.5">
-                                <Text className="text-[10px] font-bold text-success">Сейчас</Text>
+                    {sessionsLoading ? (
+                      <ActivityIndicator size="small" color={palette.primary} className="py-4" />
+                    ) : (
+                      <>
+                        {/* Current Session */}
+                        {sessionsData?.current && (
+                          <View className="flex-row items-center gap-3 rounded-card border border-line bg-surface p-4">
+                            <View className="h-11 w-11 items-center justify-center rounded-full bg-primary-light">
+                              <Ionicons
+                                name={getDeviceIcon(sessionsData.current.device_os)}
+                                size={21}
+                                color={palette.primary}
+                              />
+                            </View>
+                            <View className="flex-1">
+                              <View className="flex-row items-center gap-2">
+                                <Text className="font-bold text-ink leading-5">
+                                  {sessionsData.current.device_name || 'Текущее устройство'}
+                                </Text>
+                                <View className="rounded-pill bg-success-light px-2 py-0.5">
+                                  <Text className="text-[10px] font-bold text-success uppercase">Сейчас</Text>
+                                </View>
                               </View>
-                            ) : null}
+                              <Text className="mt-1 text-xs text-ink-secondary leading-4">
+                                {sessionsData.current.location || 'Неизвестно'} • {sessionsData.current.ip_address}
+                              </Text>
+                              <Text className="text-[10px] text-ink-muted leading-4 mt-0.5">
+                                Sutki.ru v{sessionsData.current.app_version || '1.0.0'} • {sessionsData.current.device_os}
+                              </Text>
+                            </View>
                           </View>
-                          <Text className="mt-1 text-sm text-ink-secondary">{device.place}</Text>
-                          <Text className="text-xs text-ink-muted">{device.date}</Text>
-                        </View>
-                        <Ionicons name="ellipsis-horizontal" size={20} color={palette.inkMuted} />
-                      </View>
-                    ))}
+                        )}
+
+                        {/* Other Active Sessions */}
+                        {sessionsData?.active && sessionsData.active.map((session) => (
+                          <Pressable
+                            key={session.id}
+                            onPress={() => handleRevokeOne(session)}
+                            className="flex-row items-center gap-3 rounded-card border border-line bg-surface p-4 active:bg-surface-muted"
+                          >
+                            <View className="h-11 w-11 items-center justify-center rounded-full bg-surface-muted">
+                              <Ionicons
+                                name={getDeviceIcon(session.device_os)}
+                                size={21}
+                                color={palette.inkSecondary}
+                              />
+                            </View>
+                            <View className="flex-1">
+                              <Text className="font-bold text-ink leading-5">
+                                {session.device_name || 'Неизвестное устройство'}
+                              </Text>
+                              <Text className="mt-1 text-xs text-ink-secondary leading-4">
+                                {session.location || 'Неизвестно'} • {session.ip_address}
+                              </Text>
+                              <Text className="text-[10px] text-ink-muted leading-4 mt-0.5">
+                                {session.device_os} • {formatRelativeTime(session.last_active_at)}
+                              </Text>
+                            </View>
+                            <Ionicons name="trash-outline" size={18} color={palette.danger} />
+                          </Pressable>
+                        ))}
+
+                        {/* Revoke All Other Sessions Button */}
+                        {sessionsData?.active && sessionsData.active.length > 0 && (
+                          <Pressable
+                            onPress={handleRevokeOther}
+                            className="h-11 items-center justify-center rounded-field bg-danger-light active:bg-danger/25 border border-danger/10 mt-1"
+                          >
+                            <Text className="text-sm font-bold text-danger">Завершить все другие сеансы</Text>
+                          </Pressable>
+                        )}
+                      </>
+                    )}
                   </View>
 
                   <View className="gap-3 mt-6">
@@ -881,6 +1141,6 @@ export default function ProfileScreen() {
               onClose={() => setDeleteSheetVisible(false)}
             />
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }

@@ -31,9 +31,23 @@ type EmailLoginCode struct {
 
 // RefreshToken is a persisted (hashed) refresh token for JWT rotation.
 type RefreshToken struct {
-	ID        int64
-	UserID    int32
-	TokenHash string
-	ExpiresAt time.Time
-	RevokedAt *time.Time
+	ID           int64
+	UserID       int32
+	TokenHash    string
+	ExpiresAt    time.Time
+	RevokedAt    *time.Time
+	DeviceName   *string
+	DeviceOS     *string
+	AppVersion   *string
+	IPAddress    *string
+	Location     *string
+	LastActiveAt time.Time
+}
+
+type DeviceInfo struct {
+	DeviceName *string
+	DeviceOS   *string
+	AppVersion *string
+	IPAddress  *string
+	Location   *string
 }

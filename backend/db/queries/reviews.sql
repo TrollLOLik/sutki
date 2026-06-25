@@ -103,3 +103,18 @@ FROM review rv
 JOIN house h ON h.id = rv.house_id
 WHERE h.owner_id = $1 AND rv.status = 'active';
 
+-- name: ReviewSummaryForHost :one
+SELECT
+  COALESCE(round(avg(rv.rating)::numeric, 1), 0)::float8 AS average,
+  (count(*))::int AS total,
+  (count(*) FILTER (WHERE rv.rating = 1))::int AS count1,
+  (count(*) FILTER (WHERE rv.rating = 2))::int AS count2,
+  (count(*) FILTER (WHERE rv.rating = 3))::int AS count3,
+  (count(*) FILTER (WHERE rv.rating = 4))::int AS count4,
+  (count(*) FILTER (WHERE rv.rating = 5))::int AS count5
+FROM review rv
+JOIN house h ON h.id = rv.house_id
+WHERE h.owner_id = @owner_id::int
+  AND rv.status = 'active';
+
+

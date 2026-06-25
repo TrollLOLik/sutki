@@ -180,7 +180,7 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
       </View>
 
       {/* Bottom Part: Price on Left, Button on Right */}
-      <View className="flex-row justify-between items-center mt-3">
+      <View className="flex-row justify-between items-center mt-3 pt-1">
         <View className="flex-row items-baseline gap-1">
           <Text className="text-lg font-black text-ink">{formatRub(listing.price)} ₽</Text>
           <Text className="text-xs text-ink-muted">/ ночь</Text>
@@ -188,15 +188,9 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
 
         <Pressable
           onPress={onPress}
-          android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-          style={{
-            backgroundColor: palette.primary,
-            borderRadius: 999,
-            paddingHorizontal: 24,
-            paddingVertical: 10,
-          }}
+          className="rounded-full bg-primary-light px-6 py-2.5 active:opacity-85"
         >
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Открыть</Text>
+          <Text className="text-sm font-bold text-primary">Открыть</Text>
         </Pressable>
       </View>
     </Pressable>

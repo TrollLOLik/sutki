@@ -36,6 +36,22 @@ export const radii = {
   pill: 999,
 } as const;
 
+export const shadows = {
+  card: {
+    shadowColor: palette.ink,
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  tile: {
+    shadowColor: palette.ink,
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+} as const;
+
 /** Max content width used by SafeContainer to keep auth/profile screens
  * centered on tablets/iPad (per TZ §3). */
 export const MAX_CONTENT_WIDTH = 600;
+

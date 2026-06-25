@@ -59,18 +59,46 @@ SET name = COALESCE(sqlc.narg('name'), name),
 WHERE id = sqlc.arg('id') AND deleted = false
 RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id;
 
--- name: CreateRefreshToken :exec
-INSERT INTO refresh_token (user_id, token_hash, expires_at, created_at)
-VALUES ($1, $2, $3, now());
+-- name: CreateRefreshToken :one
+INSERT INTO refresh_token (user_id, token_hash, expires_at, device_name, device_os, app_version, ip_address, location, last_active_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+RETURNING id;
 
 -- name: GetRefreshToken :one
-SELECT id, user_id, token_hash, expires_at, created_at, revoked_at
+SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, device_name, device_os, app_version, ip_address, location, last_active_at
 FROM refresh_token
 WHERE token_hash = $1;
+
+-- name: GetRefreshTokenByID :one
+SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, device_name, device_os, app_version, ip_address, location, last_active_at
+FROM refresh_token
+WHERE id = $1;
 
 -- name: RevokeRefreshToken :exec
 UPDATE refresh_token SET revoked_at = now()
 WHERE token_hash = $1 AND revoked_at IS NULL;
+
+-- name: RevokeRefreshTokenByID :exec
+UPDATE refresh_token SET revoked_at = now()
+WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL;
+
+-- name: RevokeAllOtherRefreshTokens :exec
+UPDATE refresh_token SET revoked_at = now()
+WHERE user_id = $1 AND id != $2 AND revoked_at IS NULL;
+
+-- name: UpdateRefreshTokenActiveTime :exec
+UPDATE refresh_token SET last_active_at = $2
+WHERE id = $1;
+
+-- name: UpdateRefreshTokenLocation :exec
+UPDATE refresh_token SET location = $2
+WHERE id = $1;
+
+-- name: ListActiveRefreshTokens :many
+SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, device_name, device_os, app_version, ip_address, location, last_active_at
+FROM refresh_token
+WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+ORDER BY last_active_at DESC;
 
 -- name: DeleteUser :exec
 DELETE FROM "user" WHERE id = $1;

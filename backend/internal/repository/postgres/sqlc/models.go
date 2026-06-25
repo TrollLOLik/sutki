@@ -180,12 +180,18 @@ type PersonalDataRevocation struct {
 }
 
 type RefreshToken struct {
-	ID        int64
-	UserID    int32
-	TokenHash string
-	ExpiresAt pgtype.Timestamp
-	CreatedAt pgtype.Timestamp
-	RevokedAt pgtype.Timestamp
+	ID           int64
+	UserID       int32
+	TokenHash    string
+	ExpiresAt    pgtype.Timestamp
+	CreatedAt    pgtype.Timestamp
+	RevokedAt    pgtype.Timestamp
+	DeviceName   *string
+	DeviceOs     *string
+	AppVersion   *string
+	IpAddress    *string
+	Location     *string
+	LastActiveAt pgtype.Timestamp
 }
 
 type Request struct {

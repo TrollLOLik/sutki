@@ -1,5 +1,6 @@
 import { env } from '@/lib/env';
 import { storeRef } from '@/lib/api/store-ref';
+import { getDeviceMetadata } from '@/lib/device';
 
 export class ApiError extends Error {
   constructor(
@@ -20,9 +21,12 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, headers, ...rest } = options;
-
+  const metadata = getDeviceMetadata();
   const finalHeaders: Record<string, string> = {
     Accept: 'application/json',
+    'X-Device-Name': metadata.deviceName,
+    'X-Device-OS': metadata.deviceOS,
+    'X-App-Version': metadata.appVersion,
     ...(headers as Record<string, string> | undefined),
   };
 
@@ -51,6 +55,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
+            'X-Device-Name': metadata.deviceName,
+            'X-Device-OS': metadata.deviceOS,
+            'X-App-Version': metadata.appVersion,
           },
           body: JSON.stringify({ refresh_token: refreshToken }),
         });

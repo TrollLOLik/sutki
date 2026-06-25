@@ -61,6 +61,7 @@ func main() {
 		SMTPUsername: cfg.SMTPUsername,
 		SMTPPassword: cfg.SMTPPassword,
 		SMTPFrom:     cfg.SMTPFrom,
+		DadataAPIKey: cfg.DadataAPIKey,
 	})
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 

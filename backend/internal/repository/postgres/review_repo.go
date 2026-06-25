@@ -151,3 +151,16 @@ func (r *ReviewRepo) CountForHost(ctx context.Context, userID int32) (int64, err
 	return r.q.CountReviewsForHost(ctx, userID)
 }
 
+func (r *ReviewRepo) SummaryForHost(ctx context.Context, ownerID int32) (domain.RatingSummary, error) {
+	row, err := r.q.ReviewSummaryForHost(ctx, ownerID)
+	if err != nil {
+		return domain.RatingSummary{}, err
+	}
+	return domain.RatingSummary{
+		Average:      row.Average,
+		Total:        row.Total,
+		Distribution: [5]int32{row.Count1, row.Count2, row.Count3, row.Count4, row.Count5},
+	}, nil
+}
+
+

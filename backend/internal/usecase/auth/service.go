@@ -7,11 +7,14 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"mime"
+	"net/http"
 	"net/mail"
 	"net/smtp"
 	"strings"
@@ -44,6 +47,7 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	SMTPFrom     string
+	DadataAPIKey string
 }
 
 // Service implements passwordless email-code auth with JWT access/refresh.
@@ -62,8 +66,12 @@ type Service struct {
 	smtpUsername string
 	smtpPassword string
 	smtpFrom     string
+	dadataAPIKey string
 
 	emailChangeTokens sync.Map // map[int32]string (userID -> temporary token)
+	sessionCache      sync.Map // map[int64]time.Time (sid -> expiresAt)
+	sessionBlacklist  sync.Map // map[int64]bool (sid -> isBlacklisted)
+	ipLocationCache   sync.Map // map[string]string (ip -> city/region)
 }
 
 func New(
@@ -87,6 +95,7 @@ func New(
 		smtpUsername: cfg.SMTPUsername,
 		smtpPassword: cfg.SMTPPassword,
 		smtpFrom:     cfg.SMTPFrom,
+		dadataAPIKey: cfg.DadataAPIKey,
 	}
 }
 
@@ -173,7 +182,7 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 }
 
 // VerifyCode checks the code, upserts the user and issues a token pair.
-func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string) (AuthResult, error) {
+func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info domain.DeviceInfo) (AuthResult, error) {
 	email, err := normalizeEmail(emailRaw)
 	if err != nil {
 		return AuthResult{}, err
@@ -209,11 +218,11 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string) (AuthRe
 	if err != nil {
 		return AuthResult{}, err
 	}
-	return s.issueTokens(ctx, user)
+	return s.issueTokens(ctx, user, info)
 }
 
 // Refresh rotates a refresh token, returning a new token pair.
-func (s *Service) Refresh(ctx context.Context, refreshToken string) (AuthResult, error) {
+func (s *Service) Refresh(ctx context.Context, refreshToken string, info domain.DeviceInfo) (AuthResult, error) {
 	hash := hashToken(refreshToken)
 	rec, err := s.refresh.Get(ctx, hash)
 	if err != nil {
@@ -235,7 +244,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (AuthResult,
 		}
 		return AuthResult{}, err
 	}
-	return s.issueTokens(ctx, user)
+	return s.issueTokens(ctx, user, info)
 }
 
 // Logout revokes a refresh token. Unknown tokens are a no-op.
@@ -349,19 +358,32 @@ func trimPtr(s *string) *string {
 	return &t
 }
 
-func (s *Service) issueTokens(ctx context.Context, user domain.User) (AuthResult, error) {
+func (s *Service) issueTokens(ctx context.Context, user domain.User, info domain.DeviceInfo) (AuthResult, error) {
 	now := s.now()
-	access, _, err := s.tm.Issue(user.ID, now)
-	if err != nil {
-		return AuthResult{}, err
-	}
+
 	refreshToken, err := generateToken()
 	if err != nil {
 		return AuthResult{}, err
 	}
-	if err := s.refresh.Create(ctx, user.ID, hashToken(refreshToken), now.Add(s.refreshTTL)); err != nil {
+
+	// Clean fields
+	info.DeviceName = trimPtr(info.DeviceName)
+	info.DeviceOS = trimPtr(info.DeviceOS)
+	info.AppVersion = trimPtr(info.AppVersion)
+	info.IPAddress = trimPtr(info.IPAddress)
+	info.Location = trimPtr(info.Location)
+
+	sessionID, err := s.refresh.Create(ctx, user.ID, hashToken(refreshToken), now.Add(s.refreshTTL),
+		info.DeviceName, info.DeviceOS, info.AppVersion, info.IPAddress, info.Location)
+	if err != nil {
 		return AuthResult{}, err
 	}
+
+	access, _, err := s.tm.Issue(user.ID, sessionID, now)
+	if err != nil {
+		return AuthResult{}, err
+	}
+
 	return AuthResult{
 		User:         user,
 		AccessToken:  access,
@@ -584,5 +606,254 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmail
 	s.emailChangeTokens.Delete(userID)
 
 	return s.users.UpdateEmail(ctx, userID, newEmail)
+}
+
+func (s *Service) IsValidSession(ctx context.Context, sid int64) bool {
+	if sid == 0 {
+		return false
+	}
+	if s.isSessionBlacklisted(sid) {
+		return false
+	}
+
+	now := s.now()
+	if exp, found := s.sessionCacheGet(sid); found {
+		if now.Before(exp) {
+			return true
+		}
+		s.blacklistSession(sid)
+		return false
+	}
+
+	// Fallback to database
+	token, err := s.refresh.GetByID(ctx, sid)
+	if err != nil {
+		s.blacklistSession(sid)
+		return false
+	}
+
+	if token.RevokedAt != nil || now.After(token.ExpiresAt) {
+		s.blacklistSession(sid)
+		return false
+	}
+
+	s.sessionCacheSet(sid, token.ExpiresAt)
+	return true
+}
+
+func (s *Service) blacklistSession(sid int64) {
+	s.sessionBlacklist.Store(sid, true)
+	s.sessionCache.Delete(sid)
+}
+
+func (s *Service) sessionCacheGet(sid int64) (time.Time, bool) {
+	val, ok := s.sessionCache.Load(sid)
+	if !ok {
+		return time.Time{}, false
+	}
+	return val.(time.Time), true
+}
+
+func (s *Service) sessionCacheSet(sid int64, expiresAt time.Time) {
+	s.sessionCache.Store(sid, expiresAt)
+}
+
+func (s *Service) isSessionBlacklisted(sid int64) bool {
+	_, ok := s.sessionBlacklist.Load(sid)
+	return ok
+}
+
+// SessionDTO is a clean structure for JSON responses.
+type SessionDTO struct {
+	ID           int64     `json:"id"`
+	DeviceName   string    `json:"device_name"`
+	DeviceOS     string    `json:"device_os"`
+	AppVersion   string    `json:"app_version"`
+	IPAddress    string    `json:"ip_address"`
+	Location     string    `json:"location"`
+	LastActiveAt time.Time `json:"last_active_at"`
+}
+
+type SessionsResult struct {
+	Current SessionDTO   `json:"current"`
+	Active  []SessionDTO `json:"active"`
+}
+
+func (s *Service) ListSessions(ctx context.Context, userID int32, currentSID int64) (SessionsResult, error) {
+	tokens, err := s.refresh.ListActive(ctx, userID)
+	if err != nil {
+		return SessionsResult{}, err
+	}
+
+	var current SessionDTO
+	active := make([]SessionDTO, 0)
+
+	for _, t := range tokens {
+		dto := SessionDTO{
+			ID:           t.ID,
+			DeviceName:   stringOrEmpty(t.DeviceName),
+			DeviceOS:     stringOrEmpty(t.DeviceOS),
+			AppVersion:   stringOrEmpty(t.AppVersion),
+			IPAddress:    stringOrEmpty(t.IPAddress),
+			Location:     stringOrEmpty(t.Location),
+			LastActiveAt: t.LastActiveAt,
+		}
+
+		if t.ID == currentSID {
+			current = dto
+		} else {
+			active = append(active, dto)
+		}
+	}
+
+	// If current session was not found in the DB (should not happen normally but just in case)
+	if current.ID == 0 && currentSID != 0 {
+		current.ID = currentSID
+		current.DeviceOS = "Unknown OS"
+		current.DeviceName = "Current Device"
+		current.LastActiveAt = s.now()
+	}
+
+	return SessionsResult{
+		Current: current,
+		Active:  active,
+	}, nil
+}
+
+func stringOrEmpty(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+	return *ptr
+}
+
+func (s *Service) RevokeSession(ctx context.Context, sessionID int64, userID int32) error {
+	err := s.refresh.RevokeByID(ctx, sessionID, userID)
+	if err != nil {
+		return err
+	}
+	s.blacklistSession(sessionID)
+	return nil
+}
+
+func (s *Service) RevokeAllSessionsExcept(ctx context.Context, currentSID int64, userID int32) error {
+	// First fetch all other active sessions to blacklist them in memory
+	tokens, err := s.refresh.ListActive(ctx, userID)
+	if err == nil {
+		for _, t := range tokens {
+			if t.ID != currentSID {
+				s.blacklistSession(t.ID)
+			}
+		}
+	}
+
+	return s.refresh.RevokeAllExcept(ctx, currentSID, userID)
+}
+
+func (s *Service) UpdateSessionActiveTime(ctx context.Context, sid int64) {
+	if sid == 0 {
+		return
+	}
+	now := s.now()
+	// Update active time in background (without blocking response) and rate-limit db calls to once every 5 minutes
+	cacheKey := fmt.Sprintf("last_write_%d", sid)
+	if val, ok := s.sessionCache.Load(cacheKey); ok {
+		lastWrite := val.(time.Time)
+		if now.Sub(lastWrite) < 5*time.Minute {
+			return
+		}
+	}
+
+	s.sessionCache.Store(cacheKey, now)
+
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = s.refresh.UpdateActiveTime(bgCtx, sid, now)
+	}()
+}
+
+func (s *Service) resolveAndSaveLocation(sessionID int64, ip string) {
+	if ip == "" || ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "172.16.") {
+		return
+	}
+
+	// 1. Check local IP cache
+	if cachedVal, ok := s.ipLocationCache.Load(ip); ok {
+		city := cachedVal.(string)
+		if city != "" {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_ = s.refresh.UpdateLocation(bgCtx, sessionID, city)
+		}
+		return
+	}
+
+	// 2. Fetch from DaData with timeout
+	if s.dadataAPIKey == "" {
+		return
+	}
+
+	bgCtx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	url := "https://suggestions.dadata.ru/suggestions/api/4_1/rs/iplocate/address?ip=" + ip
+	req, err := http.NewRequestWithContext(bgCtx, "GET", url, nil)
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Token "+s.dadataAPIKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	var parsed struct {
+		Location *struct {
+			Value string `json:"value"`
+			Data  *struct {
+				City string `json:"city"`
+			} `json:"data"`
+		} `json:"location"`
+	}
+
+	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
+		return
+	}
+
+	city := ""
+	if parsed.Location != nil {
+		if parsed.Location.Data != nil && parsed.Location.Data.City != "" {
+			city = parsed.Location.Data.City
+		} else {
+			city = parsed.Location.Value
+		}
+	}
+
+	if city == "" {
+		return
+	}
+
+	// Cache IP
+	s.ipLocationCache.Store(ip, city)
+
+	// Save to DB
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer dbCancel()
+	_ = s.refresh.UpdateLocation(dbCtx, sessionID, city)
 }
 

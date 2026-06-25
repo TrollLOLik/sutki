@@ -10,28 +10,31 @@ import { EmptyState } from '@/components/EmptyState';
 import { Stars } from '@/components/Stars';
 import { Button } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
-import { useReviews } from '@/lib/api/reviews';
+import { useReviews, useHostReviews } from '@/lib/api/reviews';
 import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 import type { Review, ReviewSummary } from '@/types/review';
 
 export default function ReviewsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, isHost } = useLocalSearchParams<{ id: string; isHost?: string }>();
   const numericId = Number(id);
-  const { data, isLoading, isError, refetch, isRefetching } = useReviews(numericId, { limit: 50 });
+  const { data, isLoading, isError, refetch, isRefetching } = isHost === 'true'
+    ? useHostReviews(numericId, { limit: 50 })
+    : useReviews(numericId, { limit: 50 });
 
   const { status: authStatus } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
-  const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated });
+  const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated && isHost !== 'true' });
 
   const isOwnListing = useMemo(() => {
-    if (!myListingsData || !numericId) return false;
+    if (isHost === 'true' || !myListingsData || !numericId) return false;
     return myListingsData.items.some((item) => item.id === numericId);
-  }, [myListingsData, numericId]);
+  }, [myListingsData, numericId, isHost]);
 
   const summary = data?.summary;
   const items = data?.items ?? [];
+
 
   return (
     <View className="flex-1 bg-surface">
@@ -74,7 +77,7 @@ export default function ReviewsScreen() {
               showsVerticalScrollIndicator={false}
               onRefresh={() => refetch()}
               refreshing={isRefetching}
-              ListHeaderComponent={summary ? <SummaryHeader summary={summary} /> : null}
+              ListHeaderComponent={summary && summary.total > 0 ? <SummaryHeader summary={summary} /> : null}
               ListEmptyComponent={
                 <EmptyState
                   icon="chatbubble-ellipses-outline"
@@ -85,19 +88,22 @@ export default function ReviewsScreen() {
               renderItem={({ item }) => <ReviewRow review={item} />}
             />
 
-            <View className="border-t border-line px-4 py-3 bg-surface">
-              {isOwnListing ? (
-                <Button
-                  label="Редактировать"
-                  onPress={() => router.push({ pathname: '/create', params: { editId: id } } as any)}
-                />
-              ) : (
-                <Button
-                  label="Оставить заявку"
-                  onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
-                />
-              )}
-            </View>
+            {isHost !== 'true' ? (
+              <View className="border-t border-line px-4 py-3 bg-surface">
+                {isOwnListing ? (
+                  <Button
+                    label="Редактировать"
+                    onPress={() => router.push({ pathname: '/create', params: { editId: id } } as any)}
+                  />
+                ) : (
+                  <Button
+                    label="Оставить заявку"
+                    onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
+                  />
+                )}
+              </View>
+            ) : null}
+
           </>
         )}
       </SafeAreaView>

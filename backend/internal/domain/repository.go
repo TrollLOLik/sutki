@@ -64,6 +64,7 @@ type ReviewRepository interface {
 	CountByAuthor(ctx context.Context, userID int32) (int64, error)
 	ListForHost(ctx context.Context, userID, limit, offset int32) ([]Review, error)
 	CountForHost(ctx context.Context, userID int32) (int64, error)
+	SummaryForHost(ctx context.Context, ownerID int32) (RatingSummary, error)
 }
 
 // FavoriteRepository abstracts persistence for a user's favorite listings.
@@ -98,7 +99,13 @@ type AuthCodeRepository interface {
 
 // RefreshTokenRepository persists hashed refresh tokens for JWT rotation.
 type RefreshTokenRepository interface {
-	Create(ctx context.Context, userID int32, tokenHash string, expiresAt time.Time) error
+	Create(ctx context.Context, userID int32, tokenHash string, expiresAt time.Time, deviceName, deviceOS, appVersion, ipAddress, location *string) (int64, error)
 	Get(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetByID(ctx context.Context, id int64) (RefreshToken, error)
 	Revoke(ctx context.Context, tokenHash string) error
+	RevokeByID(ctx context.Context, id int64, userID int32) error
+	RevokeAllExcept(ctx context.Context, currentID int64, userID int32) error
+	UpdateActiveTime(ctx context.Context, id int64, lastActive time.Time) error
+	UpdateLocation(ctx context.Context, id int64, location string) error
+	ListActive(ctx context.Context, userID int32) ([]RefreshToken, error)
 }

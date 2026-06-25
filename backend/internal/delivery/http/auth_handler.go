@@ -3,6 +3,8 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -110,7 +112,7 @@ func (h *AuthHandler) verifyCode(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	res, err := h.svc.VerifyCode(r.Context(), body.Email, body.Code)
+	res, err := h.svc.VerifyCode(r.Context(), body.Email, body.Code, extractDeviceInfo(r))
 	if err != nil {
 		writeAuthError(w, err)
 		return
@@ -125,7 +127,7 @@ func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	res, err := h.svc.Refresh(r.Context(), body.RefreshToken)
+	res, err := h.svc.Refresh(r.Context(), body.RefreshToken, extractDeviceInfo(r))
 	if err != nil {
 		writeAuthError(w, err)
 		return
@@ -412,6 +414,139 @@ func writeAuthErrorRussian(w http.ResponseWriter, err error) {
 	default:
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка сервера")
 	}
+}
+
+func extractDeviceInfo(r *http.Request) domain.DeviceInfo {
+	device := r.Header.Get("X-Device-Name")
+	os := r.Header.Get("X-Device-OS")
+	version := r.Header.Get("X-App-Version")
+
+	ip := r.Header.Get("X-Real-IP")
+	if ip == "" {
+		ip = r.Header.Get("X-Forwarded-For")
+		if idx := strings.Index(ip, ","); idx != -1 {
+			ip = strings.TrimSpace(ip[:idx])
+		}
+	}
+	if ip == "" {
+		ip = r.RemoteAddr
+		if idx := strings.LastIndex(ip, ":"); idx != -1 {
+			ip = ip[:idx]
+		}
+	}
+
+	if device == "" {
+		ua := r.Header.Get("User-Agent")
+		if ua != "" {
+			osName := "Unknown OS"
+			browserName := "Browser"
+
+			uaLower := strings.ToLower(ua)
+			if strings.Contains(uaLower, "windows") {
+				osName = "Windows"
+			} else if strings.Contains(uaLower, "macintosh") || strings.Contains(uaLower, "mac os x") {
+				osName = "macOS"
+			} else if strings.Contains(uaLower, "linux") {
+				osName = "Linux"
+			} else if strings.Contains(uaLower, "iphone") || strings.Contains(uaLower, "ipad") {
+				osName = "iOS"
+			} else if strings.Contains(uaLower, "android") {
+				osName = "Android"
+			}
+
+			if strings.Contains(uaLower, "chrome") {
+				browserName = "Chrome"
+			} else if strings.Contains(uaLower, "safari") {
+				browserName = "Safari"
+			} else if strings.Contains(uaLower, "firefox") {
+				browserName = "Firefox"
+			} else if strings.Contains(uaLower, "edge") {
+				browserName = "Edge"
+			}
+
+			device = browserName
+			os = osName
+			version = "Web"
+		}
+	}
+
+	info := domain.DeviceInfo{}
+	if device != "" {
+		info.DeviceName = &device
+	}
+	if os != "" {
+		info.DeviceOS = &os
+	}
+	if version != "" {
+		info.AppVersion = &version
+	}
+	if ip != "" {
+		info.IPAddress = &ip
+	}
+
+	return info
+}
+
+func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	sid, ok := sessionIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	res, err := h.svc.ListSessions(r.Context(), userID, sid)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (h *AuthHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	sid, ok := sessionIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	err := h.svc.RevokeAllSessionsExcept(r.Context(), sid, userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	sessionID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid session id")
+		return
+	}
+
+	err = h.svc.RevokeSession(r.Context(), sessionID, userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 

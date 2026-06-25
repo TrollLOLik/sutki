@@ -69,20 +69,37 @@ func (q *Queries) CreatePersonalDataRevocation(ctx context.Context, arg CreatePe
 	return err
 }
 
-const createRefreshToken = `-- name: CreateRefreshToken :exec
-INSERT INTO refresh_token (user_id, token_hash, expires_at, created_at)
-VALUES ($1, $2, $3, now())
+const createRefreshToken = `-- name: CreateRefreshToken :one
+INSERT INTO refresh_token (user_id, token_hash, expires_at, device_name, device_os, app_version, ip_address, location, last_active_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+RETURNING id
 `
 
 type CreateRefreshTokenParams struct {
-	UserID    int32
-	TokenHash string
-	ExpiresAt pgtype.Timestamp
+	UserID     int32
+	TokenHash  string
+	ExpiresAt  pgtype.Timestamp
+	DeviceName *string
+	DeviceOs   *string
+	AppVersion *string
+	IpAddress  *string
+	Location   *string
 }
 
-func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error {
-	_, err := q.db.Exec(ctx, createRefreshToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
-	return err
+func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createRefreshToken,
+		arg.UserID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.DeviceName,
+		arg.DeviceOs,
+		arg.AppVersion,
+		arg.IpAddress,
+		arg.Location,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const createUser = `-- name: CreateUser :one
@@ -196,7 +213,7 @@ func (q *Queries) GetEmailLoginCode(ctx context.Context, email string) (EmailLog
 }
 
 const getRefreshToken = `-- name: GetRefreshToken :one
-SELECT id, user_id, token_hash, expires_at, created_at, revoked_at
+SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, device_name, device_os, app_version, ip_address, location, last_active_at
 FROM refresh_token
 WHERE token_hash = $1
 `
@@ -211,6 +228,38 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (Refres
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.RevokedAt,
+		&i.DeviceName,
+		&i.DeviceOs,
+		&i.AppVersion,
+		&i.IpAddress,
+		&i.Location,
+		&i.LastActiveAt,
+	)
+	return i, err
+}
+
+const getRefreshTokenByID = `-- name: GetRefreshTokenByID :one
+SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, device_name, device_os, app_version, ip_address, location, last_active_at
+FROM refresh_token
+WHERE id = $1
+`
+
+func (q *Queries) GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error) {
+	row := q.db.QueryRow(ctx, getRefreshTokenByID, id)
+	var i RefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.RevokedAt,
+		&i.DeviceName,
+		&i.DeviceOs,
+		&i.AppVersion,
+		&i.IpAddress,
+		&i.Location,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
@@ -322,6 +371,61 @@ func (q *Queries) IncrementEmailLoginCodeAttempts(ctx context.Context, email str
 	return err
 }
 
+const listActiveRefreshTokens = `-- name: ListActiveRefreshTokens :many
+SELECT id, user_id, token_hash, expires_at, created_at, revoked_at, device_name, device_os, app_version, ip_address, location, last_active_at
+FROM refresh_token
+WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+ORDER BY last_active_at DESC
+`
+
+func (q *Queries) ListActiveRefreshTokens(ctx context.Context, userID int32) ([]RefreshToken, error) {
+	rows, err := q.db.Query(ctx, listActiveRefreshTokens, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RefreshToken
+	for rows.Next() {
+		var i RefreshToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TokenHash,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.RevokedAt,
+			&i.DeviceName,
+			&i.DeviceOs,
+			&i.AppVersion,
+			&i.IpAddress,
+			&i.Location,
+			&i.LastActiveAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeAllOtherRefreshTokens = `-- name: RevokeAllOtherRefreshTokens :exec
+UPDATE refresh_token SET revoked_at = now()
+WHERE user_id = $1 AND id != $2 AND revoked_at IS NULL
+`
+
+type RevokeAllOtherRefreshTokensParams struct {
+	UserID int32
+	ID     int64
+}
+
+func (q *Queries) RevokeAllOtherRefreshTokens(ctx context.Context, arg RevokeAllOtherRefreshTokensParams) error {
+	_, err := q.db.Exec(ctx, revokeAllOtherRefreshTokens, arg.UserID, arg.ID)
+	return err
+}
+
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
 UPDATE refresh_token SET revoked_at = now()
 WHERE token_hash = $1 AND revoked_at IS NULL
@@ -332,12 +436,57 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, tokenHash string) erro
 	return err
 }
 
+const revokeRefreshTokenByID = `-- name: RevokeRefreshTokenByID :exec
+UPDATE refresh_token SET revoked_at = now()
+WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeRefreshTokenByIDParams struct {
+	ID     int64
+	UserID int32
+}
+
+func (q *Queries) RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokenByID, arg.ID, arg.UserID)
+	return err
+}
+
 const softDeleteUserHouses = `-- name: SoftDeleteUserHouses :exec
 UPDATE house SET deleted = true, updated_at = now() WHERE owner_id = $1
 `
 
 func (q *Queries) SoftDeleteUserHouses(ctx context.Context, ownerID int32) error {
 	_, err := q.db.Exec(ctx, softDeleteUserHouses, ownerID)
+	return err
+}
+
+const updateRefreshTokenActiveTime = `-- name: UpdateRefreshTokenActiveTime :exec
+UPDATE refresh_token SET last_active_at = $2
+WHERE id = $1
+`
+
+type UpdateRefreshTokenActiveTimeParams struct {
+	ID           int64
+	LastActiveAt pgtype.Timestamp
+}
+
+func (q *Queries) UpdateRefreshTokenActiveTime(ctx context.Context, arg UpdateRefreshTokenActiveTimeParams) error {
+	_, err := q.db.Exec(ctx, updateRefreshTokenActiveTime, arg.ID, arg.LastActiveAt)
+	return err
+}
+
+const updateRefreshTokenLocation = `-- name: UpdateRefreshTokenLocation :exec
+UPDATE refresh_token SET location = $2
+WHERE id = $1
+`
+
+type UpdateRefreshTokenLocationParams struct {
+	ID       int64
+	Location *string
+}
+
+func (q *Queries) UpdateRefreshTokenLocation(ctx context.Context, arg UpdateRefreshTokenLocationParams) error {
+	_, err := q.db.Exec(ctx, updateRefreshTokenLocation, arg.ID, arg.Location)
 	return err
 }
 

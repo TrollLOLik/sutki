@@ -260,3 +260,32 @@ func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
 	}
 }
 
+// ListForUser returns reviews left on the specified host's listings (public).
+// GET /api/v1/users/{id}/reviews.
+func (h *ReviewHandler) ListForUser(w http.ResponseWriter, r *http.Request) {
+	hostID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || hostID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	res, err := h.svc.ListForHostWithSummary(r.Context(), int32(hostID),
+		parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	items := make([]reviewDTO, 0, len(res.Items))
+	for _, rv := range res.Items {
+		items = append(items, h.reviewDTO(rv))
+	}
+	writeJSON(w, http.StatusOK, reviewListResponse{
+		Summary: summaryDTO(res.Summary),
+		Items:   items,
+		Total:   res.Total,
+		Limit:   res.Limit,
+		Offset:  res.Offset,
+	})
+}
+
+

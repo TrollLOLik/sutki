@@ -63,11 +63,16 @@ func NewRefreshTokenRepo(q *sqlc.Queries) *RefreshTokenRepo {
 	return &RefreshTokenRepo{q: q}
 }
 
-func (r *RefreshTokenRepo) Create(ctx context.Context, userID int32, tokenHash string, expiresAt time.Time) error {
+func (r *RefreshTokenRepo) Create(ctx context.Context, userID int32, tokenHash string, expiresAt time.Time, deviceName, deviceOS, appVersion, ipAddress, location *string) (int64, error) {
 	return r.q.CreateRefreshToken(ctx, sqlc.CreateRefreshTokenParams{
-		UserID:    userID,
-		TokenHash: tokenHash,
-		ExpiresAt: ts(expiresAt),
+		UserID:     userID,
+		TokenHash:  tokenHash,
+		ExpiresAt:  ts(expiresAt),
+		DeviceName: deviceName,
+		DeviceOs:   deviceOS,
+		AppVersion: appVersion,
+		IpAddress:  ipAddress,
+		Location:   location,
 	})
 }
 
@@ -79,21 +84,82 @@ func (r *RefreshTokenRepo) Get(ctx context.Context, tokenHash string) (domain.Re
 		}
 		return domain.RefreshToken{}, err
 	}
+	return mapRefreshToken(row), nil
+}
+
+func (r *RefreshTokenRepo) GetByID(ctx context.Context, id int64) (domain.RefreshToken, error) {
+	row, err := r.q.GetRefreshTokenByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.RefreshToken{}, domain.ErrNotFound
+		}
+		return domain.RefreshToken{}, err
+	}
+	return mapRefreshToken(row), nil
+}
+
+func (r *RefreshTokenRepo) Revoke(ctx context.Context, tokenHash string) error {
+	return r.q.RevokeRefreshToken(ctx, tokenHash)
+}
+
+func (r *RefreshTokenRepo) RevokeByID(ctx context.Context, id int64, userID int32) error {
+	return r.q.RevokeRefreshTokenByID(ctx, sqlc.RevokeRefreshTokenByIDParams{
+		ID:     id,
+		UserID: userID,
+	})
+}
+
+func (r *RefreshTokenRepo) RevokeAllExcept(ctx context.Context, currentID int64, userID int32) error {
+	return r.q.RevokeAllOtherRefreshTokens(ctx, sqlc.RevokeAllOtherRefreshTokensParams{
+		ID:     currentID,
+		UserID: userID,
+	})
+}
+
+func (r *RefreshTokenRepo) UpdateActiveTime(ctx context.Context, id int64, lastActive time.Time) error {
+	return r.q.UpdateRefreshTokenActiveTime(ctx, sqlc.UpdateRefreshTokenActiveTimeParams{
+		ID:           id,
+		LastActiveAt: ts(lastActive),
+	})
+}
+
+func (r *RefreshTokenRepo) UpdateLocation(ctx context.Context, id int64, location string) error {
+	return r.q.UpdateRefreshTokenLocation(ctx, sqlc.UpdateRefreshTokenLocationParams{
+		ID:       id,
+		Location: &location,
+	})
+}
+
+func (r *RefreshTokenRepo) ListActive(ctx context.Context, userID int32) ([]domain.RefreshToken, error) {
+	rows, err := r.q.ListActiveRefreshTokens(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]domain.RefreshToken, len(rows))
+	for i, row := range rows {
+		res[i] = mapRefreshToken(row)
+	}
+	return res, nil
+}
+
+func mapRefreshToken(row sqlc.RefreshToken) domain.RefreshToken {
 	tok := domain.RefreshToken{
-		ID:        row.ID,
-		UserID:    row.UserID,
-		TokenHash: row.TokenHash,
-		ExpiresAt: row.ExpiresAt.Time,
+		ID:           row.ID,
+		UserID:       row.UserID,
+		TokenHash:    row.TokenHash,
+		ExpiresAt:    row.ExpiresAt.Time,
+		DeviceName:   row.DeviceName,
+		DeviceOS:     row.DeviceOs,
+		AppVersion:   row.AppVersion,
+		IPAddress:    row.IpAddress,
+		Location:     row.Location,
+		LastActiveAt: row.LastActiveAt.Time,
 	}
 	if row.RevokedAt.Valid {
 		t := row.RevokedAt.Time
 		tok.RevokedAt = &t
 	}
-	return tok, nil
-}
-
-func (r *RefreshTokenRepo) Revoke(ctx context.Context, tokenHash string) error {
-	return r.q.RevokeRefreshToken(ctx, tokenHash)
+	return tok
 }
 
 func ts(t time.Time) pgtype.Timestamp {

@@ -123,3 +123,21 @@ func (s *Service) ListForHost(ctx context.Context, userID, limit, offset int32) 
 	return UserReviewsResult{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
+func (s *Service) ListForHostWithSummary(ctx context.Context, hostID, limit, offset int32) (ListResult, error) {
+	limit, offset = clamp(limit, offset)
+	items, err := s.repo.ListForHost(ctx, hostID, limit, offset)
+	if err != nil {
+		return ListResult{}, err
+	}
+	total, err := s.repo.CountForHost(ctx, hostID)
+	if err != nil {
+		return ListResult{}, err
+	}
+	summary, err := s.repo.SummaryForHost(ctx, hostID)
+	if err != nil {
+		return ListResult{}, err
+	}
+	return ListResult{Items: items, Summary: summary, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+

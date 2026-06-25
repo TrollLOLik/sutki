@@ -29,7 +29,7 @@ type Querier interface {
 	// front-end stub until YooKassa is wired (then `pay` flips via webhook).
 	CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error)
 	CreatePersonalDataRevocation(ctx context.Context, arg CreatePersonalDataRevocationParams) error
-	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (int64, error)
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
@@ -44,6 +44,7 @@ type Querier interface {
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error)
 	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
 	GetReviewByID(ctx context.Context, id int32) (GetReviewByIDRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
@@ -54,6 +55,7 @@ type Querier interface {
 	// free for next guest). The caller passes the exclusive end (start+1 for single night).
 	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
+	ListActiveRefreshTokens(ctx context.Context, userID int32) ([]RefreshToken, error)
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
 	ListAllServices(ctx context.Context) ([]ListAllServicesRow, error)
 	// All active/pending date ranges for a house so the booking calendar can
@@ -76,11 +78,16 @@ type Querier interface {
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
 	ReviewSummaryByHouse(ctx context.Context, houseID int32) (ReviewSummaryByHouseRow, error)
+	ReviewSummaryForHost(ctx context.Context, ownerID int32) (ReviewSummaryForHostRow, error)
+	RevokeAllOtherRefreshTokens(ctx context.Context, arg RevokeAllOtherRefreshTokensParams) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
 	SoftDeleteUserHouses(ctx context.Context, ownerID int32) error
 	// Updates a listing owned by the given user. Returns the number of affected
 	// rows so the caller can distinguish "not found / not owner" (0) from success.
 	UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error)
+	UpdateRefreshTokenActiveTime(ctx context.Context, arg UpdateRefreshTokenActiveTimeParams) error
+	UpdateRefreshTokenLocation(ctx context.Context, arg UpdateRefreshTokenLocationParams) error
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error

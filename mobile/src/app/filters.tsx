@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
@@ -58,6 +58,8 @@ function dateRangeLabel(checkIn: string | null, checkOut: string | null): string
 }
 
 export default function FiltersScreen() {
+  const { ownerId } = useLocalSearchParams<{ ownerId?: string }>();
+  const numericOwnerId = ownerId ? Number(ownerId) : null;
   const store = useFiltersStore();
   const { data: services } = useServices();
   const insets = useSafeAreaInsets();
@@ -124,8 +126,52 @@ export default function FiltersScreen() {
     () => filtersToListParams(draftFilters, '', { limit: 1 }),
     [draftFilters],
   );
-  const { data: countData, isFetching: countLoading } = useListings(countParams);
+  // Global search count
+  const { data: countData, isFetching: countLoading } = useListings(countParams, { enabled: !numericOwnerId });
   const total = countData?.total;
+
+  // Host search count (fetch up to 100 listings and filter locally)
+  const { data: allListingsData, isLoading: allListingsLoading } = useListings(
+    { limit: 100 },
+    { enabled: !!numericOwnerId }
+  );
+
+  const localFilteredTotal = useMemo(() => {
+    if (!numericOwnerId) return null;
+    const allItems = allListingsData?.items ?? [];
+    let list = allItems.filter((item) => item.owner_id === numericOwnerId);
+
+    if (city) {
+      list = list.filter((item) => item.city.toLowerCase().includes(city.toLowerCase()));
+    }
+    if (priceMinQuery !== '') {
+      list = list.filter((item) => item.price >= Number(priceMinQuery));
+    }
+    if (priceMaxQuery !== '') {
+      list = list.filter((item) => item.price <= Number(priceMaxQuery));
+    }
+    if (rooms.length > 0) {
+      list = list.filter((item) => {
+        const itemRooms = parseInt(item.rooms, 10);
+        const roomsCount = isNaN(itemRooms) ? 0 : itemRooms;
+        return rooms.some((r) => {
+          if (r === 'studio') return roomsCount === 0;
+          if (r === '1') return roomsCount === 1;
+          if (r === '2') return roomsCount === 2;
+          if (r === '3plus') return roomsCount >= 3;
+          return false;
+        });
+      });
+    }
+    if (guests) {
+      list = list.filter((item) => item.max_guests === null || item.max_guests >= guests);
+    }
+
+    return list.length;
+  }, [numericOwnerId, allListingsData, city, priceMinQuery, priceMaxQuery, rooms, guests]);
+
+  const isCtaLoading = numericOwnerId ? allListingsLoading : countLoading;
+  const ctaTotal = numericOwnerId ? localFilteredTotal : total;
 
   const apply = () => {
     store.setFilters({
@@ -163,10 +209,10 @@ export default function FiltersScreen() {
   };
 
 
-  const ctaLabel = countLoading
+  const ctaLabel = isCtaLoading
     ? 'Загрузка…'
-    : total != null
-      ? `Показать ${total} ${pluralVariants(total)}`
+    : ctaTotal != null
+      ? `Показать ${ctaTotal} ${pluralVariants(ctaTotal)}`
       : 'Показать варианты';
 
   return (
@@ -495,7 +541,7 @@ export default function FiltersScreen() {
           backgroundColor: palette.surface,
         }}
       >
-        <Button label={ctaLabel} loading={countLoading} onPress={apply} />
+        <Button label={ctaLabel} loading={isCtaLoading} onPress={apply} />
       </View>
 
       {/* City picker bottom sheet */}

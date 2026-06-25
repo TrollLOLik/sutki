@@ -171,9 +171,8 @@ export default function ListingDetailScreen() {
   const handleMainScroll = (event: any) => {
     if (!isMountedRef.current) return;
     const y = event.nativeEvent.contentOffset.y;
-    // Threshold (310px) ensures that the page's original title is completely scrolled past/under
-    // the header layout before we start fading in the sticky header elements.
-    const threshold = 310;
+    const headerHeight = (insets.top || 0) + 64;
+    const threshold = titleBottomRef.current - headerHeight;
     if (y >= threshold) {
       if (!isHeaderVisibleRef.current) {
         isHeaderVisibleRef.current = true;
@@ -584,7 +583,27 @@ export default function ListingDetailScreen() {
                 <Text className="text-base font-bold text-ink">Владелец жилья</Text>
                 
                 <View className="rounded-2xl border border-line bg-surface p-4">
-                  <View className="flex-row items-start gap-4">
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/profile/[id]',
+                        params: {
+                          id: String(data.owner_id),
+                          name: data.owner_name,
+                          surname: data.owner_surname,
+                          patronymic: data.owner_patronymic,
+                          phone: data.owner_phone,
+                          avatarUrl: data.owner_avatar_url,
+                          rating: String(data.owner_rating),
+                          reviewsCount: String(data.owner_reviews_count),
+                          isVerified: data.owner_is_verified ? 'true' : 'false',
+                          city: data.city,
+                          listingId: id,
+                        },
+                      })
+                    }
+                    className="flex-row items-start gap-4 active:opacity-80"
+                  >
                     {/* Left: Avatar */}
                     <View className="w-14 h-14 rounded-full bg-primary-light items-center justify-center flex-shrink-0">
                       <Text className="text-xl font-bold text-primary">
@@ -598,12 +617,15 @@ export default function ListingDetailScreen() {
 
                     {/* Right: Info */}
                     <View className="flex-1 gap-1">
-                      <Text className="text-xl font-bold text-ink leading-tight">
-                        {(() => {
-                          const nameStr = [data.owner_name, data.owner_patronymic, data.owner_surname].filter(Boolean).join(' ');
-                          return nameStr || 'Арендодатель';
-                        })()}
-                      </Text>
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-xl font-bold text-ink leading-tight flex-1">
+                          {(() => {
+                            const nameStr = [data.owner_name, data.owner_patronymic, data.owner_surname].filter(Boolean).join(' ');
+                            return nameStr || 'Арендодатель';
+                          })()}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+                      </View>
                       
                       {/* Rating row */}
                       <View className="flex-row items-center gap-1.5 mt-0.5">
@@ -629,17 +651,19 @@ export default function ListingDetailScreen() {
                       <Text className="text-sm text-ink-secondary">
                         {formatListingsPlural(data.owner_listings_count || 0)}
                       </Text>
-
-                      {/* Subscribe link */}
-                      {!isOwnListing && (
-                        <Pressable onPress={() => setIsSubscribed(!isSubscribed)} className="mt-1 active:opacity-70">
-                          <Text className={`text-sm font-semibold ${isSubscribed ? 'text-ink-muted' : 'text-primary'}`}>
-                            {isSubscribed ? 'Вы подписаны' : 'Подписаться'}
-                          </Text>
-                        </Pressable>
-                      )}
                     </View>
-                  </View>
+                  </Pressable>
+
+                  {/* Subscribe link */}
+                  {!isOwnListing && (
+                    <View style={{ paddingLeft: 72 }} className="mt-2">
+                      <Pressable onPress={() => setIsSubscribed(!isSubscribed)} className="self-start active:opacity-70">
+                        <Text className={`text-sm font-semibold ${isSubscribed ? 'text-ink-muted' : 'text-primary'}`}>
+                          {isSubscribed ? 'Вы подписаны' : 'Подписаться'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
 
                   {/* Badges block */}
                   <View className="flex-row flex-wrap gap-2 mt-3 border-t border-line/60 pt-3">

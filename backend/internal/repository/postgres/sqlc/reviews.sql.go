@@ -366,3 +366,43 @@ func (q *Queries) ReviewSummaryByHouse(ctx context.Context, houseID int32) (Revi
 	)
 	return i, err
 }
+
+const reviewSummaryForHost = `-- name: ReviewSummaryForHost :one
+SELECT
+  COALESCE(round(avg(rv.rating)::numeric, 1), 0)::float8 AS average,
+  (count(*))::int AS total,
+  (count(*) FILTER (WHERE rv.rating = 1))::int AS count1,
+  (count(*) FILTER (WHERE rv.rating = 2))::int AS count2,
+  (count(*) FILTER (WHERE rv.rating = 3))::int AS count3,
+  (count(*) FILTER (WHERE rv.rating = 4))::int AS count4,
+  (count(*) FILTER (WHERE rv.rating = 5))::int AS count5
+FROM review rv
+JOIN house h ON h.id = rv.house_id
+WHERE h.owner_id = $1::int
+  AND rv.status = 'active'
+`
+
+type ReviewSummaryForHostRow struct {
+	Average float64
+	Total   int32
+	Count1  int32
+	Count2  int32
+	Count3  int32
+	Count4  int32
+	Count5  int32
+}
+
+func (q *Queries) ReviewSummaryForHost(ctx context.Context, ownerID int32) (ReviewSummaryForHostRow, error) {
+	row := q.db.QueryRow(ctx, reviewSummaryForHost, ownerID)
+	var i ReviewSummaryForHostRow
+	err := row.Scan(
+		&i.Average,
+		&i.Total,
+		&i.Count1,
+		&i.Count2,
+		&i.Count3,
+		&i.Count4,
+		&i.Count5,
+	)
+	return i, err
+}

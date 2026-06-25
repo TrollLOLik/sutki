@@ -32,7 +32,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 
 			// Authenticated endpoints under /listings
 			r.Group(func(r chi.Router) {
-				r.Use(AuthMiddleware(authSvc.TokenManager()))
+				r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
 				r.Post("/", listingHandler.create)
 				r.Put("/{id}", listingHandler.update)
 				r.Get("/mine", listingHandler.listMine)
@@ -48,13 +48,18 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Route("/auth", authHandler.Routes)
 		r.Post("/cities/suggest", cityHandler.Suggest)
 		r.Get("/cities/iplocate", cityHandler.IPLocate)
+		r.Get("/users/{id}/reviews", reviewHandler.ListForUser)
+
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
-			r.Use(AuthMiddleware(authSvc.TokenManager()))
+			r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
 			r.Get("/me", authHandler.Me)
 			r.Patch("/me", authHandler.UpdateMe)
 			r.Delete("/me", authHandler.DeleteMe)
+			r.Get("/me/sessions", authHandler.ListSessions)
+			r.Delete("/me/sessions", authHandler.RevokeOtherSessions)
+			r.Delete("/me/sessions/{id}", authHandler.RevokeSession)
 			r.Post("/me/change-email/request-old", authHandler.RequestOldEmailCode)
 			r.Post("/me/change-email/verify-old", authHandler.VerifyOldEmailCode)
 			r.Post("/me/change-email/request-new", authHandler.RequestNewEmailCode)

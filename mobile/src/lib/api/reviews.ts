@@ -43,6 +43,29 @@ export function useReviews(houseId: number | undefined, params: ListReviewsParam
   });
 }
 
+export const hostReviewKeys = {
+  all: ['host-reviews'] as const,
+  list: (hostId: number, params: ListReviewsParams) =>
+    [...hostReviewKeys.all, hostId, 'list', params] as const,
+};
+
+export function fetchHostReviews(hostId: number, params: ListReviewsParams = {}): Promise<ReviewsPage> {
+  return api.get<ReviewsPage>(`/api/v1/users/${hostId}/reviews${buildQuery(params)}`, {
+    auth: false,
+  });
+}
+
+export function useHostReviews(hostId: number | undefined, params: ListReviewsParams = {}) {
+  return useQuery({
+    queryKey: hostReviewKeys.list(hostId ?? 0, params),
+    queryFn: () => fetchHostReviews(hostId as number, params),
+    enabled: hostId != null && hostId > 0,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+
 export function useCreateReview(houseId: number) {
   const qc = useQueryClient();
   return useMutation({

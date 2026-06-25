@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { api } from '@/lib/api/client';
 import type { AuthResponse, RequestCodeResponse, UpdateProfileBody } from '@/types/auth';
@@ -134,6 +134,52 @@ export function useRequestDeleteMeCode() {
 
 export function useConfirmDeleteMe() {
   return useMutation({ mutationFn: (code: string) => confirmDeleteMe(code) });
+}
+
+export interface Session {
+  id: number;
+  device_name: string;
+  device_os: string;
+  app_version: string;
+  ip_address: string;
+  location: string;
+  last_active_at: string;
+}
+
+export interface SessionsResponse {
+  current: Session;
+  active: Session[];
+}
+
+export function fetchSessions(): Promise<SessionsResponse> {
+  return api.get<SessionsResponse>('/api/v1/me/sessions');
+}
+
+export function revokeOtherSessions(): Promise<void> {
+  return api.delete<void>('/api/v1/me/sessions');
+}
+
+export function revokeSession(id: number): Promise<void> {
+  return api.delete<void>(`/api/v1/me/sessions/${id}`);
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: ['sessions'],
+    queryFn: fetchSessions,
+  });
+}
+
+export function useRevokeOtherSessions() {
+  return useMutation({
+    mutationFn: revokeOtherSessions,
+  });
+}
+
+export function useRevokeSession() {
+  return useMutation({
+    mutationFn: (id: number) => revokeSession(id),
+  });
 }
 
 
