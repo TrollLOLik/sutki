@@ -9,10 +9,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui';
 import { useBooking, useCancelBooking } from '@/lib/api/bookings';
+import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
 import { palette } from '@/theme/tokens';
+import { requireAuth } from '@/lib/requireAuth';
 
 /** Format date without year, e.g. "20 мая" */
 function formatDateShort(date: Date): string {
@@ -55,6 +57,27 @@ export default function BookingDetailScreen() {
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
   const cancel = useCancelBooking();
   const insets = useSafeAreaInsets();
+  const { mutateAsync: findOrCreateConv, isPending: isCreatingChat } = useFindOrCreateConversation();
+
+  const handleOpenChat = async () => {
+    if (!data?.house) return;
+    if (!requireAuth('generic')) return;
+    try {
+      const res = await findOrCreateConv({
+        houseID: data.house_id,
+        userID: data.house.owner_id,
+      });
+      router.push({
+        pathname: `/chat/${res.conversation_id}` as any,
+        params: {
+          title: `${data.house.owner_name ?? ''} ${data.house.owner_surname ?? ''}`.trim() || 'Хозяин',
+          otherUserId: data.house.owner_id,
+        },
+      });
+    } catch (err) {
+      Alert.alert('Ошибка', err instanceof ApiError ? err.message : 'Не удалось открыть чат.');
+    }
+  };
 
   const onCancel = () => {
     Alert.alert('Отменить заявку?', 'Это действие нельзя отменить.', [
@@ -523,6 +546,7 @@ export default function BookingDetailScreen() {
             >
               {/* Открыть чат */}
               <TouchableOpacity
+                disabled={isCreatingChat}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -532,11 +556,18 @@ export default function BookingDetailScreen() {
                   borderColor: palette.line,
                   borderRadius: 999,
                   paddingVertical: 13,
+                  opacity: isCreatingChat ? 0.6 : 1,
                 }}
-                onPress={() => router.back()}
+                onPress={handleOpenChat}
               >
-                <Ionicons name="chatbubble-outline" size={18} color={palette.ink} />
-                <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Открыть чат</Text>
+                {isCreatingChat ? (
+                  <ActivityIndicator size="small" color={palette.ink} />
+                ) : (
+                  <>
+                    <Ionicons name="chatbubble-outline" size={18} color={palette.ink} />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Открыть чат</Text>
+                  </>
+                )}
               </TouchableOpacity>
 
               {/* Отменить заявку — only for pending */}

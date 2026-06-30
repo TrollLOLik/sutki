@@ -12,6 +12,7 @@ import {
   ScrollView,
   Text,
   View,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,6 +22,8 @@ import { HistoryBookingCard } from '@/components/HistoryBookingCard';
 import { Button } from '@/components/ui';
 import { useMyBookings, useGuestRequests } from '@/lib/api/bookings';
 import { requestEmailCode } from '@/lib/api/auth';
+import { ApiError } from '@/lib/api/client';
+import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 import type { Booking } from '@/types/booking';
@@ -33,6 +36,7 @@ export default function MyBookingsScreen() {
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
+  const { mutateAsync: findOrCreateConv } = useFindOrCreateConversation();
 
   const { status: authStatus } = useSessionStore();
   const isGuest = authStatus === 'guest';
@@ -57,6 +61,26 @@ export default function MyBookingsScreen() {
   };
 
   const allGuestItems = guestQuery.data?.items ?? [];
+
+  const handleOpenChat = async (booking: Booking) => {
+    if (!booking.house) return;
+    try {
+      const res = await findOrCreateConv({
+        houseID: booking.house_id,
+        userID: booking.house.owner_id,
+      });
+      router.push({
+        pathname: `/chat/${res.conversation_id}` as any,
+        params: {
+          title: `${booking.house.owner_name ?? ''} ${booking.house.owner_surname ?? ''}`.trim() || 'Хозяин',
+          otherUserId: booking.house.owner_id,
+          houseId: String(booking.house_id),
+        },
+      });
+    } catch (err) {
+      Alert.alert('Ошибка', err instanceof ApiError ? err.message : 'Не удалось открыть чат.');
+    }
+  };
 
   const activeItems = isGuest
     ? allGuestItems.filter(isActive)
@@ -258,6 +282,7 @@ export default function MyBookingsScreen() {
                       onPress={() => open(item)}
                       onRepeat={item.status !== 'pending_verification' ? () => repeat(item) : undefined}
                       onVerifyEmail={item.status === 'pending_verification' ? () => handleVerifyEmail(item) : undefined}
+                      onChatPress={() => handleOpenChat(item)}
                     />
                   )}
                   ListFooterComponent={

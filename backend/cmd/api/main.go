@@ -19,9 +19,11 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 )
 
 func main() {
@@ -72,6 +74,7 @@ func main() {
 		SMTPUsername: cfg.SMTPUsername,
 		SMTPPassword: cfg.SMTPPassword,
 		SMTPFrom:     cfg.SMTPFrom,
+		ExposeCode:   cfg.AuthExposeCode,
 	})
 	bookingSvc.StartCleanupJob(ctx, 1*time.Hour)
 	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
@@ -86,9 +89,31 @@ func main() {
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
+	s3Storage, err := storage.NewS3Storage(
+		cfg.S3Endpoint,
+		cfg.S3PresignEndpoint,
+		cfg.S3Region,
+		cfg.S3Bucket,
+		cfg.S3AccessKey,
+		cfg.S3SecretKey,
+		cfg.S3UsePathStyle,
+		cfg.MediaBaseURL,
+	)
+	if err != nil {
+		log.Fatalf("failed to initialize S3 storage: %v", err)
+	}
+
+	chatRepo := postgres.NewChatRepo(queries)
+	chatSvc := chat.New(chatRepo, s3Storage, chat.Config{
+		CentrifugoURL: cfg.CentrifugoURL,
+		CentrifugoKey: cfg.CentrifugoKey,
+		HMACSecret:    cfg.CentrifugoHMACSecret,
+	})
+	chatHandler := httpdelivery.NewChatHandler(chatSvc)
+
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, authSvc),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, authSvc),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}

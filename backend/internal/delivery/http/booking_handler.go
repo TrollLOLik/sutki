@@ -136,10 +136,6 @@ func (h *BookingHandler) Availability(w http.ResponseWriter, r *http.Request) {
 func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := userIDFromContext(r.Context())
 	guestID := r.Header.Get("X-Guest-Id")
-	if userID == 0 && guestID == "" {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
 	houseID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || houseID <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid id")
@@ -156,9 +152,43 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StartDate string  `json:"start_date"`
 		EndDate   *string `json:"end_date"`
 		Email     string  `json:"email"`
+		GuestID   string  `json:"guest_id"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
+	}
+
+	if guestID == "" {
+		guestID = body.GuestID
+	}
+
+	if userID == 0 && guestID == "" {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if !h.svc.ExposeCode() {
+		clientIP := getClientIP(r)
+		if !BookingIPLimiter.Allow("booking_ip:"+clientIP, 15) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов бронирования с вашего IP. Пожалуйста, попробуйте позже.")
+			return
+		}
+
+		if userID == 0 {
+			emailClean := strings.ToLower(strings.TrimSpace(body.Email))
+			if emailClean != "" {
+				if !BookingEmailLimiter.Allow("booking_email:"+emailClean, 5) {
+					writeError(w, http.StatusTooManyRequests, "Слишком много заявок на этот email. Пожалуйста, попробуйте позже.")
+					return
+				}
+			}
+			if guestID != "" {
+				if !BookingGuestIDLimiter.Allow("booking_guest:"+guestID, 10) {
+					writeError(w, http.StatusTooManyRequests, "Слишком много заявок с вашего устройства. Пожалуйста, попробуйте позже.")
+					return
+				}
+			}
+		}
 	}
 
 	nb := domain.NewBooking{
@@ -436,6 +466,8 @@ func (h *BookingHandler) writeBookingError(w http.ResponseWriter, err error, not
 		writeError(w, http.StatusConflict, "dates unavailable")
 	case errors.Is(err, domain.ErrBookingForbidden):
 		writeError(w, http.StatusForbidden, "forbidden")
+	case errors.Is(err, domain.ErrBookingOwnListing):
+		writeError(w, http.StatusForbidden, "Вы не можете забронировать собственное объявление")
 	case errors.Is(err, domain.ErrBookingNotPending):
 		writeError(w, http.StatusConflict, "booking not pending")
 	default:

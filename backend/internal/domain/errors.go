@@ -35,6 +35,8 @@ var (
 	// ErrDatesUnavailable is returned when the requested dates overlap an
 	// already-confirmed booking on the same listing.
 	ErrDatesUnavailable = errors.New("dates unavailable")
+	// ErrBookingOwnListing is returned when a user attempts to book their own listing.
+	ErrBookingOwnListing = errors.New("cannot book own listing")
 )
 
 // Review-related errors.

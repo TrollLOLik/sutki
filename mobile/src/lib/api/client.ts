@@ -20,6 +20,8 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   auth?: boolean;
 }
 
+let activeRefreshPromise: Promise<string | null> | null = null;
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, headers, ...rest } = options;
   const metadata = getDeviceMetadata();
@@ -45,6 +47,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
+  console.log('[API Request]', {
+    path,
+    auth,
+    hasToken: !!storeRef.getState?.()?.accessToken,
+    tokenSnippet: storeRef.getState?.()?.accessToken
+      ? storeRef.getState().accessToken.substring(0, 10) + '...'
+      : 'none',
+  });
+
   const res = await fetch(`${env.apiUrl}${path}`, {
     ...rest,
     headers: finalHeaders,
@@ -56,27 +67,46 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const refreshToken = state?.refreshToken;
     if (refreshToken) {
       try {
-        const refreshRes = await fetch(`${env.apiUrl}/api/v1/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            'X-Device-Name': metadata.deviceName,
-            'X-Device-OS': metadata.deviceOS,
-            'X-App-Version': metadata.appVersion,
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          await state.beginSession(
-            { accessToken: data.access_token, refreshToken: data.refresh_token },
-            data.user,
-          );
+        if (!activeRefreshPromise) {
+          activeRefreshPromise = (async () => {
+            try {
+              const refreshRes = await fetch(`${env.apiUrl}/api/v1/auth/refresh`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Accept: 'application/json',
+                  'X-Device-Name': metadata.deviceName,
+                  'X-Device-OS': metadata.deviceOS,
+                  'X-App-Version': metadata.appVersion,
+                },
+                body: JSON.stringify({ refresh_token: refreshToken }),
+              });
+              if (refreshRes.ok) {
+                const data = await refreshRes.json();
+                await state.beginSession(
+                  { accessToken: data.access_token, refreshToken: data.refresh_token },
+                  data.user,
+                );
+                return data.access_token as string;
+              } else {
+                await state.signOut();
+                return null;
+              }
+            } catch (err) {
+              console.error('Failed to auto-refresh token inside promise:', err);
+              await state.signOut();
+              return null;
+            } finally {
+              activeRefreshPromise = null;
+            }
+          })();
+        }
 
+        const newAccessToken = await activeRefreshPromise;
+        if (newAccessToken) {
           const retryHeaders = {
             ...finalHeaders,
-            Authorization: `Bearer ${data.access_token}`,
+            Authorization: `Bearer ${newAccessToken}`,
           };
           const retryRes = await fetch(`${env.apiUrl}${path}`, {
             ...rest,
@@ -91,12 +121,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           const errBody = retryPayload as { message?: string; error?: string } | undefined;
           const message = errBody?.message ?? errBody?.error ?? `Request failed (${retryRes.status})`;
           throw new ApiError(retryRes.status, message, retryPayload);
-        } else {
-          await state.signOut();
         }
       } catch (refreshErr) {
         console.error('Failed to auto-refresh token:', refreshErr);
-        await state.signOut();
       }
     }
   }

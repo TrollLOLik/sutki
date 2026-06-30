@@ -101,6 +101,7 @@ func New(
 
 // TokenManager exposes the access-token parser for HTTP middleware.
 func (s *Service) TokenManager() *TokenManager { return s.tm }
+func (s *Service) ExposeCode() bool { return s.exposeCode }
 
 // RequestCodeResult reports the outcome of requesting an email login code.
 type RequestCodeResult struct {

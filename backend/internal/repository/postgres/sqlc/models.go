@@ -39,14 +39,15 @@ type Comment struct {
 type Conversation struct {
 	ID        int64
 	HouseID   *int32
-	CreatedAt pgtype.Timestamp
-	UpdatedAt pgtype.Timestamp
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type ConversationParticipant struct {
-	ConversationID int64
-	UserID         int32
-	LastReadAt     pgtype.Timestamp
+	ConversationID    int64
+	UserID            int32
+	LastReadAt        pgtype.Timestamptz
+	LastReadMessageID *int64
 }
 
 type DeviceToken struct {
@@ -153,8 +154,20 @@ type Message struct {
 	ID             int64
 	ConversationID int64
 	SenderID       int32
-	Body           string
-	CreatedAt      pgtype.Timestamp
+	Body           *string
+	CreatedAt      pgtype.Timestamptz
+}
+
+type MessageAttachment struct {
+	ID        int64
+	MessageID int64
+	Url       string
+	FileName  *string
+	MimeType  *string
+	SizeBytes *int64
+	Width     *int32
+	Height    *int32
+	CreatedAt pgtype.Timestamptz
 }
 
 type Payment struct {

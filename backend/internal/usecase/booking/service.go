@@ -28,6 +28,7 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	SMTPFrom     string
+	ExposeCode   bool
 }
 
 // Service implements booking (rental request) use cases.
@@ -38,6 +39,7 @@ type Service struct {
 	smtpUsername string
 	smtpPassword string
 	smtpFrom     string
+	exposeCode   bool
 }
 
 func New(repo domain.BookingRepository, cfg Config) *Service {
@@ -48,7 +50,12 @@ func New(repo domain.BookingRepository, cfg Config) *Service {
 		smtpUsername: cfg.SMTPUsername,
 		smtpPassword: cfg.SMTPPassword,
 		smtpFrom:     cfg.SMTPFrom,
+		exposeCode:   cfg.ExposeCode,
 	}
+}
+
+func (s *Service) ExposeCode() bool {
+	return s.exposeCode
 }
 
 // ListResult is a page of bookings plus pagination metadata.
@@ -75,7 +82,7 @@ func clamp(limit, offset int32) (int32, int32) {
 // Create validates and creates a booking for b.UserID. The listing must exist
 // and be active, and a user cannot book their own listing.
 func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booking, error) {
-	ownerID, status, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
+	ownerID, status, _, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
 	if err != nil {
 		return domain.Booking{}, err
 	}
@@ -83,7 +90,7 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 		return domain.Booking{}, domain.ErrListingUnavailable
 	}
 	if b.UserID != 0 && ownerID == b.UserID {
-		return domain.Booking{}, domain.ErrBookingForbidden
+		return domain.Booking{}, domain.ErrBookingOwnListing
 	}
 	// Reject requests that overlap an already-confirmed booking so users cannot
 	// request dates that are taken.

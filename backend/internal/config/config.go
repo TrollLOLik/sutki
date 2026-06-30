@@ -32,6 +32,20 @@ type Config struct {
 	SMTPFrom     string
 
 	DadataAPIKey string
+
+	// Centrifugo config
+	CentrifugoURL        string
+	CentrifugoKey        string
+	CentrifugoHMACSecret string
+
+	// S3/MinIO config
+	S3Endpoint        string
+	S3PresignEndpoint string
+	S3Region          string
+	S3Bucket          string
+	S3AccessKey       string
+	S3SecretKey       string
+	S3UsePathStyle    bool
 }
 
 // Load reads configuration from the environment. DATABASE_URL is required.
@@ -54,6 +68,18 @@ func Load() (Config, error) {
 		SMTPFrom:     os.Getenv("SMTP_FROM"),
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
+
+		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
+		CentrifugoKey:        getEnv("CENTRIFUGO_API_KEY", ""),
+		CentrifugoHMACSecret: getEnv("CENTRIFUGO_HMAC_SECRET", "YOUR_SHARED_HMAC_SECRET_KEY"),
+
+		S3Endpoint:        getEnv("S3_ENDPOINT", "http://127.0.0.1:9000"),
+		S3PresignEndpoint: getEnv("S3_PRESIGN_ENDPOINT", getEnv("S3_ENDPOINT", "http://127.0.0.1:9000")),
+		S3Region:          getEnv("S3_REGION", "ru-1"),
+		S3Bucket:          getEnv("S3_BUCKET", "chat-uploads"),
+		S3AccessKey:       getEnv("S3_ACCESS_KEY", "sutki_dev"),
+		S3SecretKey:       getEnv("S3_SECRET_KEY", "sutki_dev_password"),
+		S3UsePathStyle:    getBool("S3_USE_PATH_STYLE", true),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")

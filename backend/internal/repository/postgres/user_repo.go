@@ -195,10 +195,31 @@ func (r *UserRepo) AnonymizeAndRevoke(ctx context.Context, id int32, emailHash s
 }
 
 func (r *UserRepo) LinkGuestRequests(ctx context.Context, userID int32, email string) error {
-	return r.q.LinkGuestRequests(ctx, sqlc.LinkGuestRequestsParams{
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	db := r.q.DB()
+	txb, ok := db.(TxBeginner)
+	if !ok {
+		return errors.New("underlying database connection does not support transactions")
+	}
+
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.q.WithTx(tx)
+	if err := qtx.LinkGuestRequests(ctx, sqlc.LinkGuestRequestsParams{
 		UserID: userID,
 		Email:  email,
-	})
+	}); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 

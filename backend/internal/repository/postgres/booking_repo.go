@@ -21,15 +21,15 @@ func NewBookingRepo(q *sqlc.Queries) *BookingRepo {
 	return &BookingRepo{q: q}
 }
 
-func (r *BookingRepo) GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, err error) {
+func (r *BookingRepo) GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, ownerEmail string, err error) {
 	row, err := r.q.GetHouseForBooking(ctx, houseID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, "", domain.ErrNotFound
+			return 0, "", "", domain.ErrNotFound
 		}
-		return 0, "", err
+		return 0, "", "", err
 	}
-	return row.OwnerID, row.Status, nil
+	return row.OwnerID, row.Status, row.OwnerEmail, nil
 }
 
 func (r *BookingRepo) HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error) {

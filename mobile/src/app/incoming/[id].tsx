@@ -10,6 +10,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EmptyState } from '@/components/EmptyState';
 import { Button, Input } from '@/components/ui';
 import { useBooking, useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
+import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
@@ -41,6 +42,26 @@ export default function IncomingBookingDetailScreen() {
   const confirm = useConfirmBooking();
   const reject = useRejectBooking();
   const insets = useSafeAreaInsets();
+  const { mutateAsync: findOrCreateConv, isPending: isCreatingChat } = useFindOrCreateConversation();
+
+  const handleOpenChat = async () => {
+    if (!data) return;
+    try {
+      const res = await findOrCreateConv({
+        houseID: data.house_id,
+        userID: data.user_id,
+      });
+      router.push({
+        pathname: `/chat/${res.conversation_id}` as any,
+        params: {
+          title: `${data.guest?.name ?? data.name ?? ''} ${data.guest?.surname ?? data.surname ?? ''}`.trim() || 'Гость',
+          otherUserId: data.user_id,
+        },
+      });
+    } catch (err) {
+      Alert.alert('Ошибка', err instanceof ApiError ? err.message : 'Не удалось открыть чат.');
+    }
+  };
 
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
@@ -536,6 +557,7 @@ export default function IncomingBookingDetailScreen() {
               {/* Открыть чат — always shown */}
               {!rejecting && (
                 <TouchableOpacity
+                  disabled={isCreatingChat}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -545,11 +567,18 @@ export default function IncomingBookingDetailScreen() {
                     borderColor: palette.line,
                     borderRadius: 999,
                     paddingVertical: 13,
+                    opacity: isCreatingChat ? 0.6 : 1,
                   }}
-                  onPress={() => router.back()}
+                  onPress={handleOpenChat}
                 >
-                  <Ionicons name="chatbubble-outline" size={18} color={palette.ink} />
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Открыть чат</Text>
+                  {isCreatingChat ? (
+                    <ActivityIndicator size="small" color={palette.ink} />
+                  ) : (
+                    <>
+                      <Ionicons name="chatbubble-outline" size={18} color={palette.ink} />
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Открыть чат</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               )}
 

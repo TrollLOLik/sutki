@@ -8,6 +8,7 @@ import { initGuestId, getGuestId } from '@/lib/guestId';
 import { readLocalFavorites, writeLocalFavorites } from '@/lib/localFavorites';
 import { addFavorite, fetchFavoriteIds } from '@/lib/api/favorites';
 import type { User } from '@/types/user';
+import { useChatStore } from '@/store/chatStore';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'onboarding' | 'guest' | 'unauthenticated';
 
@@ -97,6 +98,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
     try {
       const user = await fetchMe();
       set({ user, status: needsOnboarding(user) ? 'onboarding' : 'authenticated' });
+      if (accessToken) {
+        useChatStore.getState().init(accessToken);
+      }
       await mergeLocalFavorites();
       return;
     } catch (err) {
@@ -110,6 +114,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
             user: res.user,
             status: needsOnboarding(res.user) ? 'onboarding' : 'authenticated',
           });
+          useChatStore.getState().init(res.access_token);
           await mergeLocalFavorites();
           return;
         } catch {
@@ -117,6 +122,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
         }
       }
       await clearTokens();
+      useChatStore.getState().disconnect();
       set({
         accessToken: null,
         refreshToken: null,
@@ -135,6 +141,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       user,
       status: needsProfile ? 'onboarding' : 'authenticated',
     });
+    useChatStore.getState().init(accessToken);
     await mergeLocalFavorites();
     return needsProfile;
   };
@@ -145,6 +152,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       await apiLogout(refreshToken).catch(() => undefined);
     }
     await clearTokens();
+    useChatStore.getState().disconnect();
     const hasChosenGuest = await secureStorage.get('sutki.hasChosenGuest');
     set({
       accessToken: null,

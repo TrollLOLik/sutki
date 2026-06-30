@@ -34,7 +34,7 @@ type ListingRepository interface {
 
 // BookingRepository abstracts persistence for rental requests (bookings).
 type BookingRepository interface {
-	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, err error)
+	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, ownerEmail string, err error)
 	// HasConfirmedOverlap reports whether the house already has a confirmed
 	// booking overlapping [start, end). A nil end means a single night.
 	HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error)
@@ -112,4 +112,16 @@ type RefreshTokenRepository interface {
 	UpdateActiveTime(ctx context.Context, id int64, lastActive time.Time) error
 	UpdateLocation(ctx context.Context, id int64, location string) error
 	ListActive(ctx context.Context, userID int32) ([]RefreshToken, error)
+}
+
+// ChatRepository abstracts persistence for real-time messaging
+type ChatRepository interface {
+	FindOrCreateConversation(ctx context.Context, houseID *int32, user1, user2 int32) (int64, error)
+	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, attachments []MessageAttachment) (Message, error)
+	ListUserConversations(ctx context.Context, userID int32) ([]ConversationSummary, error)
+	GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]Message, error)
+	UpdateLastReadMessage(ctx context.Context, messageID int64, convID int64, userID int32) error
+	CheckParticipantExists(ctx context.Context, convID int64, userID int32) (bool, error)
+	IsOtherParticipantDeleted(ctx context.Context, convID int64, userID int32) (bool, error)
+	GetOtherParticipantID(ctx context.Context, convID int64, userID int32) (int32, error)
 }

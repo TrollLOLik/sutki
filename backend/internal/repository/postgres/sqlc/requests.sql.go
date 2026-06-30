@@ -306,21 +306,22 @@ func (q *Queries) DeleteExpiredPendingRequests(ctx context.Context, before pgtyp
 }
 
 const getHouseForBooking = `-- name: GetHouseForBooking :one
-SELECT id, owner_id, status
-FROM house
-WHERE id = $1 AND deleted = false
+SELECT h.owner_id, h.status, u.email AS owner_email
+FROM house h
+JOIN "user" u ON h.owner_id = u.id
+WHERE h.id = $1 AND h.deleted = false AND u.deleted = false
 `
 
 type GetHouseForBookingRow struct {
-	ID      int32
-	OwnerID int32
-	Status  string
+	OwnerID    int32
+	Status     string
+	OwnerEmail string
 }
 
 func (q *Queries) GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error) {
 	row := q.db.QueryRow(ctx, getHouseForBooking, id)
 	var i GetHouseForBookingRow
-	err := row.Scan(&i.ID, &i.OwnerID, &i.Status)
+	err := row.Scan(&i.OwnerID, &i.Status, &i.OwnerEmail)
 	return i, err
 }
 
@@ -501,20 +502,22 @@ func (q *Queries) HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConf
 }
 
 const linkGuestRequests = `-- name: LinkGuestRequests :exec
-UPDATE request
-SET user_id = $1::int, status = 'in_progress', updated_at = now()
-WHERE LOWER(TRIM(email)) = LOWER(TRIM($2))
-  AND user_id IS NULL
-  AND status = 'pending_verification'
+DELETE FROM request
+USING house
+WHERE request.house_id = house.id
+  AND LOWER(TRIM(request.email)) = LOWER(TRIM($1))
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id = $2::int
 `
 
 type LinkGuestRequestsParams struct {
-	UserID int32
 	Email  string
+	UserID int32
 }
 
 func (q *Queries) LinkGuestRequests(ctx context.Context, arg LinkGuestRequestsParams) error {
-	_, err := q.db.Exec(ctx, linkGuestRequests, arg.UserID, arg.Email)
+	_, err := q.db.Exec(ctx, linkGuestRequests, arg.Email, arg.UserID)
 	return err
 }
 

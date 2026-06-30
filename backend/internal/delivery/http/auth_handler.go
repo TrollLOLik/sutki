@@ -92,6 +92,26 @@ func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
+
+	if !h.svc.ExposeCode() {
+		emailClean := strings.ToLower(strings.TrimSpace(body.Email))
+		guestID := r.Header.Get("X-Guest-Id")
+		clientIP := getClientIP(r)
+
+		if !OTPEmailLimiter.Allow("otp_email:"+emailClean, 5) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов кода для этой почты. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if guestID != "" && !OTPGuestIDLimiter.Allow("otp_guest:"+guestID, 10) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с этого устройства. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if !OTPIPLimiter.Allow("otp_ip:"+clientIP, 15) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
+			return
+		}
+	}
+
 	res, err := h.svc.RequestCode(r.Context(), body.Email)
 	if err != nil {
 		writeAuthError(w, err)

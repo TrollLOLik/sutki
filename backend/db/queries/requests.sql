@@ -1,7 +1,8 @@
 -- name: GetHouseForBooking :one
-SELECT id, owner_id, status
-FROM house
-WHERE id = @id AND deleted = false;
+SELECT h.owner_id, h.status, u.email AS owner_email
+FROM house h
+JOIN "user" u ON h.owner_id = u.id
+WHERE h.id = @id AND h.deleted = false AND u.deleted = false;
 
 -- name: CreateRequest :one
 INSERT INTO request (
@@ -271,8 +272,28 @@ WHERE status = 'pending_verification'
   AND created_at < @before::timestamp;
 
 -- name: LinkGuestRequests :exec
+DELETE FROM request
+USING house
+WHERE request.house_id = house.id
+  AND LOWER(TRIM(request.email)) = LOWER(TRIM(@email))
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id = @user_id::int;
+
 UPDATE request
 SET user_id = @user_id::int, status = 'in_progress', updated_at = now()
-WHERE LOWER(TRIM(email)) = LOWER(TRIM(@email))
-  AND user_id IS NULL
-  AND status = 'pending_verification';
+FROM house
+WHERE request.house_id = house.id
+  AND LOWER(TRIM(request.email)) = LOWER(TRIM(@email))
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id != @user_id::int;
+
+UPDATE "user"
+SET
+  name = COALESCE(NULLIF(name, ''), (SELECT name FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM(@email)) AND name IS NOT NULL AND name != '' ORDER BY created_at DESC LIMIT 1)),
+  surname = COALESCE(NULLIF(surname, ''), (SELECT surname FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM(@email)) AND surname IS NOT NULL AND surname != '' ORDER BY created_at DESC LIMIT 1)),
+  patronymic = COALESCE(NULLIF(patronymic, ''), (SELECT lastname FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM(@email)) AND lastname IS NOT NULL AND lastname != '' ORDER BY created_at DESC LIMIT 1)),
+  phone = COALESCE(NULLIF(phone, ''), (SELECT phone FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM(@email)) AND phone IS NOT NULL AND phone != '' ORDER BY created_at DESC LIMIT 1))
+WHERE id = @user_id::int
+  AND (name IS NULL OR name = '' OR phone IS NULL OR phone = '');

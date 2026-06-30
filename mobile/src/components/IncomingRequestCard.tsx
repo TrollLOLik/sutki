@@ -16,6 +16,7 @@ interface IncomingRequestCardProps {
   isConfirming?: boolean;
   isRejecting?: boolean;
   disabled?: boolean;
+  onChatPress?: () => void;
 }
 
 function formatCompactDateRange(start: Date, end: Date | null): string {
@@ -64,6 +65,7 @@ export function IncomingRequestCard({
   isConfirming = false,
   isRejecting = false,
   disabled = false,
+  onChatPress,
 }: IncomingRequestCardProps) {
   const start = parseISO(booking.start_date);
   const end = booking.end_date ? parseISO(booking.end_date) : null;
@@ -304,9 +306,8 @@ export function IncomingRequestCard({
           </View>
         )}
 
-        {/* Chat Button (Always Visible) */}
         <TouchableOpacity
-          onPress={(e) => { e.stopPropagation(); onPress(); }}
+          onPress={(e) => { e.stopPropagation(); onChatPress ? onChatPress() : onPress(); }}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={{

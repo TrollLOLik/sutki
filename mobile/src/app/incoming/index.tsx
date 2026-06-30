@@ -33,6 +33,7 @@ import {
 } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
+import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { palette } from '@/theme/tokens';
 import type { Booking } from '@/types/booking';
 
@@ -44,12 +45,32 @@ export default function IncomingBookingsScreen() {
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
+  const { mutateAsync: findOrCreateConv } = useFindOrCreateConversation();
 
   const { data, isLoading, isError, refetch, isRefetching } = useIncomingBookings({ limit: 50 });
   const items = data?.items ?? [];
 
   const pendingItems = items.filter(item => item.status === 'in_progress');
   const processedItems = items.filter(item => item.status !== 'in_progress');
+
+  const handleOpenChat = async (booking: Booking) => {
+    try {
+      const res = await findOrCreateConv({
+        houseID: booking.house_id,
+        userID: booking.user_id,
+      });
+      router.push({
+        pathname: `/chat/${res.conversation_id}` as any,
+        params: {
+          title: `${booking.guest?.name ?? booking.name ?? ''} ${booking.guest?.surname ?? booking.surname ?? ''}`.trim() || 'Гость',
+          otherUserId: booking.user_id,
+          houseId: String(booking.house_id),
+        },
+      });
+    } catch (err) {
+      Alert.alert('Ошибка', err instanceof ApiError ? err.message : 'Не удалось открыть чат.');
+    }
+  };
 
   useEffect(() => {
     Animated.timing(tabAnim, {
@@ -250,6 +271,7 @@ export default function IncomingBookingsScreen() {
                       isConfirming={confirmMutation.isPending && confirmMutation.variables === item.id}
                       isRejecting={rejectMutation.isPending && rejectMutation.variables?.id === item.id}
                       disabled={isMutationBusy}
+                      onChatPress={() => handleOpenChat(item)}
                     />
                   )}
                   ListFooterComponent={
@@ -295,6 +317,7 @@ export default function IncomingBookingsScreen() {
                       isConfirming={confirmMutation.isPending && confirmMutation.variables === item.id}
                       isRejecting={rejectMutation.isPending && rejectMutation.variables?.id === item.id}
                       disabled={isMutationBusy}
+                      onChatPress={() => handleOpenChat(item)}
                     />
                   )}
                   ListFooterComponent={

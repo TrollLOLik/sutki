@@ -214,7 +214,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           bottom: 0,
           left: 0,
           right: 0,
-          paddingBottom: insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
         },
         tabBarStyle,
       ]}

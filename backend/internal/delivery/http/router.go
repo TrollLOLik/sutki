@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, authSvc *auth.Service) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, authSvc *auth.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -58,13 +58,6 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		// Public/Guest endpoints
 		r.Get("/guest/requests", bookingHandler.ListGuest)
 
-		// Endpoints with optional authentication
-		r.Group(func(r chi.Router) {
-			r.Use(OptionalAuthMiddleware(authSvc.TokenManager(), authSvc))
-			r.Get("/requests/{id}", bookingHandler.get)
-			r.Post("/requests/{id}/cancel", bookingHandler.cancel)
-		})
-
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
 			r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
@@ -83,8 +76,25 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Post("/me/delete/confirm", authHandler.ConfirmDeleteMe)
 			r.Get("/me/reviews/written", reviewHandler.ListMineWritten)
 			r.Get("/me/reviews/received", reviewHandler.ListMineReceived)
-			r.Route("/requests", bookingHandler.Routes)
+			r.Route("/requests", func(r chi.Router) {
+				// Authenticated sub-routes
+				r.Group(func(r chi.Router) {
+					r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
+					r.Get("/", bookingHandler.listMine)
+					r.Get("/incoming", bookingHandler.listIncoming)
+					r.Post("/{id}/confirm", bookingHandler.confirm)
+					r.Post("/{id}/reject", bookingHandler.reject)
+				})
+
+				// Optional auth wildcard sub-routes (declared AFTER static sub-routes)
+				r.Group(func(r chi.Router) {
+					r.Use(OptionalAuthMiddleware(authSvc.TokenManager(), authSvc))
+					r.Get("/{id}", bookingHandler.get)
+					r.Post("/{id}/cancel", bookingHandler.cancel)
+				})
+			})
 			r.Route("/favorites", favoriteHandler.Routes)
+			r.Route("/chat", chatHandler.Routes)
 		})
 	})
 

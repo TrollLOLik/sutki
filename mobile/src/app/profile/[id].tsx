@@ -31,7 +31,10 @@ import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListings } from '@/lib/api/listings';
 import { formatRub } from '@/lib/format';
 import { useFiltersStore, countActiveFilters } from '@/store/filters';
+import { useFindOrCreateConversation } from '@/lib/api/chat';
+import { ApiError } from '@/lib/api/client';
 import { palette, shadows } from '@/theme/tokens';
+import { requireAuth } from '@/lib/requireAuth';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -321,8 +324,25 @@ export default function PublicProfileScreen() {
     });
   };
 
-  const handleMessage = () => {
-    Alert.alert('Внимание', 'Прямой чат с хозяином находится в разработке.');
+  const { mutateAsync: findOrCreateConv, isPending: isCreatingChat } = useFindOrCreateConversation();
+
+  const handleMessage = async () => {
+    if (!requireAuth('generic')) return;
+    try {
+      const res = await findOrCreateConv({
+        houseID: null,
+        userID: numericId,
+      });
+      router.push({
+        pathname: `/chat/${res.conversation_id}` as any,
+        params: {
+          title: displayName || 'Пользователь',
+          otherUserId: numericId,
+        },
+      });
+    } catch (err) {
+      Alert.alert('Ошибка', err instanceof ApiError ? err.message : 'Не удалось открыть чат.');
+    }
   };
 
   const handleShare = async () => {
@@ -570,10 +590,18 @@ export default function PublicProfileScreen() {
 
           <Pressable
             onPress={handleMessage}
+            disabled={isCreatingChat}
+            style={{ opacity: isCreatingChat ? 0.6 : 1 }}
             className="flex-1 h-12 flex-row items-center justify-center gap-2 rounded-field bg-surface-muted active:bg-surface-muted/80 border border-line"
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.ink} />
-            <Text className="text-base font-semibold text-ink">Написать</Text>
+            {isCreatingChat ? (
+              <ActivityIndicator size="small" color={palette.ink} />
+            ) : (
+              <>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.ink} />
+                <Text className="text-base font-semibold text-ink">Написать</Text>
+              </>
+            )}
           </Pressable>
         </View>
 
@@ -718,10 +746,18 @@ export default function PublicProfileScreen() {
 
           <Pressable
             onPress={handleMessage}
+            disabled={isCreatingChat}
+            style={{ opacity: isCreatingChat ? 0.6 : 1 }}
             className="flex-1 h-12 flex-row items-center justify-center gap-2 rounded-field bg-surface-muted active:bg-surface-muted/80 border border-line"
           >
-            <Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.ink} />
-            <Text className="text-base font-semibold text-ink">Написать</Text>
+            {isCreatingChat ? (
+              <ActivityIndicator size="small" color={palette.ink} />
+            ) : (
+              <>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.ink} />
+                <Text className="text-base font-semibold text-ink">Написать</Text>
+              </>
+            )}
           </Pressable>
         </View>
       </Animated.View>

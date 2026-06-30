@@ -11,11 +11,13 @@ import (
 )
 
 type Querier interface {
+	AddConversationParticipant(ctx context.Context, arg AddConversationParticipantParams) error
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	AddHouseCategory(ctx context.Context, arg AddHouseCategoryParams) error
 	AddHouseService(ctx context.Context, arg AddHouseServiceParams) error
 	AnonymizeUser(ctx context.Context, id int32) error
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
+	CheckParticipantExists(ctx context.Context, arg CheckParticipantExistsParams) (bool, error)
 	CheckUserActiveBookings(ctx context.Context, userID *int32) (int64, error)
 	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
@@ -27,10 +29,13 @@ type Querier interface {
 	CountReviewsByAuthor(ctx context.Context, ownerID int32) (int64, error)
 	CountReviewsByHouse(ctx context.Context, houseID int32) (int64, error)
 	CountReviewsForHost(ctx context.Context, ownerID int32) (int64, error)
+	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (CreateAttachmentRow, error)
+	CreateConversation(ctx context.Context, houseID *int32) (Conversation, error)
 	// Creates a new listing owned by the given user. New listings are published
 	// immediately (status='active') for the MVP; the one-time publication fee is a
 	// front-end stub until YooKassa is wired (then `pay` flips via webhook).
 	CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error)
+	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreatePersonalDataRevocation(ctx context.Context, arg CreatePersonalDataRevocationParams) error
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (int64, error)
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
@@ -44,9 +49,16 @@ type Querier interface {
 	DeleteUserDeviceTokens(ctx context.Context, userID int32) error
 	DeleteUserFavorites(ctx context.Context, userID int32) error
 	DeleteUserRefreshTokens(ctx context.Context, userID int32) error
+	// 1. Поиск диалога привязанного к объекту (house_id IS NOT NULL)
+	GetConversationByParticipantsAndHouse(ctx context.Context, arg GetConversationByParticipantsAndHouseParams) (int64, error)
+	// 2. Поиск общего диалога между пользователями (house_id IS NULL)
+	GetConversationByParticipantsGeneral(ctx context.Context, arg GetConversationByParticipantsGeneralParams) (int64, error)
+	GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]Message, error)
 	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
+	GetMessageAttachments(ctx context.Context, dollar_1 []int64) ([]GetMessageAttachmentsRow, error)
+	GetOtherParticipantID(ctx context.Context, arg GetOtherParticipantIDParams) (int32, error)
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error)
 	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
@@ -59,6 +71,7 @@ type Querier interface {
 	// free for next guest). The caller passes the exclusive end (start+1 for single night).
 	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
 	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
+	IsOtherParticipantDeleted(ctx context.Context, arg IsOtherParticipantDeletedParams) (bool, error)
 	LinkGuestRequests(ctx context.Context, arg LinkGuestRequestsParams) error
 	ListActiveRefreshTokens(ctx context.Context, userID int32) ([]RefreshToken, error)
 	ListAllCategories(ctx context.Context) ([]ListAllCategoriesRow, error)
@@ -81,6 +94,8 @@ type Querier interface {
 	ListReviewsByAuthor(ctx context.Context, arg ListReviewsByAuthorParams) ([]ListReviewsByAuthorRow, error)
 	ListReviewsByHouse(ctx context.Context, arg ListReviewsByHouseParams) ([]ListReviewsByHouseRow, error)
 	ListReviewsForHost(ctx context.Context, arg ListReviewsForHostParams) ([]ListReviewsForHostRow, error)
+	// Тянет последнее сообщение с Фолбэком для медиа-вложений (превью в списке диалогов)
+	ListUserConversations(ctx context.Context, userID int32) ([]ListUserConversationsRow, error)
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
 	ReviewSummaryByHouse(ctx context.Context, houseID int32) (ReviewSummaryByHouseRow, error)
@@ -89,9 +104,11 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
 	SoftDeleteUserHouses(ctx context.Context, ownerID int32) error
+	UpdateConversationTimestamp(ctx context.Context, id int64) error
 	// Updates a listing owned by the given user. Returns the number of affected
 	// rows so the caller can distinguish "not found / not owner" (0) from success.
 	UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error)
+	UpdateLastReadMessage(ctx context.Context, arg UpdateLastReadMessageParams) error
 	UpdateRefreshTokenActiveTime(ctx context.Context, arg UpdateRefreshTokenActiveTimeParams) error
 	UpdateRefreshTokenLocation(ctx context.Context, arg UpdateRefreshTokenLocationParams) error
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)

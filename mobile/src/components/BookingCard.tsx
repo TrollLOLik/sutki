@@ -17,6 +17,7 @@ interface BookingCardProps {
   /** Owner inbox: lead with the requester's name instead of the listing. */
   showRequester?: boolean;
   onVerifyEmail?: () => void;
+  onChatPress?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -32,6 +33,7 @@ export function BookingCard({
   onRepeat,
   showRequester = false,
   onVerifyEmail,
+  onChatPress,
 }: BookingCardProps) {
   const { width: screenWidth } = useWindowDimensions();
 
@@ -211,7 +213,7 @@ export function BookingCard({
             <>
               {/* Открыть чат — always shown */}
               <TouchableOpacity
-                onPress={(e) => { e.stopPropagation(); onPress(); }}
+                onPress={(e) => { e.stopPropagation(); onChatPress ? onChatPress() : onPress(); }}
                 style={{
                   flex: 1,
                   borderWidth: 1,
