@@ -4,24 +4,27 @@ import { router } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
-  Animated,
-  Easing,
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+	Animated,
+	Easing,
+	Image,
+	Modal,
+	Pressable,
+	ScrollView,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	View,
+	Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
+import * as ImagePicker from 'expo-image-picker';
 
 import { Button, ScreenContainer, BottomSheet } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useDeleteMe, useUpdateMe } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
+import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 import { env } from '@/lib/env';
 import { useSessionStore } from '@/store/session';
 import { palette, radii } from '@/theme/tokens';
@@ -96,6 +99,7 @@ export default function ProfileSetupScreen() {
   const [createdUser, setCreatedUser] = useState<User | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // ScrollRefs for Date Picker wheels
   const dayScrollRef = useRef<ScrollView>(null);
@@ -195,17 +199,56 @@ export default function ProfileSetupScreen() {
   }, []);
 
 
-  const toggleAvatar = () => {
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Разрешение отклонено', 'Нам нужен доступ к галерее для выбора фото.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const handleAvatarPress = async () => {
     if (avatarUri) {
-      setAvatarUri(null);
+      Alert.alert('Фото профиля', 'Что вы хотите сделать?', [
+        { text: 'Выбрать из галереи', onPress: pickAvatar },
+        { text: 'Удалить фото', style: 'destructive', onPress: () => setAvatarUri(null) },
+        { text: 'Отмена', style: 'cancel' },
+      ]);
     } else {
-      setAvatarUri(MOCK_AVATAR_URL);
+      await pickAvatar();
     }
   };
 
   const onSubmit = handleSubmit(async ({ name, surname, city, birthday }) => {
+    setUploading(true);
     try {
-      // Send birthday formatted as YYYY-MM-DD
+      let finalAvatarUrl = '';
+      if (avatarUri) {
+        if (avatarUri.startsWith('file://') || avatarUri.startsWith('content://')) {
+          const fileName = avatarUri.split('/').pop() || 'avatar.jpg';
+          const ext = fileName.split('.').pop() || 'jpg';
+          const mimeType = `image/${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'}`;
+          const size = 1024 * 1024; // fallback size
+
+          const target = await presignMediaUpload(fileName, size, mimeType, 'avatar');
+          await uploadToS3(avatarUri, target.url, mimeType);
+          finalAvatarUrl = target.key;
+        } else {
+          finalAvatarUrl = avatarUri;
+        }
+      }
+
       let formattedBirthday = '';
       if (birthday) {
         const [d, m, y] = birthday.split('.');
@@ -217,15 +260,18 @@ export default function ProfileSetupScreen() {
         surname: surname || undefined,
         city,
         birthday: formattedBirthday || undefined,
-        avatar_url: avatarUri || undefined,
+        avatar_url: finalAvatarUrl || '',
       });
 
       setCreatedUser(user);
       setIsCompleted(true);
     } catch (err) {
+      console.error('[Onboarding] Error submitting profile:', err);
       setError('name', {
         message: err instanceof ApiError ? err.message : 'Не удалось сохранить профиль.',
       });
+    } finally {
+      setUploading(false);
     }
   });
 
@@ -340,7 +386,7 @@ export default function ProfileSetupScreen() {
         {/* Interactive Avatar Placeholder */}
         <View className="items-center my-2">
           <TouchableOpacity
-            onPress={toggleAvatar}
+            onPress={handleAvatarPress}
             activeOpacity={0.8}
             className="relative h-24 w-24 items-center justify-center rounded-full bg-surface-muted border border-line"
           >
@@ -505,9 +551,9 @@ export default function ProfileSetupScreen() {
       <View className="w-full pb-6 px-4">
         <Button
           label="Продолжить"
-          loading={isSubmitting}
+          loading={isSubmitting || uploading}
           onPress={onSubmit}
-          disabled={!nameVal || !cityVal}
+          disabled={!nameVal || !cityVal || uploading}
         />
       </View>
 

@@ -28,6 +28,7 @@ export interface NewListingInput {
   pets_allowed?: string | null;
   children_allowed?: string | null;
   events_allowed?: string | null;
+  photos?: string[];
 }
 
 interface RefResponse {

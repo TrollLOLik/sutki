@@ -18,11 +18,12 @@ var ErrInvalidListing = errors.New("invalid listing")
 
 // Service implements listing read use cases over a ListingRepository.
 type Service struct {
-	repo domain.ListingRepository
+	repo    domain.ListingRepository
+	storage domain.FileStorage
 }
 
-func New(repo domain.ListingRepository) *Service {
-	return &Service{repo: repo}
+func New(repo domain.ListingRepository, storage domain.FileStorage) *Service {
+	return &Service{repo: repo, storage: storage}
 }
 
 // ListResult is a page of active listings plus pagination metadata.
@@ -48,6 +49,9 @@ func (s *Service) List(ctx context.Context, filter domain.ListFilter) (ListResul
 	items, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return ListResult{}, err
+	}
+	for i := range items {
+		items[i] = s.formatHouseMedia(ctx, items[i])
 	}
 	total, err := s.repo.Count(ctx, filter)
 	if err != nil {
@@ -110,6 +114,9 @@ func (s *Service) ListMine(ctx context.Context, ownerID, limit, offset int32) (L
 	if err != nil {
 		return ListResult{}, err
 	}
+	for i := range items {
+		items[i] = s.formatHouseMedia(ctx, items[i])
+	}
 	total, err := s.repo.CountByOwner(ctx, ownerID)
 	if err != nil {
 		return ListResult{}, err
@@ -142,7 +149,7 @@ func (s *Service) Get(ctx context.Context, id int32) (domain.House, error) {
 	if house.Categories, err = s.repo.ListCategories(ctx, id); err != nil {
 		return domain.House{}, err
 	}
-	return house, nil
+	return s.formatHouseMedia(ctx, house), nil
 }
 
 func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (domain.House, error) {
@@ -278,4 +285,19 @@ func validateAndCleanRules(in *domain.NewHouse) error {
 		}
 	}
 	return nil
+}
+
+func (s *Service) formatHouseMedia(ctx context.Context, h domain.House) domain.House {
+	if h.CoverPath != "" && !strings.Contains(h.CoverPath, "upload_files/") && !strings.HasPrefix(h.CoverPath, "http://") && !strings.HasPrefix(h.CoverPath, "https://") {
+		h.CoverPath = s.storage.PublicURL(h.CoverPath)
+	}
+	if h.OwnerAvatarURL != "" && !strings.Contains(h.OwnerAvatarURL, "upload_files/") && !strings.HasPrefix(h.OwnerAvatarURL, "http://") && !strings.HasPrefix(h.OwnerAvatarURL, "https://") {
+		h.OwnerAvatarURL = s.storage.PublicURL(h.OwnerAvatarURL)
+	}
+	for i := range h.Photos {
+		if h.Photos[i].Path != "" && !strings.Contains(h.Photos[i].Path, "upload_files/") && !strings.HasPrefix(h.Photos[i].Path, "http://") && !strings.HasPrefix(h.Photos[i].Path, "https://") {
+			h.Photos[i].Path = s.storage.PublicURL(h.Photos[i].Path)
+		}
+	}
+	return h
 }

@@ -19,6 +19,8 @@ type S3Storage struct {
 	presignClient *s3.PresignClient
 	bucket        string
 	publicURL     string
+	endpoint      string
+	usePathStyle  bool
 }
 
 func NewS3Storage(endpoint, presignEndpoint, region, bucket, accessKey, secretKey string, usePathStyle bool, publicURL string) (*S3Storage, error) {
@@ -98,6 +100,8 @@ func NewS3Storage(endpoint, presignEndpoint, region, bucket, accessKey, secretKe
 		presignClient: s3.NewPresignClient(presignTargetClient),
 		bucket:        bucket,
 		publicURL:     publicURL,
+		endpoint:      endpoint,
+		usePathStyle:  usePathStyle,
 	}, nil
 }
 
@@ -162,7 +166,19 @@ func (s *S3Storage) PublicURL(key string) string {
 	if s.publicURL != "" {
 		return fmt.Sprintf("%s/%s", strings.TrimRight(s.publicURL, "/"), key)
 	}
-	return fmt.Sprintf("%s/%s", s.bucket, key)
+
+	base := strings.TrimRight(s.endpoint, "/")
+	if s.usePathStyle {
+		return fmt.Sprintf("%s/%s/%s", base, s.bucket, key)
+	}
+
+	proto := ""
+	host := base
+	if idx := strings.Index(base, "://"); idx != -1 {
+		proto = base[:idx+3]
+		host = base[idx+3:]
+	}
+	return fmt.Sprintf("%s%s.%s/%s", proto, s.bucket, host, key)
 }
 
 func (s *S3Storage) Delete(ctx context.Context, key string) error {

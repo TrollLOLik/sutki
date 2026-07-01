@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -85,6 +86,28 @@ func (h *ChatHandler) subscriptionToken(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+type conversationSummaryDTO struct {
+	ConversationID       int64      `json:"conversation_id"`
+	HouseID              *int32     `json:"house_id,omitempty"`
+	LastActivity         time.Time  `json:"last_activity"`
+	UnreadCount          int64      `json:"unread_count"`
+	LastMessageID        *int64     `json:"last_message_id,omitempty"`
+	LastMessageBody      string     `json:"last_message_body"`
+	LastMessageSenderID  *int32     `json:"last_message_sender_id,omitempty"`
+	LastMessageCreatedAt *time.Time `json:"last_message_created_at,omitempty"`
+	OtherLastReadMessageID *int64     `json:"other_last_read_message_id,omitempty"`
+	OtherUserID          int32      `json:"other_user_id"`
+	OtherUserName        string     `json:"other_user_name"`
+	OtherUserSurname     string     `json:"other_user_surname"`
+	OtherUserAvatarUrl   string     `json:"other_user_avatar_url"`
+	OtherUserDeleted     bool       `json:"other_user_deleted"`
+	HouseStreet          *string    `json:"house_street,omitempty"`
+	HouseNumber          *string    `json:"house_number,omitempty"`
+	HouseCountRoom       *string    `json:"house_count_room,omitempty"`
+	HousePrice           *int32     `json:"house_price,omitempty"`
+	HouseCoverPath       string     `json:"house_cover_path"`
+}
+
 func (h *ChatHandler) listConversations(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
@@ -98,7 +121,32 @@ func (h *ChatHandler) listConversations(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, convs)
+	dtos := make([]conversationSummaryDTO, 0, len(convs))
+	for _, c := range convs {
+		dtos = append(dtos, conversationSummaryDTO{
+			ConversationID:       c.ConversationID,
+			HouseID:              c.HouseID,
+			LastActivity:         c.LastActivity,
+			UnreadCount:          c.UnreadCount,
+			LastMessageID:        c.LastMessageID,
+			LastMessageBody:      c.LastMessageBody,
+			LastMessageSenderID:  c.LastMessageSenderID,
+			LastMessageCreatedAt: c.LastMessageCreatedAt,
+			OtherLastReadMessageID: c.OtherLastReadMessageID,
+			OtherUserID:          c.OtherUserID,
+			OtherUserName:        c.OtherUserName,
+			OtherUserSurname:     c.OtherUserSurname,
+			OtherUserAvatarUrl:   resolveMediaURL(c.OtherUserAvatarUrl),
+			OtherUserDeleted:     c.OtherUserDeleted,
+			HouseStreet:          c.HouseStreet,
+			HouseNumber:          c.HouseNumber,
+			HouseCountRoom:       c.HouseCountRoom,
+			HousePrice:           c.HousePrice,
+			HouseCoverPath:       resolveMediaURL(c.HouseCoverPath),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, dtos)
 }
 
 type findOrCreateConversationRequest struct {

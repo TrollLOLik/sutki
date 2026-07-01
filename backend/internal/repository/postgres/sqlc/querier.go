@@ -14,6 +14,7 @@ type Querier interface {
 	AddConversationParticipant(ctx context.Context, arg AddConversationParticipantParams) error
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	AddHouseCategory(ctx context.Context, arg AddHouseCategoryParams) error
+	AddHousePhoto(ctx context.Context, arg AddHousePhotoParams) error
 	AddHouseService(ctx context.Context, arg AddHouseServiceParams) error
 	AnonymizeUser(ctx context.Context, id int32) error
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
@@ -103,6 +104,7 @@ type Querier interface {
 	RevokeAllOtherRefreshTokens(ctx context.Context, arg RevokeAllOtherRefreshTokensParams) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
+	SoftDeleteHousePhotos(ctx context.Context, houseID *int32) error
 	SoftDeleteUserHouses(ctx context.Context, ownerID int32) error
 	UpdateConversationTimestamp(ctx context.Context, id int64) error
 	// Updates a listing owned by the given user. Returns the number of affected

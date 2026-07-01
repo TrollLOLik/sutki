@@ -118,7 +118,7 @@ export default function MessagesScreen() {
 					{item.other_user_avatar_url && !item.other_user_deleted ? (
 						<Image
 							source={{ uri: item.other_user_avatar_url }}
-							className="w-12 h-12 rounded-full bg-surfaceMuted"
+							style={{ width: 48, height: 48, borderRadius: 24 }}
 							contentFit="cover"
 							transition={200}
 						/>
@@ -193,7 +193,7 @@ export default function MessagesScreen() {
 					{item.house_id && item.house_cover_path ? (
 						<Image
 							source={{ uri: item.house_cover_path }}
-							className="w-12 h-12 rounded-lg bg-surfaceMuted ml-3"
+							style={{ width: 48, height: 48, borderRadius: 8, marginLeft: 12 }}
 							contentFit="cover"
 							transition={200}
 						/>

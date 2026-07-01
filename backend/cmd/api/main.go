@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"strings"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
@@ -45,9 +47,49 @@ func main() {
 		log.Fatalf("db ping: %v", err)
 	}
 
+	privateStorage, err := storage.NewS3Storage(
+		cfg.S3Endpoint,
+		cfg.S3PresignEndpoint,
+		cfg.S3Region,
+		cfg.S3Bucket,
+		cfg.S3AccessKey,
+		cfg.S3SecretKey,
+		cfg.S3UsePathStyle,
+		cfg.MediaBaseURL,
+	)
+	if err != nil {
+		log.Fatalf("failed to initialize private S3 storage: %v", err)
+	}
+
+	publicStorage, err := storage.NewS3Storage(
+		cfg.S3Endpoint,
+		cfg.S3PresignEndpoint,
+		cfg.S3Region,
+		cfg.S3PublicBucket,
+		cfg.S3AccessKey,
+		cfg.S3SecretKey,
+		cfg.S3UsePathStyle,
+		cfg.MediaBaseURL,
+	)
+	if err != nil {
+		log.Fatalf("failed to initialize public S3 storage: %v", err)
+	}
+
 	queries := sqlc.New(pool)
+	httpdelivery.ConfigureMediaFormatter(func(key string) string {
+		if strings.Contains(key, "upload_files/") {
+			clean := strings.TrimPrefix(key, "../")
+			clean = strings.TrimLeft(clean, "/")
+			if cfg.MediaBaseURL != "" {
+				return strings.TrimRight(cfg.MediaBaseURL, "/") + "/" + clean
+			}
+			return clean
+		}
+		return publicStorage.PublicURL(key)
+	})
+
 	listingRepo := postgres.NewListingRepo(queries)
-	listingSvc := listing.New(listingRepo)
+	listingSvc := listing.New(listingRepo, publicStorage)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
 	userRepo := postgres.NewUserRepo(queries)
@@ -64,6 +106,7 @@ func main() {
 		SMTPPassword: cfg.SMTPPassword,
 		SMTPFrom:     cfg.SMTPFrom,
 		DadataAPIKey: cfg.DadataAPIKey,
+		Storage:      publicStorage,
 	})
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 
@@ -89,22 +132,12 @@ func main() {
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
-	s3Storage, err := storage.NewS3Storage(
-		cfg.S3Endpoint,
-		cfg.S3PresignEndpoint,
-		cfg.S3Region,
-		cfg.S3Bucket,
-		cfg.S3AccessKey,
-		cfg.S3SecretKey,
-		cfg.S3UsePathStyle,
-		cfg.MediaBaseURL,
-	)
-	if err != nil {
-		log.Fatalf("failed to initialize S3 storage: %v", err)
-	}
+
+
+	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage)
 
 	chatRepo := postgres.NewChatRepo(queries)
-	chatSvc := chat.New(chatRepo, s3Storage, chat.Config{
+	chatSvc := chat.New(chatRepo, privateStorage, chat.Config{
 		CentrifugoURL: cfg.CentrifugoURL,
 		CentrifugoKey: cfg.CentrifugoKey,
 		HMACSecret:    cfg.CentrifugoHMACSecret,
@@ -113,7 +146,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, authSvc),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -149,6 +150,21 @@ func (r *ListingRepo) Create(ctx context.Context, h domain.NewHouse) (int32, err
 	}
 	for _, cid := range h.CategoryIDs {
 		if err := r.q.AddHouseCategory(ctx, sqlc.AddHouseCategoryParams{HouseID: id, HouseCategoryID: cid}); err != nil {
+			return 0, err
+		}
+	}
+	for i, path := range h.Photos {
+		name := filepath.Base(path)
+		format := strings.TrimPrefix(filepath.Ext(path), ".")
+		err := r.q.AddHousePhoto(ctx, sqlc.AddHousePhotoParams{
+			HouseID:  &id,
+			Name:     name,
+			Size:     nil,
+			Format:   format,
+			Path:     path,
+			Position: int32(i),
+		})
+		if err != nil {
 			return 0, err
 		}
 	}
@@ -375,6 +391,25 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 	}
 	for _, categoryID := range h.CategoryIDs {
 		if err := r.q.AddHouseCategory(ctx, sqlc.AddHouseCategoryParams{HouseID: id, HouseCategoryID: categoryID}); err != nil {
+			return err
+		}
+	}
+
+	if err := r.q.SoftDeleteHousePhotos(ctx, &id); err != nil {
+		return err
+	}
+	for i, path := range h.Photos {
+		name := filepath.Base(path)
+		format := strings.TrimPrefix(filepath.Ext(path), ".")
+		err := r.q.AddHousePhoto(ctx, sqlc.AddHousePhotoParams{
+			HouseID:  &id,
+			Name:     name,
+			Size:     nil,
+			Format:   format,
+			Path:     path,
+			Position: int32(i),
+		})
+		if err != nil {
 			return err
 		}
 	}

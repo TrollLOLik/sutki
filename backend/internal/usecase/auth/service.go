@@ -48,6 +48,7 @@ type Config struct {
 	SMTPPassword string
 	SMTPFrom     string
 	DadataAPIKey string
+	Storage      domain.FileStorage
 }
 
 // Service implements passwordless email-code auth with JWT access/refresh.
@@ -60,6 +61,7 @@ type Service struct {
 	refreshTTL time.Duration
 	exposeCode bool
 	now        func() time.Time
+	storage    domain.FileStorage
 
 	smtpHost     string
 	smtpPort     int
@@ -89,6 +91,7 @@ func New(
 		refreshTTL: cfg.RefreshTTL,
 		exposeCode: cfg.ExposeCode,
 		now:        time.Now,
+		storage:    cfg.Storage,
 
 		smtpHost:     cfg.SMTPHost,
 		smtpPort:     cfg.SMTPPort,
@@ -259,15 +262,34 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	return s.refresh.Revoke(ctx, hashToken(refreshToken))
 }
 
+func (s *Service) formatUserAvatar(u domain.User) domain.User {
+	if u.AvatarURL == "" {
+		return u
+	}
+	if strings.HasPrefix(u.AvatarURL, "http://") || strings.HasPrefix(u.AvatarURL, "https://") || strings.Contains(u.AvatarURL, "upload_files/") {
+		return u
+	}
+	u.AvatarURL = s.storage.PublicURL(u.AvatarURL)
+	return u
+}
+
 // GetUser returns the account for an authenticated user id.
 func (s *Service) GetUser(ctx context.Context, id int32) (domain.User, error) {
-	return s.users.GetByID(ctx, id)
+	u, err := s.users.GetByID(ctx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return s.formatUserAvatar(u), nil
 }
 
 // UpdateProfile updates the provided profile fields for a user. nil fields are
 // left unchanged (PATCH semantics).
 func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
-	return s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), trimPtr(avatarURL), birthday, vkID, vkIDDoNull)
+	u, err := s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), trimPtr(avatarURL), birthday, vkID, vkIDDoNull)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return s.formatUserAvatar(u), nil
 }
 
 // DeleteUser deletes a user account (e.g. if they abort onboarding).
@@ -392,7 +414,7 @@ func (s *Service) issueTokens(ctx context.Context, user domain.User, info domain
 	}
 
 	return AuthResult{
-		User:         user,
+		User:         s.formatUserAvatar(user),
 		AccessToken:  access,
 		RefreshToken: refreshToken,
 		ExpiresIn:    int64(s.accessTTL.Seconds()),
@@ -612,7 +634,11 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmail
 	_ = s.codes.Delete(ctx, newEmail)
 	s.emailChangeTokens.Delete(userID)
 
-	return s.users.UpdateEmail(ctx, userID, newEmail)
+	u, err := s.users.UpdateEmail(ctx, userID, newEmail)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return s.formatUserAvatar(u), nil
 }
 
 func (s *Service) IsValidSession(ctx context.Context, sid int64) bool {

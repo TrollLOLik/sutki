@@ -43,6 +43,7 @@ type Config struct {
 	S3PresignEndpoint string
 	S3Region          string
 	S3Bucket          string
+	S3PublicBucket    string
 	S3AccessKey       string
 	S3SecretKey       string
 	S3UsePathStyle    bool
@@ -63,9 +64,9 @@ func Load() (Config, error) {
 
 		SMTPHost:     getEnv("SMTP_HOST", "smtp.yandex.ru"),
 		SMTPPort:     getInt("SMTP_PORT", 465),
-		SMTPUsername: os.Getenv("SMTP_USERNAME"),
-		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:     os.Getenv("SMTP_FROM"),
+		SMTPUsername: getEnv("SMTP_USERNAME", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM", ""),
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
 
@@ -73,16 +74,38 @@ func Load() (Config, error) {
 		CentrifugoKey:        getEnv("CENTRIFUGO_API_KEY", ""),
 		CentrifugoHMACSecret: getEnv("CENTRIFUGO_HMAC_SECRET", "YOUR_SHARED_HMAC_SECRET_KEY"),
 
-		S3Endpoint:        getEnv("S3_ENDPOINT", "http://127.0.0.1:9000"),
-		S3PresignEndpoint: getEnv("S3_PRESIGN_ENDPOINT", getEnv("S3_ENDPOINT", "http://127.0.0.1:9000")),
-		S3Region:          getEnv("S3_REGION", "ru-1"),
-		S3Bucket:          getEnv("S3_BUCKET", "chat-uploads"),
-		S3AccessKey:       getEnv("S3_ACCESS_KEY", "sutki_dev"),
-		S3SecretKey:       getEnv("S3_SECRET_KEY", "sutki_dev_password"),
+		S3Endpoint:        getEnv("S3_ENDPOINT", ""),
+		S3PresignEndpoint: getEnv("S3_PRESIGN_ENDPOINT", ""),
+		S3Region:          getEnv("S3_REGION", ""),
+		S3Bucket:          getEnv("S3_BUCKET", ""),
+		S3PublicBucket:    getEnv("S3_PUBLIC_BUCKET", ""),
+		S3AccessKey:       getEnv("S3_ACCESS_KEY", ""),
+		S3SecretKey:       getEnv("S3_SECRET_KEY", ""),
 		S3UsePathStyle:    getBool("S3_USE_PATH_STYLE", true),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+	if cfg.S3Endpoint == "" {
+		return Config{}, fmt.Errorf("S3_ENDPOINT is required")
+	}
+	if cfg.S3Region == "" {
+		return Config{}, fmt.Errorf("S3_REGION is required")
+	}
+	if cfg.S3Bucket == "" {
+		return Config{}, fmt.Errorf("S3_BUCKET is required")
+	}
+	if cfg.S3PublicBucket == "" {
+		return Config{}, fmt.Errorf("S3_PUBLIC_BUCKET is required")
+	}
+	if cfg.S3AccessKey == "" {
+		return Config{}, fmt.Errorf("S3_ACCESS_KEY is required")
+	}
+	if cfg.S3SecretKey == "" {
+		return Config{}, fmt.Errorf("S3_SECRET_KEY is required")
+	}
+	if cfg.S3PresignEndpoint == "" {
+		cfg.S3PresignEndpoint = cfg.S3Endpoint
 	}
 	if cfg.JWTSecret == "" {
 		// Dev fallback: tokens won't survive a restart. Set JWT_SECRET in prod.

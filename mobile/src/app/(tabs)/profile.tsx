@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator } from 'react-native';
+import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
@@ -20,6 +20,8 @@ import { ru } from 'date-fns/locale';
 import { ApiError } from '@/lib/api/client';
 import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
+import * as ImagePicker from 'expo-image-picker';
+import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 import type { UpdateProfileBody } from '@/types/auth';
 import type { User } from '@/types/user';
 import { GuestProfile } from '@/components/profile/GuestProfile';
@@ -262,6 +264,8 @@ export default function ProfileScreen() {
   const [formPhone, setFormPhone] = useState('');
   const [formCity, setFormCity] = useState('');
   const [formBirthday, setFormBirthday] = useState(''); // YYYY-MM-DD
+  const [formAvatarUri, setFormAvatarUri] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [birthdayPickerVisible, setBirthdayPickerVisible] = useState(false);
   const [emailChangeVisible, setEmailChangeVisible] = useState(false);
@@ -276,6 +280,7 @@ export default function ProfileScreen() {
       setFormPhone(user?.phone ?? '');
       setFormCity(user?.city ?? '');
       setFormBirthday(user?.birthday ?? '');
+      setFormAvatarUri(user?.avatar_url || null);
       setSaveError(null);
       setSettingsTab('basic');
       tabAnim.setValue(0);
@@ -284,6 +289,37 @@ export default function ProfileScreen() {
       });
     }
   }, [settingsVisible, user]);
+
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Разрешение отклонено', 'Нам нужен доступ к галерее для выбора фото.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setFormAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const handleAvatarPress = async () => {
+    if (formAvatarUri) {
+      Alert.alert('Фото профиля', 'Что вы хотите сделать?', [
+        { text: 'Выбрать из галереи', onPress: pickAvatar },
+        { text: 'Удалить фото', style: 'destructive', onPress: () => setFormAvatarUri(null) },
+        { text: 'Отмена', style: 'cancel' },
+      ]);
+    } else {
+      await pickAvatar();
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -296,26 +332,50 @@ export default function ProfileScreen() {
       setSaveError('Введите имя (минимум 2 символа)');
       return;
     }
-    // Only send changed fields. Birthday can't be cleared via the API (empty =
-    // "unchanged" server-side), so only send it when set and different.
-    const body: UpdateProfileBody = {};
-    if (name !== (user.name ?? '')) body.name = name;
-    if (surname !== (user.surname ?? '')) body.surname = surname;
-    if (patronymic !== (user.patronymic ?? '')) body.patronymic = patronymic;
-    if (phone !== (user.phone ?? '')) body.phone = phone;
-    if (city !== (user.city ?? '')) body.city = city;
-    if (formBirthday && formBirthday !== (user.birthday ?? '')) body.birthday = formBirthday;
-    if (Object.keys(body).length === 0) {
-      closeSettings();
-      return;
-    }
     setSaveError(null);
+    setUploadingAvatar(true);
     try {
+      let finalAvatarUrl = user?.avatar_url || '';
+
+      if (formAvatarUri === null) {
+        finalAvatarUrl = '';
+      } else if (formAvatarUri.startsWith('file://') || formAvatarUri.startsWith('content://')) {
+        // Local file, upload to S3
+        const fileName = formAvatarUri.split('/').pop() || 'avatar.jpg';
+        const ext = fileName.split('.').pop() || 'jpg';
+        const mimeType = `image/${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'}`;
+        const size = 1024 * 1024; // fallback size
+
+        const target = await presignMediaUpload(fileName, size, mimeType, 'avatar');
+        await uploadToS3(formAvatarUri, target.url, mimeType);
+        finalAvatarUrl = target.key;
+      } else {
+        finalAvatarUrl = formAvatarUri;
+      }
+
+      // Construct update payload containing only changed fields
+      const body: UpdateProfileBody = {};
+      if (name !== (user.name ?? '')) body.name = name;
+      if (surname !== (user.surname ?? '')) body.surname = surname;
+      if (patronymic !== (user.patronymic ?? '')) body.patronymic = patronymic;
+      if (phone !== (user.phone ?? '')) body.phone = phone;
+      if (city !== (user.city ?? '')) body.city = city;
+      if (formBirthday && formBirthday !== (user.birthday ?? '')) body.birthday = formBirthday;
+      if (finalAvatarUrl !== (user.avatar_url ?? '')) body.avatar_url = finalAvatarUrl;
+
+      if (Object.keys(body).length === 0) {
+        closeSettings();
+        return;
+      }
+
       const updated = await updateMe.mutateAsync(body);
       setUser(updated);
       closeSettings();
     } catch (err) {
+      console.error('[Profile] Error saving profile:', err);
       setSaveError(err instanceof ApiError ? err.message : 'Не удалось сохранить профиль.');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -906,17 +966,34 @@ export default function ProfileScreen() {
                   contentContainerClassName="gap-4 py-5 pr-2"
                   style={{ width: containerWidth }}
                 >
-                  <View className="rounded-[24px] border border-line bg-surface-muted p-4" style={{ borderRadius: 24 }}>
+                  <TouchableOpacity
+                    onPress={handleAvatarPress}
+                    activeOpacity={0.7}
+                    disabled={uploadingAvatar}
+                    className="rounded-[24px] border border-line bg-surface-muted p-4 relative"
+                    style={{ borderRadius: 24 }}
+                  >
                     <View className="flex-row items-center gap-4">
-                      <Image source={{ uri: avatarUrl }} className="h-20 w-20 rounded-[24px]" />
+                      {formAvatarUri ? (
+                        <Image source={{ uri: formAvatarUri }} className="h-20 w-20 rounded-[24px]" />
+                      ) : (
+                        <View className="h-20 w-20 rounded-[24px] bg-surface border border-line items-center justify-center">
+                          <Ionicons name="person" size={32} color={palette.inkMuted} />
+                        </View>
+                      )}
                       <View className="flex-1">
                         <Text className="text-lg font-extrabold text-ink">Фото профиля</Text>
                         <Text className="mt-1 text-sm leading-5 text-ink-secondary">
-                          Заглушка загрузки аватара. Позже подключим выбор изображения и сохранение.
+                          {uploadingAvatar ? 'Загрузка...' : 'Нажмите для изменения или удаления фотографии.'}
                         </Text>
                       </View>
+                      {uploadingAvatar && (
+                        <View className="absolute inset-0 bg-black/30 items-center justify-center rounded-[24px]" style={{ borderRadius: 24 }}>
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        </View>
+                      )}
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
                   <PickerField
                     label="Email"

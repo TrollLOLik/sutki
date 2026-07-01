@@ -3,16 +3,21 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
+	ActivityIndicator,
+	KeyboardAvoidingView,
+	Platform,
+	Pressable,
+	ScrollView,
+	Text,
+	TextInput,
+	View,
+	Alert,
+	TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 
 import { Button, Chip, Input } from '@/components/ui';
 import {
@@ -100,6 +105,7 @@ export default function CreateListingScreen() {
   const [published, setPublished] = useState(false);
 
   const [loadedEdit, setLoadedEdit] = useState(false);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, { progress: number; error: boolean; key?: string }>>({});
 
   useEffect(() => {
     if (isEditing && editListing && !loadedEdit) {
@@ -122,6 +128,18 @@ export default function CreateListingScreen() {
         childrenAllowed: editListing.children_allowed || '',
         eventsAllowed: editListing.events_allowed || '',
       });
+
+      const initialStatuses: Record<string, { progress: number; error: boolean; key: string }> = {};
+      editListing.photos.forEach((p) => {
+        let key = '';
+        if (p.url.includes('/listings/')) {
+          key = 'listings/' + p.url.split('/listings/').pop();
+        } else {
+          key = p.url;
+        }
+        initialStatuses[p.url] = { progress: 1, error: false, key };
+      });
+      setUploadStatuses(initialStatuses);
       setLoadedEdit(true);
     }
   }, [isEditing, editListing, loadedEdit]);
@@ -129,8 +147,69 @@ export default function CreateListingScreen() {
   useEffect(() => {
     if (!isEditing) {
       draft.reset();
+      setUploadStatuses({});
     }
   }, [isEditing]);
+
+  const uploadListingPhoto = async (uri: string) => {
+    if (uploadStatuses[uri]?.key && !uploadStatuses[uri]?.error) {
+      return;
+    }
+
+    setUploadStatuses((prev) => ({
+      ...prev,
+      [uri]: { progress: 0, error: false },
+    }));
+
+    try {
+      const fileName = uri.split('/').pop() || 'photo.jpg';
+      const ext = fileName.split('.').pop() || 'jpg';
+      const mimeType = `image/${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'}`;
+      const size = 1024 * 1024; // fallback size
+
+      const target = await presignMediaUpload(fileName, size, mimeType, 'listing');
+      await uploadToS3(uri, target.url, mimeType, (progress) => {
+        setUploadStatuses((prev) => ({
+          ...prev,
+          [uri]: { ...prev[uri], progress },
+        }));
+      });
+
+      setUploadStatuses((prev) => ({
+        ...prev,
+        [uri]: { progress: 1, error: false, key: target.key },
+      }));
+    } catch (err) {
+      console.error('[CreateListing] Upload photo failed:', err);
+      setUploadStatuses((prev) => ({
+        ...prev,
+        [uri]: { progress: 0, error: true },
+      }));
+    }
+  };
+
+  const pickListingPhotos = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Разрешение отклонено', 'Нам нужен доступ к галерее для выбора фото.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: 10 - draft.photos.length,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets) {
+      const newUris = result.assets.map((a) => a.uri);
+      newUris.forEach((uri) => {
+        draft.addPhoto(uri);
+        uploadListingPhoto(uri);
+      });
+    }
+  };
 
   // City autocomplete
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -192,6 +271,18 @@ export default function CreateListingScreen() {
         }
         return null;
       }
+      case 4: {
+        const statuses = draft.photos.map((uri) => uploadStatuses[uri]);
+        const hasUploading = statuses.some((s) => s && !s.key && !s.error);
+        const hasError = statuses.some((s) => s && s.error);
+        if (hasUploading) {
+          return 'Пожалуйста, дождитесь окончания загрузки всех фотографий.';
+        }
+        if (hasError) {
+          return 'Некоторые фотографии не удалось загрузить. Попробуйте еще раз или удалите их.';
+        }
+        return null;
+      }
       default:
         return null;
     }
@@ -232,6 +323,7 @@ export default function CreateListingScreen() {
       pets_allowed: draft.petsAllowed || null,
       children_allowed: draft.childrenAllowed || null,
       events_allowed: draft.eventsAllowed || null,
+      photos: draft.photos.map((p) => uploadStatuses[p]?.key).filter(Boolean) as string[],
     };
 
     if (isEditing) {
@@ -592,15 +684,80 @@ export default function CreateListingScreen() {
 
           {step === 4 && (
             <View className="gap-4">
-              <Text className="text-base font-semibold text-ink">Фотографии</Text>
-              <View className="items-center justify-center gap-3 rounded-card border border-dashed border-line bg-surface-muted px-6 py-10">
-                <Ionicons name="images-outline" size={40} color={palette.inkMuted} />
-                <Text className="text-center text-sm text-ink-secondary">
-                  Загрузка фотографий появится в одном из следующих обновлений. Сейчас объявление
-                  публикуется без фото — вы сможете добавить их позже.
-                </Text>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-semibold text-ink">Фотографии ({draft.photos.length} / 10)</Text>
+                {draft.photos.length > 0 && draft.photos.length < 10 && (
+                  <TouchableOpacity onPress={pickListingPhotos} activeOpacity={0.7}>
+                    <Text className="text-sm font-semibold text-primary">Добавить еще</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              <Text className="text-center text-xs text-ink-muted">Можно пропустить этот шаг.</Text>
+
+              {draft.photos.length === 0 ? (
+                <TouchableOpacity
+                  onPress={pickListingPhotos}
+                  activeOpacity={0.7}
+                  className="items-center justify-center gap-3 rounded-card border border-dashed border-line bg-surface-muted px-6 py-12"
+                >
+                  <Ionicons name="images-outline" size={40} color={palette.primary} />
+                  <Text className="text-center text-sm font-semibold text-ink">Добавить фотографии</Text>
+                  <Text className="text-center text-xs text-ink-secondary leading-4 px-4">
+                    Выберите до 10 фотографий жилья. Первая выбранная станет обложкой объявления.
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View className="flex-row flex-wrap gap-2.5">
+                  {draft.photos.map((uri, index) => {
+                    const status = uploadStatuses[uri];
+                    const isUploading = status && !status.key && !status.error;
+                    const isError = status?.error;
+
+                    return (
+                      <View key={uri} className="relative h-24 w-[31%] rounded-xl overflow-hidden bg-surface-muted border border-line">
+                        <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                        
+                        {/* Badges */}
+                        {index === 0 && (
+                          <View className="absolute bottom-1 left-1 bg-primary px-1.5 py-0.5 rounded-md">
+                            <Text className="text-[9px] font-bold text-white uppercase">Главное</Text>
+                          </View>
+                        )}
+
+                        {/* Upload Status Overlays */}
+                        {isUploading && (
+                          <View className="absolute inset-0 bg-black/50 items-center justify-center">
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <Text className="text-[10px] text-white font-semibold mt-1">
+                              {Math.round((status?.progress || 0) * 100)}%
+                            </Text>
+                          </View>
+                        )}
+
+                        {isError && (
+                          <TouchableOpacity
+                            onPress={() => uploadListingPhoto(uri)}
+                            activeOpacity={0.8}
+                            className="absolute inset-0 bg-black/60 items-center justify-center gap-1"
+                          >
+                            <Ionicons name="alert-circle" size={20} color="#FF453A" />
+                            <Text className="text-[9px] text-white font-bold text-center">Повторить</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Delete Button */}
+                        <TouchableOpacity
+                          onPress={() => draft.removePhoto(uri)}
+                          activeOpacity={0.7}
+                          className="absolute top-1 right-1 h-6 w-6 items-center justify-center rounded-full bg-black/60"
+                        >
+                          <Ionicons name="close" size={14} color="#FFF" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+              <Text className="text-center text-xs text-ink-muted mt-2">Можно опубликовать объявление без фотографий.</Text>
             </View>
           )}
 

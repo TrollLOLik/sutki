@@ -476,7 +476,7 @@ export default function PublicProfileScreen() {
             <View className="h-[84px] w-[84px] items-center justify-center rounded-full border border-white/40 p-[3px] flex-shrink-0">
               <View className="h-full w-full items-center justify-center rounded-full border-2 border-white bg-primary-light overflow-hidden">
                 {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
+                  <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 9999 }} contentFit="cover" />
                 ) : (
                   <Text className="text-xl font-extrabold text-primary">{getInitials()}</Text>
                 )}

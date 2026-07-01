@@ -22,6 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useQueryClient, InfiniteData } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 
 import { useSessionStore } from '@/store/session';
 import { useChatStore, ChatMessage } from '@/store/chatStore';
@@ -80,6 +81,21 @@ export default function ChatDialogScreen() {
 	const { mutate: performReadMessages } = useReadMessages(convID);
 
 	const messages = data?.pages.flat().filter(Boolean) ?? [];
+
+	const [galleryVisible, setGalleryVisible] = useState(false);
+	const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+
+	const chatImages = React.useMemo(() => {
+		const list: string[] = [];
+		for (let i = messages.length - 1; i >= 0; i--) {
+			messages[i].attachments?.forEach((att) => {
+				if (att.mime_type.startsWith('image/')) {
+					list.push(att.url);
+				}
+			});
+		}
+		return list;
+	}, [messages]);
 
 	// Mark active conversation on mount/unmount
 	useEffect(() => {
@@ -423,7 +439,18 @@ export default function ChatDialogScreen() {
 						const isImg = att.mime_type.startsWith('image/');
 						if (isImg) {
 							return (
-								<View key={att.id} className="mb-1.5 rounded-xl overflow-hidden bg-surfaceMuted border border-line/20">
+								<TouchableOpacity
+									key={att.id}
+									activeOpacity={0.9}
+									onPress={() => {
+										const index = chatImages.indexOf(att.url);
+										if (index >= 0) {
+											setSelectedImageIndex(index);
+											setGalleryVisible(true);
+										}
+									}}
+									className="mb-1.5 rounded-xl overflow-hidden bg-surfaceMuted border border-line/20"
+								>
 									<Image
 										source={{ uri: att.url }}
 										style={{
@@ -432,7 +459,7 @@ export default function ChatDialogScreen() {
 										}}
 										contentFit="cover"
 									/>
-								</View>
+								</TouchableOpacity>
 							);
 						}
 						return (
@@ -750,6 +777,13 @@ export default function ChatDialogScreen() {
 					/>
 				</View>
 			</BottomSheet>
+
+			<ImageViewerModal
+				visible={galleryVisible}
+				images={chatImages}
+				initialIndex={selectedImageIndex}
+				onClose={() => setGalleryVisible(false)}
+			/>
 		</View>
 	);
 }

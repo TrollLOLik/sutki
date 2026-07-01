@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -132,7 +131,7 @@ func (h *ReviewHandler) reviewDTO(rv domain.Review) reviewDTO {
 		Rating:          rv.Rating,
 		Body:            rv.Body,
 		AuthorName:      rv.AuthorName,
-		AuthorAvatarURL: h.mediaURL(rv.AuthorAvatarURL),
+		AuthorAvatarURL: resolveMediaURL(rv.AuthorAvatarURL),
 		CreatedAt:       createdAt,
 	}
 }
@@ -149,20 +148,6 @@ func summaryDTO(s domain.RatingSummary) reviewSummaryDTO {
 			"5": s.Distribution[4],
 		},
 	}
-}
-
-// mediaURL turns a stored avatar path into an absolute URL, mirroring
-// ListingHandler.mediaURL. Empty values pass through unchanged.
-func (h *ReviewHandler) mediaURL(p string) string {
-	if p == "" {
-		return ""
-	}
-	if h.mediaBaseURL == "" {
-		return p
-	}
-	clean := strings.TrimPrefix(p, "../")
-	clean = strings.TrimLeft(clean, "/")
-	return strings.TrimRight(h.mediaBaseURL, "/") + "/" + clean
 }
 
 type userReviewDTO struct {
@@ -250,13 +235,13 @@ func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
 		Rating:          rv.Rating,
 		Body:            rv.Body,
 		AuthorName:      rv.AuthorName,
-		AuthorAvatarURL: h.mediaURL(rv.AuthorAvatarURL),
+		AuthorAvatarURL: resolveMediaURL(rv.AuthorAvatarURL),
 		CreatedAt:       createdAt,
 		HouseID:         rv.HouseID,
 		HouseStreet:     rv.HouseStreet,
 		HouseNumber:     rv.HouseNumber,
 		HouseCity:       rv.HouseCity,
-		HouseCoverURL:   h.mediaURL(rv.HouseCoverPath),
+		HouseCoverURL:   resolveMediaURL(rv.HouseCoverPath),
 	}
 }
 

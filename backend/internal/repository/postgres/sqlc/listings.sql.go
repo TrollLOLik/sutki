@@ -27,6 +27,32 @@ func (q *Queries) AddHouseCategory(ctx context.Context, arg AddHouseCategoryPara
 	return err
 }
 
+const addHousePhoto = `-- name: AddHousePhoto :exec
+INSERT INTO file (house_id, name, size, format, path, deleted, position, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, false, $6, now(), now())
+`
+
+type AddHousePhotoParams struct {
+	HouseID  *int32
+	Name     string
+	Size     *int32
+	Format   string
+	Path     string
+	Position int32
+}
+
+func (q *Queries) AddHousePhoto(ctx context.Context, arg AddHousePhotoParams) error {
+	_, err := q.db.Exec(ctx, addHousePhoto,
+		arg.HouseID,
+		arg.Name,
+		arg.Size,
+		arg.Format,
+		arg.Path,
+		arg.Position,
+	)
+	return err
+}
+
 const addHouseService = `-- name: AddHouseService :exec
 INSERT INTO house_house_service (house_id, service_id)
 VALUES ($1, $2)
@@ -895,6 +921,15 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		return nil, err
 	}
 	return items, nil
+}
+
+const softDeleteHousePhotos = `-- name: SoftDeleteHousePhotos :exec
+UPDATE file SET deleted = true, updated_at = now() WHERE house_id = $1
+`
+
+func (q *Queries) SoftDeleteHousePhotos(ctx context.Context, houseID *int32) error {
+	_, err := q.db.Exec(ctx, softDeleteHousePhotos, houseID)
+	return err
 }
 
 const updateHouse = `-- name: UpdateHouse :execrows

@@ -59,7 +59,7 @@ func toUserDTO(u domain.User) userDTO {
 		Patronymic:    u.Patronymic,
 		Phone:         u.Phone,
 		City:          u.City,
-		AvatarURL:     u.AvatarURL,
+		AvatarURL:     resolveMediaURL(u.AvatarURL),
 		IsVerified:    u.IsVerified,
 		Birthday:      bdayStr,
 		ListingsCount: u.ListingsCount,

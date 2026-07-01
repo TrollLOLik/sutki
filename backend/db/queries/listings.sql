@@ -368,3 +368,10 @@ LIMIT @result_limit OFFSET @result_offset;
 SELECT count(*)
 FROM house h
 WHERE h.owner_id = @owner_id AND h.deleted = false;
+
+-- name: AddHousePhoto :exec
+INSERT INTO file (house_id, name, size, format, path, deleted, position, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, false, $6, now(), now());
+
+-- name: SoftDeleteHousePhotos :exec
+UPDATE file SET deleted = true, updated_at = now() WHERE house_id = $1;

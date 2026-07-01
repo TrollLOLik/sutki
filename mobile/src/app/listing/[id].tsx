@@ -3,21 +3,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  Pressable,
-  ScrollView,
-  Share,
-  Text,
-  useWindowDimensions,
-  View,
+	ActivityIndicator,
+	Animated,
+	FlatList,
+	Pressable,
+	ScrollView,
+	Share,
+	Text,
+	useWindowDimensions,
+	View,
+	TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { Button } from '@/components/ui';
+import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
@@ -145,6 +147,8 @@ export default function ListingDetailScreen() {
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [galleryVisible, setGalleryVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const animVisible = useRef(new Animated.Value(0)).current;
   const isHeaderVisibleRef = useRef(false);
@@ -451,13 +455,21 @@ export default function ListingDetailScreen() {
                   onScroll={onScroll}
                   scrollEventThrottle={16}
                   keyExtractor={(p) => String(p.id)}
-                  renderItem={({ item }) => (
-                    <Image
-                      source={{ uri: item.url }}
-                      style={{ width, height: 320 }}
-                      contentFit="cover"
-                      transition={150}
-                    />
+                  renderItem={({ item, index }) => (
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        setSelectedImageIndex(index);
+                        setGalleryVisible(true);
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.url }}
+                        style={{ width, height: 320 }}
+                        contentFit="cover"
+                        transition={150}
+                      />
+                    </TouchableOpacity>
                   )}
                 />
               ) : (
@@ -474,6 +486,13 @@ export default function ListingDetailScreen() {
                 </View>
               )}
             </View>
+
+            <ImageViewerModal
+              visible={galleryVisible}
+              images={data.photos.map((p) => p.url)}
+              initialIndex={selectedImageIndex}
+              onClose={() => setGalleryVisible(false)}
+            />
 
             <View className="bg-surface rounded-t-[24px] mt-[-20px] px-4 pt-5 pb-8 gap-5">
               <View
@@ -604,14 +623,22 @@ export default function ListingDetailScreen() {
                     className="flex-row items-start gap-4 active:opacity-80"
                   >
                     {/* Left: Avatar */}
-                    <View className="w-14 h-14 rounded-full bg-primary-light items-center justify-center flex-shrink-0">
-                      <Text className="text-xl font-bold text-primary">
-                        {(() => {
-                          const nameStr = [data.owner_name, data.owner_patronymic, data.owner_surname].filter(Boolean).join(' ');
-                          const letter = nameStr ? nameStr[0] : (data.owner_phone ? 'Т' : 'А');
-                          return letter.toUpperCase();
-                        })()}
-                      </Text>
+                    <View className="w-14 h-14 rounded-full overflow-hidden bg-primary-light items-center justify-center flex-shrink-0">
+                      {data.owner_avatar_url ? (
+                        <Image
+                          source={{ uri: data.owner_avatar_url }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <Text className="text-xl font-bold text-primary">
+                          {(() => {
+                            const nameStr = [data.owner_name, data.owner_patronymic, data.owner_surname].filter(Boolean).join(' ');
+                            const letter = nameStr ? nameStr[0] : (data.owner_phone ? 'Т' : 'А');
+                            return letter.toUpperCase();
+                          })()}
+                        </Text>
+                      )}
                     </View>
 
                     {/* Right: Info */}

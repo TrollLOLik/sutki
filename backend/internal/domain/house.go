@@ -87,4 +87,5 @@ type NewHouse struct {
 	PetsAllowed     *string
 	ChildrenAllowed *string
 	EventsAllowed   *string
+	Photos          []string
 }

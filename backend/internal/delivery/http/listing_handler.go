@@ -163,6 +163,7 @@ type createListingRequest struct {
 	PetsAllowed     *string  `json:"pets_allowed"`
 	ChildrenAllowed *string  `json:"children_allowed"`
 	EventsAllowed   *string  `json:"events_allowed"`
+	Photos          []string `json:"photos"`
 }
 
 // create handles POST /api/v1/listings: the authenticated user publishes a new
@@ -198,6 +199,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		PetsAllowed:     body.PetsAllowed,
 		ChildrenAllowed: body.ChildrenAllowed,
 		EventsAllowed:   body.EventsAllowed,
+		Photos:          body.Photos,
 	}
 	hs, err := h.svc.Create(r.Context(), in)
 	if err != nil {
@@ -249,6 +251,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		PetsAllowed:     body.PetsAllowed,
 		ChildrenAllowed: body.ChildrenAllowed,
 		EventsAllowed:   body.EventsAllowed,
+		Photos:          body.Photos,
 	}
 	hs, err := h.svc.Update(r.Context(), int32(id), in)
 	if err != nil {
@@ -328,7 +331,7 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 		Lng:          hs.Lng,
 		MaxGuests:    hs.MaxGuests,
 		Views:        hs.Views,
-		CoverURL:     h.mediaURL(hs.CoverPath),
+		CoverURL:     resolveMediaURL(hs.CoverPath),
 		Rating:       hs.Rating,
 		ReviewsCount: hs.ReviewsCount,
 	}
@@ -337,7 +340,7 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
 	photos := make([]photoDTO, 0, len(hs.Photos))
 	for _, p := range hs.Photos {
-		photos = append(photos, photoDTO{ID: p.ID, URL: h.mediaURL(p.Path), Position: p.Position})
+		photos = append(photos, photoDTO{ID: p.ID, URL: resolveMediaURL(p.Path), Position: p.Position})
 	}
 	card := h.cardDTO(hs)
 	if card.CoverURL == "" && len(photos) > 0 {
@@ -350,7 +353,7 @@ func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
 		OwnerSurname:       hs.OwnerSurname,
 		OwnerPatronymic:    hs.OwnerPatronymic,
 		OwnerPhone:         hs.OwnerPhone,
-		OwnerAvatarURL:     hs.OwnerAvatarURL,
+		OwnerAvatarURL:     resolveMediaURL(hs.OwnerAvatarURL),
 		OwnerRating:        hs.OwnerRating,
 		OwnerReviewsCount:  hs.OwnerReviewsCount,
 		OwnerListingsCount: hs.OwnerListingsCount,
@@ -376,20 +379,6 @@ func toRefDTOs(refs []domain.Ref) []refDTO {
 		out = append(out, refDTO{ID: ref.ID, Name: ref.Name})
 	}
 	return out
-}
-
-// mediaURL turns a stored relative path into an absolute URL using MEDIA_BASE_URL.
-// Legacy paths look like "../upload_files/x.jpg"; the leading "../" is stripped.
-func (h *ListingHandler) mediaURL(p string) string {
-	if p == "" {
-		return ""
-	}
-	if h.mediaBaseURL == "" {
-		return p
-	}
-	clean := strings.TrimPrefix(p, "../")
-	clean = strings.TrimLeft(clean, "/")
-	return strings.TrimRight(h.mediaBaseURL, "/") + "/" + clean
 }
 
 func address(hs domain.House) string {

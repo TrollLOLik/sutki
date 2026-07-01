@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -129,21 +128,8 @@ func (h *FavoriteHandler) cardDTO(hs domain.House) listingCardDTO {
 		Lat:          hs.Lat,
 		Lng:          hs.Lng,
 		Views:        hs.Views,
-		CoverURL:     h.mediaURL(hs.CoverPath),
+		CoverURL:     resolveMediaURL(hs.CoverPath),
 		Rating:       hs.Rating,
 		ReviewsCount: hs.ReviewsCount,
 	}
-}
-
-// mediaURL mirrors ListingHandler.mediaURL for favorite listing covers.
-func (h *FavoriteHandler) mediaURL(p string) string {
-	if p == "" {
-		return ""
-	}
-	if h.mediaBaseURL == "" {
-		return p
-	}
-	clean := strings.TrimPrefix(p, "../")
-	clean = strings.TrimLeft(clean, "/")
-	return strings.TrimRight(h.mediaBaseURL, "/") + "/" + clean
 }

@@ -417,12 +417,12 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 			NumberRoom:        numRoom,
 			City:              b.House.City,
 			Price:             b.House.Price,
-			CoverURL:          h.mediaURL(b.House.CoverPath),
+			CoverURL:          resolveMediaURL(b.House.CoverPath),
 			OwnerName:         b.House.OwnerName,
 			OwnerSurname:      b.House.OwnerSurname,
 			OwnerPatronymic:   b.House.OwnerPatronymic,
 			OwnerPhone:        b.House.OwnerPhone,
-			OwnerAvatarURL:    h.mediaURL(b.House.OwnerAvatarURL),
+			OwnerAvatarURL:    resolveMediaURL(b.House.OwnerAvatarURL),
 			OwnerRating:       b.House.OwnerRating,
 			OwnerReviewsCount: b.House.OwnerReviewsCount,
 			OwnerIsVerified:   b.House.OwnerIsVerified,
@@ -433,7 +433,7 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 			Name:         b.Guest.Name,
 			Surname:      b.Guest.Surname,
 			Patronymic:   b.Guest.Patronymic,
-			AvatarURL:    h.mediaURL(b.Guest.AvatarURL),
+			AvatarURL:    resolveMediaURL(b.Guest.AvatarURL),
 			Phone:        b.Guest.Phone,
 			IsVerified:   b.Guest.IsVerified,
 			Rating:       b.Guest.Rating,
@@ -441,19 +441,6 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 		}
 	}
 	return dto
-}
-
-// mediaURL mirrors ListingHandler.mediaURL for booking house covers.
-func (h *BookingHandler) mediaURL(p string) string {
-	if p == "" {
-		return ""
-	}
-	if h.mediaBaseURL == "" {
-		return p
-	}
-	clean := strings.TrimPrefix(p, "../")
-	clean = strings.TrimLeft(clean, "/")
-	return strings.TrimRight(h.mediaBaseURL, "/") + "/" + clean
 }
 
 func (h *BookingHandler) writeBookingError(w http.ResponseWriter, err error, notFoundMsg string) {
