@@ -123,6 +123,7 @@ type House struct {
 	RejectionReason *string
 	Lat             *float64
 	Lng             *float64
+	QcGeo           *int32
 	MaxGuests       *int32
 	CheckInAfter    pgtype.Time
 	CheckOutBefore  pgtype.Time

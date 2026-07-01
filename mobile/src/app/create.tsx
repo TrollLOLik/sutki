@@ -28,9 +28,11 @@ import {
   type NewListingInput,
 } from '@/lib/api/create-listing';
 import { useListing } from '@/lib/api/listings';
-import { suggestCities } from '@/lib/api/cities';
+import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
 import { useCreateListingStore } from '@/store/create-listing';
 import { palette } from '@/theme/tokens';
+import YaMap, { Marker, Search } from 'react-native-yamap-plus';
+import * as Location from 'expo-location';
 
 const TOTAL_STEPS = 6;
 const LISTING_PRICE_RUB = 199;
@@ -115,6 +117,9 @@ export default function CreateListingScreen() {
         city: editListing.city,
         street: editListing.street || '',
         houseNumber: editListing.house_number || '',
+        lat: editListing.lat || null,
+        lng: editListing.lng || null,
+        qcGeo: editListing.qc_geo || null,
         area: String(editListing.area),
         price: String(editListing.price),
         maxGuests: editListing.max_guests != null ? String(editListing.max_guests) : '',
@@ -231,6 +236,228 @@ export default function CreateListingScreen() {
     };
   }, [draft.city, cityFocused]);
 
+  // References for map and loop prevention
+  const mapRef = useRef<any>(null);
+  const isProgrammaticRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
+
+  // Address suggestions
+  const [streetSuggestions, setStreetSuggestions] = useState<DaDataSuggestion[]>([]);
+  const [streetFocused, setStreetFocused] = useState(false);
+  const streetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [houseSuggestions, setHouseSuggestions] = useState<DaDataSuggestion[]>([]);
+  const [houseFocused, setHouseFocused] = useState(false);
+  const houseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Non-modal banner state for reverse geocoding
+  const [suggestedAddressText, setSuggestedAddressText] = useState<string | null>(null);
+  const [suggestedCoords, setSuggestedCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [suggestedComponents, setSuggestedComponents] = useState<any[] | null>(null);
+
+  const centerMap = (lat: number, lng: number, zoom = 16) => {
+    if (mapRef.current) {
+      isProgrammaticRef.current = true;
+      mapRef.current.setCenter({ lat, lon: lng }, zoom, 0, 0, 0.4, 'smooth');
+    }
+  };
+
+  // Center map on Step 1 load or when address/coordinates update
+  useEffect(() => {
+    if (step === 1 && mapReady && mapRef.current) {
+      if (draft.lat != null && draft.lng != null) {
+        const t = setTimeout(() => {
+          centerMap(draft.lat!, draft.lng!, 16);
+        }, 150);
+        return () => clearTimeout(t);
+      } else if (draft.city.trim().length > 0) {
+        const fullAddress = [
+          draft.city.trim(),
+          draft.street.trim(),
+          draft.houseNumber.trim(),
+        ].filter(Boolean).join(', ');
+
+        const t = setTimeout(() => {
+          Search.geocodeAddress(fullAddress)
+            .then((point) => {
+              if (point && point.lat != null && point.lon != null) {
+                centerMap(point.lat, point.lon, draft.street ? 16 : 11);
+              }
+            })
+            .catch((err) => {
+              console.warn('[CreateListing] Address geocode error:', err);
+            });
+        }, 150);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [step, draft.city, draft.street, draft.houseNumber, draft.lat, draft.lng, mapReady]);
+
+  // Load street suggestions
+  useEffect(() => {
+    if (!streetFocused) return;
+    if (streetTimer.current) clearTimeout(streetTimer.current);
+    if (draft.street.trim().length < 2) {
+      setStreetSuggestions([]);
+      return;
+    }
+    streetTimer.current = setTimeout(() => {
+      suggestAddress(draft.street.trim(), 'street', draft.city.trim()).then(setStreetSuggestions);
+    }, 300);
+    return () => {
+      if (streetTimer.current) clearTimeout(streetTimer.current);
+    };
+  }, [draft.street, streetFocused, draft.city]);
+
+  // Load house suggestions
+  useEffect(() => {
+    if (!houseFocused) return;
+    if (houseTimer.current) clearTimeout(houseTimer.current);
+    if (draft.houseNumber.trim().length === 0) {
+      setHouseSuggestions([]);
+      return;
+    }
+    houseTimer.current = setTimeout(() => {
+      suggestAddress(draft.houseNumber.trim(), 'house', draft.city.trim(), draft.street.trim()).then(setHouseSuggestions);
+    }, 300);
+    return () => {
+      if (houseTimer.current) clearTimeout(houseTimer.current);
+    };
+  }, [draft.houseNumber, houseFocused, draft.city, draft.street]);
+
+  const handleCameraChangeEnd = async (event: any) => {
+    // Loop prevention check
+    if (isProgrammaticRef.current) {
+      isProgrammaticRef.current = false;
+      return;
+    }
+
+    const nativeEvent = event?.nativeEvent;
+    let lat: number | undefined;
+    let lon: number | undefined;
+
+    if (nativeEvent?.point) {
+      lat = nativeEvent.point.lat;
+      lon = nativeEvent.point.lon;
+    } else if (event?.point) {
+      lat = event.point.lat;
+      lon = event.point.lon;
+    }
+
+    if (lat == null || lon == null) return;
+
+    try {
+      const res = await Search.geocodePoint({ lat, lon });
+      if (res && res.formatted) {
+        setSuggestedAddressText(res.formatted);
+        setSuggestedCoords({ lat, lng: lon });
+        setSuggestedComponents(res.Components || []);
+      }
+    } catch (err) {
+      console.error('[CreateListing] Reverse geocode error:', err);
+    }
+  };
+
+  const applySuggestedAddress = () => {
+    if (!suggestedCoords || !suggestedComponents) return;
+
+    let country = '';
+    let region = '';
+    let area = '';
+    let locality = '';
+    let district = '';
+    let street = '';
+    let house = '';
+
+    suggestedComponents.forEach((c) => {
+      const name = c.name;
+      const kind = String(c.kind).toLowerCase();
+
+      // UNKNOWN=0, COUNTRY=1, REGION=2, PROVINCE=3, AREA=4, LOCALITY=5, DISTRICT=6, STREET=7, HOUSE=8
+      if (kind === 'locality' || kind === '5') {
+        locality = name;
+      } else if (kind === 'street' || kind === '7') {
+        street = name;
+      } else if (kind === 'house' || kind === '8') {
+        house = name;
+      } else if (kind === 'country' || kind === '1') {
+        country = name;
+      } else if (kind === 'region' || kind === '2' || kind === 'province' || kind === '3') {
+        region = name;
+      } else if (kind === 'area' || kind === '4') {
+        area = name;
+      } else if (kind === 'district' || kind === '6') {
+        district = name;
+      }
+    });
+
+    const finalCity = locality || district || area || region || country || '';
+    
+    draft.setField('city', finalCity);
+    draft.setField('street', street);
+    draft.setField('houseNumber', house);
+
+    draft.setField('lat', suggestedCoords.lat);
+    draft.setField('lng', suggestedCoords.lng);
+    draft.setField('qcGeo', 0); // Manually verified exact level
+
+    setSuggestedAddressText(null);
+    setSuggestedCoords(null);
+    setSuggestedComponents(null);
+  };
+
+  const locateMe = async () => {
+    try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          'Службы геолокации отключены',
+          'Пожалуйста, включите службы геолокации (GPS) в настройках вашего устройства.'
+        );
+        return;
+      }
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Доступ запрещен', 'Разрешите доступ к местоположению в настройках устройства.');
+        return;
+      }
+
+      // Try last known position first (fastest, works on emulators without mock position)
+      let loc = await Location.getLastKnownPositionAsync();
+      
+      // Fallback to active query if last known is unavailable
+      if (!loc) {
+        loc = await Location.getCurrentPositionAsync({ 
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+
+      if (!loc) {
+        Alert.alert('Ошибка', 'Не удалось определить текущие координаты.');
+        return;
+      }
+
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+
+      centerMap(lat, lng, 16);
+
+      const res = await Search.geocodePoint({ lat, lon: lng });
+      if (res && res.formatted) {
+        setSuggestedAddressText(res.formatted);
+        setSuggestedCoords({ lat, lng });
+        setSuggestedComponents(res.Components || []);
+      }
+    } catch (err) {
+      console.warn('[CreateListing] Locate me error:', err);
+      Alert.alert(
+        'Ошибка геолокации',
+        'Не удалось получить геопозицию. Убедитесь, что службы геолокации включены и у приложения есть доступ.'
+      );
+    }
+  };
+
   const close = () => {
     draft.reset();
     if (router.canGoBack()) router.back();
@@ -315,6 +542,9 @@ export default function CreateListingScreen() {
       count_room: draft.countRoom.replace('+', ''),
       area: Math.round(Number(draft.area)),
       max_guests: draft.maxGuests !== '' ? Math.round(Number(draft.maxGuests)) : null,
+      lat: draft.lat,
+      lng: draft.lng,
+      qc_geo: draft.qcGeo,
       service_ids: draft.serviceIds,
       category_ids: draft.categoryIds,
       check_in_after: draft.checkInAfter || null,
@@ -454,8 +684,11 @@ export default function CreateListingScreen() {
             </View>
           )}
 
+
+
           {step === 1 && (
             <View className="gap-5">
+              {/* City Input */}
               <View className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Город</Text>
                 <Input
@@ -467,7 +700,7 @@ export default function CreateListingScreen() {
                   onBlur={() => setTimeout(() => setCityFocused(false), 150)}
                 />
                 {cityFocused && citySuggestions.length > 0 && (
-                  <View className="overflow-hidden rounded-field border border-line bg-surface">
+                  <View className="overflow-hidden rounded-field border border-line bg-surface z-50">
                     {citySuggestions.slice(0, 5).map((c) => (
                       <Pressable
                         key={c}
@@ -475,6 +708,13 @@ export default function CreateListingScreen() {
                           draft.setField('city', c);
                           setCitySuggestions([]);
                           setCityFocused(false);
+                          Search.geocodeAddress(c)
+                            .then((point) => {
+                              if (point && point.lat != null && point.lon != null) {
+                                centerMap(point.lat, point.lon, 11);
+                              }
+                            })
+                            .catch((err) => console.warn('[CreateListing] City selection geocode error:', err));
                         }}
                         className="border-b border-line px-4 py-3 active:bg-surface-muted">
                         <Text className="text-sm text-ink">{c}</Text>
@@ -483,6 +723,8 @@ export default function CreateListingScreen() {
                   </View>
                 )}
               </View>
+
+              {/* Street Input */}
               <View className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Улица</Text>
                 <Input
@@ -490,8 +732,36 @@ export default function CreateListingScreen() {
                   placeholder="Улица"
                   value={draft.street}
                   onChangeText={(t) => draft.setField('street', t)}
+                  onFocus={() => setStreetFocused(true)}
+                  onBlur={() => setTimeout(() => setStreetFocused(false), 150)}
                 />
+                {streetFocused && streetSuggestions.length > 0 && (
+                  <View className="overflow-hidden rounded-field border border-line bg-surface z-50">
+                    {streetSuggestions.slice(0, 5).map((s) => (
+                      <Pressable
+                        key={s.value}
+                        onPress={() => {
+                          const val = s.data.street || s.value;
+                          draft.setField('street', val);
+                          setStreetSuggestions([]);
+                          setStreetFocused(false);
+                          Search.geocodeAddress(`${draft.city.trim()}, ${val}`)
+                            .then((point) => {
+                              if (point && point.lat != null && point.lon != null) {
+                                centerMap(point.lat, point.lon, 14);
+                              }
+                            })
+                            .catch((err) => console.warn('[CreateListing] Street selection geocode error:', err));
+                        }}
+                        className="border-b border-line px-4 py-3 active:bg-surface-muted">
+                        <Text className="text-sm text-ink">{s.value}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
+
+              {/* House Input */}
               <View className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Дом</Text>
                 <Input
@@ -499,7 +769,93 @@ export default function CreateListingScreen() {
                   placeholder="Номер дома"
                   value={draft.houseNumber}
                   onChangeText={(t) => draft.setField('houseNumber', t)}
+                  onFocus={() => setHouseFocused(true)}
+                  onBlur={() => setTimeout(() => setHouseFocused(false), 150)}
                 />
+                {houseFocused && houseSuggestions.length > 0 && (
+                  <View className="overflow-hidden rounded-field border border-line bg-surface z-50">
+                    {houseSuggestions.slice(0, 5).map((h) => (
+                      <Pressable
+                        key={h.value}
+                        onPress={() => {
+                          const val = h.data.house || h.value;
+                          draft.setField('houseNumber', val);
+                          setHouseSuggestions([]);
+                          setHouseFocused(false);
+
+                          if (h.data.geo_lat && h.data.geo_lon) {
+                            const lat = parseFloat(h.data.geo_lat);
+                            const lng = parseFloat(h.data.geo_lon);
+                            const qc = h.data.qc_geo ? parseInt(h.data.qc_geo, 10) : 0;
+                            
+                            draft.setField('lat', lat);
+                            draft.setField('lng', lng);
+                            draft.setField('qcGeo', qc);
+
+                            centerMap(lat, lng, 16);
+                          }
+                        }}
+                        className="border-b border-line px-4 py-3 active:bg-surface-muted">
+                        <Text className="text-sm text-ink">{h.value}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Interactive Yandex Map */}
+              <View className="h-[280px] rounded-2xl border border-line overflow-hidden relative mt-2 bg-surface-muted">
+                <YaMap
+                  ref={(ref) => {
+                    mapRef.current = ref;
+                    if (ref && !mapReady) {
+                      setMapReady(true);
+                    }
+                  }}
+                  style={{ width: '100%', height: '100%' }}
+                  showUserPosition={false}
+                  onCameraPositionChangeEnd={handleCameraChangeEnd}
+                  initialRegion={{
+                    lat: draft.lat || 55.7558,
+                    lon: draft.lng || 37.6173,
+                    zoom: draft.lat ? 16 : 10,
+                  }}
+                >
+                  {draft.lat != null && draft.lng != null && (
+                    <Marker point={{ lat: draft.lat, lon: draft.lng }} />
+                  )}
+                </YaMap>
+                
+                {/* Static Center Pin Selector */}
+                <View style={{ position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -18 }, { translateY: -42 }] }} pointerEvents="none">
+                  <Ionicons name="location" size={36} color={palette.primary} />
+                </View>
+
+                {/* Locate Me FAB */}
+                <Pressable
+                  onPress={locateMe}
+                  className="absolute top-3 right-3 bg-surface border border-line h-10 w-10 rounded-full items-center justify-center shadow active:bg-surface-muted"
+                >
+                  <Ionicons name="locate-outline" size={20} color={palette.ink} />
+                </Pressable>
+
+                {/* Non-modal geocoded address banner */}
+                {suggestedAddressText && (
+                  <View className="absolute bottom-3 left-3 right-3 bg-surface border border-line rounded-2xl p-3 flex-row items-center justify-between shadow-lg">
+                    <View className="flex-1 mr-3">
+                      <Text className="text-[10px] uppercase font-bold text-ink-secondary tracking-wider">Найдено на карте</Text>
+                      <Text className="text-xs font-semibold text-ink mt-0.5" numberOfLines={2}>
+                        {suggestedAddressText}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={applySuggestedAddress}
+                      className="bg-primary px-3 py-2 rounded-xl active:opacity-85"
+                    >
+                      <Text className="text-xs font-bold text-white">Применить</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             </View>
           )}

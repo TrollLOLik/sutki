@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS idx_house_coords;
+ALTER TABLE house DROP COLUMN IF EXISTS qc_geo;
+

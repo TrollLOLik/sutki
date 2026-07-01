@@ -143,6 +143,10 @@ WHERE h.deleted = false
   AND ($13::boolean IS NULL OR ($13::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
   AND ($14::boolean IS NULL OR ($14::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
   AND ($15::boolean IS NULL OR ($15::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+  AND ($16::float8 IS NULL OR h.lat >= $16::float8)
+  AND ($17::float8 IS NULL OR h.lat <= $17::float8)
+  AND ($18::float8 IS NULL OR h.lng >= $18::float8)
+  AND ($19::float8 IS NULL OR h.lng <= $19::float8)
 `
 
 type CountHousesFilteredParams struct {
@@ -161,6 +165,10 @@ type CountHousesFilteredParams struct {
 	PetsAllowed     *bool
 	ChildrenAllowed *bool
 	EventsAllowed   *bool
+	MinLat          *float64
+	MaxLat          *float64
+	MinLng          *float64
+	MaxLng          *float64
 }
 
 func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error) {
@@ -180,6 +188,10 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 		arg.PetsAllowed,
 		arg.ChildrenAllowed,
 		arg.EventsAllowed,
+		arg.MinLat,
+		arg.MaxLat,
+		arg.MinLng,
+		arg.MaxLng,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -189,15 +201,15 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 const createHouse = `-- name: CreateHouse :one
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
-  area, country, status, deleted, pay, views, lat, lng, max_guests,
+  area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
   check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
   created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6,
   $7, $8, $9, 'active', false, false, 0,
-  $10, $11, $12,
-  $13, $14, $15,
-  $16, $17, $18,
+  $10, $11, $12, $13,
+  $14, $15, $16,
+  $17, $18, $19,
   now(), now()
 )
 RETURNING id
@@ -215,6 +227,7 @@ type CreateHouseParams struct {
 	Country         string
 	Lat             *float64
 	Lng             *float64
+	QcGeo           *int32
 	MaxGuests       *int32
 	CheckInAfter    pgtype.Time
 	CheckOutBefore  pgtype.Time
@@ -240,6 +253,7 @@ func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32
 		arg.Country,
 		arg.Lat,
 		arg.Lng,
+		arg.QcGeo,
 		arg.MaxGuests,
 		arg.CheckInAfter,
 		arg.CheckOutBefore,
@@ -287,6 +301,7 @@ SELECT
   h.max_guests,
   h.lat,
   h.lng,
+  h.qc_geo,
   h.views,
   h.check_in_after,
   h.check_out_before,
@@ -349,6 +364,7 @@ type GetHouseByIDRow struct {
 	MaxGuests          *int32
 	Lat                *float64
 	Lng                *float64
+	QcGeo              *int32
 	Views              int32
 	CheckInAfter       pgtype.Time
 	CheckOutBefore     pgtype.Time
@@ -389,6 +405,7 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.MaxGuests,
 		&i.Lat,
 		&i.Lng,
+		&i.QcGeo,
 		&i.Views,
 		&i.CheckInAfter,
 		&i.CheckOutBefore,
@@ -596,6 +613,7 @@ SELECT
   h.max_guests,
   h.lat,
   h.lng,
+  h.qc_geo,
   h.views,
   h.check_in_after,
   h.check_out_before,
@@ -646,6 +664,7 @@ type ListHousesByOwnerRow struct {
 	MaxGuests       *int32
 	Lat             *float64
 	Lng             *float64
+	QcGeo           *int32
 	Views           int32
 	CheckInAfter    pgtype.Time
 	CheckOutBefore  pgtype.Time
@@ -681,6 +700,7 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.MaxGuests,
 			&i.Lat,
 			&i.Lng,
+			&i.QcGeo,
 			&i.Views,
 			&i.CheckInAfter,
 			&i.CheckOutBefore,
@@ -718,6 +738,7 @@ SELECT
   h.max_guests,
   h.lat,
   h.lng,
+  h.qc_geo,
   h.views,
   h.check_in_after,
   h.check_out_before,
@@ -802,13 +823,17 @@ WHERE h.deleted = false
   AND ($13::boolean IS NULL OR ($13::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
   AND ($14::boolean IS NULL OR ($14::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
   AND ($15::boolean IS NULL OR ($15::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+  AND ($16::float8 IS NULL OR h.lat >= $16::float8)
+  AND ($17::float8 IS NULL OR h.lat <= $17::float8)
+  AND ($18::float8 IS NULL OR h.lng >= $18::float8)
+  AND ($19::float8 IS NULL OR h.lng <= $19::float8)
 ORDER BY
-  CASE WHEN $16::text = 'price_asc' THEN h.price END ASC NULLS LAST,
-  CASE WHEN $16::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN $16::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN $20::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $20::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $20::text = 'newest' THEN h.created_at END DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
   h.created_at DESC
-LIMIT $18 OFFSET $17
+LIMIT $22 OFFSET $21
 `
 
 type ListHousesFilteredParams struct {
@@ -827,6 +852,10 @@ type ListHousesFilteredParams struct {
 	PetsAllowed     *bool
 	ChildrenAllowed *bool
 	EventsAllowed   *bool
+	MinLat          *float64
+	MaxLat          *float64
+	MinLng          *float64
+	MaxLng          *float64
 	Sort            string
 	ResultOffset    int32
 	ResultLimit     int32
@@ -846,6 +875,7 @@ type ListHousesFilteredRow struct {
 	MaxGuests       *int32
 	Lat             *float64
 	Lng             *float64
+	QcGeo           *int32
 	Views           int32
 	CheckInAfter    pgtype.Time
 	CheckOutBefore  pgtype.Time
@@ -876,6 +906,10 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		arg.PetsAllowed,
 		arg.ChildrenAllowed,
 		arg.EventsAllowed,
+		arg.MinLat,
+		arg.MaxLat,
+		arg.MinLng,
+		arg.MaxLng,
 		arg.Sort,
 		arg.ResultOffset,
 		arg.ResultLimit,
@@ -901,6 +935,7 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 			&i.MaxGuests,
 			&i.Lat,
 			&i.Lng,
+			&i.QcGeo,
 			&i.Views,
 			&i.CheckInAfter,
 			&i.CheckOutBefore,
@@ -944,15 +979,16 @@ SET street = $1,
     country = $8,
     lat = $9,
     lng = $10,
-    max_guests = $11,
-    check_in_after = $12,
-    check_out_before = $13,
-    smoking_allowed = $14,
-    pets_allowed = $15,
-    children_allowed = $16,
-    events_allowed = $17,
+    qc_geo = $11,
+    max_guests = $12,
+    check_in_after = $13,
+    check_out_before = $14,
+    smoking_allowed = $15,
+    pets_allowed = $16,
+    children_allowed = $17,
+    events_allowed = $18,
     updated_at = now()
-WHERE id = $18 AND owner_id = $19 AND deleted = false
+WHERE id = $19 AND owner_id = $20 AND deleted = false
 `
 
 type UpdateHouseParams struct {
@@ -966,6 +1002,7 @@ type UpdateHouseParams struct {
 	Country         string
 	Lat             *float64
 	Lng             *float64
+	QcGeo           *int32
 	MaxGuests       *int32
 	CheckInAfter    pgtype.Time
 	CheckOutBefore  pgtype.Time
@@ -991,6 +1028,7 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		arg.Country,
 		arg.Lat,
 		arg.Lng,
+		arg.QcGeo,
 		arg.MaxGuests,
 		arg.CheckInAfter,
 		arg.CheckOutBefore,
@@ -1005,4 +1043,26 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const userHasConfirmedBookingForHouse = `-- name: UserHasConfirmedBookingForHouse :one
+SELECT EXISTS (
+  SELECT 1 FROM request
+  WHERE user_id = $1 AND house_id = $2
+    AND status IN ('confirmed', 'active')
+)::boolean
+`
+
+type UserHasConfirmedBookingForHouseParams struct {
+	UserID  *int32
+	HouseID *int32
+}
+
+// Returns true if the given user has a confirmed or active booking for the house.
+// Used by the detail endpoint to decide whether to reveal exact coordinates.
+func (q *Queries) UserHasConfirmedBookingForHouse(ctx context.Context, arg UserHasConfirmedBookingForHouseParams) (bool, error) {
+	row := q.db.QueryRow(ctx, userHasConfirmedBookingForHouse, arg.UserID, arg.HouseID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }

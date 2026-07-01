@@ -29,6 +29,7 @@ type House struct {
 	MaxGuests      *int32
 	Lat            *float64
 	Lng            *float64
+	QcGeo          *int32
 	Views          int32
 	CoverPath      string
 	CheckInAfter   *string
@@ -78,6 +79,7 @@ type NewHouse struct {
 	City        string
 	Lat         *float64
 	Lng         *float64
+	QcGeo       *int32
 	MaxGuests       *int32
 	ServiceIDs      []int32
 	CategoryIDs     []int32

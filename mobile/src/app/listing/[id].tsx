@@ -13,8 +13,11 @@ import {
 	useWindowDimensions,
 	View,
 	TouchableOpacity,
+	StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
+
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
@@ -697,17 +700,39 @@ export default function ListingDetailScreen() {
                 </View>
               </View>
 
-              <View className="border-t border-line pt-4 gap-3">
-                <Text className="text-base font-bold text-ink">На карте</Text>
-                <View className="h-40 items-center justify-center rounded-2xl bg-surface-muted">
-                  <Ionicons name="map-outline" size={32} color={palette.inkMuted} />
-                  <Text className="mt-1 text-xs text-ink-muted">
-                    {data.lat != null && data.lng != null
-                      ? `${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`
-                      : 'Координаты появятся позже'}
-                  </Text>
+              {data.lat != null && data.lng != null && (data.qc_geo == null || data.qc_geo < 2) ? (
+                <View className="border-t border-line pt-4 gap-3">
+                  <Text className="text-base font-bold text-ink">На карте</Text>
+                  <Pressable
+                    onPress={() => router.push(`/listing/${id}/location`)}
+                    className="h-40 rounded-2xl border border-line/60 overflow-hidden relative"
+                  >
+                    <YaMap
+                      style={{ width: '100%', height: '100%' }}
+                      showUserPosition={false}
+                      ref={(ref) => {
+                        if (ref && data.lat != null && data.lng != null) {
+                          ref.setCenter({ lat: data.lat, lon: data.lng }, 14);
+                        }
+                      }}
+                    >
+                      {data.radius > 0 ? (
+                        <Circle
+                          center={{ lat: data.lat, lon: data.lng }}
+                          radius={data.radius}
+                          fillColor="rgba(255, 90, 31, 0.1)"
+                          strokeColor="rgba(255, 90, 31, 0.3)"
+                          strokeWidth={1}
+                        />
+                      ) : (
+                        <Marker point={{ lat: data.lat, lon: data.lng }} />
+                      )}
+                    </YaMap>
+                    {/* Intercept touches to direct them to navigate */}
+                    <View style={StyleSheet.absoluteFill} className="bg-transparent" />
+                  </Pressable>
                 </View>
-              </View>
+              ) : null}
 
               {(similarLoading || (!similarError && similarListings.length > 0)) ? (
                 <View className="border-t border-line pt-4 gap-3">

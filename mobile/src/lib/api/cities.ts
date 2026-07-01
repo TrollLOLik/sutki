@@ -59,3 +59,69 @@ export function useCitySuggestions(query: string) {
     staleTime: 1000 * 60 * 5,
   });
 }
+
+export interface DaDataSuggestion {
+  value: string;
+  unrestricted_value: string;
+  data: {
+    city?: string | null;
+    street?: string | null;
+    house?: string | null;
+    geo_lat?: string | null;
+    geo_lon?: string | null;
+    qc_geo?: string | null;
+  };
+}
+
+/**
+ * Autocomplete for streets and houses using the DaData proxy.
+ * Restricts queries by city/street contexts.
+ */
+export async function suggestAddress(
+  query: string,
+  bounds: 'street' | 'house',
+  cityContext?: string,
+  streetContext?: string,
+  signal?: AbortSignal
+): Promise<DaDataSuggestion[]> {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) return [];
+
+  const locations: any[] = [];
+  if (cityContext) {
+    locations.push({ city: cityContext });
+  }
+  // If we have street context, DaData recommends restricting it inside locations
+  if (streetContext && cityContext) {
+    locations[0] = { city: cityContext, street: streetContext };
+  }
+
+  try {
+    const res = await fetch(`${env.apiUrl}/api/v1/cities/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        query: trimmed,
+        locations: locations.length > 0 ? locations : undefined,
+        from_bound: { value: bounds },
+        to_bound: { value: bounds },
+      }),
+      signal,
+    });
+    const data = await res.json();
+    if (data?.suggestions) {
+      return data.suggestions as DaDataSuggestion[];
+    }
+  } catch (err) {
+    const error = err as Error | undefined;
+    const isAbort =
+      error?.name === 'AbortError' ||
+      error?.message?.toLowerCase().includes('cancel') ||
+      error?.message?.toLowerCase().includes('abort');
+    if (!isAbort) {
+      console.error(`Address suggest error for ${bounds}:`, err);
+    }
+  }
+  return [];
+}
+

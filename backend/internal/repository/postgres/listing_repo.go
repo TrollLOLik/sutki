@@ -78,6 +78,10 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 		PetsAllowed:     filter.PetsAllowed,
 		ChildrenAllowed: filter.ChildrenAllowed,
 		EventsAllowed:   filter.EventsAllowed,
+		MinLat:          filter.MinLat,
+		MaxLat:          filter.MaxLat,
+		MinLng:          filter.MinLng,
+		MaxLng:          filter.MaxLng,
 		Sort:            string(filter.Sort),
 		ResultLimit:     filter.Limit,
 		ResultOffset:    filter.Offset,
@@ -101,6 +105,7 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 			MaxGuests:    row.MaxGuests,
 			Lat:            row.Lat,
 			Lng:            row.Lng,
+			QcGeo:          row.QcGeo,
 			Views:          row.Views,
 			CoverPath:      row.CoverPath,
 			CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
@@ -132,6 +137,7 @@ func (r *ListingRepo) Create(ctx context.Context, h domain.NewHouse) (int32, err
 		Country:     h.City,
 		Lat:            h.Lat,
 		Lng:            h.Lng,
+		QcGeo:          h.QcGeo,
 		MaxGuests:      h.MaxGuests,
 		CheckInAfter:   pgTimePtr(h.CheckInAfter),
 		CheckOutBefore: pgTimePtr(h.CheckOutBefore),
@@ -196,6 +202,7 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 			MaxGuests:    row.MaxGuests,
 			Lat:            row.Lat,
 			Lng:            row.Lng,
+			QcGeo:          row.QcGeo,
 			Views:          row.Views,
 			CoverPath:      row.CoverPath,
 			CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
@@ -233,6 +240,10 @@ func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int6
 		PetsAllowed:     filter.PetsAllowed,
 		ChildrenAllowed: filter.ChildrenAllowed,
 		EventsAllowed:   filter.EventsAllowed,
+		MinLat:          filter.MinLat,
+		MaxLat:          filter.MaxLat,
+		MinLng:          filter.MinLng,
+		MaxLng:          filter.MaxLng,
 	})
 }
 
@@ -267,6 +278,7 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		MaxGuests:      row.MaxGuests,
 		Lat:            row.Lat,
 		Lng:            row.Lng,
+		QcGeo:          row.QcGeo,
 		Views:          row.Views,
 		CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
 		CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
@@ -360,6 +372,7 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 		Country:     h.City,
 		Lat:            h.Lat,
 		Lng:            h.Lng,
+		QcGeo:          h.QcGeo,
 		MaxGuests:      h.MaxGuests,
 		CheckInAfter:   pgTimePtr(h.CheckInAfter),
 		CheckOutBefore: pgTimePtr(h.CheckOutBefore),
@@ -416,6 +429,15 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 
 	return nil
 }
+
+// UserHasConfirmedBooking implements domain.ListingRepository.
+func (r *ListingRepo) UserHasConfirmedBooking(ctx context.Context, userID, houseID int32) (bool, error) {
+	return r.q.UserHasConfirmedBookingForHouse(ctx, sqlc.UserHasConfirmedBookingForHouseParams{
+		UserID:  &userID,
+		HouseID: &houseID,
+	})
+}
+
 
 func stringFromPtr(s *string) string {
 	if s == nil {

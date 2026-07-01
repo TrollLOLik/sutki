@@ -30,6 +30,10 @@ type ListingRepository interface {
 	AllServices(ctx context.Context) ([]Ref, error)
 	AllCategories(ctx context.Context) ([]Ref, error)
 	Update(ctx context.Context, id int32, h NewHouse) error
+	// UserHasConfirmedBooking returns true when userID has a confirmed or
+	// active booking for houseID.  Used by the detail endpoint to decide
+	// whether to return exact vs. fuzzed coordinates.
+	UserHasConfirmedBooking(ctx context.Context, userID, houseID int32) (bool, error)
 }
 
 // BookingRepository abstracts persistence for rental requests (bookings).

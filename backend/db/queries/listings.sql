@@ -13,6 +13,7 @@ SELECT
   h.max_guests,
   h.lat,
   h.lng,
+  h.qc_geo,
   h.views,
   h.check_in_after,
   h.check_out_before,
@@ -97,6 +98,10 @@ WHERE h.deleted = false
   AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
   AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
   AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+  AND (sqlc.narg('min_lat')::float8 IS NULL OR h.lat >= sqlc.narg('min_lat')::float8)
+  AND (sqlc.narg('max_lat')::float8 IS NULL OR h.lat <= sqlc.narg('max_lat')::float8)
+  AND (sqlc.narg('min_lng')::float8 IS NULL OR h.lng >= sqlc.narg('min_lng')::float8)
+  AND (sqlc.narg('max_lng')::float8 IS NULL OR h.lng <= sqlc.narg('max_lng')::float8)
 ORDER BY
   CASE WHEN @sort::text = 'price_asc' THEN h.price END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price_desc' THEN h.price END DESC NULLS LAST,
@@ -165,7 +170,11 @@ WHERE h.deleted = false
   )
   AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
   AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
-  AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')));
+  AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+  AND (sqlc.narg('min_lat')::float8 IS NULL OR h.lat >= sqlc.narg('min_lat')::float8)
+  AND (sqlc.narg('max_lat')::float8 IS NULL OR h.lat <= sqlc.narg('max_lat')::float8)
+  AND (sqlc.narg('min_lng')::float8 IS NULL OR h.lng >= sqlc.narg('min_lng')::float8)
+  AND (sqlc.narg('max_lng')::float8 IS NULL OR h.lng <= sqlc.narg('max_lng')::float8);
 
 -- name: GetHouseByID :one
 SELECT
@@ -183,6 +192,7 @@ SELECT
   h.max_guests,
   h.lat,
   h.lng,
+  h.qc_geo,
   h.views,
   h.check_in_after,
   h.check_out_before,
@@ -267,13 +277,13 @@ ORDER BY name;
 -- front-end stub until YooKassa is wired (then `pay` flips via webhook).
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
-  area, country, status, deleted, pay, views, lat, lng, max_guests,
+  area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
   check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
   created_at, updated_at
 ) VALUES (
   @owner_id, @street, @house_number, @description, @price, @count_room,
   sqlc.narg('number_room'), @area, @country, 'active', false, false, 0,
-  sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('max_guests'),
+  sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('qc_geo'), sqlc.narg('max_guests'),
   sqlc.narg('check_in_after'), sqlc.narg('check_out_before'), sqlc.narg('smoking_allowed'),
   sqlc.narg('pets_allowed'), sqlc.narg('children_allowed'), sqlc.narg('events_allowed'),
   now(), now()
@@ -294,6 +304,7 @@ SET street = @street,
     country = @country,
     lat = sqlc.narg('lat'),
     lng = sqlc.narg('lng'),
+    qc_geo = sqlc.narg('qc_geo'),
     max_guests = sqlc.narg('max_guests'),
     check_in_after = sqlc.narg('check_in_after'),
     check_out_before = sqlc.narg('check_out_before'),
@@ -334,6 +345,7 @@ SELECT
   h.max_guests,
   h.lat,
   h.lng,
+  h.qc_geo,
   h.views,
   h.check_in_after,
   h.check_out_before,
@@ -375,3 +387,12 @@ VALUES ($1, $2, $3, $4, $5, false, $6, now(), now());
 
 -- name: SoftDeleteHousePhotos :exec
 UPDATE file SET deleted = true, updated_at = now() WHERE house_id = $1;
+
+-- name: UserHasConfirmedBookingForHouse :one
+-- Returns true if the given user has a confirmed or active booking for the house.
+-- Used by the detail endpoint to decide whether to reveal exact coordinates.
+SELECT EXISTS (
+  SELECT 1 FROM request
+  WHERE user_id = @user_id AND house_id = @house_id
+    AND status IN ('confirmed', 'active')
+)::boolean;

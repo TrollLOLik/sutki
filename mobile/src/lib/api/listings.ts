@@ -27,6 +27,8 @@ export interface ListListingsParams {
   childrenAllowed?: boolean;
   eventsAllowed?: boolean;
   houseIds?: number[];
+  /** Bounding box search: "minLng,minLat,maxLng,maxLat" */
+  bbox?: string;
 }
 
 export const listingKeys = {
@@ -58,6 +60,7 @@ function buildQuery(params: ListListingsParams): string {
   if (params.petsAllowed) sp.set('pets_allowed', 'true');
   if (params.childrenAllowed) sp.set('children_allowed', 'true');
   if (params.eventsAllowed) sp.set('events_allowed', 'true');
+  if (params.bbox) sp.set('bbox', params.bbox);
   const qs = sp.toString();
   return qs ? `?${qs}` : '';
 }

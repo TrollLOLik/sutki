@@ -12,6 +12,9 @@ export interface CreateListingDraft {
   city: string;
   street: string;
   houseNumber: string;
+  lat: number | null;
+  lng: number | null;
+  qcGeo: number | null;
   /** Area in m², entered as text and parsed on submit. */
   area: string;
   /** Price per night in rubles, entered as text and parsed on submit. */
@@ -36,6 +39,9 @@ const emptyDraft: CreateListingDraft = {
   city: '',
   street: '',
   houseNumber: '',
+  lat: null,
+  lng: null,
+  qcGeo: null,
   area: '',
   price: '',
   maxGuests: '',

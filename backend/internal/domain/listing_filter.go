@@ -41,6 +41,12 @@ type ListFilter struct {
 	PetsAllowed     *bool
 	ChildrenAllowed *bool
 	EventsAllowed   *bool
+	// BBox constrains results to listings whose coordinates fall inside the
+	// given bounding box.  Used by the map-search tab.
+	MinLat *float64
+	MaxLat *float64
+	MinLng *float64
+	MaxLng *float64
 	Sort   ListSort
 	Limit  int32
 	Offset int32

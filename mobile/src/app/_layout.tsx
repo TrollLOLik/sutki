@@ -13,8 +13,15 @@ import { useSessionStore } from '@/store/session';
 import { palette } from '@/theme/tokens';
 import { useAuthGateStore } from '@/lib/requireAuth';
 import { AuthGateSheet } from '@/components/AuthGateSheet';
+import { YamapInstance } from 'react-native-yamap-plus';
+
+// Initialize Yandex Maps SDK on JS startup to prevent native crashes.
+YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
 
 SplashScreen.preventAutoHideAsync();
+
+
+
 
 export default function RootLayout() {
   const status = useSessionStore((s) => s.status);

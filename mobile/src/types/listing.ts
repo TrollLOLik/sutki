@@ -29,6 +29,10 @@ export interface ListingCard {
   area: number;
   lat: number | null;
   lng: number | null;
+  /** Radius for coordinate fuzzing, in meters. 0 means exact coordinates. */
+  radius: number;
+  /** Geocoding quality code (DaData qc_geo): 0=exact, 1=near, 2=street, 3=city, 4=region, 5=not found. */
+  qc_geo: number | null;
   /** Sleeping capacity; null when unknown (legacy listings). */
   max_guests: number | null;
   views: number;

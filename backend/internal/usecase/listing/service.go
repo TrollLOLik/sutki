@@ -152,6 +152,13 @@ func (s *Service) Get(ctx context.Context, id int32) (domain.House, error) {
 	return s.formatHouseMedia(ctx, house), nil
 }
 
+// UserHasConfirmedBooking reports whether userID has a confirmed or active
+// booking for houseID.  Used by the detail endpoint to decide whether to
+// reveal exact coordinates.
+func (s *Service) UserHasConfirmedBooking(ctx context.Context, userID, houseID int32) (bool, error) {
+	return s.repo.UserHasConfirmedBooking(ctx, userID, houseID)
+}
+
 func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (domain.House, error) {
 	in.Street = strings.TrimSpace(in.Street)
 	in.HouseNumber = strings.TrimSpace(in.HouseNumber)

@@ -72,6 +72,8 @@ type listingCardDTO struct {
 	Area        int32    `json:"area"`
 	Lat         *float64 `json:"lat"`
 	Lng         *float64 `json:"lng"`
+	Radius      float64  `json:"radius"`
+	QcGeo       *int32   `json:"qc_geo"`
 	MaxGuests   *int32   `json:"max_guests"`
 	Views       int32    `json:"views"`
 	CoverURL    string   `json:"cover_url"`
@@ -154,6 +156,7 @@ type createListingRequest struct {
 	Area            int32    `json:"area"`
 	Lat             *float64 `json:"lat"`
 	Lng             *float64 `json:"lng"`
+	QcGeo           *int32   `json:"qc_geo"`
 	MaxGuests       *int32   `json:"max_guests"`
 	ServiceIDs      []int32  `json:"service_ids"`
 	CategoryIDs     []int32  `json:"category_ids"`
@@ -190,6 +193,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		Area:            body.Area,
 		Lat:             body.Lat,
 		Lng:             body.Lng,
+		QcGeo:           body.QcGeo,
 		MaxGuests:       body.MaxGuests,
 		ServiceIDs:      body.ServiceIDs,
 		CategoryIDs:     body.CategoryIDs,
@@ -210,7 +214,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusCreated, h.detailDTO(hs))
+	writeJSON(w, http.StatusCreated, h.detailDTO(hs, true)) // owner always sees exact coords
 }
 
 // update handles PUT /api/v1/listings/{id}: the authenticated user updates their own listing.
@@ -242,6 +246,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		Area:            body.Area,
 		Lat:             body.Lat,
 		Lng:             body.Lng,
+		QcGeo:           body.QcGeo,
 		MaxGuests:       body.MaxGuests,
 		ServiceIDs:      body.ServiceIDs,
 		CategoryIDs:     body.CategoryIDs,
@@ -265,7 +270,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, h.detailDTO(hs))
+	writeJSON(w, http.StatusOK, h.detailDTO(hs, true)) // owner always sees exact coords
 }
 
 // listMine handles GET /api/v1/listings/mine: the authenticated user's own
@@ -314,10 +319,28 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusOK, h.detailDTO(hs))
+
+	// Determine whether the requesting user can see exact coordinates.
+	// Owner always can; confirmed/active guests also can. Everyone else gets
+	// fuzzed coordinates.  Failures here are non-fatal: fall back to fuzzed.
+	exactCoords := false
+	if callerID, ok := userIDFromContext(r.Context()); ok {
+		if callerID == hs.OwnerID {
+			exactCoords = true
+		} else {
+			hasBooking, berr := h.svc.UserHasConfirmedBooking(r.Context(), callerID, int32(id))
+			if berr == nil && hasBooking {
+				exactCoords = true
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, h.detailDTO(hs, exactCoords))
 }
 
 func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
+	// Lists and map tab always get fuzzed coordinates — no per-row DB check.
+	lat, lng, radius := fuzzedCoords(hs)
 	return listingCardDTO{
 		ID:           hs.ID,
 		OwnerID:      hs.OwnerID,
@@ -327,8 +350,10 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 		Price:        hs.Price,
 		Rooms:        hs.CountRoom,
 		Area:         hs.Area,
-		Lat:          hs.Lat,
-		Lng:          hs.Lng,
+		Lat:          lat,
+		Lng:          lng,
+		Radius:       radius,
+		QcGeo:        hs.QcGeo,
 		MaxGuests:    hs.MaxGuests,
 		Views:        hs.Views,
 		CoverURL:     resolveMediaURL(hs.CoverPath),
@@ -337,12 +362,30 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 	}
 }
 
-func (h *ListingHandler) detailDTO(hs domain.House) listingDetailDTO {
+// fuzzedCoords returns coordinates safe for public display.
+// When the house has no lat/lng the returned pointers are nil and radius is 0.
+func fuzzedCoords(hs domain.House) (lat, lng *float64, radius float64) {
+	if hs.Lat == nil || hs.Lng == nil {
+		return nil, nil, 0
+	}
+	fl, flng := domain.FuzzCoordinates(*hs.Lat, *hs.Lng, hs.ID)
+	return &fl, &flng, domain.FuzzRadius
+}
+
+func (h *ListingHandler) detailDTO(hs domain.House, exactCoords bool) listingDetailDTO {
 	photos := make([]photoDTO, 0, len(hs.Photos))
 	for _, p := range hs.Photos {
 		photos = append(photos, photoDTO{ID: p.ID, URL: resolveMediaURL(p.Path), Position: p.Position})
 	}
-	card := h.cardDTO(hs)
+
+	// Build the card with correct coordinate privacy.
+	card := h.cardDTO(hs) // starts with fuzzed coords
+	if exactCoords && hs.Lat != nil && hs.Lng != nil {
+		card.Lat = hs.Lat
+		card.Lng = hs.Lng
+		card.Radius = 0
+	}
+
 	if card.CoverURL == "" && len(photos) > 0 {
 		card.CoverURL = photos[0].URL
 	}
@@ -495,6 +538,28 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 		*p.dst = b
 	}
 
+	// Bounding box for map-tab viewport queries: bbox=minLng,minLat,maxLng,maxLat
+	if bbox := strings.TrimSpace(q.Get("bbox")); bbox != "" {
+		parts := strings.SplitN(bbox, ",", 4)
+		if len(parts) != 4 {
+			return domain.ListFilter{}, "invalid bbox: expected minLng,minLat,maxLng,maxLat"
+		}
+		minLng, ok1 := parseFloat64(parts[0])
+		minLat, ok2 := parseFloat64(parts[1])
+		maxLng, ok3 := parseFloat64(parts[2])
+		maxLat, ok4 := parseFloat64(parts[3])
+		if !ok1 || !ok2 || !ok3 || !ok4 {
+			return domain.ListFilter{}, "invalid bbox: values must be valid floats"
+		}
+		if minLat > maxLat || minLng > maxLng {
+			return domain.ListFilter{}, "invalid bbox: min must be <= max"
+		}
+		f.MinLat = &minLat
+		f.MaxLat = &maxLat
+		f.MinLng = &minLng
+		f.MaxLng = &maxLng
+	}
+
 	return f, ""
 }
 
@@ -556,4 +621,14 @@ func parseOptBool(s string) (*bool, bool) {
 		return nil, false
 	}
 	return &b, true
+}
+
+// parseFloat64 parses a float64 from a trimmed string.
+func parseFloat64(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
 }

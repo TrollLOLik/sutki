@@ -116,6 +116,9 @@ type Querier interface {
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
+	// Returns true if the given user has a confirmed or active booking for the house.
+	// Used by the detail endpoint to decide whether to reveal exact coordinates.
+	UserHasConfirmedBookingForHouse(ctx context.Context, arg UserHasConfirmedBookingForHouseParams) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)
