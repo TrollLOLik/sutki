@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +19,16 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
+
+// attachmentKeyPattern is the only S3 object-key shape accepted for chat
+// attachments. Keys are minted server-side by PresignUpload as
+// "chat/uploads/<32 hex chars><ext>", so any other value on an incoming
+// message is rejected to prevent referencing arbitrary/other users' objects.
+var attachmentKeyPattern = regexp.MustCompile(`^chat/uploads/[0-9a-f]{32}(\.[A-Za-z0-9]+)?$`)
+
+// errInvalidAttachmentKey is returned when a client supplies an attachment key
+// that was not minted by this service.
+var errInvalidAttachmentKey = errors.New("invalid attachment reference")
 
 // Config holds settings for the chat service and Centrifugo
 type Config struct {
@@ -108,6 +119,14 @@ func (s *Service) presignAttachment(ctx context.Context, att domain.MessageAttac
 		key = key[idx:]
 	}
 
+	// Only presign keys that match the server-minted attachment shape. This
+	// guards against presigning arbitrary objects if a bad key ever reached
+	// storage.
+	if !attachmentKeyPattern.MatchString(key) {
+		log.Printf("[Chat] Refusing to presign unexpected attachment key: %q", key)
+		return att
+	}
+
 	// Presign GET request for 24 hours
 	presignedURL, err := s.storage.PresignGet(ctx, key, 24*time.Hour)
 	if err != nil {
@@ -177,7 +196,14 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 
 	// Verify S3 attachments (stat check)
 	for i, att := range attachments {
-		info, err := s.storage.StatObject(ctx, att.URL) // att.URL holds the S3 object key on incoming request
+		// att.URL holds the S3 object key on incoming request. Reject anything
+		// that does not match a key this service minted via PresignUpload,
+		// otherwise a client could reference (and have us presign) another
+		// user's private object.
+		if !attachmentKeyPattern.MatchString(att.URL) {
+			return domain.Message{}, errInvalidAttachmentKey
+		}
+		info, err := s.storage.StatObject(ctx, att.URL)
 		if err != nil {
 			return domain.Message{}, fmt.Errorf("failed to verify attachment on S3: %w", err)
 		}

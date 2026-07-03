@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+// weakSecrets are well-known placeholder values that must never be used for
+// signing secrets in any environment.
+var weakSecrets = map[string]struct{}{
+	"YOUR_SHARED_HMAC_SECRET_KEY": {},
+	"dev_api_key":                 {},
+	"changeme":                    {},
+	"secret":                      {},
+}
+
 // Config holds all runtime configuration, populated from environment variables.
 type Config struct {
 	HTTPAddr     string
@@ -76,14 +85,14 @@ func Load() (Config, error) {
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
 
-		LLMBaseURL:   getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
-		LLMAPIKey:    os.Getenv("LLM_API_KEY"),
-		LLMModel:     getEnv("LLM_MODEL", "gpt-3.5-turbo"),
-		LLMTimeout:   getDuration("LLM_TIMEOUT", 15*time.Second),
+		LLMBaseURL: getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
+		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
+		LLMModel:   getEnv("LLM_MODEL", "gpt-3.5-turbo"),
+		LLMTimeout: getDuration("LLM_TIMEOUT", 15*time.Second),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
-		CentrifugoKey:        getEnv("CENTRIFUGO_API_KEY", ""),
-		CentrifugoHMACSecret: getEnv("CENTRIFUGO_HMAC_SECRET", "YOUR_SHARED_HMAC_SECRET_KEY"),
+		CentrifugoKey:        os.Getenv("CENTRIFUGO_API_KEY"),
+		CentrifugoHMACSecret: os.Getenv("CENTRIFUGO_HMAC_SECRET"),
 
 		S3Endpoint:        getEnv("S3_ENDPOINT", ""),
 		S3PresignEndpoint: getEnv("S3_PRESIGN_ENDPOINT", ""),
@@ -117,6 +126,15 @@ func Load() (Config, error) {
 	}
 	if cfg.S3PresignEndpoint == "" {
 		cfg.S3PresignEndpoint = cfg.S3Endpoint
+	}
+	// The Centrifugo HMAC secret signs connection/subscription JWTs. A weak or
+	// well-known value lets anyone forge tokens for arbitrary chat channels, so
+	// it must be set explicitly and must not be a known placeholder.
+	if cfg.CentrifugoHMACSecret == "" {
+		return Config{}, fmt.Errorf("CENTRIFUGO_HMAC_SECRET is required")
+	}
+	if _, weak := weakSecrets[cfg.CentrifugoHMACSecret]; weak {
+		return Config{}, fmt.Errorf("CENTRIFUGO_HMAC_SECRET is set to a known insecure placeholder; generate a strong random secret")
 	}
 	if cfg.JWTSecret == "" {
 		// Dev fallback: tokens won't survive a restart. Set JWT_SECRET in prod.
@@ -180,4 +198,3 @@ func getInt(key string, def int) int {
 	}
 	return i
 }
-
