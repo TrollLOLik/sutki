@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -171,10 +172,25 @@ func (h *ChatHandler) findOrCreateConversation(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Rate-limit conversation creation per user to slow down spam campaigns.
+	if !ChatConversationLimiter.Allow(fmt.Sprintf("chat_conv_user_%d", userID), 30) {
+		writeError(w, http.StatusTooManyRequests, "too many conversation requests, try again later")
+		return
+	}
+
 	convID, err := h.svc.FindOrCreateConversation(r.Context(), req.HouseID, userID, req.UserID)
 	if err != nil {
+		// Log the full error server-side, but only return curated messages to
+		// the client so internal storage/database details never leak.
 		log.Printf("[Chat] FindOrCreateConversation error (user1=%d, user2=%d, house=%v): %v", userID, req.UserID, req.HouseID, err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		switch {
+		case errors.Is(err, chat.ErrSelfConversation):
+			writeError(w, http.StatusBadRequest, "cannot create conversation with yourself")
+		case errors.Is(err, chat.ErrContactNotAllowed):
+			writeError(w, http.StatusForbidden, "you can only message users you have a listing or booking relationship with")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 
@@ -252,11 +268,21 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := h.svc.SendMessage(r.Context(), userID, convID, req.Body, req.Attachments)
 	if err != nil {
-		if errors.Is(err, domain.ErrBookingForbidden) {
+		switch {
+		case errors.Is(err, domain.ErrBookingForbidden):
 			writeError(w, http.StatusForbidden, "not a participant of this conversation")
-			return
+		case errors.Is(err, chat.ErrRecipientDeleted):
+			writeError(w, http.StatusBadRequest, "нельзя написать этому пользователю, так как его профиль удален")
+		case errors.Is(err, chat.ErrEmptyMessage):
+			writeError(w, http.StatusBadRequest, "message cannot be empty")
+		case errors.Is(err, chat.ErrInvalidAttachment):
+			writeError(w, http.StatusBadRequest, "invalid attachment reference")
+		case errors.Is(err, chat.ErrAttachmentTooLarge):
+			writeError(w, http.StatusBadRequest, "attachment exceeds 15MB limit")
+		default:
+			log.Printf("[Chat] SendMessage error (user=%d, conv=%d): %v", userID, convID, err)
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
-		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -328,7 +354,15 @@ func (h *ChatHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 
 	target, err := h.svc.PresignUpload(r.Context(), userID, req.FileName, req.Size, req.ContentType)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		switch {
+		case errors.Is(err, chat.ErrFileTooLarge):
+			writeError(w, http.StatusBadRequest, "file size exceeds 15MB limit")
+		case errors.Is(err, chat.ErrFileTypeNotAllowed):
+			writeError(w, http.StatusBadRequest, "file type is not allowed")
+		default:
+			log.Printf("[Chat] PresignUpload error (user=%d): %v", userID, err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 

@@ -123,6 +123,11 @@ type RefreshTokenRepository interface {
 // ChatRepository abstracts persistence for real-time messaging
 type ChatRepository interface {
 	FindOrCreateConversation(ctx context.Context, houseID *int32, user1, user2 int32) (int64, error)
+	// CanContact reports whether initiatorID has a legitimate reason to open a
+	// conversation with targetID: an existing conversation between them, a
+	// listing contact (targetID owns houseID), or a booking relationship in
+	// either direction.
+	CanContact(ctx context.Context, houseID *int32, initiatorID, targetID int32) (bool, error)
 	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, attachments []MessageAttachment) (Message, error)
 	ListUserConversations(ctx context.Context, userID int32) ([]ConversationSummary, error)
 	GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]Message, error)

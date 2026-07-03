@@ -47,15 +47,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
-  console.log('[API Request]', {
-    path,
-    auth,
-    hasToken: !!storeRef.getState?.()?.accessToken,
-    tokenSnippet: storeRef.getState?.()?.accessToken
-      ? storeRef.getState().accessToken.substring(0, 10) + '...'
-      : 'none',
-  });
-
   const res = await fetch(`${env.apiUrl}${path}`, {
     ...rest,
     headers: finalHeaders,

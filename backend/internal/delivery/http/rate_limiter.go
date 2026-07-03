@@ -1,7 +1,10 @@
 package http
 
 import (
+	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -91,22 +94,39 @@ var (
 	BookingEmailLimiter   = NewSlidingWindowLimiter(time.Hour)
 	BookingGuestIDLimiter = NewSlidingWindowLimiter(time.Hour)
 	BookingIPLimiter      = NewSlidingWindowLimiter(time.Hour)
+
+	// Chat conversation-creation limiter (1 hour window, anti-spam)
+	ChatConversationLimiter = NewSlidingWindowLimiter(time.Hour)
 )
 
-// Extract client IP address supporting proxy headers
+// trustProxyHeaders controls whether X-Forwarded-For / X-Real-IP are honored.
+// It must only be enabled (TRUST_PROXY_HEADERS=true) when the backend sits
+// behind a trusted reverse proxy that overwrites/appends these headers.
+// Otherwise any client could spoof its IP and bypass per-IP rate limits.
+var trustProxyHeaders = func() bool {
+	v, err := strconv.ParseBool(os.Getenv("TRUST_PROXY_HEADERS"))
+	return err == nil && v
+}()
+
+// getClientIP extracts the client IP address. Proxy headers are only trusted
+// when TRUST_PROXY_HEADERS=true; in that case the LAST X-Forwarded-For entry
+// is used because it is the one appended by our own (single, trusted) proxy
+// hop — earlier entries are attacker-controllable.
 func getClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+	if trustProxyHeaders {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if ip := strings.TrimSpace(parts[len(parts)-1]); ip != "" {
+				return ip
+			}
+		}
+		if xri := r.Header.Get("X-Real-IP"); xri != "" {
+			return strings.TrimSpace(xri)
 		}
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
 	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		return host
 	}
 	return strings.Trim(ip, "[]")
 }
