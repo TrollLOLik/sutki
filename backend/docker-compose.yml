@@ -22,7 +22,10 @@ services:
     image: centrifugo/centrifugo:v6
     container_name: sutki-centrifugo
     environment:
-      - CENTRIFUGO_HTTP_API_KEY=dev_api_key
+      # Secrets are injected from the environment (shared with the backend via
+      # CENTRIFUGO_API_KEY / CENTRIFUGO_HMAC_SECRET). Compose fails fast if unset.
+      - CENTRIFUGO_HTTP_API_KEY=${CENTRIFUGO_API_KEY:?set CENTRIFUGO_API_KEY}
+      - CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY=${CENTRIFUGO_HMAC_SECRET:?set CENTRIFUGO_HMAC_SECRET}
     volumes:
       - ../centrifugo/config.json:/centrifugo/config.json:ro
     ports:

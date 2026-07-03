@@ -1,14 +1,8 @@
 {
-  "http_api": {
-    "key": "dev_api_key"
-  },
   "client": {
     "allowed_origins": [
       "*"
     ],
-    "token": {
-      "hmac_secret_key": "YOUR_SHARED_HMAC_SECRET_KEY"
-    },
     "subscribe_to_user_personal_channel": {
       "enabled": true,
       "personal_channel_namespace": "user"

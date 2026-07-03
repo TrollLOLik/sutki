@@ -117,6 +117,10 @@ func (h *FavoriteHandler) actorAndID(w http.ResponseWriter, r *http.Request) (in
 }
 
 func (h *FavoriteHandler) cardDTO(hs domain.House) listingCardDTO {
+	// Favorites are a list view: never expose exact coordinates. Use the same
+	// fuzzing as the public listing cards so a saved listing can't be used to
+	// deanonymize an exact address without a confirmed booking.
+	lat, lng, radius := fuzzedCoords(hs)
 	return listingCardDTO{
 		ID:           hs.ID,
 		Address:      address(hs),
@@ -125,8 +129,9 @@ func (h *FavoriteHandler) cardDTO(hs domain.House) listingCardDTO {
 		Price:        hs.Price,
 		Rooms:        hs.CountRoom,
 		Area:         hs.Area,
-		Lat:          hs.Lat,
-		Lng:          hs.Lng,
+		Lat:          lat,
+		Lng:          lng,
+		Radius:       radius,
 		Views:        hs.Views,
 		CoverURL:     resolveMediaURL(hs.CoverPath),
 		Rating:       hs.Rating,
