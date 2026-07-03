@@ -98,7 +98,10 @@ func (h *AIHandler) GenerateDescription(w http.ResponseWriter, r *http.Request) 
 	// infrastructure for the (potentially third-party / cross-border) LLM. The
 	// owner-authored draft is the main vector for leaking guest/owner contact
 	// details; structured fields (city/street) are addresses, not PII.
-	req.DraftDescription = llm.ScrubPII(req.DraftDescription)
+	// Then fence it as untrusted input (prompt-injection mitigation): the
+	// delimiters are stripped from the payload and the system prompt instructs
+	// the model to treat the fenced block as data, never as instructions.
+	req.DraftDescription = llm.WrapUntrusted(llm.ScrubPII(req.DraftDescription))
 
 	// Apply rate limiting per user (fallback to IP for safety) - Relaxed to 20 requests per hour for interactive editing
 	ip := getClientIP(r)
@@ -120,7 +123,7 @@ func (h *AIHandler) GenerateDescription(w http.ResponseWriter, r *http.Request) 
 
 	switch req.Action {
 	case "improve":
-		systemPrompt = "Ты — профессиональный копирайтер объявлений о посуточной аренде недвижимости на Avito. Твоя задача — улучшить написанный владельцем текст: сделать его продающим, структурированным и привлекательным для гостей, строго сохранив все исходные факты.\n\nСТРОГИЕ ПРАВИЛА ОФОРМЛЕНИЯ И ВЫВОДА:\n1. Верни РОВНО ОДИН вариант описания. НЕ пиши вступлений или пояснений («вот вариант», «я улучшил» и т.п.). Верни ТОЛЬКО готовый текст.\n2. Используй эмодзи-маркеры (например, ✨, 🏡, 📍, 🕒, 🚭, ✅) для структурирования.\n3. РАЗДЕЛЯЙ текст на логические блоки с абзацами (пустыми строками):\n   - Заголовок-зазывала с эмодзи (например: ✨ Уютная студия в центре Москвы! ✨).\n   - Описание жилья и ключевых преимуществ.\n   - Раздел удобств с эмодзи-буллетами (например: ✅ Быстрый Wi-Fi, ✅ Кондиционер).\n   - Раздел расположения и инфраструктуры (что рядом, transport).\n   - Раздел правил проживания (время заезда/выезда, ограничения).\n4. Категорически ЗАПРЕЩЕНО использовать markdown-заголовки (#, ##, ###), жирный текст (**), списки на дефисах (-) или звездочках (*). Используй только эмодзи-буллеты.\n5. НЕ выдумывай несуществующие удобства или особенности.\n6. ЗАПРЕЩЕНЫ ссылки, телефоны и любые контактные данные."
+		systemPrompt = "Ты — профессиональный копирайтер объявлений о посуточной аренде недвижимости на Avito. Твоя задача — улучшить написанный владельцем текст: сделать его продающим, структурированным и привлекательным для гостей, строго сохранив все исходные факты.\n\nСТРОГИЕ ПРАВИЛА ОФОРМЛЕНИЯ И ВЫВОДА:\n1. Верни РОВНО ОДИН вариант описания. НЕ пиши вступлений или пояснений («вот вариант», «я улучшил» и т.п.). Верни ТОЛЬКО готовый текст.\n2. Используй эмодзи-маркеры (например, ✨, 🏡, 📍, 🕒, ����, ✅) для структурирования.\n3. РАЗДЕЛЯЙ текст на логические блоки с абзацами (пустыми строками):\n   - Заголовок-зазывала с эмодзи (например: ✨ Уютная студия в центре Москвы! ✨).\n   - Описание жилья и ключевых преимуществ.\n   - Раздел удобств с эмодзи-буллетами (например: ✅ Быстрый Wi-Fi, ✅ Кондиционер).\n   - Раздел расположения и инфраструктуры (что рядом, transport).\n   - Раздел правил проживания (время заезда/выезда, ограничения).\n4. Категорически ЗАПРЕЩЕНО использовать markdown-заголовки (#, ##, ###), жирный текст (**), списки на дефисах (-) или звездочках (*). Используй только эмодзи-буллеты.\n5. НЕ выдумывай несуществующие удобства или особенности.\n6. ЗАПРЕЩЕНЫ ссылки, телефоны и любые контактные данные."
 		userPrompt = fmt.Sprintf(
 			"Текст владельца:\n\"%s\"\n\nХарактеристики квартиры для контекста:\n%s",
 			req.DraftDescription, contextBlock,
@@ -159,6 +162,10 @@ func (h *AIHandler) GenerateDescription(w http.ResponseWriter, r *http.Request) 
 		userPrompt = fmt.Sprintf("Создай продающее описание на основе характеристик:\n%s", contextBlock)
 		maxTokens = 800
 	}
+
+	// Prompt-injection mitigation: tell the model that fenced user text is
+	// data, not instructions (see llm.WrapUntrusted above).
+	systemPrompt += llm.UntrustedInputRule
 
 	llm.LogPrompt(h.debug, "GenerateDescription", systemPrompt, userPrompt)
 

@@ -88,6 +88,23 @@ func (s *Service) Create(ctx context.Context, r domain.NewReview) (domain.Review
 	if !exists {
 		return domain.Review{}, domain.ErrNotFound
 	}
+	// Reviews are gated on a real stay: the author must have a confirmed or
+	// active booking for the listing and must not be the listing's owner.
+	// Otherwise any account could astroturf ratings or defame competitors.
+	house, err := s.listingRepo.GetByID(ctx, r.HouseID)
+	if err != nil {
+		return domain.Review{}, err
+	}
+	if house.OwnerID == r.AuthorID {
+		return domain.Review{}, domain.ErrReviewNotAllowed
+	}
+	hasBooking, err := s.listingRepo.UserHasConfirmedBooking(ctx, r.AuthorID, r.HouseID)
+	if err != nil {
+		return domain.Review{}, err
+	}
+	if !hasBooking {
+		return domain.Review{}, domain.ErrReviewNotAllowed
+	}
 	created, err := s.repo.Create(ctx, r)
 	if err != nil {
 		return domain.Review{}, err
@@ -182,5 +199,3 @@ func (s *Service) ListForHostWithSummary(ctx context.Context, hostID, limit, off
 	}
 	return ListResult{Items: items, Summary: summary, Total: total, Limit: limit, Offset: offset}, nil
 }
-
-

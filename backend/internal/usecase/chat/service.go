@@ -26,9 +26,34 @@ import (
 // message is rejected to prevent referencing arbitrary/other users' objects.
 var attachmentKeyPattern = regexp.MustCompile(`^chat/uploads/[0-9a-f]{32}(\.[A-Za-z0-9]+)?$`)
 
-// errInvalidAttachmentKey is returned when a client supplies an attachment key
-// that was not minted by this service.
-var errInvalidAttachmentKey = errors.New("invalid attachment reference")
+// Sentinel errors exposed so the HTTP layer can map user-facing failures to
+// safe, curated messages instead of leaking internal error text (wrapped
+// storage/database details) to clients.
+var (
+	// ErrInvalidAttachment is returned when a client supplies an attachment
+	// key that was not minted by this service.
+	ErrInvalidAttachment = errors.New("invalid attachment reference")
+	// ErrSelfConversation is returned when a user tries to open a chat with
+	// themselves.
+	ErrSelfConversation = errors.New("cannot create conversation with yourself")
+	// ErrContactNotAllowed is returned when a user tries to start a chat with
+	// someone they have no listing/booking relationship with (anti-spam).
+	ErrContactNotAllowed = errors.New("contact not allowed")
+	// ErrRecipientDeleted is returned when the other participant's profile is
+	// deleted.
+	ErrRecipientDeleted = errors.New("recipient profile deleted")
+	// ErrEmptyMessage is returned when a message has neither body nor
+	// attachments.
+	ErrEmptyMessage = errors.New("message cannot be empty")
+	// ErrAttachmentTooLarge is returned when the uploaded object exceeds
+	// maxAttachmentBytes.
+	ErrAttachmentTooLarge = errors.New("attachment exceeds size limit")
+	// ErrFileTooLarge is returned by PresignUpload for oversized declared sizes.
+	ErrFileTooLarge = errors.New("file size exceeds limit")
+	// ErrFileTypeNotAllowed is returned by PresignUpload for non-whitelisted
+	// content types.
+	ErrFileTypeNotAllowed = errors.New("file type not allowed")
+)
 
 // maxAttachmentBytes is the maximum accepted size for a chat attachment,
 // enforced server-side against the actual uploaded object.
@@ -103,7 +128,19 @@ func (s *Service) ListUserConversations(ctx context.Context, userID int32) ([]do
 
 func (s *Service) FindOrCreateConversation(ctx context.Context, houseID *int32, user1, user2 int32) (int64, error) {
 	if user1 == user2 {
-		return 0, errors.New("cannot create conversation with yourself")
+		return 0, ErrSelfConversation
+	}
+	// Anti-spam: a user may only open a conversation when there is a real
+	// relationship with the target — an existing conversation between them, a
+	// listing contact (target owns the referenced house), or a booking
+	// relationship in either direction. Otherwise any authenticated user could
+	// message arbitrary user IDs.
+	allowed, err := s.repo.CanContact(ctx, houseID, user1, user2)
+	if err != nil {
+		return 0, err
+	}
+	if !allowed {
+		return 0, ErrContactNotAllowed
 	}
 	return s.repo.FindOrCreateConversation(ctx, houseID, user1, user2)
 }
@@ -189,13 +226,13 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		return domain.Message{}, err
 	}
 	if isOtherDeleted {
-		return domain.Message{}, errors.New("нельзя написать этому пользователю, так как его профиль удален")
+		return domain.Message{}, ErrRecipientDeleted
 	}
 
 	// Validate body and attachments (at least one must be present)
 	hasBody := body != nil && strings.TrimSpace(*body) != ""
 	if !hasBody && len(attachments) == 0 {
-		return domain.Message{}, errors.New("message cannot be empty")
+		return domain.Message{}, ErrEmptyMessage
 	}
 
 	// Verify S3 attachments (stat check)
@@ -205,7 +242,7 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		// otherwise a client could reference (and have us presign) another
 		// user's private object.
 		if !attachmentKeyPattern.MatchString(att.URL) {
-			return domain.Message{}, errInvalidAttachmentKey
+			return domain.Message{}, ErrInvalidAttachment
 		}
 		info, err := s.storage.StatObject(ctx, att.URL)
 		if err != nil {
@@ -221,7 +258,7 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 			if delErr := s.storage.Delete(ctx, att.URL); delErr != nil {
 				log.Printf("[Chat] Failed to delete oversized attachment %q: %v", att.URL, delErr)
 			}
-			return domain.Message{}, fmt.Errorf("file %s exceeds %dMB limit", att.FileName, maxAttachmentBytes/(1024*1024))
+			return domain.Message{}, ErrAttachmentTooLarge
 		}
 		// Save the clean S3 object key (e.g. chat/uploads/...) to the database, rather than the public URL
 		attachments[i].URL = att.URL
@@ -268,8 +305,8 @@ func (s *Service) ReadMessages(ctx context.Context, userID int32, convID int64, 
 
 func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName string, size int64, contentType string) (domain.UploadTarget, error) {
 	// 1. Size check (15MB)
-	if size > 15*1024*1024 {
-		return domain.UploadTarget{}, errors.New("file size exceeds 15MB limit")
+	if size > maxAttachmentBytes {
+		return domain.UploadTarget{}, ErrFileTooLarge
 	}
 
 	// 2. MIME whitelist check
@@ -288,7 +325,7 @@ func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName stri
 		}
 	}
 	if !allowed {
-		return domain.UploadTarget{}, fmt.Errorf("file type %s is not allowed", contentType)
+		return domain.UploadTarget{}, ErrFileTypeNotAllowed
 	}
 
 	// 3. Generate secure random key path

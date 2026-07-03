@@ -198,15 +198,15 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	// Pointer fields distinguish "omitted" (nil, left unchanged) from "set to
 	// empty" so PATCH does not clobber fields the client didn't send.
 	var body struct {
-		Name         *string `json:"name"`
-		Surname      *string `json:"surname"`
-		Patronymic   *string `json:"patronymic"`
-		Phone        *string `json:"phone"`
-		City         *string `json:"city"`
-		Birthday     *string `json:"birthday"`
-		AvatarURL    *string `json:"avatar_url"`
-		VKID         *string `json:"vk_id"`
-		VKIDDoNull   *bool   `json:"vk_id_do_null"`
+		Name       *string `json:"name"`
+		Surname    *string `json:"surname"`
+		Patronymic *string `json:"patronymic"`
+		Phone      *string `json:"phone"`
+		City       *string `json:"city"`
+		Birthday   *string `json:"birthday"`
+		AvatarURL  *string `json:"avatar_url"`
+		VKID       *string `json:"vk_id"`
+		VKIDDoNull *bool   `json:"vk_id_do_null"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -441,19 +441,10 @@ func extractDeviceInfo(r *http.Request) domain.DeviceInfo {
 	os := r.Header.Get("X-Device-OS")
 	version := r.Header.Get("X-App-Version")
 
-	ip := r.Header.Get("X-Real-IP")
-	if ip == "" {
-		ip = r.Header.Get("X-Forwarded-For")
-		if idx := strings.Index(ip, ","); idx != -1 {
-			ip = strings.TrimSpace(ip[:idx])
-		}
-	}
-	if ip == "" {
-		ip = r.RemoteAddr
-		if idx := strings.LastIndex(ip, ":"); idx != -1 {
-			ip = ip[:idx]
-		}
-	}
+	// Use the shared getClientIP helper: proxy headers are only trusted when
+	// TRUST_PROXY_HEADERS=true, so stored session IPs/geo can't be spoofed by
+	// clients sending forged X-Forwarded-For / X-Real-IP headers.
+	ip := getClientIP(r)
 
 	if device == "" {
 		ua := r.Header.Get("User-Agent")
@@ -521,7 +512,7 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.svc.ListSessions(r.Context(), userID, sid)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -541,7 +532,7 @@ func (h *AuthHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request
 
 	err := h.svc.RevokeAllSessionsExcept(r.Context(), sid, userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -563,10 +554,8 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 
 	err = h.svc.RevokeSession(r.Context(), sessionID, userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-

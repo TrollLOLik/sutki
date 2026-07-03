@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
@@ -70,10 +71,43 @@ type Service struct {
 	smtpFrom     string
 	dadataAPIKey string
 
-	emailChangeTokens sync.Map // map[int32]string (userID -> temporary token)
+	// NOTE(multi-instance): these in-memory maps are correct for a single
+	// backend instance only. Before scaling horizontally they must move to a
+	// shared store (e.g. Redis or the DB), otherwise email-change tokens and
+	// the session blacklist won't be visible across instances.
+	emailChangeTokens sync.Map // map[int32]emailChangeToken (userID -> token+expiry)
 	sessionCache      sync.Map // map[int64]time.Time (sid -> expiresAt)
 	sessionBlacklist  sync.Map // map[int64]bool (sid -> isBlacklisted)
 	ipLocationCache   sync.Map // map[string]string (ip -> city/region)
+}
+
+// emailChangeTokenTTL bounds the window between confirming the old email and
+// completing the change. Without it, tokens lived until process restart.
+const emailChangeTokenTTL = 15 * time.Minute
+
+// emailChangeToken is a short-lived proof that the user recently confirmed
+// ownership of their current email.
+type emailChangeToken struct {
+	token     string
+	expiresAt time.Time
+}
+
+// loadEmailChangeToken returns the user's live token, deleting it if expired.
+func (s *Service) loadEmailChangeToken(userID int32) (emailChangeToken, bool) {
+	v, ok := s.emailChangeTokens.Load(userID)
+	if !ok {
+		return emailChangeToken{}, false
+	}
+	tok, ok := v.(emailChangeToken)
+	if !ok {
+		s.emailChangeTokens.Delete(userID)
+		return emailChangeToken{}, false
+	}
+	if s.now().After(tok.expiresAt) {
+		s.emailChangeTokens.Delete(userID)
+		return emailChangeToken{}, false
+	}
+	return tok, true
 }
 
 func New(
@@ -104,7 +138,7 @@ func New(
 
 // TokenManager exposes the access-token parser for HTTP middleware.
 func (s *Service) TokenManager() *TokenManager { return s.tm }
-func (s *Service) ExposeCode() bool { return s.exposeCode }
+func (s *Service) ExposeCode() bool            { return s.exposeCode }
 
 // RequestCodeResult reports the outcome of requesting an email login code.
 type RequestCodeResult struct {
@@ -377,7 +411,6 @@ func (s *Service) ConfirmDeleteAccount(ctx context.Context, userID int32, code s
 	return nil
 }
 
-
 // trimPtr trims a non-nil string pointer in place, leaving nil pointers as-is.
 func trimPtr(s *string) *string {
 	if s == nil {
@@ -574,14 +607,17 @@ func (s *Service) VerifyOldEmailCode(ctx context.Context, userID int32, code str
 		return "", err
 	}
 	token := hex.EncodeToString(b)
-	s.emailChangeTokens.Store(userID, token)
+	s.emailChangeTokens.Store(userID, emailChangeToken{
+		token:     token,
+		expiresAt: s.now().Add(emailChangeTokenTTL),
+	})
 
 	return token, nil
 }
 
 func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToken, newEmailRaw string) (RequestCodeResult, error) {
-	stored, ok := s.emailChangeTokens.Load(userID)
-	if !ok || stored.(string) != oldToken {
+	stored, ok := s.loadEmailChangeToken(userID)
+	if !ok || subtle.ConstantTimeCompare([]byte(stored.token), []byte(oldToken)) != 1 {
 		return RequestCodeResult{}, domain.ErrTokenInvalid
 	}
 
@@ -601,7 +637,7 @@ func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToke
 }
 
 func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmailRaw, code string) (domain.User, error) {
-	_, ok := s.emailChangeTokens.Load(userID)
+	_, ok := s.loadEmailChangeToken(userID)
 	if !ok {
 		return domain.User{}, domain.ErrTokenInvalid
 	}
@@ -889,4 +925,3 @@ func (s *Service) resolveAndSaveLocation(sessionID int64, ip string) {
 	defer dbCancel()
 	_ = s.refresh.UpdateLocation(dbCtx, sessionID, city)
 }
-

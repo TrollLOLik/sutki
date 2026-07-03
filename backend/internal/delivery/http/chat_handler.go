@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -87,25 +88,25 @@ func (h *ChatHandler) subscriptionToken(w http.ResponseWriter, r *http.Request) 
 }
 
 type conversationSummaryDTO struct {
-	ConversationID       int64      `json:"conversation_id"`
-	HouseID              *int32     `json:"house_id,omitempty"`
-	LastActivity         time.Time  `json:"last_activity"`
-	UnreadCount          int64      `json:"unread_count"`
-	LastMessageID        *int64     `json:"last_message_id,omitempty"`
-	LastMessageBody      string     `json:"last_message_body"`
-	LastMessageSenderID  *int32     `json:"last_message_sender_id,omitempty"`
-	LastMessageCreatedAt *time.Time `json:"last_message_created_at,omitempty"`
+	ConversationID         int64      `json:"conversation_id"`
+	HouseID                *int32     `json:"house_id,omitempty"`
+	LastActivity           time.Time  `json:"last_activity"`
+	UnreadCount            int64      `json:"unread_count"`
+	LastMessageID          *int64     `json:"last_message_id,omitempty"`
+	LastMessageBody        string     `json:"last_message_body"`
+	LastMessageSenderID    *int32     `json:"last_message_sender_id,omitempty"`
+	LastMessageCreatedAt   *time.Time `json:"last_message_created_at,omitempty"`
 	OtherLastReadMessageID *int64     `json:"other_last_read_message_id,omitempty"`
-	OtherUserID          int32      `json:"other_user_id"`
-	OtherUserName        string     `json:"other_user_name"`
-	OtherUserSurname     string     `json:"other_user_surname"`
-	OtherUserAvatarUrl   string     `json:"other_user_avatar_url"`
-	OtherUserDeleted     bool       `json:"other_user_deleted"`
-	HouseStreet          *string    `json:"house_street,omitempty"`
-	HouseNumber          *string    `json:"house_number,omitempty"`
-	HouseCountRoom       *string    `json:"house_count_room,omitempty"`
-	HousePrice           *int32     `json:"house_price,omitempty"`
-	HouseCoverPath       string     `json:"house_cover_path"`
+	OtherUserID            int32      `json:"other_user_id"`
+	OtherUserName          string     `json:"other_user_name"`
+	OtherUserSurname       string     `json:"other_user_surname"`
+	OtherUserAvatarUrl     string     `json:"other_user_avatar_url"`
+	OtherUserDeleted       bool       `json:"other_user_deleted"`
+	HouseStreet            *string    `json:"house_street,omitempty"`
+	HouseNumber            *string    `json:"house_number,omitempty"`
+	HouseCountRoom         *string    `json:"house_count_room,omitempty"`
+	HousePrice             *int32     `json:"house_price,omitempty"`
+	HouseCoverPath         string     `json:"house_cover_path"`
 }
 
 func (h *ChatHandler) listConversations(w http.ResponseWriter, r *http.Request) {
@@ -124,25 +125,25 @@ func (h *ChatHandler) listConversations(w http.ResponseWriter, r *http.Request) 
 	dtos := make([]conversationSummaryDTO, 0, len(convs))
 	for _, c := range convs {
 		dtos = append(dtos, conversationSummaryDTO{
-			ConversationID:       c.ConversationID,
-			HouseID:              c.HouseID,
-			LastActivity:         c.LastActivity,
-			UnreadCount:          c.UnreadCount,
-			LastMessageID:        c.LastMessageID,
-			LastMessageBody:      c.LastMessageBody,
-			LastMessageSenderID:  c.LastMessageSenderID,
-			LastMessageCreatedAt: c.LastMessageCreatedAt,
+			ConversationID:         c.ConversationID,
+			HouseID:                c.HouseID,
+			LastActivity:           c.LastActivity,
+			UnreadCount:            c.UnreadCount,
+			LastMessageID:          c.LastMessageID,
+			LastMessageBody:        c.LastMessageBody,
+			LastMessageSenderID:    c.LastMessageSenderID,
+			LastMessageCreatedAt:   c.LastMessageCreatedAt,
 			OtherLastReadMessageID: c.OtherLastReadMessageID,
-			OtherUserID:          c.OtherUserID,
-			OtherUserName:        c.OtherUserName,
-			OtherUserSurname:     c.OtherUserSurname,
-			OtherUserAvatarUrl:   resolveMediaURL(c.OtherUserAvatarUrl),
-			OtherUserDeleted:     c.OtherUserDeleted,
-			HouseStreet:          c.HouseStreet,
-			HouseNumber:          c.HouseNumber,
-			HouseCountRoom:       c.HouseCountRoom,
-			HousePrice:           c.HousePrice,
-			HouseCoverPath:       resolveMediaURL(c.HouseCoverPath),
+			OtherUserID:            c.OtherUserID,
+			OtherUserName:          c.OtherUserName,
+			OtherUserSurname:       c.OtherUserSurname,
+			OtherUserAvatarUrl:     resolveMediaURL(c.OtherUserAvatarUrl),
+			OtherUserDeleted:       c.OtherUserDeleted,
+			HouseStreet:            c.HouseStreet,
+			HouseNumber:            c.HouseNumber,
+			HouseCountRoom:         c.HouseCountRoom,
+			HousePrice:             c.HousePrice,
+			HouseCoverPath:         resolveMediaURL(c.HouseCoverPath),
 		})
 	}
 
@@ -171,10 +172,25 @@ func (h *ChatHandler) findOrCreateConversation(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Rate-limit conversation creation per user to slow down spam campaigns.
+	if !ChatConversationLimiter.Allow(fmt.Sprintf("chat_conv_user_%d", userID), 30) {
+		writeError(w, http.StatusTooManyRequests, "too many conversation requests, try again later")
+		return
+	}
+
 	convID, err := h.svc.FindOrCreateConversation(r.Context(), req.HouseID, userID, req.UserID)
 	if err != nil {
+		// Log the full error server-side, but only return curated messages to
+		// the client so internal storage/database details never leak.
 		log.Printf("[Chat] FindOrCreateConversation error (user1=%d, user2=%d, house=%v): %v", userID, req.UserID, req.HouseID, err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		switch {
+		case errors.Is(err, chat.ErrSelfConversation):
+			writeError(w, http.StatusBadRequest, "cannot create conversation with yourself")
+		case errors.Is(err, chat.ErrContactNotAllowed):
+			writeError(w, http.StatusForbidden, "you can only message users you have a listing or booking relationship with")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 
@@ -252,11 +268,21 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := h.svc.SendMessage(r.Context(), userID, convID, req.Body, req.Attachments)
 	if err != nil {
-		if errors.Is(err, domain.ErrBookingForbidden) {
+		switch {
+		case errors.Is(err, domain.ErrBookingForbidden):
 			writeError(w, http.StatusForbidden, "not a participant of this conversation")
-			return
+		case errors.Is(err, chat.ErrRecipientDeleted):
+			writeError(w, http.StatusBadRequest, "нельзя написать этому пользователю, так как его профиль удален")
+		case errors.Is(err, chat.ErrEmptyMessage):
+			writeError(w, http.StatusBadRequest, "message cannot be empty")
+		case errors.Is(err, chat.ErrInvalidAttachment):
+			writeError(w, http.StatusBadRequest, "invalid attachment reference")
+		case errors.Is(err, chat.ErrAttachmentTooLarge):
+			writeError(w, http.StatusBadRequest, "attachment exceeds 15MB limit")
+		default:
+			log.Printf("[Chat] SendMessage error (user=%d, conv=%d): %v", userID, convID, err)
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
-		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -328,7 +354,15 @@ func (h *ChatHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 
 	target, err := h.svc.PresignUpload(r.Context(), userID, req.FileName, req.Size, req.ContentType)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		switch {
+		case errors.Is(err, chat.ErrFileTooLarge):
+			writeError(w, http.StatusBadRequest, "file size exceeds 15MB limit")
+		case errors.Is(err, chat.ErrFileTypeNotAllowed):
+			writeError(w, http.StatusBadRequest, "file type is not allowed")
+		default:
+			log.Printf("[Chat] PresignUpload error (user=%d): %v", userID, err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 

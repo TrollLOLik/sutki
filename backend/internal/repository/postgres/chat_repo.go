@@ -33,6 +33,37 @@ func generateAdvisoryLockKey(houseID int32, user1, user2 int32) int64 {
 	return int64(h.Sum64())
 }
 
+// CanContact reports whether initiatorID has a legitimate relationship with
+// targetID that justifies opening a conversation: an existing conversation
+// between the two, a listing contact (targetID owns the referenced house), or
+// a booking relationship in either direction. Prevents authenticated users
+// from spamming arbitrary user IDs.
+func (r *ChatRepo) CanContact(ctx context.Context, houseID *int32, initiatorID, targetID int32) (bool, error) {
+	const q = `
+SELECT
+  EXISTS (
+    SELECT 1
+    FROM conversation_participant cp1
+    JOIN conversation_participant cp2 ON cp1.conversation_id = cp2.conversation_id
+    WHERE cp1.user_id = $1 AND cp2.user_id = $2
+  )
+  OR ($3::int IS NOT NULL AND EXISTS (
+    SELECT 1 FROM house h WHERE h.id = $3 AND h.owner_id = $2 AND h.deleted = false
+  ))
+  OR EXISTS (
+    SELECT 1
+    FROM request req
+    JOIN house h ON h.id = req.house_id
+    WHERE (req.user_id = $1 AND h.owner_id = $2)
+       OR (req.user_id = $2 AND h.owner_id = $1)
+  )`
+	var allowed bool
+	if err := r.q.DB().QueryRow(ctx, q, initiatorID, targetID, houseID).Scan(&allowed); err != nil {
+		return false, err
+	}
+	return allowed, nil
+}
+
 func (r *ChatRepo) FindOrCreateConversation(ctx context.Context, houseID *int32, user1, user2 int32) (int64, error) {
 	if user1 == user2 {
 		return 0, errors.New("нельзя начать чат с самим собой")
@@ -243,12 +274,12 @@ func (r *ChatRepo) ListUserConversations(ctx context.Context, userID int32) ([]d
 	summaries := make([]domain.ConversationSummary, 0, len(rows))
 	for _, row := range rows {
 		summaries = append(summaries, domain.ConversationSummary{
-			ConversationID:       row.ConversationID,
-			HouseID:              row.HouseID,
-			LastActivity:         toTime(row.LastActivity),
-			UnreadCount:          row.UnreadCount,
-			LastMessageID:        row.LastMessageID,
-			LastMessageBody:      row.LastMessageBody,
+			ConversationID:         row.ConversationID,
+			HouseID:                row.HouseID,
+			LastActivity:           toTime(row.LastActivity),
+			UnreadCount:            row.UnreadCount,
+			LastMessageID:          row.LastMessageID,
+			LastMessageBody:        row.LastMessageBody,
 			LastMessageSenderID:    row.LastMessageSenderID,
 			LastMessageCreatedAt:   toTimestamptzPtr(row.LastMessageCreatedAt),
 			OtherLastReadMessageID: row.OtherLastReadMessageID,

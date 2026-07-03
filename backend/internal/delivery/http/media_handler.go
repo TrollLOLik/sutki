@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -112,7 +113,9 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 	// 3. Generate S3 presigned upload target
 	target, err := targetStorage.PresignUpload(r.Context(), key, req.Size, contentType)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		// Log the full error server-side; never leak storage internals to the client.
+		log.Printf("[Media] PresignUpload error (type=%s): %v", uploadType, err)
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
