@@ -179,7 +179,7 @@ function ProfileAction({
 }
 
 export default function ProfileScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
   const setUser = useSessionStore((s) => s.setUser);
@@ -682,7 +682,7 @@ export default function ProfileScreen() {
           scrollEventThrottle={16}
       >
         <AnimatedLinearGradient
-          colors={['#FF8E53', '#FF5A1F', '#FF2D55']}
+          colors={isDark ? ['#8C4E2D', '#3B1E30', '#1A0D1D'] : ['#FF8E53', '#FF5A1F', '#FF2D55']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -852,7 +852,7 @@ export default function ProfileScreen() {
               onPress={() => setSettingsVisible(true)}
               className="mt-4 h-12 flex-row items-center justify-center rounded-field bg-ink active:opacity-90">
               <Ionicons name="create-outline" size={18} color={palette.surface} />
-              <Text className="ml-2 text-base font-bold text-white">Открыть настройки</Text>
+              <Text style={{ color: palette.surface }} className="ml-2 text-base font-bold">Открыть настройки</Text>
             </Pressable>
           </View>
 

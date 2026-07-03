@@ -454,7 +454,7 @@ export default function ChatDialogScreen() {
 									<Text numberOfLines={1} className={`text-xs ${isMe ? 'text-white' : 'text-ink'} font-semibold`}>
 										{att.file_name}
 									</Text>
-									<Text className={`text-[10px] ${isMe ? 'text-white/70' : 'text-inkMuted'} mt-0.5`}>
+									<Text className={`text-[10px] ${isMe ? 'text-white/70' : 'text-ink-muted'} mt-0.5`}>
 										{(att.size_bytes / 1024).toFixed(1)} КБ
 									</Text>
 								</View>
@@ -471,7 +471,7 @@ export default function ChatDialogScreen() {
 
 					{/* Time & Sent Status Info */}
 					<View className="flex-row justify-end items-center mt-1 self-end">
-						<Text className={`text-[10px] ${isMe ? 'text-white/75' : 'text-inkMuted'} mr-1`}>
+						<Text className={`text-[10px] ${isMe ? 'text-white/75' : 'text-ink-muted'} mr-1`}>
 							{formatMessageTime(item.created_at)}
 						</Text>
 						{isMe && (
@@ -546,7 +546,7 @@ export default function ChatDialogScreen() {
 						<Text numberOfLines={1} className="font-bold text-[16px] text-ink">
 							{isDeletedUser ? 'Удаленный профиль' : otherUserTitle}
 						</Text>
-						<Text className={`text-[11px] mt-0.5 font-medium ${isDeletedUser ? 'text-inkMuted' : 'text-primary'}`}>
+						<Text className={`text-[11px] mt-0.5 font-medium ${isDeletedUser ? 'text-ink-muted' : 'text-primary'}`}>
 							{isDeletedUser ? 'Профиль удален' : (socketStatus === 'connected' ? 'В сети' : 'Был недавно')}
 						</Text>
 					</View>
@@ -606,7 +606,7 @@ export default function ChatDialogScreen() {
 					<Text className="text-xl font-bold text-ink text-center mb-2">
 						Начните общение с хозяином
 					</Text>
-					<Text className="text-sm text-inkSecondary text-center leading-6 max-w-[300px]">
+					<Text className="text-sm text-ink-secondary text-center leading-6 max-w-[300px]">
 						Уточните время прибытия, правила проживания или обсудите индивидуальные условия заселения.
 					</Text>
 				</View>
@@ -641,7 +641,7 @@ export default function ChatDialogScreen() {
 								</View>
 								<View className="flex-1">
 									<Text className="text-base font-extrabold text-ink">Профиль удален</Text>
-									<Text className="mt-1 text-sm leading-5 text-inkSecondary">
+									<Text className="mt-1 text-sm leading-5 text-ink-secondary">
 										Вы не можете писать этому пользователю, так как его профиль удален.
 									</Text>
 								</View>
@@ -713,7 +713,7 @@ export default function ChatDialogScreen() {
 						</View>
 						<View className="flex-1">
 							<Text className="text-[15px] font-bold text-ink">Камера</Text>
-							<Text className="text-xs text-inkSecondary mt-0.5">Сделать снимок сейчас</Text>
+							<Text className="text-xs text-ink-secondary mt-0.5">Сделать снимок сейчас</Text>
 						</View>
 						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
 					</TouchableOpacity>
@@ -731,7 +731,7 @@ export default function ChatDialogScreen() {
 						</View>
 						<View className="flex-1">
 							<Text className="text-[15px] font-bold text-ink">Галерея</Text>
-							<Text className="text-xs text-inkSecondary mt-0.5">Выбрать из галереи устройства</Text>
+							<Text className="text-xs text-ink-secondary mt-0.5">Выбрать из галереи устройства</Text>
 						</View>
 						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
 					</TouchableOpacity>
@@ -749,7 +749,7 @@ export default function ChatDialogScreen() {
 						</View>
 						<View className="flex-1">
 							<Text className="text-[15px] font-bold text-ink">Документ</Text>
-							<Text className="text-xs text-inkSecondary mt-0.5">Файл любого формата</Text>
+							<Text className="text-xs text-ink-secondary mt-0.5">Файл любого формата</Text>
 						</View>
 						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
 					</TouchableOpacity>

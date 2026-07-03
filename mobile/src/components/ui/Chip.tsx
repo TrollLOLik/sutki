@@ -22,8 +22,8 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
         borderRadius: 999,
         borderWidth: 1,
         paddingHorizontal: 16,
-        backgroundColor: selected ? palette.primaryLight : '#FFFFFF',
-        borderColor: selected ? palette.primary : '#E0E0E0',
+        backgroundColor: selected ? palette.primaryLight : palette.surfaceMuted,
+        borderColor: selected ? palette.primary : palette.line,
       }}>
       <Text
         style={{

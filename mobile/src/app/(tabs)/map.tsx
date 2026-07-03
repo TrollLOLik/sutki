@@ -112,7 +112,7 @@ async function detectCityByIP(): Promise<string | null> {
 
 export default function MapScreen() {
   const { palette, isDark } = useAppTheme();
-  const styles = useMemo(() => makeStyles(palette), [palette]);
+  const styles = useMemo(() => makeStyles(palette, isDark), [palette, isDark]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);
@@ -137,6 +137,8 @@ export default function MapScreen() {
     enabled: isQueryEnabled,
   });
   const listings = data?.items ?? [];
+
+
 
   // ── Initial camera ─────────────────────────────────────────────────────────
   // Compute once on mount. Start from the hardcoded default so the very first
@@ -383,6 +385,35 @@ export default function MapScreen() {
   /** Label shown inside the search bar (current city or placeholder). */
   const searchLabel = filters.city ?? 'Город или адрес';
 
+  // ── Warning state ──────────────────────────────────────────────────────────
+  const [warningType, setWarningType] = useState<'zoom' | 'empty' | 'limit' | null>(null);
+
+  useEffect(() => {
+    if (bbox == null || isDragging) {
+      setWarningType(null);
+      return;
+    }
+
+    if (currentZoom < 10) {
+      setWarningType('zoom');
+      return;
+    }
+
+    const isFetchingAny = isLoading || isFetching || isRefetching;
+    if (!isFetchingAny) {
+      if (listings.length === 0) {
+        setWarningType('empty');
+      } else if (listings.length >= 200) {
+        setWarningType('limit');
+      } else {
+        setWarningType(null);
+      }
+    } else {
+      // Reset zoom warning immediately on zoom-in. Keep empty/limit warnings during refetch to prevent flickering.
+      setWarningType((prev) => (prev === 'zoom' ? null : prev));
+    }
+  }, [currentZoom, isLoading, isFetching, isRefetching, listings.length, bbox, isDragging]);
+
 
   return (
     <View style={styles.container}>
@@ -478,66 +509,66 @@ export default function MapScreen() {
 
       {/* Dynamic Map Warning Overlays (Zoom out, limit reach, empty results) */}
       <AnimatePresence>
-        {bbox != null && !isDragging && (() => {
-          if (currentZoom < 10) {
-            return (
-              <MotiView
-                key="zoom-warning"
-                from={{ opacity: 0, translateY: 15 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                exit={{ opacity: 0, translateY: 15 }}
-                transition={{ type: 'timing', duration: 180 }}
-                pointerEvents="box-none"
-                style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-              >
-                <View style={styles.emptyBar}>
-                  <Text style={styles.emptyText}>
-                    Приблизьте карту, чтобы увидеть объявления
-                  </Text>
-                </View>
-              </MotiView>
-            );
-          }
-          if (!isLoading && listings.length === 0) {
-            return (
-              <MotiView
-                key="empty-warning"
-                from={{ opacity: 0, translateY: 15 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                exit={{ opacity: 0, translateY: 15 }}
-                transition={{ type: 'timing', duration: 180 }}
-                pointerEvents="box-none"
-                style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-              >
-                <View style={styles.emptyBar}>
-                  <Text style={styles.emptyText}>
-                    В этой области нет объявлений — отдалите карту или измените фильтры
-                  </Text>
-                </View>
-              </MotiView>
-            );
-          }
-          if (!isLoading && listings.length >= 200) {
-            return (
-              <MotiView
-                key="limit-warning"
-                from={{ opacity: 0, translateY: 15 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                exit={{ opacity: 0, translateY: 15 }}
-                transition={{ type: 'timing', duration: 180 }}
-                pointerEvents="box-none"
-                style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-              >
-                <View style={styles.emptyBar}>
-                  <Text style={styles.emptyText}>
-                    Показано 200+ объявлений. Приблизьте карту для точного поиска
-                  </Text>
-                </View>
-              </MotiView>
-            );
-          }
-          return null;
-        })()}
+        {warningType === 'zoom' && (
+          <MotiView
+            key="zoom-warning"
+            from={{ translateY: 10, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            exit={{ translateY: 5, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 180,
+            }}
+            pointerEvents="box-none"
+            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
+          >
+            <View style={styles.emptyBar}>
+              <Text style={styles.emptyText}>
+                Приблизьте карту, чтобы увидеть объявления
+              </Text>
+            </View>
+          </MotiView>
+        )}
+        {warningType === 'empty' && (
+          <MotiView
+            key="empty-warning"
+            from={{ translateY: 10, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            exit={{ translateY: 5, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 180,
+            }}
+            pointerEvents="box-none"
+            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
+          >
+            <View style={styles.emptyBar}>
+              <Text style={styles.emptyText}>
+                В этой области нет объявлений — отдалите карту или измените фильтры
+              </Text>
+            </View>
+          </MotiView>
+        )}
+        {warningType === 'limit' && (
+          <MotiView
+            key="limit-warning"
+            from={{ translateY: 10, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            exit={{ translateY: 5, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 180,
+            }}
+            pointerEvents="box-none"
+            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
+          >
+            <View style={styles.emptyBar}>
+              <Text style={styles.emptyText}>
+                Показано 200+ объявлений. Приблизьте карту для точного поиска
+              </Text>
+            </View>
+          </MotiView>
+        )}
       </AnimatePresence>
 
       {/* Bottom mini-card on pin tap */}
@@ -558,7 +589,7 @@ export default function MapScreen() {
   );
 }
 
-const makeStyles = (palette: Palette) =>
+const makeStyles = (palette: Palette, isDark: boolean) =>
   StyleSheet.create({
   container: {
     flex: 1,
@@ -735,19 +766,18 @@ const makeStyles = (palette: Palette) =>
   },
   emptyBar: {
     backgroundColor: palette.overlaySurface,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(26, 26, 26, 0.4)',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 16,
+    alignSelf: 'stretch',
     alignItems: 'center',
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
   },
   emptyText: {
     fontSize: 13,
+    fontWeight: '400',
     textAlign: 'center',
-    color: palette.inkSecondary,
+    color: palette.ink,
   },
 });

@@ -67,7 +67,7 @@ export function IncomingRequestCard({
   disabled = false,
   onChatPress,
 }: IncomingRequestCardProps) {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const start = parseISO(booking.start_date);
   const end = booking.end_date ? parseISO(booking.end_date) : null;
   const nights = end ? differenceInCalendarDays(end, start) : 0;
@@ -84,6 +84,9 @@ export function IncomingRequestCard({
     }
     return name;
   };
+
+  const formattedName = getFormattedName();
+  const isDeletedUser = formattedName === 'Удаленный пользователь';
 
   const guestInitial = (booking.guest?.name || booking.name || 'Г').charAt(0).toUpperCase();
 
@@ -125,11 +128,20 @@ export function IncomingRequestCard({
   const getStatusTone = (status: string) => {
     switch (status) {
       case 'confirmed':
-        return { bg: '#EAF8F1', text: '#2EAD6B' };
+        return { 
+          bg: palette.successLight, 
+          text: isDark ? '#A7F3D0' : palette.success 
+        };
       case 'cancelled':
-        return { bg: '#FDECEC', text: '#E5484D' };
+        return { 
+          bg: palette.dangerLight, 
+          text: isDark ? '#FECACA' : palette.danger 
+        };
       default:
-        return { bg: '#F4F5F6', text: '#9AA0A6' };
+        return { 
+          bg: palette.surfaceMuted, 
+          text: isDark ? '#E6E8EA' : palette.inkMuted 
+        };
     }
   };
 
@@ -181,22 +193,31 @@ export function IncomingRequestCard({
             </View>
           )}
 
-          <View style={{ gap: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: palette.ink }}>
-                {getFormattedName()}
+          <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+              <Text 
+                numberOfLines={1} 
+                style={{ 
+                  fontSize: 15, 
+                  fontWeight: isDeletedUser ? '500' : '800', 
+                  fontStyle: isDeletedUser ? 'italic' : 'normal',
+                  color: isDeletedUser ? palette.inkMuted : palette.ink, 
+                  flexShrink: 1 
+                }}
+              >
+                {formattedName}
               </Text>
               
               {/* Rating */}
               {booking.guest?.rating && booking.guest.rating > 0 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                   <Ionicons name="star" size={13} color="#FFB400" />
                   <Text style={{ fontSize: 13, fontWeight: '700', color: palette.ink }}>
                     {booking.guest.rating.toFixed(1)}
                   </Text>
                 </View>
               ) : (
-                <Text style={{ fontSize: 12, fontWeight: '600', color: palette.inkMuted }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: palette.inkMuted, flexShrink: 0 }}>
                   Новый гость
                 </Text>
               )}
@@ -247,16 +268,16 @@ export function IncomingRequestCard({
               style={{
                 height: 36,
                 borderWidth: 1.5,
-                borderColor: '#2EAD6B',
+                borderColor: palette.success,
                 borderRadius: 18,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
               {isConfirming ? (
-                <ActivityIndicator size="small" color="#2EAD6B" />
+                <ActivityIndicator size="small" color={palette.success} />
               ) : (
-                <Text style={{ fontSize: 13, fontWeight: '500', color: '#2EAD6B' }}>Принять</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: palette.success }}>Принять</Text>
               )}
             </TouchableOpacity>
 
@@ -269,16 +290,16 @@ export function IncomingRequestCard({
               style={{
                 height: 36,
                 borderWidth: 1.5,
-                borderColor: '#E5484D',
+                borderColor: palette.danger,
                 borderRadius: 18,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
               {isRejecting ? (
-                <ActivityIndicator size="small" color="#E5484D" />
+                <ActivityIndicator size="small" color={palette.danger} />
               ) : (
-                <Text style={{ fontSize: 13, fontWeight: '500', color: '#E5484D' }}>Отклонить</Text>
+                <Text style={{ fontSize: 13, fontWeight: '500', color: palette.danger }}>Отклонить</Text>
               )}
             </TouchableOpacity>
           </>

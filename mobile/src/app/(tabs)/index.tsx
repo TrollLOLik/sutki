@@ -49,7 +49,7 @@ const QUICK_FILTERS = [
 ];
 
 export default function SearchScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const [query, setQuery] = useState('');
   const filters = useFiltersStore();
   const insets = useSafeAreaInsets();
@@ -288,7 +288,7 @@ export default function SearchScreen() {
         >
           <BlurView
             intensity={95}
-            tint="light"
+            tint={isDark ? 'dark' : 'light'}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           />
         </Animated.View>

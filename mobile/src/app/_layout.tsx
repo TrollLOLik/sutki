@@ -16,11 +16,19 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import { darkVars, lightVars } from '@/theme/vars';
 import { useAuthGateStore } from '@/lib/requireAuth';
 import { AuthGateSheet } from '@/components/AuthGateSheet';
+import { ThemeTransitionOverlay } from '@/components/ThemeTransitionOverlay';
 import { YamapInstance } from 'react-native-yamap-plus';
 
 // Initialize Yandex Maps SDK on JS startup to prevent native crashes.
-YamapInstance.setLocale('ru_RU');
-YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
+const initYamap = async () => {
+  try {
+    await YamapInstance.setLocale('ru_RU');
+    await YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
+  } catch (err) {
+    console.warn('Yamap already initialized or failed to initialize:', err);
+  }
+};
+initYamap();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,6 +86,9 @@ export default function RootLayout() {
         </QueryClientProvider>
       </SafeAreaProvider>
       </View>
+      {/* Circular-reveal overlay: above everything including tab bar and status
+          bar. pointerEvents="none" so it never blocks touches. */}
+      <ThemeTransitionOverlay />
     </GestureHandlerRootView>
   );
 }

@@ -67,7 +67,7 @@ export default function MessagesScreen() {
 						<Ionicons name="chatbubbles-outline" size={40} color={palette.primary} />
 					</View>
 					<Text className="text-center text-xl font-bold text-ink mb-2">Сообщения</Text>
-					<Text className="text-center text-base text-inkSecondary px-4 leading-6">
+					<Text className="text-center text-base text-ink-secondary px-4 leading-6">
 						Войдите в аккаунт, чтобы вести переписку с хозяевами квартир и обсуждать детали бронирования.
 					</Text>
 				</View>
@@ -133,25 +133,31 @@ export default function MessagesScreen() {
 				{/* Info Container with iOS-style separator */}
 				<View className={`flex-1 ml-4 flex-row items-center pr-1 ${isLast ? '' : 'border-b border-line/30'}`}>
 					<View className="flex-1 justify-center py-1">
-						<View className="flex-row justify-between items-baseline mb-1">
-							<Text
-								numberOfLines={1}
-								className={`text-[16px] text-ink flex-1 mr-2 ${hasUnread ? 'font-extrabold text-[17px]' : 'font-semibold'}`}
-							>
-								{item.other_user_deleted
-									? 'Удаленный профиль'
-									: `${item.other_user_name} ${item.other_user_surname}`.trim() || 'Пользователь'}
-							</Text>
-							<Text className={`text-xs ${hasUnread ? 'text-primary font-bold' : 'text-inkMuted font-medium'}`}>
-								{formatRelativeTime(item.last_activity)}
-							</Text>
-						</View>
+                        <View className="flex-row justify-between items-center mb-1">
+                          <View className="flex-1 mr-4">
+                            <Text
+                              numberOfLines={1}
+                              style={{ lineHeight: 20, includeFontPadding: false, textAlignVertical: 'center' }}
+                              className={`text-[16px] text-ink ${hasUnread ? 'font-extrabold' : 'font-semibold'}`}
+                            >
+                              {item.other_user_deleted
+                                ? 'Удаленный профиль'
+                                : `${item.other_user_name} ${item.other_user_surname}`.trim() || 'Пользователь'}
+                            </Text>
+                          </View>
+                          <Text
+                            style={{ lineHeight: 20, includeFontPadding: false, textAlignVertical: 'right' }}
+                            className={`text-xs ${hasUnread ? 'text-primary font-bold' : 'text-ink-muted font-medium'}`}
+                          >
+                            {formatRelativeTime(item.last_activity)}
+                          </Text>
+                        </View>
 
 						{/* House/Listing context subtitle */}
 						{item.house_id && (
 							<View className="flex-row items-center mb-1">
 								<Ionicons name="home-outline" size={13} color={palette.inkMuted} className="mr-1" />
-								<Text numberOfLines={1} className="text-xs text-inkMuted flex-1 font-medium">
+								<Text numberOfLines={1} className="text-xs text-ink-muted flex-1 font-medium">
 									{item.house_count_room ? `${formatRooms(item.house_count_room)}, ` : ''}
 									{item.house_street ? `${item.house_street}` : ''}
 									{item.house_number ? `, д. ${item.house_number}` : ''}
@@ -173,8 +179,8 @@ export default function MessagesScreen() {
 								<Text
 									numberOfLines={1}
 									className={`text-[14px] flex-1 ${
-										hasUnread ? 'text-ink font-bold' : 'text-inkSecondary'
-									} ${!hasPreview ? 'italic text-inkMuted font-normal' : ''}`}
+										hasUnread ? 'text-ink font-bold' : 'text-ink-secondary'
+									} ${!hasPreview ? 'italic text-ink-muted font-normal' : ''}`}
 								>
 									{hasPreview ? item.last_message_body : 'Начните переписку'}
 								</Text>
@@ -245,7 +251,7 @@ export default function MessagesScreen() {
 						<Text className="text-center text-lg font-bold text-ink">
 							{searchQuery ? 'Ничего не найдено' : 'Сообщений пока нет'}
 						</Text>
-						<Text className="mt-2 text-center text-[15px] text-inkSecondary leading-6 px-4">
+						<Text className="mt-2 text-center text-[15px] text-ink-secondary leading-6 px-4">
 							{searchQuery
 								? 'Попробуйте изменить запрос или имя собеседника.'
 								: 'Здесь будут ваши переписки с хозяевами квартир.'}
@@ -255,7 +261,7 @@ export default function MessagesScreen() {
 				ListFooterComponent={
 					filteredConversations.length > 0 ? (
 						<View className="py-6 items-center">
-							<Text className="text-xs text-inkMuted">Это все переписки</Text>
+							<Text className="text-xs text-ink-muted">Это все переписки</Text>
 						</View>
 					) : null
 				}

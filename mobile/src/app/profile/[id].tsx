@@ -44,7 +44,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export default function PublicProfileScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const {
     id,
     name,
@@ -455,7 +455,7 @@ export default function PublicProfileScreen() {
       >
         {/* Profile Gradient Card with Sweep Animation */}
         <AnimatedLinearGradient
-          colors={['#FF8E53', '#FF5A1F', '#FF2D55']}
+          colors={isDark ? ['#8C4E2D', '#3B1E30', '#1A0D1D'] : ['#FF8E53', '#FF5A1F', '#FF2D55']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{

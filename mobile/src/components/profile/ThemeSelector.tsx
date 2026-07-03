@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { useThemeStore, type ThemePreference } from '@/store/theme';
@@ -12,13 +13,45 @@ const OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionic
 ];
 
 /**
- * "Оформление" card on the profile screen: light / dark / system segmented
+ * \"Оформление\" card on the profile screen: light / dark / system segmented
  * control backed by the persisted theme store.
+ *
+ * On each tap the button's on-screen center is measured and passed to
+ * startThemeTransition() so the root circular-reveal overlay can originate
+ * the animation from exactly that point.
  */
 export function ThemeSelector() {
   const preference = useThemeStore((s) => s.preference);
-  const setPreference = useThemeStore((s) => s.setPreference);
+  const transition = useThemeStore((s) => s.transition);
+  const startThemeTransition = useThemeStore((s) => s.startThemeTransition);
   const { palette } = useAppTheme();
+
+  // One ref per option — used to measure the button's page coordinates.
+  const buttonRefs = useRef<Record<ThemePreference, View | null>>({
+    light: null,
+    dark: null,
+    system: null,
+  });
+
+  const handleOptionPress = (value: ThemePreference) => {
+    // No-op if already selected or a transition is in progress.
+    if (value === preference || transition.active) return;
+
+    const ref = buttonRefs.current[value];
+    if (!ref) {
+      // Fallback: switch without animation (should never happen).
+      startThemeTransition({ x: 0, y: 0 }, value);
+      return;
+    }
+
+    ref.measure((_x, _y, width, height, pageX, pageY) => {
+      const origin = {
+        x: pageX + width / 2,
+        y: pageY + height / 2,
+      };
+      startThemeTransition(origin, value);
+    });
+  };
 
   return (
     <View
@@ -34,10 +67,13 @@ export function ThemeSelector() {
           return (
             <Pressable
               key={option.value}
+              ref={(ref) => {
+                buttonRefs.current[option.value] = ref as View | null;
+              }}
               accessibilityRole="radio"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`Тема: ${option.label}`}
-              onPress={() => setPreference(option.value)}
+              onPress={() => handleOptionPress(option.value)}
               className={`h-10 flex-1 flex-row items-center justify-center gap-1.5 rounded-[9px] ${
                 active ? 'bg-surface' : ''
               }`}
