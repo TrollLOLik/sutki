@@ -311,6 +311,8 @@ SELECT
   h.events_allowed,
   h.created_at,
   h.updated_at,
+  h.reviews_summary,
+  h.location_summary,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -374,6 +376,8 @@ type GetHouseByIDRow struct {
 	EventsAllowed      *string
 	CreatedAt          pgtype.Timestamp
 	UpdatedAt          pgtype.Timestamp
+	ReviewsSummary     *string
+	LocationSummary    *string
 	Rating             float64
 	ReviewsCount       int32
 	OwnerName          *string
@@ -415,6 +419,8 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.EventsAllowed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReviewsSummary,
+		&i.LocationSummary,
 		&i.Rating,
 		&i.ReviewsCount,
 		&i.OwnerName,
@@ -1043,6 +1049,38 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateHouseLocationSummary = `-- name: UpdateHouseLocationSummary :exec
+UPDATE house
+SET location_summary = $2
+WHERE id = $1
+`
+
+type UpdateHouseLocationSummaryParams struct {
+	ID              int32
+	LocationSummary *string
+}
+
+func (q *Queries) UpdateHouseLocationSummary(ctx context.Context, arg UpdateHouseLocationSummaryParams) error {
+	_, err := q.db.Exec(ctx, updateHouseLocationSummary, arg.ID, arg.LocationSummary)
+	return err
+}
+
+const updateHouseReviewsSummary = `-- name: UpdateHouseReviewsSummary :exec
+UPDATE house
+SET reviews_summary = $2
+WHERE id = $1
+`
+
+type UpdateHouseReviewsSummaryParams struct {
+	ID             int32
+	ReviewsSummary *string
+}
+
+func (q *Queries) UpdateHouseReviewsSummary(ctx context.Context, arg UpdateHouseReviewsSummaryParams) error {
+	_, err := q.db.Exec(ctx, updateHouseReviewsSummary, arg.ID, arg.ReviewsSummary)
+	return err
 }
 
 const userHasConfirmedBookingForHouse = `-- name: UserHasConfirmedBookingForHouse :one

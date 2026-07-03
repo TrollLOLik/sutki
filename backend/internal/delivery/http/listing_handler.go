@@ -107,6 +107,8 @@ type listingDetailDTO struct {
 	PetsAllowed        *string    `json:"pets_allowed"`
 	ChildrenAllowed    *string    `json:"children_allowed"`
 	EventsAllowed      *string    `json:"events_allowed"`
+	ReviewsSummary     *string    `json:"reviews_summary"`
+	LocationSummary    *string    `json:"location_summary"`
 }
 
 type listResponse struct {
@@ -413,6 +415,8 @@ func (h *ListingHandler) detailDTO(hs domain.House, exactCoords bool) listingDet
 		PetsAllowed:     hs.PetsAllowed,
 		ChildrenAllowed: hs.ChildrenAllowed,
 		EventsAllowed:   hs.EventsAllowed,
+		ReviewsSummary:  hs.ReviewsSummary,
+		LocationSummary: hs.LocationSummary,
 	}
 }
 

@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { MotiView } from 'moti';
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -13,12 +12,16 @@ import Animated, {
   withSpring,
   Easing,
   interpolateColor,
+  interpolate,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabBarStore } from '@/store/tabbar';
 import { palette } from '@/theme/tokens';
 import { requireAuth } from '@/lib/requireAuth';
+
+export const TAB_BAR_HEIGHT = 49;
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -38,14 +41,17 @@ const TAB_META: Record<string, TabMeta> = {
 const LEFT_TABS = ['index', 'map'];
 const RIGHT_TABS = ['messages', 'profile'];
 
+/* ─────────────────────────── TabButton ─────────────────────────── */
+
 interface TabButtonProps {
   focused: boolean;
   meta: TabMeta;
   onPress: () => void;
   reduceMotion: boolean;
+  mapTransition: SharedValue<number>;
 }
 
-function TabButton({ focused, meta, onPress, reduceMotion }: TabButtonProps) {
+function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabButtonProps) {
   const focusAnim = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
@@ -60,56 +66,88 @@ function TabButton({ focused, meta, onPress, reduceMotion }: TabButtonProps) {
     }
   }, [focused, reduceMotion]);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    const scale = 1 + focusAnim.value * 0.12;
-    
+  /* Icon scale on focus */
+  const iconScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + focusAnim.value * 0.12 }],
+  }));
+
+  const activeIconOpacity = useAnimatedStyle(() => ({
+    opacity: focusAnim.value,
+  }));
+
+  const inactiveIconOpacity = useAnimatedStyle(() => ({
+    opacity: 1 - focusAnim.value,
+  }));
+
+  const textColorStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(focusAnim.value, [0, 1], [palette.inkMuted, palette.primary]),
+  }));
+
+  /*
+   * Card: grows from 28 → 48 px, gains white background, border,
+   * rounded corners, and shadow. Layout (flex: 1 on the slot) never
+   * changes, so no janky reflows.
+   */
+  const cardStyle = useAnimatedStyle(() => {
+    const size = interpolate(mapTransition.value, [0, 1], [28, 48]);
     return {
-      transform: [{ scale }],
+      width: size,
+      height: size,
+      // Always a perfect circle — no square shape mid-transition
+      borderRadius: size / 2,
+      // Interpolate from rgba(255,255,255,0) NOT 'transparent' (which RN parses
+      // as rgba(0,0,0,0) and produces a gray smear mid-transition)
+      backgroundColor: interpolateColor(
+        mapTransition.value,
+        [0, 0.5, 1],
+        ['rgba(255,255,255,0)', 'rgba(255,255,255,0)', 'rgba(255,255,255,1)'],
+      ),
+      // Border fades in only in the final 30% of the transition
+      borderWidth: interpolate(mapTransition.value, [0, 0.7, 1], [0, 0, 1]),
+      borderColor: interpolateColor(
+        mapTransition.value,
+        [0, 0.7, 1],
+        ['rgba(236,236,236,0)', 'rgba(236,236,236,0)', 'rgba(236,236,236,1)'],
+      ),
+      // Shadow appears only at the very end — no phantom squares mid-flight
+      shadowColor: palette.ink,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: interpolate(mapTransition.value, [0, 0.8, 1], [0, 0, 0.12]),
+      shadowRadius: interpolate(mapTransition.value, [0, 0.8, 1], [0, 0, 6]),
+      elevation: interpolate(mapTransition.value, [0, 0.8, 1], [0, 0, 3]),
     };
   });
 
-  const activeIconStyle = useAnimatedStyle(() => {
-    return {
-      opacity: focusAnim.value,
-    };
-  });
-
-  const inactiveIconStyle = useAnimatedStyle(() => {
-    return {
-      opacity: 1 - focusAnim.value,
-    };
-  });
-
-  const textStyle = useAnimatedStyle(() => {
-    const color = interpolateColor(
-      focusAnim.value,
-      [0, 1],
-      [palette.inkMuted, palette.primary]
-    );
-
-    return {
-      color,
-    };
-  });
+  /* Label fades & collapses in map mode */
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(mapTransition.value, [0, 0.35], [1, 0]),
+    maxHeight: interpolate(mapTransition.value, [0, 1], [16, 0]),
+    marginTop: interpolate(mapTransition.value, [0, 1], [4, 0]),
+  }));
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={focused ? { selected: true } : {}}
       onPress={onPress}
-      className="flex-1 items-center justify-end gap-1 pt-2 pb-1 active:opacity-70">
-      <Animated.View style={[{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }, animatedStyle]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, inactiveIconStyle]}>
-          <Ionicons name={meta.icon} size={24} color={palette.inkMuted} />
-        </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }, activeIconStyle]}>
-          <Ionicons name={meta.activeIcon} size={24} color={palette.primary} />
+      style={styles.tabSlot}>
+      <Animated.View style={[styles.cardBase, cardStyle]}>
+        <Animated.View style={[styles.iconWrap, iconScaleStyle]}>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.iconCenter, inactiveIconOpacity]}>
+            <Ionicons name={meta.icon} size={24} color={palette.inkMuted} />
+          </Animated.View>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.iconCenter, activeIconOpacity]}>
+            <Ionicons name={meta.activeIcon} size={24} color={palette.primary} />
+          </Animated.View>
         </Animated.View>
       </Animated.View>
       <Animated.Text
+        numberOfLines={1}
         style={[
-          { fontSize: 11, fontWeight: focused ? '600' : '500' },
-          textStyle,
+          styles.tabLabel,
+          { fontWeight: focused ? '600' : '500' },
+          textColorStyle,
+          labelStyle,
         ]}>
         {meta.label}
       </Animated.Text>
@@ -117,32 +155,42 @@ function TabButton({ focused, meta, onPress, reduceMotion }: TabButtonProps) {
   );
 }
 
+/* ──────────────────────── CustomTabBar ──────────────────────── */
+
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const [pressed, setPressed] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const pulse = useSharedValue(0);
   const rotation = useSharedValue(0);
+  const centerScale = useSharedValue(1);
+  const centerRotate = useSharedValue(0);
+  const shimmer = useSharedValue(0);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => {
-      sub.remove();
-    };
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.linear }),
-      -1,
-      false
-    );
+    // Gradient background: steady linear spin
     rotation.value = withRepeat(
       withTiming(360, { duration: 4000, easing: Easing.linear }),
       -1,
-      false
+      false,
+    );
+    // Pulse ring: ease-out expansion, then jump back
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    // Shimmer: smooth ease-in-out that reverses seamlessly
+    shimmer.value = withRepeat(
+      withTiming(1, { duration: 2500, easing: Easing.ease }),
+      -1,
+      true, // ← reverse: ping-pong so there's no jump
     );
   }, []);
 
@@ -155,9 +203,29 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
 
+  // Scale wraps the whole button — spring for organic bounce
+  const centerScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: centerScale.value }],
+  }));
+
+  // Rotation applied ONLY to the "+" icon glyph
+  const centerRotateStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${centerRotate.value}deg` }],
+  }));
+
+  // Shimmer beam travels across the circle diagonally
+  const shimmerStyle = useAnimatedStyle(() => {
+    const translateX = interpolate(shimmer.value, [0, 1], [-60, 60]);
+    return {
+      transform: [{ translateX }, { rotate: '30deg' }],
+    };
+  });
+
+  /* ── routing helpers ── */
   const routeByName = Object.fromEntries(state.routes.map((r) => [r.name, r] as const));
   const activeName = state.routes[state.index]?.name;
 
+  /* ── hide / show on scroll ── */
   const visible = useTabBarStore((s) => s.visible);
   const translateY = useSharedValue(0);
 
@@ -172,10 +240,46 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     });
   }, [visible, insets.bottom]);
 
-  const tabBarStyle = useAnimatedStyle(() => ({
+  /* ── map ↔ normal transition (spring for organic feel) ── */
+  const isMap = activeName === 'map';
+  const mapTransition = useSharedValue(isMap ? 1 : 0);
+
+  useEffect(() => {
+    mapTransition.value = withSpring(isMap ? 1 : 0, {
+      damping: 22,
+      stiffness: 200,
+      mass: 0.8,
+    });
+  }, [isMap]);
+
+  /* ── container animated styles ── */
+  const hideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
+  const containerBgStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      mapTransition.value,
+      [0, 1],
+      [palette.surface, 'transparent'],
+    ),
+  }));
+
+  const containerBorderStyle = useAnimatedStyle(() => ({
+    borderTopWidth: interpolate(mapTransition.value, [0, 1], [1, 0]),
+    borderTopColor: interpolateColor(
+      mapTransition.value,
+      [0, 1],
+      [palette.line, 'transparent'],
+    ),
+  }));
+
+  /* Center "+" lift animation */
+  const centerLiftStyle = useAnimatedStyle(() => ({
+    marginTop: interpolate(mapTransition.value, [0, 1], [-18, 0]),
+  }));
+
+  /* ── render helper ── */
   const renderTab = (name: string) => {
     const route = routeByName[name];
     const meta = TAB_META[name];
@@ -202,102 +306,164 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         meta={meta}
         onPress={onPress}
         reduceMotion={reduceMotion}
+        mapTransition={mapTransition}
       />
     );
   };
 
+  /* ── JSX ── */
   return (
     <Animated.View
       style={[
-        {
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-        },
-        tabBarStyle,
-      ]}
-      className="flex-row items-end border-t border-line bg-surface pb-1">
+        styles.container,
+        { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 },
+        hideStyle,
+        containerBgStyle,
+        containerBorderStyle,
+      ]}>
 
       {LEFT_TABS.map(renderTab)}
 
-      {/* Center "+" — raised, animated create-listing action */}
-      <View className="flex-1 items-center justify-end">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Разместить объявление"
-          onPressIn={() => setPressed(true)}
-          onPressOut={() => setPressed(false)}
-          onPress={() => {
-            if (requireAuth('listing')) {
-              router.push('/create');
-            }
-          }}
-          style={{ marginTop: -18 }}
-          className="items-center justify-center">
-          <Animated.View
-            style={[
-              {
-                position: 'absolute',
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: palette.primary,
-              },
-              pulseStyle,
-            ]}
-          />
-          <MotiView
-            animate={{ scale: pressed ? 0.86 : 1 }}
-            transition={{ type: 'timing', duration: 160 }}
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 24,
-              shadowColor: palette.primary,
-              shadowOpacity: 0.4,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 6,
-            }}>
-            <MotiView
-              animate={{ rotate: pressed ? '90deg' : '0deg' }}
-              transition={{ type: 'timing', duration: 160 }}
-              style={{
-                flex: 1,
-                borderRadius: 24,
-                overflow: 'hidden',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <Animated.View
-                style={[
-                  {
-                    position: 'absolute',
-                    width: 76,
-                    height: 76,
-                    top: -14,
-                    left: -14,
-                  },
-                  rotationStyle,
-                ]}>
+      {/* Center "+" — animated create-listing action */}
+      <View style={styles.tabSlot}>
+        <Animated.View style={centerLiftStyle}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Разместить объявление"
+            onPressIn={() => {
+              // Spring-in: quick compress with slight overshoot on release
+              centerScale.value = withSpring(0.88, { damping: 20, stiffness: 400 });
+              centerRotate.value = withSpring(45, { damping: 20, stiffness: 400 });
+            }}
+            onPressOut={() => {
+              // Bouncy spring-back
+              centerScale.value = withSpring(1, { damping: 12, stiffness: 250 });
+              centerRotate.value = withSpring(0, { damping: 12, stiffness: 250 });
+            }}
+            onPress={() => {
+              if (requireAuth('listing')) {
+                router.push('/create');
+              }
+            }}
+            style={styles.centerBtn}>
+
+            {/* Layer 1: Pulse ring — fully independent */}
+            <Animated.View style={[styles.pulseBg, pulseStyle]} />
+
+            {/* Layer 2: Main circle — spring-scales on press */}
+            <Animated.View style={[styles.gradientWrap, centerScaleStyle]}>
+
+              {/* Layer 3: Spinning gradient — always runs, clips to circle */}
+              <Animated.View style={[styles.gradientOversize, rotationStyle]}>
                 <LinearGradient
                   colors={['#FF8E53', '#FF5A1F', '#FF2D55', '#FF8E53']}
                   start={{ x: 0.0, y: 0.0 }}
                   end={{ x: 1.0, y: 1.0 }}
-                  style={{
-                    flex: 1,
-                  }}
+                  style={StyleSheet.absoluteFill}
                 />
               </Animated.View>
-              <Ionicons name="add" size={28} color="#FFFFFF" />
-            </MotiView>
-          </MotiView>
-        </Pressable>
+
+              {/* Layer 4: Shimmer beam — ping-pongs horizontally */}
+              <Animated.View style={[styles.shimmerBeam, shimmerStyle]}>
+                <LinearGradient
+                  colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
+
+              {/* Layer 5: Icon — rotates on press ONLY, nothing else */}
+              <Animated.View style={centerRotateStyle}>
+                <Ionicons name="add" size={28} color="#FFFFFF" />
+              </Animated.View>
+
+            </Animated.View>
+          </Pressable>
+        </Animated.View>
       </View>
 
       {RIGHT_TABS.map(renderTab)}
     </Animated.View>
   );
 }
+
+/* ──────────────────────────── Styles ──────────────────────────── */
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    overflow: 'visible',
+  },
+  tabSlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  cardBase: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabLabel: {
+    fontSize: 11,
+    overflow: 'hidden',
+  },
+  centerBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseBg: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: palette.primary,
+  },
+  // overflow:'hidden' clips the spinning gradient AND shimmer to the circle
+  // Shadow must live on a separate wrapper outside the clipping view (iOS)
+  gradientWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: palette.primary,
+    shadowColor: palette.primary,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gradientOversize: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    top: -16,
+    left: -16,
+  },
+  // Shimmer beam: a narrow strip that ping-pongs across the circle
+  shimmerBeam: {
+    position: 'absolute',
+    top: -8,
+    bottom: -8,
+    width: 22,
+  },
+});

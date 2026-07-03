@@ -66,6 +66,8 @@ export interface ListingDetail extends ListingCard {
   pets_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
   children_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
   events_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
+  reviews_summary?: string | null;
+  location_summary?: string | null;
 }
 
 export interface ListingsPage {

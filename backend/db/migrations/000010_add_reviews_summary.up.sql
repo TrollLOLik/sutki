@@ -1,0 +1,2 @@
+ALTER TABLE house ADD COLUMN IF NOT EXISTS reviews_summary text DEFAULT NULL;
+ALTER TABLE house ADD COLUMN IF NOT EXISTS location_summary text DEFAULT NULL;

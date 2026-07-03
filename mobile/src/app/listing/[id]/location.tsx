@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { View, Text, Pressable, Linking, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -34,22 +34,8 @@ function OrangePin() {
 export default function LocationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const mapRef = useRef<any>(null);
 
   const { data, isLoading, error } = useListing(id ? Number(id) : undefined);
-
-  useEffect(() => {
-    if (data?.lat && data?.lng && mapRef.current) {
-      mapRef.current.setCenter(
-        { lat: data.lat, lon: data.lng },
-        15, // zoom level
-        0,  // azimuth
-        0,  // tilt
-        0.5, // duration in seconds
-        'smooth'
-      );
-    }
-  }, [data]);
 
   if (isLoading) {
     return (
@@ -104,9 +90,9 @@ export default function LocationScreen() {
 
       {/* Yandex Map */}
       <YaMap
-        ref={mapRef}
         showUserPosition={false}
         style={styles.map}
+        initialRegion={{ lat: data.lat, lon: data.lng, zoom: 15 }}
       >
         {isFuzzed ? (
           <Circle

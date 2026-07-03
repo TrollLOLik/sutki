@@ -131,6 +131,8 @@ type House struct {
 	PetsAllowed     *string
 	ChildrenAllowed *string
 	EventsAllowed   *string
+	ReviewsSummary  *string
+	LocationSummary *string
 }
 
 type HouseCategory struct {

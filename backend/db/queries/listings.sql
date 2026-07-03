@@ -202,6 +202,8 @@ SELECT
   h.events_allowed,
   h.created_at,
   h.updated_at,
+  h.reviews_summary,
+  h.location_summary,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -396,3 +398,13 @@ SELECT EXISTS (
   WHERE user_id = @user_id AND house_id = @house_id
     AND status IN ('confirmed', 'active')
 )::boolean;
+
+-- name: UpdateHouseReviewsSummary :exec
+UPDATE house
+SET reviews_summary = $2
+WHERE id = $1;
+
+-- name: UpdateHouseLocationSummary :exec
+UPDATE house
+SET location_summary = $2
+WHERE id = $1;

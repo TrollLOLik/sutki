@@ -41,6 +41,9 @@ type House struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 
+	ReviewsSummary  *string
+	LocationSummary *string
+
 	// Rating is the average review score rounded to one decimal (0 when the
 	// listing has no published reviews); ReviewsCount is the published count.
 	Rating       float64

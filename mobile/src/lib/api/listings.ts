@@ -119,8 +119,11 @@ export function filtersToListParams(
 }
 
 /** Listings are public, so no Authorization header is attached. */
-export function fetchListings(params: ListListingsParams = {}): Promise<ListingsPage> {
-  return api.get<ListingsPage>(`/api/v1/listings${buildQuery(params)}`, { auth: false });
+export function fetchListings(
+  params: ListListingsParams = {},
+  signal?: AbortSignal,
+): Promise<ListingsPage> {
+  return api.get<ListingsPage>(`/api/v1/listings${buildQuery(params)}`, { auth: false, signal });
 }
 
 export function fetchListing(id: number): Promise<ListingDetail> {
@@ -133,7 +136,7 @@ export function useListings(
 ) {
   return useQuery({
     queryKey: listingKeys.list(params),
-    queryFn: () => fetchListings(params),
+    queryFn: ({ signal }) => fetchListings(params, signal),
     placeholderData: keepPreviousData,
     ...options,
   });

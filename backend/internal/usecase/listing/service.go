@@ -18,12 +18,13 @@ var ErrInvalidListing = errors.New("invalid listing")
 
 // Service implements listing read use cases over a ListingRepository.
 type Service struct {
-	repo    domain.ListingRepository
-	storage domain.FileStorage
+	repo         domain.ListingRepository
+	storage      domain.FileStorage
+	aiSummarizer domain.AISummarizer
 }
 
-func New(repo domain.ListingRepository, storage domain.FileStorage) *Service {
-	return &Service{repo: repo, storage: storage}
+func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer) *Service {
+	return &Service{repo: repo, storage: storage, aiSummarizer: aiSummarizer}
 }
 
 // ListResult is a page of active listings plus pagination metadata.
@@ -95,7 +96,24 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 	if err != nil {
 		return domain.House{}, err
 	}
+
+	// Trigger background location summary generation
+	if s.aiSummarizer != nil {
+		go func() {
+			bgCtx := context.Background()
+			_ = s.regenerateLocationSummary(bgCtx, id, in.City, in.Street)
+		}()
+	}
+
 	return s.Get(ctx, id)
+}
+
+func (s *Service) regenerateLocationSummary(ctx context.Context, id int32, city, street string) error {
+	summary, err := s.aiSummarizer.GenerateLocationSummary(ctx, city, street, "")
+	if err != nil {
+		return err
+	}
+	return s.repo.UpdateLocationSummary(ctx, id, &summary)
 }
 
 // ListMine returns a page of listings owned by ownerID (any status), newest
@@ -187,10 +205,34 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		return domain.House{}, ErrInvalidListing
 	}
 
-	err := s.repo.Update(ctx, id, in)
+	// Fetch old listing to see if coordinates or address changed
+	oldHouse, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return domain.House{}, err
 	}
+
+	err = s.repo.Update(ctx, id, in)
+	if err != nil {
+		return domain.House{}, err
+	}
+
+	addressChanged := oldHouse.Street != in.Street || 
+		oldHouse.HouseNumber != in.HouseNumber || 
+		oldHouse.City != in.City || 
+		(oldHouse.Lat == nil && in.Lat != nil) || 
+		(oldHouse.Lat != nil && in.Lat == nil) || 
+		(oldHouse.Lat != nil && in.Lat != nil && *oldHouse.Lat != *in.Lat) || 
+		(oldHouse.Lng == nil && in.Lng != nil) || 
+		(oldHouse.Lng != nil && in.Lng == nil) || 
+		(oldHouse.Lng != nil && in.Lng != nil && *oldHouse.Lng != *in.Lng)
+
+	if addressChanged && s.aiSummarizer != nil {
+		go func() {
+			bgCtx := context.Background()
+			_ = s.regenerateLocationSummary(bgCtx, id, in.City, in.Street)
+		}()
+	}
+
 	return s.Get(ctx, id)
 }
 

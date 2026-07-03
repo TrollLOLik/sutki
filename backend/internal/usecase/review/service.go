@@ -17,11 +17,13 @@ const (
 
 // Service implements the listing reviews use cases.
 type Service struct {
-	repo domain.ReviewRepository
+	repo         domain.ReviewRepository
+	listingRepo  domain.ListingRepository
+	aiSummarizer domain.AISummarizer
 }
 
-func New(repo domain.ReviewRepository) *Service {
-	return &Service{repo: repo}
+func New(repo domain.ReviewRepository, listingRepo domain.ListingRepository, aiSummarizer domain.AISummarizer) *Service {
+	return &Service{repo: repo, listingRepo: listingRepo, aiSummarizer: aiSummarizer}
 }
 
 // ListResult is a page of a listing's reviews plus the rating summary.
@@ -86,7 +88,48 @@ func (s *Service) Create(ctx context.Context, r domain.NewReview) (domain.Review
 	if !exists {
 		return domain.Review{}, domain.ErrNotFound
 	}
-	return s.repo.Create(ctx, r)
+	created, err := s.repo.Create(ctx, r)
+	if err != nil {
+		return domain.Review{}, err
+	}
+
+	// Trigger background reviews summary regeneration
+	if s.aiSummarizer != nil && s.listingRepo != nil {
+		go func() {
+			bgCtx := context.Background()
+			_ = s.regenerateReviewsSummary(bgCtx, r.HouseID)
+		}()
+	}
+
+	return created, nil
+}
+
+func (s *Service) regenerateReviewsSummary(ctx context.Context, houseID int32) error {
+	count, err := s.repo.CountByHouse(ctx, houseID)
+	if err != nil {
+		return err
+	}
+	if count < 3 {
+		return nil
+	}
+
+	// Fetch the last 15 reviews
+	reviews, err := s.repo.ListByHouse(ctx, houseID, 15, 0)
+	if err != nil {
+		return err
+	}
+
+	var reviewTexts []string
+	for _, rev := range reviews {
+		reviewTexts = append(reviewTexts, rev.Body)
+	}
+
+	summary, err := s.aiSummarizer.GenerateReviewsSummary(ctx, reviewTexts)
+	if err != nil {
+		return err
+	}
+
+	return s.listingRepo.UpdateReviewsSummary(ctx, houseID, &summary)
 }
 
 // UserReviewsResult is a page of reviews left by a user or received by a host.

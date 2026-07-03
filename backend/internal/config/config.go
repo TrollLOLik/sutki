@@ -33,6 +33,12 @@ type Config struct {
 
 	DadataAPIKey string
 
+	// LLM (OpenAI-compatible) config
+	LLMBaseURL string
+	LLMAPIKey  string
+	LLMModel   string
+	LLMTimeout time.Duration
+
 	// Centrifugo config
 	CentrifugoURL        string
 	CentrifugoKey        string
@@ -69,6 +75,11 @@ func Load() (Config, error) {
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
+
+		LLMBaseURL:   getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
+		LLMAPIKey:    os.Getenv("LLM_API_KEY"),
+		LLMModel:     getEnv("LLM_MODEL", "gpt-3.5-turbo"),
+		LLMTimeout:   getDuration("LLM_TIMEOUT", 15*time.Second),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
 		CentrifugoKey:        getEnv("CENTRIFUGO_API_KEY", ""),

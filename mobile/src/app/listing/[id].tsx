@@ -599,6 +599,21 @@ export default function ListingDetailScreen() {
                 </View>
               ) : null}
 
+              {/* AI Reviews Summary Card */}
+              {data.reviews_summary ? (
+                <View className="border-t border-line pt-4 gap-3">
+                  <View className="flex-row items-center gap-1.5">
+                    <Ionicons name="sparkles" size={16} color={palette.primary} />
+                    <Text className="text-base font-bold text-ink">Что говорят гости (ИИ)</Text>
+                  </View>
+                  <View className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                    <Text className="text-sm leading-5 text-ink-secondary">
+                      {data.reviews_summary}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
               {/* Владелец жилья (Avito Style) */}
               <View className="border-t border-line pt-4 gap-3">
                 <Text className="text-base font-bold text-ink">Владелец жилья</Text>
@@ -705,16 +720,12 @@ export default function ListingDetailScreen() {
                   <Text className="text-base font-bold text-ink">На карте</Text>
                   <Pressable
                     onPress={() => router.push(`/listing/${id}/location`)}
-                    className="h-40 rounded-2xl border border-line/60 overflow-hidden relative"
+                    className="h-64 rounded-2xl border border-line/60 overflow-hidden relative"
                   >
                     <YaMap
                       style={{ width: '100%', height: '100%' }}
                       showUserPosition={false}
-                      ref={(ref) => {
-                        if (ref && data.lat != null && data.lng != null) {
-                          ref.setCenter({ lat: data.lat, lon: data.lng }, 14);
-                        }
-                      }}
+                      initialRegion={{ lat: data.lat, lon: data.lng, zoom: 14 }}
                     >
                       {data.radius > 0 ? (
                         <Circle
@@ -731,6 +742,13 @@ export default function ListingDetailScreen() {
                     {/* Intercept touches to direct them to navigate */}
                     <View style={StyleSheet.absoluteFill} className="bg-transparent" />
                   </Pressable>
+                  {data.location_summary ? (
+                    <View className="mt-1 bg-surface-muted px-4 py-3 rounded-2xl border border-line/60">
+                      <Text className="text-sm leading-5 text-ink-secondary">
+                        {data.location_summary}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               ) : null}
 

@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -29,6 +29,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Get("/{id}", listingHandler.get)
 			r.Get("/{id}/availability", bookingHandler.Availability)
 			r.Get("/{id}/reviews", reviewHandler.List)
+			r.Get("/{id}/reviews-summary", aiHandler.GetReviewsSummary)
+			r.Get("/{id}/location-summary", aiHandler.GetLocationSummary)
 
 			// Authenticated endpoints under /listings
 			r.Group(func(r chi.Router) {
@@ -96,6 +98,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Route("/favorites", favoriteHandler.Routes)
 			r.Route("/chat", chatHandler.Routes)
 			r.Post("/media/presign", mediaHandler.PresignUpload)
+			r.Post("/ai/listing-description", aiHandler.GenerateDescription)
 		})
 	})
 

@@ -288,6 +288,8 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		EventsAllowed:   row.EventsAllowed,
 		CreatedAt:      row.CreatedAt.Time,
 		UpdatedAt:      row.UpdatedAt.Time,
+		ReviewsSummary:  row.ReviewsSummary,
+		LocationSummary: row.LocationSummary,
 		Rating:         row.Rating,
 		ReviewsCount:   row.ReviewsCount,
 	}
@@ -435,6 +437,22 @@ func (r *ListingRepo) UserHasConfirmedBooking(ctx context.Context, userID, house
 	return r.q.UserHasConfirmedBookingForHouse(ctx, sqlc.UserHasConfirmedBookingForHouseParams{
 		UserID:  &userID,
 		HouseID: &houseID,
+	})
+}
+
+// UpdateReviewsSummary implements domain.ListingRepository.
+func (r *ListingRepo) UpdateReviewsSummary(ctx context.Context, id int32, summary *string) error {
+	return r.q.UpdateHouseReviewsSummary(ctx, sqlc.UpdateHouseReviewsSummaryParams{
+		ID:             id,
+		ReviewsSummary: summary,
+	})
+}
+
+// UpdateLocationSummary implements domain.ListingRepository.
+func (r *ListingRepo) UpdateLocationSummary(ctx context.Context, id int32, summary *string) error {
+	return r.q.UpdateHouseLocationSummary(ctx, sqlc.UpdateHouseLocationSummaryParams{
+		ID:              id,
+		LocationSummary: summary,
 	})
 }
 

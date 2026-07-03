@@ -23,9 +23,10 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
-	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 )
 
 func main() {
@@ -88,8 +89,11 @@ func main() {
 		return publicStorage.PublicURL(key)
 	})
 
+	llmClient := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, cfg.LLMTimeout)
+	aiSummarizer := llm.NewSummarizer(llmClient)
+
 	listingRepo := postgres.NewListingRepo(queries)
-	listingSvc := listing.New(listingRepo, publicStorage)
+	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
 	userRepo := postgres.NewUserRepo(queries)
@@ -127,8 +131,10 @@ func main() {
 	favoriteHandler := httpdelivery.NewFavoriteHandler(favoriteSvc, cfg.MediaBaseURL)
 
 	reviewRepo := postgres.NewReviewRepo(queries)
-	reviewSvc := review.New(reviewRepo)
+	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
+
+	aiHandler := httpdelivery.NewAIHandler(llmClient, listingSvc, true)
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
@@ -146,7 +152,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}

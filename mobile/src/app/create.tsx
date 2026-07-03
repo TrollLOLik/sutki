@@ -18,6 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
+import { api } from '@/lib/api/client';
+import { env } from '@/lib/env';
+import { storeRef } from '@/lib/api/store-ref';
 
 import { Button, Chip, Input } from '@/components/ui';
 import {
@@ -31,7 +34,7 @@ import { useListing } from '@/lib/api/listings';
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
 import { useCreateListingStore } from '@/store/create-listing';
 import { palette } from '@/theme/tokens';
-import YaMap, { Marker, Search } from 'react-native-yamap-plus';
+import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yamap-plus';
 import * as Location from 'expo-location';
 
 const TOTAL_STEPS = 6;
@@ -105,9 +108,110 @@ export default function CreateListingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [published, setPublished] = useState(false);
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [previousDescription, setPreviousDescription] = useState('');
 
   const [loadedEdit, setLoadedEdit] = useState(false);
   const [uploadStatuses, setUploadStatuses] = useState<Record<string, { progress: number; error: boolean; key?: string }>>({});
+
+  const generateAIDescription = async (action: string = 'generate') => {
+    if (action === 'generate' && !draft.city) {
+      Alert.alert('Недостаточно данных', 'Пожалуйста, укажите город на первом шаге, чтобы составить описание.');
+      return;
+    }
+    if (action === 'neighborhood' && !draft.city) {
+      Alert.alert('Недостаточно данных', 'Пожалуйста, укажите город на первом шаге.');
+      return;
+    }
+
+    const currentText = draft.description || '';
+    setPreviousDescription(currentText);
+    setIsGeneratingDescription(true);
+    draft.setField('description', ''); // Start with empty field to stream text into
+
+    try {
+      const selectedAmenities = (services ?? [])
+        .filter((s) => draft.serviceIds.includes(s.id))
+        .map((s) => s.name);
+
+      const rulesList: string[] = [];
+      if (draft.smokingAllowed === 'allowed') rulesList.push('Можно курить');
+      else if (draft.smokingAllowed === 'on_balcony') rulesList.push('Курение разрешено только на балконе');
+      else if (draft.smokingAllowed === 'forbidden') rulesList.push('Курение запрещено');
+
+      if (draft.petsAllowed === 'allowed') rulesList.push('Можно с питомцами');
+      else if (draft.petsAllowed === 'on_request') rulesList.push('Питомцы по согласованию');
+      else if (draft.petsAllowed === 'forbidden') rulesList.push('Без питомцев');
+
+      if (draft.childrenAllowed === 'allowed') rulesList.push('Можно с детьми');
+      else if (draft.childrenAllowed === 'on_request') rulesList.push('Дети по согласованию');
+      else if (draft.childrenAllowed === 'forbidden') rulesList.push('Без детей');
+
+      if (draft.eventsAllowed === 'allowed') rulesList.push('Разрешены вечеринки');
+      else if (draft.eventsAllowed === 'on_request') rulesList.push('Вечеринки по согласованию');
+      else if (draft.eventsAllowed === 'forbidden') rulesList.push('Без вечеринок');
+
+      const token = storeRef.getState?.()?.accessToken;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${env.apiUrl}/api/v1/ai/listing-description`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          city: draft.city,
+          street: draft.street,
+          rooms: draft.countRoom,
+          area: parseInt(draft.area) || 0,
+          price: parseInt(draft.price) || 0,
+          amenities: selectedAmenities,
+          house_rules: rulesList,
+          draft_description: currentText,
+          action,
+          stream: true,
+          category: (categories ?? []).find((c) => draft.categoryIds.includes(c.id))?.name || 'Жилье',
+          max_guests: parseInt(draft.maxGuests) || 0,
+          check_in_after: draft.checkInAfter,
+          check_out_before: draft.checkOutBefore,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ошибка API: ${response.status}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is empty');
+      }
+
+      const reader = (response.body as any).getReader();
+      const decoder = new TextDecoder('utf-8');
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulated += chunk;
+        draft.setField('description', accumulated);
+      }
+    } catch (err: any) {
+      console.warn('[CreateListing] AI generation error:', err);
+      Alert.alert('ИИ временно недоступен', err.message || 'Не удалось обработать текст. Попробуйте позже.');
+      // Restore description back if failed
+      draft.setField('description', currentText);
+    } finally {
+      setIsGeneratingDescription(false);
+    }
+  };
 
   useEffect(() => {
     if (isEditing && editListing && !loadedEdit) {
@@ -254,17 +358,25 @@ export default function CreateListingScreen() {
   const [suggestedAddressText, setSuggestedAddressText] = useState<string | null>(null);
   const [suggestedCoords, setSuggestedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [suggestedComponents, setSuggestedComponents] = useState<any[] | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   const centerMap = (lat: number, lng: number, zoom = 16) => {
     if (mapRef.current) {
       isProgrammaticRef.current = true;
-      mapRef.current.setCenter({ lat, lon: lng }, zoom, 0, 0, 0.4, 'smooth');
+      mapRef.current.setCenter({ lat, lon: lng }, zoom, 0, 0, 0.4, Animation.SMOOTH);
     }
   };
 
-  // Center map on Step 1 load or when address/coordinates update
+  const hasCenteredRef = useRef(false);
+
+  // Center map once when Step 1 loads
   useEffect(() => {
-    if (step === 1 && mapReady && mapRef.current) {
+    if (step !== 1) {
+      hasCenteredRef.current = false;
+      return;
+    }
+    if (mapReady && mapRef.current && !hasCenteredRef.current) {
+      hasCenteredRef.current = true;
       if (draft.lat != null && draft.lng != null) {
         const t = setTimeout(() => {
           centerMap(draft.lat!, draft.lng!, 16);
@@ -285,13 +397,13 @@ export default function CreateListingScreen() {
               }
             })
             .catch((err) => {
-              console.warn('[CreateListing] Address geocode error:', err);
+              console.warn('[CreateListing] Initial geocode error:', err);
             });
         }, 150);
         return () => clearTimeout(t);
       }
     }
-  }, [step, draft.city, draft.street, draft.houseNumber, draft.lat, draft.lng, mapReady]);
+  }, [step, mapReady, draft.city, draft.street, draft.houseNumber, draft.lat, draft.lng]);
 
   // Load street suggestions
   useEffect(() => {
@@ -347,7 +459,7 @@ export default function CreateListingScreen() {
     if (lat == null || lon == null) return;
 
     try {
-      const res = await Search.geocodePoint({ lat, lon });
+      const res = await Search.searchPoint({ lat, lon }, 18);
       if (res && res.formatted) {
         setSuggestedAddressText(res.formatted);
         setSuggestedCoords({ lat, lng: lon });
@@ -371,31 +483,57 @@ export default function CreateListingScreen() {
 
     suggestedComponents.forEach((c) => {
       const name = c.name;
-      const kind = String(c.kind).toLowerCase();
+      const kindVal = c.kind;
 
-      // UNKNOWN=0, COUNTRY=1, REGION=2, PROVINCE=3, AREA=4, LOCALITY=5, DISTRICT=6, STREET=7, HOUSE=8
-      if (kind === 'locality' || kind === '5') {
+      const isKind = (typeStr: string, typeEnum: AddressKind) => {
+        if (typeof kindVal === 'number') return kindVal === typeEnum;
+        if (typeof kindVal === 'string') {
+          const lower = kindVal.toLowerCase();
+          return lower === typeStr || lower === String(typeEnum);
+        }
+        return false;
+      };
+
+      if (isKind('locality', AddressKind.LOCALITY)) {
         locality = name;
-      } else if (kind === 'street' || kind === '7') {
+      } else if (isKind('street', AddressKind.STREET) || isKind('route', AddressKind.ROUTE)) {
         street = name;
-      } else if (kind === 'house' || kind === '8') {
+      } else if (isKind('house', AddressKind.HOUSE)) {
         house = name;
-      } else if (kind === 'country' || kind === '1') {
+      } else if (isKind('country', AddressKind.COUNTRY)) {
         country = name;
-      } else if (kind === 'region' || kind === '2' || kind === 'province' || kind === '3') {
+      } else if (isKind('region', AddressKind.REGION) || isKind('province', AddressKind.PROVINCE)) {
         region = name;
-      } else if (kind === 'area' || kind === '4') {
+      } else if (isKind('area', AddressKind.AREA)) {
         area = name;
-      } else if (kind === 'district' || kind === '6') {
+      } else if (isKind('district', AddressKind.DISTRICT)) {
         district = name;
       }
     });
 
     const finalCity = locality || district || area || region || country || '';
     
+    // Clean up street name to remove designator prefixes/suffixes (e.g. "улица", "ул.")
+    let finalStreet = street.trim();
+    const designatorsPattern = /^(улица|ул\.?|проспект|просп\.?|пр-кт|пр\.?|переулок|пер\.?|проезд|пр-д\.?|бульвар|б-вар|б-р\.?|набережная|наб\.?|шоссе|ш\.?)\s+|[\s,]+(улица|ул\.?|проспект|просп\.?|пр-кт|пр\.?|переулок|пер\.?|проезд|пр-д\.?|бульвар|б-вар|б-р\.?|набережная|наб\.?|шоссе|ш\.?)$/gi;
+    finalStreet = finalStreet.replace(designatorsPattern, '').trim();
+
+    // Clean up house number if it contains street name or comma
+    let finalHouse = house.trim();
+    if (finalHouse.includes(',')) {
+      finalHouse = finalHouse.split(',').pop()?.trim() || '';
+    }
+    if (street && finalHouse.toLowerCase().includes(street.toLowerCase())) {
+      finalHouse = finalHouse.replace(new RegExp(street, 'gi'), '').trim();
+    }
+    if (finalStreet && finalHouse.toLowerCase().includes(finalStreet.toLowerCase())) {
+      finalHouse = finalHouse.replace(new RegExp(finalStreet, 'gi'), '').trim();
+    }
+    finalHouse = finalHouse.replace(/^[\s,]+|[\s,]+$/g, '');
+
     draft.setField('city', finalCity);
-    draft.setField('street', street);
-    draft.setField('houseNumber', house);
+    draft.setField('street', finalStreet);
+    draft.setField('houseNumber', finalHouse);
 
     draft.setField('lat', suggestedCoords.lat);
     draft.setField('lng', suggestedCoords.lng);
@@ -407,6 +545,7 @@ export default function CreateListingScreen() {
   };
 
   const locateMe = async () => {
+    setIsLocating(true);
     try {
       const servicesEnabled = await Location.hasServicesEnabledAsync();
       if (!servicesEnabled) {
@@ -423,18 +562,28 @@ export default function CreateListingScreen() {
         return;
       }
 
-      // Try last known position first (fastest, works on emulators without mock position)
-      let loc = await Location.getLastKnownPositionAsync();
-      
-      // Fallback to active query if last known is unavailable
-      if (!loc) {
-        loc = await Location.getCurrentPositionAsync({ 
-          accuracy: Location.Accuracy.Balanced,
-        });
-      }
+      // Race position request against 3s timeout
+      const getPositionPromise = (async () => {
+        let tempLoc = await Location.getLastKnownPositionAsync();
+        if (!tempLoc) {
+          tempLoc = await Location.getCurrentPositionAsync({ 
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
+        return tempLoc;
+      })();
+
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 3000)
+      );
+
+      const loc = await Promise.race([getPositionPromise, timeoutPromise]);
 
       if (!loc) {
-        Alert.alert('Ошибка', 'Не удалось определить текущие координаты.');
+        Alert.alert(
+          'Не удалось получить геопозицию',
+          'Убедитесь, что GPS включен, у устройства есть доступ к спутникам и повторите попытку.'
+        );
         return;
       }
 
@@ -443,7 +592,7 @@ export default function CreateListingScreen() {
 
       centerMap(lat, lng, 16);
 
-      const res = await Search.geocodePoint({ lat, lon: lng });
+      const res = await Search.searchPoint({ lat, lon: lng }, 18);
       if (res && res.formatted) {
         setSuggestedAddressText(res.formatted);
         setSuggestedCoords({ lat, lng });
@@ -455,6 +604,8 @@ export default function CreateListingScreen() {
         'Ошибка геолокации',
         'Не удалось получить геопозицию. Убедитесь, что службы геолокации включены и у приложения есть доступ.'
       );
+    } finally {
+      setIsLocating(false);
     }
   };
 
@@ -711,6 +862,9 @@ export default function CreateListingScreen() {
                           Search.geocodeAddress(c)
                             .then((point) => {
                               if (point && point.lat != null && point.lon != null) {
+                                draft.setField('lat', point.lat);
+                                draft.setField('lng', point.lon);
+                                draft.setField('qcGeo', 3); // City level
                                 centerMap(point.lat, point.lon, 11);
                               }
                             })
@@ -748,6 +902,9 @@ export default function CreateListingScreen() {
                           Search.geocodeAddress(`${draft.city.trim()}, ${val}`)
                             .then((point) => {
                               if (point && point.lat != null && point.lon != null) {
+                                draft.setField('lat', point.lat);
+                                draft.setField('lng', point.lon);
+                                draft.setField('qcGeo', 2); // Street level
                                 centerMap(point.lat, point.lon, 14);
                               }
                             })
@@ -834,9 +991,14 @@ export default function CreateListingScreen() {
                 {/* Locate Me FAB */}
                 <Pressable
                   onPress={locateMe}
+                  disabled={isLocating}
                   className="absolute top-3 right-3 bg-surface border border-line h-10 w-10 rounded-full items-center justify-center shadow active:bg-surface-muted"
                 >
-                  <Ionicons name="locate-outline" size={20} color={palette.ink} />
+                  {isLocating ? (
+                    <ActivityIndicator size="small" color={palette.primary} />
+                  ) : (
+                    <Ionicons name="locate-outline" size={20} color={palette.ink} />
+                  )}
                 </Pressable>
 
                 {/* Non-modal geocoded address banner */}
@@ -913,7 +1075,26 @@ export default function CreateListingScreen() {
 
           {step === 3 && (
             <View className="gap-3">
-              <Text className="text-base font-semibold text-ink">Расскажите о жилье</Text>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-semibold text-ink">Расскажите о жилье</Text>
+                <TouchableOpacity
+                  onPress={() => generateAIDescription(draft.description && draft.description.trim().length > 0 ? 'improve' : 'generate')}
+                  disabled={isGeneratingDescription}
+                  className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20"
+                  activeOpacity={0.7}
+                >
+                  {isGeneratingDescription ? (
+                    <ActivityIndicator size="small" color={palette.primary} />
+                  ) : (
+                    <Ionicons name="sparkles" size={14} color={palette.primary} />
+                  )}
+                  <Text className="text-xs font-semibold text-primary">
+                    {isGeneratingDescription 
+                      ? 'Обработка...' 
+                      : (draft.description && draft.description.trim().length > 0 ? 'Улучшить текст' : 'Сгенерировать черновик')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <View className="rounded-field border border-line bg-surface px-4 py-3">
                 <TextInput
                   placeholder="Опишите квартиру, район, что рядом, правила заселения…"
@@ -922,10 +1103,66 @@ export default function CreateListingScreen() {
                   onChangeText={(t) => draft.setField('description', t)}
                   multiline
                   textAlignVertical="top"
-                  style={{ minHeight: 160, fontSize: 15, color: palette.ink }}
+                  editable={!isGeneratingDescription}
+                  style={{ minHeight: 160, fontSize: 15, color: isGeneratingDescription ? palette.inkMuted : palette.ink }}
                 />
               </View>
-              <Text className="text-xs text-ink-muted">{draft.description.trim().length} символов</Text>
+              
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs text-ink-muted">
+                  {draft.description ? draft.description.trim().length : 0} / 1500 символов
+                </Text>
+                {previousDescription ? (
+                  <TouchableOpacity
+                    disabled={isGeneratingDescription}
+                    onPress={() => {
+                      draft.setField('description', previousDescription);
+                      setPreviousDescription('');
+                    }}
+                    className="flex-row items-center gap-1 active:opacity-75"
+                  >
+                    <Ionicons name="arrow-undo-outline" size={13} color={palette.primary} />
+                    <Text className="text-xs font-semibold text-primary">Отменить изменения</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {draft.description && draft.description.trim().length > 0 ? (
+                <View className="mt-1">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} className="py-1">
+                    <TouchableOpacity
+                      disabled={isGeneratingDescription}
+                      onPress={() => generateAIDescription('shorter')}
+                      className="px-3 py-1.5 rounded-full bg-surface border border-line active:bg-surface-muted"
+                    >
+                      <Text className="text-xs text-ink-secondary">📝 Короче</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      disabled={isGeneratingDescription}
+                      onPress={() => generateAIDescription('longer')}
+                      className="px-3 py-1.5 rounded-full bg-surface border border-line active:bg-surface-muted"
+                    >
+                      <Text className="text-xs text-ink-secondary">✍️ Подробнее</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      disabled={isGeneratingDescription}
+                      onPress={() => generateAIDescription('friendly')}
+                      className="px-3 py-1.5 rounded-full bg-surface border border-line active:bg-surface-muted"
+                    >
+                      <Text className="text-xs text-ink-secondary">😊 Дружелюбнее</Text>
+                    </TouchableOpacity>
+                    {draft.city ? (
+                      <TouchableOpacity
+                        disabled={isGeneratingDescription}
+                        onPress={() => generateAIDescription('neighborhood')}
+                        className="px-3 py-1.5 rounded-full bg-surface border border-line active:bg-surface-muted"
+                      >
+                        <Text className="text-xs text-ink-secondary">📍 Про район</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </ScrollView>
+                </View>
+              ) : null}
 
               {/* Rules UI */}
               <View className="mt-4 gap-4">

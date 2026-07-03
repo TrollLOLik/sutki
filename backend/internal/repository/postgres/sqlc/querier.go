@@ -110,6 +110,8 @@ type Querier interface {
 	// Updates a listing owned by the given user. Returns the number of affected
 	// rows so the caller can distinguish "not found / not owner" (0) from success.
 	UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64, error)
+	UpdateHouseLocationSummary(ctx context.Context, arg UpdateHouseLocationSummaryParams) error
+	UpdateHouseReviewsSummary(ctx context.Context, arg UpdateHouseReviewsSummaryParams) error
 	UpdateLastReadMessage(ctx context.Context, arg UpdateLastReadMessageParams) error
 	UpdateRefreshTokenActiveTime(ctx context.Context, arg UpdateRefreshTokenActiveTimeParams) error
 	UpdateRefreshTokenLocation(ctx context.Context, arg UpdateRefreshTokenLocationParams) error

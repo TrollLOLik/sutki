@@ -16,6 +16,7 @@ import { AuthGateSheet } from '@/components/AuthGateSheet';
 import { YamapInstance } from 'react-native-yamap-plus';
 
 // Initialize Yandex Maps SDK on JS startup to prevent native crashes.
+YamapInstance.setLocale('ru_RU');
 YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
 
 SplashScreen.preventAutoHideAsync();
