@@ -33,7 +33,8 @@ import { formatRub } from '@/lib/format';
 import { useFiltersStore, countActiveFilters } from '@/store/filters';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
-import { palette, shadows } from '@/theme/tokens';
+import { shadows } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -43,6 +44,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export default function PublicProfileScreen() {
+  const { palette, isDark } = useAppTheme();
   const {
     id,
     name,
@@ -453,7 +455,7 @@ export default function PublicProfileScreen() {
       >
         {/* Profile Gradient Card with Sweep Animation */}
         <AnimatedLinearGradient
-          colors={['#FF8E53', '#FF5A1F', '#FF2D55']}
+          colors={isDark ? ['#8C4E2D', '#3B1E30', '#1A0D1D'] : ['#FF8E53', '#FF5A1F', '#FF2D55']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -779,6 +781,7 @@ function HostListingCard({
   isFavorite: boolean;
   onToggleFavorite: () => void;
 }) {
+  const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const cardInnerWidth = screenWidth - 32;
   const imgWidth = cardInnerWidth * 0.45;

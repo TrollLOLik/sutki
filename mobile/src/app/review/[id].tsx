@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
 import { useCreateReview } from '@/lib/api/reviews';
 import { cn } from '@/lib/cn';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const MAX_BODY = 1500;
 
@@ -28,6 +28,7 @@ const RATING_LABELS: Record<number, string> = {
 };
 
 export default function LeaveReviewScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const createReview = useCreateReview(numericId);

@@ -34,12 +34,13 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 type Tab = 'pending' | 'processed';
 
 export default function IncomingBookingsScreen() {
+  const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('pending');
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
@@ -363,7 +364,7 @@ export default function IncomingBookingsScreen() {
           >
             <Pressable
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: palette.surface,
                 borderRadius: 20,
                 padding: 20,
                 shadowColor: '#000',

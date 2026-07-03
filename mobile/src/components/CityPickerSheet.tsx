@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { BottomSheet } from './ui';
 import { suggestCities } from '@/lib/api/cities';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface CityPickerSheetProps {
   visible: boolean;
@@ -27,6 +27,7 @@ export function CityPickerSheet({
   selectedCity,
   allowAnyCity,
 }: CityPickerSheetProps) {
+  const { palette } = useAppTheme();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);

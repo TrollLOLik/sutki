@@ -6,7 +6,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Badge, Button } from '@/components/ui';
 import { canReview, historyKind, historyMeta } from '@/lib/booking-history';
 import { formatDateRangeRu } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 interface HistoryBookingCardProps {
@@ -19,6 +19,7 @@ interface HistoryBookingCardProps {
 }
 
 export function HistoryBookingCard({ booking, onPress, onRepeat, onReview }: HistoryBookingCardProps) {
+  const { palette } = useAppTheme();
   const kind = historyKind(booking);
   const meta = historyMeta(kind);
   const cover = booking.house?.cover_url;

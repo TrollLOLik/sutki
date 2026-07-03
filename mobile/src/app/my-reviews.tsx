@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui';
 import { useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { UserReview } from '@/types/review';
 
 type ReviewTab = 'written' | 'received';
@@ -49,6 +49,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function MyReviewsScreen() {
+  const { palette } = useAppTheme();
   const [tab, setTab] = useState<ReviewTab>('written');
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);

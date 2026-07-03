@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
-// NOTE: keep this palette in sync with src/theme/tokens.ts
+// Colors are CSS variables so the theme can flip at runtime (dark mode).
+// The variable sets live in src/theme/vars.ts and are applied on the root
+// View in src/app/_layout.tsx. Raw values: src/theme/tokens.ts.
+const v = (name) => `rgb(var(${name}) / <alpha-value>)`;
+
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
@@ -7,34 +11,34 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#FF5A1F',
-          pressed: '#E64A14',
-          light: '#FFF1EC',
+          DEFAULT: v('--c-primary'),
+          pressed: v('--c-primary-pressed'),
+          light: v('--c-primary-light'),
         },
         success: {
-          DEFAULT: '#2EAD6B',
-          light: '#E8F7EF',
+          DEFAULT: v('--c-success'),
+          light: v('--c-success-light'),
         },
         info: {
-          DEFAULT: '#2F80ED',
-          light: '#EAF2FE',
+          DEFAULT: v('--c-info'),
+          light: v('--c-info-light'),
         },
         danger: {
-          DEFAULT: '#E5484D',
-          light: '#FDECEC',
+          DEFAULT: v('--c-danger'),
+          light: v('--c-danger-light'),
         },
-        star: '#FFB400',
+        star: v('--c-star'),
         ink: {
-          DEFAULT: '#1A1A1A',
-          secondary: '#6B7280',
-          muted: '#9AA0A6',
+          DEFAULT: v('--c-ink'),
+          secondary: v('--c-ink-secondary'),
+          muted: v('--c-ink-muted'),
         },
         surface: {
-          DEFAULT: '#FFFFFF',
-          muted: '#F5F6F8',
-          skeleton: '#E9EBEE',
+          DEFAULT: v('--c-surface'),
+          muted: v('--c-surface-muted'),
+          skeleton: v('--c-surface-skeleton'),
         },
-        line: '#ECECEC',
+        line: v('--c-line'),
       },
       borderRadius: {
         card: '16px',

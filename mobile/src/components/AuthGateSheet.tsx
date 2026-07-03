@@ -4,7 +4,8 @@ import { Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@/components/ui';
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { AuthGateContext } from '@/lib/requireAuth';
 
 interface AuthGateSheetProps {
@@ -14,6 +15,7 @@ interface AuthGateSheetProps {
 }
 
 export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps) {
+  const { palette } = useAppTheme();
   const router = useRouter();
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(400)).current;

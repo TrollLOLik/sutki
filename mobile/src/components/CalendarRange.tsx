@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { cn } from '@/lib/cn';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface DateRange {
   start: Date | null;
@@ -43,6 +43,7 @@ const WEEK_OPTS = { weekStartsOn: 1 } as const;
  * start (or after a full range) restarts the selection.
  */
 export function CalendarRange({ value, onChange, minDate, isDateDisabled }: CalendarRangeProps) {
+  const { palette } = useAppTheme();
   const min = startOfDay(minDate ?? new Date());
   const [month, setMonth] = useState(() => startOfMonth(value.start ?? min));
 

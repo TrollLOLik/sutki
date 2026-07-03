@@ -1,12 +1,13 @@
 import { Stack } from 'expo-router';
 
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 export const unstable_settings = {
   initialRouteName: 'welcome',
 };
 
 export default function AuthLayout() {
+  const { palette } = useAppTheme();
   return (
     <Stack
       screenOptions={{

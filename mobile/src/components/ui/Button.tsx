@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-native';
 
 import { cn } from '@/lib/cn';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 type Variant = 'primary' | 'secondary' | 'success' | 'ghost';
 type Size = 'md' | 'lg';
@@ -41,6 +41,7 @@ export function Button({
   className,
   ...rest
 }: ButtonProps & { className?: string }) {
+  const { palette } = useAppTheme();
   const isDisabled = disabled || loading;
   return (
     <Pressable

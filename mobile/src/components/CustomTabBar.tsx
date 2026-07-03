@@ -18,7 +18,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabBarStore } from '@/store/tabbar';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 
 export const TAB_BAR_HEIGHT = 49;
@@ -52,6 +52,7 @@ interface TabButtonProps {
 }
 
 function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabButtonProps) {
+  const { palette } = useAppTheme();
   const focusAnim = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
@@ -84,10 +85,15 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabB
   }));
 
   /*
-   * Card: grows from 28 → 48 px, gains white background, border,
+   * Card: grows from 28 → 48 px, gains a themed surface background, border,
    * rounded corners, and shadow. Layout (flex: 1 on the slot) never
    * changes, so no janky reflows.
    */
+  // Hex8 alpha variants of theme colors: interpolate from a fully transparent
+  // version of the SAME hue (NOT 'transparent', which RN parses as
+  // rgba(0,0,0,0) and produces a gray smear mid-transition).
+  const surfaceTransparent = `${palette.surface}00`;
+  const lineTransparent = `${palette.line}00`;
   const cardStyle = useAnimatedStyle(() => {
     const size = interpolate(mapTransition.value, [0, 1], [28, 48]);
     return {
@@ -95,22 +101,21 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabB
       height: size,
       // Always a perfect circle — no square shape mid-transition
       borderRadius: size / 2,
-      // Interpolate from rgba(255,255,255,0) NOT 'transparent' (which RN parses
-      // as rgba(0,0,0,0) and produces a gray smear mid-transition)
       backgroundColor: interpolateColor(
         mapTransition.value,
         [0, 0.5, 1],
-        ['rgba(255,255,255,0)', 'rgba(255,255,255,0)', 'rgba(255,255,255,1)'],
+        [surfaceTransparent, surfaceTransparent, palette.surface],
       ),
       // Border fades in only in the final 30% of the transition
       borderWidth: interpolate(mapTransition.value, [0, 0.7, 1], [0, 0, 1]),
       borderColor: interpolateColor(
         mapTransition.value,
         [0, 0.7, 1],
-        ['rgba(236,236,236,0)', 'rgba(236,236,236,0)', 'rgba(236,236,236,1)'],
+        [lineTransparent, lineTransparent, palette.line],
       ),
       // Shadow appears only at the very end — no phantom squares mid-flight
-      shadowColor: palette.ink,
+      // (fixed near-black: a light ink shadow would glow in dark mode)
+      shadowColor: '#1A1A1A',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: interpolate(mapTransition.value, [0, 0.8, 1], [0, 0, 0.12]),
       shadowRadius: interpolate(mapTransition.value, [0, 0.8, 1], [0, 0, 6]),
@@ -158,6 +163,7 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabB
 /* ──────────────────────── CustomTabBar ──────────────────────── */
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+  const { palette } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -429,12 +435,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The center "+" sits on a fixed brand-orange gradient (#FF8E53→#FF5A1F→
+  // #FF2D55) that is intentionally NOT themed, so these use the brand
+  // constant rather than the theme palette.
   pulseBg: {
     position: 'absolute',
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: palette.primary,
+    backgroundColor: '#FF5A1F',
   },
   // overflow:'hidden' clips the spinning gradient AND shimmer to the circle
   // Shadow must live on a separate wrapper outside the clipping view (iOS)
@@ -442,8 +451,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: palette.primary,
-    shadowColor: palette.primary,
+    backgroundColor: '#FF5A1F',
+    shadowColor: '#FF5A1F',
     shadowOpacity: 0.45,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },

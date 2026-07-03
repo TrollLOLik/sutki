@@ -33,7 +33,7 @@ import {
 import { useListing } from '@/lib/api/listings';
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
 import { useCreateListingStore } from '@/store/create-listing';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yamap-plus';
 import * as Location from 'expo-location';
 
@@ -92,6 +92,7 @@ const STEP_TITLES = [
 ];
 
 export default function CreateListingScreen() {
+  const { palette, isDark } = useAppTheme();
   const draft = useCreateListingStore();
   const { data: categories } = useCategories();
   const { data: services } = useServices();
@@ -971,6 +972,7 @@ export default function CreateListingScreen() {
                   }}
                   style={{ width: '100%', height: '100%' }}
                   showUserPosition={false}
+                  nightMode={isDark}
                   onCameraPositionChangeEnd={handleCameraChangeEnd}
                   initialRegion={{
                     lat: draft.lat || 55.7558,

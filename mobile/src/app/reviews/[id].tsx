@@ -13,10 +13,11 @@ import { useMyListings } from '@/lib/api/create-listing';
 import { useReviews, useHostReviews } from '@/lib/api/reviews';
 import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { Review, ReviewSummary } from '@/types/review';
 
 export default function ReviewsScreen() {
+  const { palette } = useAppTheme();
   const { id, isHost } = useLocalSearchParams<{ id: string; isHost?: string }>();
   const numericId = Number(id);
   const { data, isLoading, isError, refetch, isRefetching } = isHost === 'true'
@@ -112,6 +113,7 @@ export default function ReviewsScreen() {
 }
 
 function SummaryHeader({ summary }: { summary: ReviewSummary }) {
+  const { palette } = useAppTheme();
   const max = Math.max(1, ...Object.values(summary.distribution));
   return (
     <View className="flex-row gap-3 py-4">
@@ -150,6 +152,7 @@ function SummaryHeader({ summary }: { summary: ReviewSummary }) {
 }
 
 function ReviewRow({ review }: { review: Review }) {
+  const { palette } = useAppTheme();
   const date = review.created_at ? parseISO(review.created_at) : null;
   return (
     <View className="mb-3 rounded-2xl border border-line bg-surface p-4">

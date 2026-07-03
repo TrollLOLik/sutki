@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui';
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const MONTH_NAMES = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -31,6 +32,7 @@ function parseInitial(value?: string): { d: number; m: number; y: number } {
 
 /** Bottom-sheet wheel date picker. Selection is by tap; value is `YYYY-MM-DD`. */
 export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }: BirthdayPickerSheetProps) {
+  const { palette } = useAppTheme();
   const init = parseInitial(initialValue);
   const [day, setDay] = useState(init.d);
   const [month, setMonth] = useState(init.m);

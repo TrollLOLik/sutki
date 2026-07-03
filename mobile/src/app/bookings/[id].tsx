@@ -13,7 +13,7 @@ import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 
 /** Format date without year, e.g. "20 мая" */
@@ -52,6 +52,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function BookingDetailScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = Number(id);
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
@@ -203,10 +204,10 @@ export default function BookingDetailScreen() {
                     onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(data.house!.id) } })}
                     activeOpacity={0.7}
                     style={{
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: palette.surface,
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: '#E8E8E8',
+                      borderColor: palette.line,
                       marginHorizontal: 16,
                       paddingHorizontal: 16,
                       paddingVertical: 14,
@@ -261,7 +262,7 @@ export default function BookingDetailScreen() {
               {data.status === 'cancelled' && data.rejection_reason ? (
                 <View
                   style={{
-                    backgroundColor: '#FDECEC',
+                    backgroundColor: palette.dangerLight,
                     marginHorizontal: 16,
                     borderRadius: 16,
                     padding: 16,
@@ -283,10 +284,10 @@ export default function BookingDetailScreen() {
               {/* Details block */}
               <View
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: palette.surface,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                   marginHorizontal: 16,
                   paddingVertical: 4,
                 }}
@@ -331,10 +332,10 @@ export default function BookingDetailScreen() {
                 return (
                   <View
                     style={{
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: palette.surface,
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: '#E8E8E8',
+                      borderColor: palette.line,
                       marginHorizontal: 16,
                       flexDirection: 'row',
                       justifyContent: 'space-between',
@@ -354,10 +355,10 @@ export default function BookingDetailScreen() {
               {/* Контакты владельца */}
               <View
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: palette.surface,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                   marginHorizontal: 16,
                   paddingHorizontal: 16,
                   paddingVertical: 16,
@@ -507,10 +508,10 @@ export default function BookingDetailScreen() {
               {/* Правила отмены */}
               <View
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: palette.surface,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                   marginHorizontal: 16,
                   paddingHorizontal: 16,
                   paddingVertical: 16,
@@ -580,7 +581,7 @@ export default function BookingDetailScreen() {
                     justifyContent: 'center',
                     borderRadius: 999,
                     paddingVertical: 13,
-                    backgroundColor: '#FDECEC',
+                    backgroundColor: palette.dangerLight,
                   }}
                 >
                   <Text style={{ fontSize: 15, fontWeight: '600', color: palette.danger }}>
@@ -597,12 +598,14 @@ export default function BookingDetailScreen() {
 }
 
 function Divider() {
+  const { palette } = useAppTheme();
   return (
     <View style={{ height: 1, backgroundColor: palette.line, marginLeft: 52 }} />
   );
 }
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const { palette } = useAppTheme();
   return (
     <View
       style={{

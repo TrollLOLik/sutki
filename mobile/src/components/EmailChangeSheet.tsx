@@ -12,7 +12,8 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useSessionStore } from '@/store/session';
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const CODE_LENGTH = 6;
 
@@ -66,6 +67,7 @@ function translateError(msg: string): string {
 }
 
 export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
+  const { palette } = useAppTheme();
   const user = useSessionStore((s) => s.user);
   const setUser = useSessionStore((s) => s.setUser);
 

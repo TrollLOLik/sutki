@@ -29,7 +29,7 @@ import { requestEmailCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { initGuestId } from '@/lib/guestId';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const ISO = 'yyyy-MM-dd';
 const MAX_GUESTS = 20;
@@ -91,6 +91,7 @@ type FormValues = z.infer<typeof baseSchema>;
 // ---------------------------------------------------------------------------
 
 export default function BookingScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const listingId = Number(id);
   const user = useSessionStore((s) => s.user);
@@ -331,7 +332,7 @@ export default function BookingScreen() {
                     width: 16,
                     height: 16,
                     borderRadius: 8,
-                    backgroundColor: '#FFF0F0',
+                    backgroundColor: palette.dangerLight,
                     borderWidth: 1,
                     borderColor: '#FAD2D2',
                     alignItems: 'center',
@@ -549,6 +550,7 @@ interface PhoneInputProps {
 }
 
 function PhoneInput({ value, onChange, onBlur, error }: PhoneInputProps) {
+  const { palette } = useAppTheme();
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
@@ -649,6 +651,7 @@ function Stepper({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const { palette } = useAppTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -671,6 +674,7 @@ function Stepper({
 }
 
 function Row({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
+  const { palette } = useAppTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <Text

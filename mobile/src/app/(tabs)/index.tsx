@@ -38,7 +38,8 @@ import { requireAuth } from '@/lib/requireAuth';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { useTabBarStore } from '@/store/tabbar';
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const QUICK_FILTERS = [
   { label: 'Квартиры', value: 'all' },
@@ -48,6 +49,7 @@ const QUICK_FILTERS = [
 ];
 
 export default function SearchScreen() {
+  const { palette, isDark } = useAppTheme();
   const [query, setQuery] = useState('');
   const filters = useFiltersStore();
   const insets = useSafeAreaInsets();
@@ -286,7 +288,7 @@ export default function SearchScreen() {
         >
           <BlurView
             intensity={95}
-            tint="light"
+            tint={isDark ? 'dark' : 'light'}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           />
         </Animated.View>
@@ -584,6 +586,7 @@ const POPULAR_DESTINATIONS = [
 ];
 
 function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialValue }: SearchModalProps) {
+  const { palette } = useAppTheme();
   const [searchVal, setSearchVal] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);

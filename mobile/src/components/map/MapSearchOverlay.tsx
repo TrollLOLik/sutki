@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface MapSearchOverlayProps {
   visible: boolean;
@@ -40,6 +40,7 @@ export function MapSearchOverlay({
   onSelectAddress,
   onSubmitText,
 }: MapSearchOverlayProps) {
+  const { palette } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);

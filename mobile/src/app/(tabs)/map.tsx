@@ -22,7 +22,8 @@ import { useListings, filtersToListParams } from '@/lib/api/listings';
 import { useBboxAutoReload } from '@/hooks/useBboxAutoReload';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
+import type { Palette } from '@/theme/tokens';
 import { env } from '@/lib/env';
 import type { ListingCard } from '@/types/listing';
 
@@ -110,6 +111,8 @@ async function detectCityByIP(): Promise<string | null> {
 }
 
 export default function MapScreen() {
+  const { palette, isDark } = useAppTheme();
+  const styles = useMemo(() => makeStyles(palette, isDark), [palette, isDark]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);
@@ -134,6 +137,8 @@ export default function MapScreen() {
     enabled: isQueryEnabled,
   });
   const listings = data?.items ?? [];
+
+
 
   // ── Initial camera ─────────────────────────────────────────────────────────
   // Compute once on mount. Start from the hardcoded default so the very first
@@ -380,6 +385,35 @@ export default function MapScreen() {
   /** Label shown inside the search bar (current city or placeholder). */
   const searchLabel = filters.city ?? 'Город или адрес';
 
+  // ── Warning state ──────────────────────────────────────────────────────────
+  const [warningType, setWarningType] = useState<'zoom' | 'empty' | 'limit' | null>(null);
+
+  useEffect(() => {
+    if (bbox == null || isDragging) {
+      setWarningType(null);
+      return;
+    }
+
+    if (currentZoom < 10) {
+      setWarningType('zoom');
+      return;
+    }
+
+    const isFetchingAny = isLoading || isFetching || isRefetching;
+    if (!isFetchingAny) {
+      if (listings.length === 0) {
+        setWarningType('empty');
+      } else if (listings.length >= 200) {
+        setWarningType('limit');
+      } else {
+        setWarningType(null);
+      }
+    } else {
+      // Reset zoom warning immediately on zoom-in. Keep empty/limit warnings during refetch to prevent flickering.
+      setWarningType((prev) => (prev === 'zoom' ? null : prev));
+    }
+  }, [currentZoom, isLoading, isFetching, isRefetching, listings.length, bbox, isDragging]);
+
 
   return (
     <View style={styles.container}>
@@ -391,6 +425,7 @@ export default function MapScreen() {
           }
         }}
         initialRegion={initialRegion}
+        nightMode={isDark}
         showUserPosition
         clusteredMarkers={clusteredMarkers}
         renderMarker={renderMarker}
@@ -474,66 +509,66 @@ export default function MapScreen() {
 
       {/* Dynamic Map Warning Overlays (Zoom out, limit reach, empty results) */}
       <AnimatePresence>
-        {bbox != null && !isDragging && (() => {
-          if (currentZoom < 10) {
-            return (
-              <MotiView
-                key="zoom-warning"
-                from={{ opacity: 0, translateY: 15 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                exit={{ opacity: 0, translateY: 15 }}
-                transition={{ type: 'timing', duration: 180 }}
-                pointerEvents="box-none"
-                style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-              >
-                <View style={styles.emptyBar}>
-                  <Text style={styles.emptyText}>
-                    Приблизьте карту, чтобы увидеть объявления
-                  </Text>
-                </View>
-              </MotiView>
-            );
-          }
-          if (!isLoading && listings.length === 0) {
-            return (
-              <MotiView
-                key="empty-warning"
-                from={{ opacity: 0, translateY: 15 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                exit={{ opacity: 0, translateY: 15 }}
-                transition={{ type: 'timing', duration: 180 }}
-                pointerEvents="box-none"
-                style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-              >
-                <View style={styles.emptyBar}>
-                  <Text style={styles.emptyText}>
-                    В этой области нет объявлений — отдалите карту или измените фильтры
-                  </Text>
-                </View>
-              </MotiView>
-            );
-          }
-          if (!isLoading && listings.length >= 200) {
-            return (
-              <MotiView
-                key="limit-warning"
-                from={{ opacity: 0, translateY: 15 }}
-                animate={{ opacity: 1, translateY: 0 }}
-                exit={{ opacity: 0, translateY: 15 }}
-                transition={{ type: 'timing', duration: 180 }}
-                pointerEvents="box-none"
-                style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-              >
-                <View style={styles.emptyBar}>
-                  <Text style={styles.emptyText}>
-                    Показано 200+ объявлений. Приблизьте карту для точного поиска
-                  </Text>
-                </View>
-              </MotiView>
-            );
-          }
-          return null;
-        })()}
+        {warningType === 'zoom' && (
+          <MotiView
+            key="zoom-warning"
+            from={{ translateY: 10, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            exit={{ translateY: 5, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 180,
+            }}
+            pointerEvents="box-none"
+            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
+          >
+            <View style={styles.emptyBar}>
+              <Text style={styles.emptyText}>
+                Приблизьте карту, чтобы увидеть объявления
+              </Text>
+            </View>
+          </MotiView>
+        )}
+        {warningType === 'empty' && (
+          <MotiView
+            key="empty-warning"
+            from={{ translateY: 10, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            exit={{ translateY: 5, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 180,
+            }}
+            pointerEvents="box-none"
+            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
+          >
+            <View style={styles.emptyBar}>
+              <Text style={styles.emptyText}>
+                В этой области нет объявлений — отдалите карту или измените фильтры
+              </Text>
+            </View>
+          </MotiView>
+        )}
+        {warningType === 'limit' && (
+          <MotiView
+            key="limit-warning"
+            from={{ translateY: 10, opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            exit={{ translateY: 5, opacity: 0 }}
+            transition={{
+              type: 'timing',
+              duration: 180,
+            }}
+            pointerEvents="box-none"
+            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
+          >
+            <View style={styles.emptyBar}>
+              <Text style={styles.emptyText}>
+                Показано 200+ объявлений. Приблизьте карту для точного поиска
+              </Text>
+            </View>
+          </MotiView>
+        )}
       </AnimatePresence>
 
       {/* Bottom mini-card on pin tap */}
@@ -554,7 +589,8 @@ export default function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette, isDark: boolean) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.surface,
@@ -579,7 +615,7 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 12,
     marginRight: 10,
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -607,7 +643,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -633,15 +669,15 @@ const styles = StyleSheet.create({
   countChip: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: palette.overlaySurface,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    borderColor: palette.line,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -666,7 +702,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -682,12 +718,12 @@ const styles = StyleSheet.create({
   topInfoBar: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: palette.overlaySurface,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
     alignItems: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -729,20 +765,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyBar: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: palette.overlaySurface,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(26, 26, 26, 0.4)',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 16,
+    alignSelf: 'stretch',
     alignItems: 'center',
-    shadowColor: palette.ink,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
   },
   emptyText: {
     fontSize: 13,
+    fontWeight: '400',
     textAlign: 'center',
-    color: palette.inkSecondary,
+    color: palette.ink,
   },
 });

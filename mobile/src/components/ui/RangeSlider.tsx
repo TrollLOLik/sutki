@@ -1,5 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { StyleSheet, View, PanResponder } from 'react-native';
+
+import { useAppTheme } from '@/theme/useAppTheme';
+import type { Palette } from '@/theme/tokens';
 
 interface RangeSliderProps {
   min: number;
@@ -22,6 +25,8 @@ export function RangeSlider({
   step = 100,
   minDistance = 500,
 }: RangeSliderProps) {
+  const { palette } = useAppTheme();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
 
@@ -185,7 +190,7 @@ export function RangeSlider({
   );
 }
 
-const styles = {
+const makeStyles = (palette: Palette) => ({
   container: {
     height: 36,
     justifyContent: 'center' as const,
@@ -194,7 +199,7 @@ const styles = {
   },
   trackBackground: {
     height: 4,
-    backgroundColor: '#ECECEC',
+    backgroundColor: palette.line,
     borderRadius: 2,
   },
   trackActive: {
@@ -208,13 +213,13 @@ const styles = {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: palette.line,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 2.5,
   },
-};
+});

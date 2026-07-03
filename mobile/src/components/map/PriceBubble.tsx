@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
+import type { Palette } from '@/theme/tokens';
 
 interface PriceBubbleProps {
   /** Nightly price in rubles. */
@@ -21,6 +22,8 @@ interface PriceBubbleProps {
  * switch to server-side clustering + static-image bubbles to avoid jank.
  */
 export function PriceBubble({ price, selected }: PriceBubbleProps) {
+  const { palette } = useAppTheme();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   return (
     <View style={[styles.bubble, selected && styles.bubbleSelected]}>
       <Text style={[styles.text, selected && styles.textSelected]}>
@@ -30,32 +33,33 @@ export function PriceBubble({ price, selected }: PriceBubbleProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  bubble: {
-    alignSelf: 'center',
-    backgroundColor: palette.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: 'white',
-    shadowColor: palette.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  bubbleSelected: {
-    backgroundColor: 'white',
-    borderColor: palette.primary,
-    shadowColor: palette.ink,
-  },
-  text: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  textSelected: {
-    color: palette.primary,
-  },
-});
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
+    bubble: {
+      alignSelf: 'center',
+      backgroundColor: palette.primary,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: palette.surface,
+      shadowColor: palette.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    bubbleSelected: {
+      backgroundColor: palette.surface,
+      borderColor: palette.primary,
+      shadowColor: '#1A1A1A',
+    },
+    text: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    textSelected: {
+      color: palette.primary,
+    },
+  });

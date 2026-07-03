@@ -6,7 +6,7 @@ import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 're
 
 import { bookingStatusMeta } from '@/lib/booking-status';
 import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 interface BookingCardProps {
@@ -35,6 +35,7 @@ export function BookingCard({
   onVerifyEmail,
   onChatPress,
 }: BookingCardProps) {
+  const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
 
   // Image: fixed square size

@@ -5,19 +5,30 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '@/lib/query';
 import { useSessionStore } from '@/store/session';
-import { palette } from '@/theme/tokens';
+import { useThemeStore } from '@/store/theme';
+import { useAppTheme } from '@/theme/useAppTheme';
+import { darkVars, lightVars } from '@/theme/vars';
 import { useAuthGateStore } from '@/lib/requireAuth';
 import { AuthGateSheet } from '@/components/AuthGateSheet';
+import { ThemeTransitionOverlay } from '@/components/ThemeTransitionOverlay';
 import { YamapInstance } from 'react-native-yamap-plus';
 
 // Initialize Yandex Maps SDK on JS startup to prevent native crashes.
-YamapInstance.setLocale('ru_RU');
-YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
+const initYamap = async () => {
+  try {
+    await YamapInstance.setLocale('ru_RU');
+    await YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
+  } catch (err) {
+    console.warn('Yamap already initialized or failed to initialize:', err);
+  }
+};
+initYamap();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,19 +38,27 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const status = useSessionStore((s) => s.status);
   const hydrate = useSessionStore((s) => s.hydrate);
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const themeHydrated = useThemeStore((s) => s.hasHydrated);
   const { visible, context, closeGate } = useAuthGateStore();
+  const { isDark, palette } = useAppTheme();
 
   useEffect(() => {
-    hydrate().finally(() => SplashScreen.hideAsync());
-  }, [hydrate]);
+    // Theme must hydrate before the splash hides, otherwise a saved dark
+    // preference would flash a light frame on cold start.
+    Promise.all([hydrate(), hydrateTheme()]).finally(() => SplashScreen.hideAsync());
+  }, [hydrate, hydrateTheme]);
 
-  if (status === 'loading') return null;
+  if (status === 'loading' || !themeHydrated) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* Root theme scope: applies the CSS variable set that every Tailwind
+          color class resolves against (NativeWind native theming). */}
+      <View style={[{ flex: 1 }, isDark ? darkVars : lightVars]}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? 'light' : 'dark'} />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.surface } }}>
             <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
               <Stack.Screen name="(tabs)" />
@@ -66,6 +85,10 @@ export default function RootLayout() {
           <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
         </QueryClientProvider>
       </SafeAreaProvider>
+      </View>
+      {/* Circular-reveal overlay: above everything including tab bar and status
+          bar. pointerEvents="none" so it never blocks touches. */}
+      <ThemeTransitionOverlay />
     </GestureHandlerRootView>
   );
 }
