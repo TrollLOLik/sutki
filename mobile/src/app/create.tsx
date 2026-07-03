@@ -277,7 +277,7 @@ export default function CreateListingScreen() {
       const size = 1024 * 1024; // fallback size
 
       const target = await presignMediaUpload(fileName, size, mimeType, 'listing');
-      await uploadToS3(uri, target.url, mimeType, (progress) => {
+      await uploadToS3(uri, target, fileName, mimeType, (progress) => {
         setUploadStatuses((prev) => ({
           ...prev,
           [uri]: { ...prev[uri], progress },

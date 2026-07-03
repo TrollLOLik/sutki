@@ -336,8 +336,10 @@ func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName stri
 	ext := filepath.Ext(fileName)
 	key := fmt.Sprintf("chat/uploads/%s%s", uuid, ext)
 
-	// 4. Generate presigned upload params
-	return s.storage.PresignUpload(ctx, key, size, contentType)
+	// 4. Generate presigned POST params. Pass the server-side limit (not the
+	// client-claimed size) as the content-length-range upper bound: picker
+	// sizes are unreliable, and S3 enforces this bound authoritatively.
+	return s.storage.PresignUpload(ctx, key, maxAttachmentBytes, contentType)
 }
 
 func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
