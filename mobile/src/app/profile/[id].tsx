@@ -33,7 +33,8 @@ import { formatRub } from '@/lib/format';
 import { useFiltersStore, countActiveFilters } from '@/store/filters';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
-import { palette, shadows } from '@/theme/tokens';
+import { shadows } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -43,6 +44,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export default function PublicProfileScreen() {
+  const { palette } = useAppTheme();
   const {
     id,
     name,
@@ -779,6 +781,7 @@ function HostListingCard({
   isFavorite: boolean;
   onToggleFavorite: () => void;
 }) {
+  const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const cardInnerWidth = screenWidth - 32;
   const imgWidth = cardInnerWidth * 0.45;

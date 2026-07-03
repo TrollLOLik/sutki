@@ -25,12 +25,13 @@ import { requestEmailCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { useSessionStore } from '@/store/session';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 type Tab = 'active' | 'history';
 
 export default function MyBookingsScreen() {
+  const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('active');
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);

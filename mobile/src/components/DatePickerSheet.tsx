@@ -5,7 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
 import { Button, BottomSheet } from '@/components/ui';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface DatePickerSheetProps {
   visible: boolean;
@@ -35,6 +35,7 @@ export function DatePickerSheet({
   checkOut,
   isDateDisabled,
 }: DatePickerSheetProps) {
+  const { palette } = useAppTheme();
   const [tempRange, setTempRange] = useState<DateRange>({ start: null, end: null });
 
   // Sync external values when sheet opens

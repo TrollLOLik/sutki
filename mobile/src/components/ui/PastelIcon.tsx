@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface PastelIconProps {
   name: keyof typeof Ionicons.glyphMap;
@@ -18,6 +18,7 @@ export function PastelIcon({
   color = palette.primary,
   containerSize = 36,
 }: PastelIconProps) {
+  const { palette } = useAppTheme();
   return (
     <View
       style={{

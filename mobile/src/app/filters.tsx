@@ -20,7 +20,7 @@ import { useServices } from '@/lib/api/create-listing';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { useFiltersStore, type RoomFilter, type SearchFilters } from '@/store/filters';
 import { formatGuests } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 
 const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
@@ -58,6 +58,7 @@ function dateRangeLabel(checkIn: string | null, checkOut: string | null): string
 }
 
 export default function FiltersScreen() {
+  const { palette } = useAppTheme();
   const { ownerId } = useLocalSearchParams<{ ownerId?: string }>();
   const numericOwnerId = ownerId ? Number(ownerId) : null;
   const store = useFiltersStore();

@@ -13,7 +13,7 @@ import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 
 /** Format date without year, e.g. "20 мая" */
@@ -52,6 +52,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function BookingDetailScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = Number(id);
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
@@ -597,12 +598,14 @@ export default function BookingDetailScreen() {
 }
 
 function Divider() {
+  const { palette } = useAppTheme();
   return (
     <View style={{ height: 1, backgroundColor: palette.line, marginLeft: 52 }} />
   );
 }
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const { palette } = useAppTheme();
   return (
     <View
       style={{

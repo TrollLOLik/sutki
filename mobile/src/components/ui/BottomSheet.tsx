@@ -11,7 +11,8 @@ import {
   View,
 } from 'react-native';
 
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface BottomSheetProps {
   /**
@@ -29,6 +30,7 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ visible, onClose, children, height }: BottomSheetProps) {
+  const { palette } = useAppTheme();
   const { height: screenHeight } = useWindowDimensions();
   const [localVisible, setLocalVisible] = useState(visible);
   const [reduceMotion, setReduceMotion] = useState(false);

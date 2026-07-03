@@ -7,9 +7,10 @@ import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { Button } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 export default function MyListingsScreen() {
+  const { palette } = useAppTheme();
   const { data, isLoading, isError, refetch, isRefetching } = useMyListings({ limit: 50 });
   const items = data?.items ?? [];
   const insets = useSafeAreaInsets();

@@ -22,7 +22,7 @@ import { useListings, filtersToListParams } from '@/lib/api/listings';
 import { useBboxAutoReload } from '@/hooks/useBboxAutoReload';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { env } from '@/lib/env';
 import type { ListingCard } from '@/types/listing';
 
@@ -110,6 +110,7 @@ async function detectCityByIP(): Promise<string | null> {
 }
 
 export default function MapScreen() {
+  const { palette } = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);

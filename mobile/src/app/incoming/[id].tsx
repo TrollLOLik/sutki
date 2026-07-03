@@ -14,7 +14,7 @@ import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 /** Format date without year, e.g. "20 мая" */
 function formatDateShort(date: Date): string {
@@ -36,6 +36,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function IncomingBookingDetailScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = Number(id);
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
@@ -685,12 +686,14 @@ function fullName(name: string, patronymic: string, surname: string): string {
 }
 
 function Divider() {
+  const { palette } = useAppTheme();
   return (
     <View style={{ height: 1, backgroundColor: palette.line, marginLeft: 52 }} />
   );
 }
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const { palette } = useAppTheme();
   return (
     <View
       style={{

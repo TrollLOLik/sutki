@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatRating, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard } from '@/types/listing';
 
 interface ListingMapCardProps {
@@ -23,6 +23,7 @@ interface ListingMapCardProps {
  * overlaps them.
  */
 export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
+  const { palette } = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 

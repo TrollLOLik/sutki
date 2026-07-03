@@ -27,9 +27,10 @@ import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 export default function ListingDetailScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const { width } = useWindowDimensions();

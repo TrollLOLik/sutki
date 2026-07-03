@@ -6,7 +6,7 @@ import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { MetricTile } from '@/components/ui';
 import { useFiltersStore } from '@/store/filters';
 import { requireAuth } from '@/lib/requireAuth';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 function GuestProfileAction({
   icon,
@@ -21,6 +21,7 @@ function GuestProfileAction({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const { palette } = useAppTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -47,6 +48,7 @@ export function GuestProfile({
   topInset: number;
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
+  const { palette } = useAppTheme();
   const router = useRouter();
 
   const handleShowLocalFavorites = () => {

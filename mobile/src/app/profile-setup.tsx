@@ -27,7 +27,8 @@ import { ApiError } from '@/lib/api/client';
 import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 import { env } from '@/lib/env';
 import { useSessionStore } from '@/store/session';
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { User } from '@/types/user';
 import { getGlobalFromBooking, setGlobalFromBooking } from '@/lib/requireAuth';
 
@@ -82,6 +83,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function ProfileSetupScreen() {
+  const { palette } = useAppTheme();
   const completeOnboarding = useSessionStore((s) => s.completeOnboarding);
   const signOut = useSessionStore((s) => s.signOut);
   const updateMe = useUpdateMe();

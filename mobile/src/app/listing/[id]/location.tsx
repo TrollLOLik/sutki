@@ -7,7 +7,7 @@ import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 
 import { useListing } from '@/lib/api/listings';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 function OrangePin() {
   return (
@@ -32,6 +32,7 @@ function OrangePin() {
 }
 
 export default function LocationScreen() {
+  const { palette } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 

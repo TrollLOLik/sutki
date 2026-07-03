@@ -37,7 +37,7 @@ import {
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
 import { api } from '@/lib/api/client';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { formatRooms } from '@/lib/format';
 import { Button, BottomSheet } from '@/components/ui';
 
@@ -46,6 +46,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function ChatDialogScreen() {
+  const { palette } = useAppTheme();
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id: string; title?: string; otherUserId?: string; houseId?: string }>();
 	const convID = parseInt(params.id ?? '0', 10);

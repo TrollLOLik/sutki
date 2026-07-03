@@ -11,7 +11,8 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useSessionStore } from '@/store/session';
-import { palette, radii } from '@/theme/tokens';
+import { radii } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const CODE_LENGTH = 6;
 
@@ -49,6 +50,7 @@ function translateError(msg: string): string {
 }
 
 export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps) {
+  const { palette } = useAppTheme();
   const signOut = useSessionStore((s) => s.signOut);
   const user = useSessionStore((s) => s.user);
 

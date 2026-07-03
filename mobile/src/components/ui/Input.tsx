@@ -3,7 +3,7 @@ import { forwardRef, useState } from 'react';
 import { Text, TextInput, View, type TextInputProps } from 'react-native';
 
 import { cn } from '@/lib/cn';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface InputProps extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -14,6 +14,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   { icon, error, className, onFocus, onBlur, ...rest },
   ref,
 ) {
+  const { palette } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
 
   return (

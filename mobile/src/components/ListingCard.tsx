@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 import { formatRating, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
 
 interface ListingCardProps {
@@ -15,6 +15,7 @@ interface ListingCardProps {
 }
 
 export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: ListingCardProps) {
+  const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
 
   // card: screen - 16px margin each side - 12px padding each side = screenWidth - 56

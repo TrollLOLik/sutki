@@ -1,6 +1,6 @@
 import { Pressable, Text } from 'react-native';
 
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface ChipProps {
   label: string;
@@ -9,6 +9,7 @@ interface ChipProps {
 }
 
 export function Chip({ label, selected = false, onPress }: ChipProps) {
+  const { palette } = useAppTheme();
   return (
     <Pressable
       accessibilityRole="button"

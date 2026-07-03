@@ -18,7 +18,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabBarStore } from '@/store/tabbar';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 
 export const TAB_BAR_HEIGHT = 49;
@@ -52,6 +52,7 @@ interface TabButtonProps {
 }
 
 function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabButtonProps) {
+  const { palette } = useAppTheme();
   const focusAnim = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
@@ -158,6 +159,7 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabB
 /* ──────────────────────── CustomTabBar ──────────────────────── */
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+  const { palette } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [reduceMotion, setReduceMotion] = useState(false);
 

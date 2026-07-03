@@ -1,6 +1,6 @@
 import { MotiView } from 'moti';
 
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface SkeletonProps {
   width?: number | string;
@@ -11,6 +11,7 @@ interface SkeletonProps {
 
 /** Lightweight pulsing placeholder used for loading states (TZ §2). */
 export function Skeleton({ width = '100%', height = 16, radius = 8, style }: SkeletonProps) {
+  const { palette } = useAppTheme();
   return (
     <MotiView
       from={{ opacity: 0.5 }}

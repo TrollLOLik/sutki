@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { ActivityIndicator, Pressable, Text, TouchableOpacity, View } from 'react-native';
 
 import { formatGuests, formatRub } from '@/lib/format';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 interface IncomingRequestCardProps {
@@ -67,6 +67,7 @@ export function IncomingRequestCard({
   disabled = false,
   onChatPress,
 }: IncomingRequestCardProps) {
+  const { palette } = useAppTheme();
   const start = parseISO(booking.start_date);
   const end = booking.end_date ? parseISO(booking.end_date) : null;
   const nights = end ? differenceInCalendarDays(end, start) : 0;

@@ -10,11 +10,12 @@ import { ru } from 'date-fns/locale';
 import { useSessionStore } from '@/store/session';
 import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
-import { palette } from '@/theme/tokens';
+import { useAppTheme } from '@/theme/useAppTheme';
 import { Button } from '@/components/ui';
 import { formatRooms } from '@/lib/format';
 
 export default function MessagesScreen() {
+  const { palette } = useAppTheme();
 	const router = useRouter();
 	const status = useSessionStore((state) => state.status);
 	const sessionUser = useSessionStore((state) => state.user);
