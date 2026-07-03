@@ -44,6 +44,9 @@ var (
 	// ErrInvalidReview is returned when a review fails validation (rating out of
 	// range or empty body).
 	ErrInvalidReview = errors.New("invalid review")
+	// ErrReviewNotAllowed is returned when the author has no confirmed/active
+	// booking for the listing, or attempts to review their own listing.
+	ErrReviewNotAllowed = errors.New("review not allowed")
 )
 
 // Account deletion errors.
@@ -51,4 +54,3 @@ var (
 	// ErrActiveBookings is returned when a user attempts to delete their account with active bookings.
 	ErrActiveBookings = errors.New("cannot delete account with active bookings")
 )
-

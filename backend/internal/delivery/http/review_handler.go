@@ -111,6 +111,8 @@ func (h *ReviewHandler) Create(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, domain.ErrInvalidReview):
 			writeError(w, http.StatusBadRequest, "invalid review")
+		case errors.Is(err, domain.ErrReviewNotAllowed):
+			writeError(w, http.StatusForbidden, "you can only review listings you have stayed at")
 		case errors.Is(err, domain.ErrNotFound):
 			writeError(w, http.StatusNotFound, "listing not found")
 		default:
@@ -272,5 +274,3 @@ func (h *ReviewHandler) ListForUser(w http.ResponseWriter, r *http.Request) {
 		Offset:  res.Offset,
 	})
 }
-
-

@@ -30,7 +30,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (never commit real env values — .env contained a live
+# Yandex MapKit key that had to be rotated; keep only .env.example in git)
+.env
 .env*.local
 
 # typescript

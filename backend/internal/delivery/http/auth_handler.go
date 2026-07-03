@@ -198,15 +198,15 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	// Pointer fields distinguish "omitted" (nil, left unchanged) from "set to
 	// empty" so PATCH does not clobber fields the client didn't send.
 	var body struct {
-		Name         *string `json:"name"`
-		Surname      *string `json:"surname"`
-		Patronymic   *string `json:"patronymic"`
-		Phone        *string `json:"phone"`
-		City         *string `json:"city"`
-		Birthday     *string `json:"birthday"`
-		AvatarURL    *string `json:"avatar_url"`
-		VKID         *string `json:"vk_id"`
-		VKIDDoNull   *bool   `json:"vk_id_do_null"`
+		Name       *string `json:"name"`
+		Surname    *string `json:"surname"`
+		Patronymic *string `json:"patronymic"`
+		Phone      *string `json:"phone"`
+		City       *string `json:"city"`
+		Birthday   *string `json:"birthday"`
+		AvatarURL  *string `json:"avatar_url"`
+		VKID       *string `json:"vk_id"`
+		VKIDDoNull *bool   `json:"vk_id_do_null"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -559,5 +559,3 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-

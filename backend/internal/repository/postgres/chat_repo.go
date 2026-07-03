@@ -274,12 +274,12 @@ func (r *ChatRepo) ListUserConversations(ctx context.Context, userID int32) ([]d
 	summaries := make([]domain.ConversationSummary, 0, len(rows))
 	for _, row := range rows {
 		summaries = append(summaries, domain.ConversationSummary{
-			ConversationID:       row.ConversationID,
-			HouseID:              row.HouseID,
-			LastActivity:         toTime(row.LastActivity),
-			UnreadCount:          row.UnreadCount,
-			LastMessageID:        row.LastMessageID,
-			LastMessageBody:      row.LastMessageBody,
+			ConversationID:         row.ConversationID,
+			HouseID:                row.HouseID,
+			LastActivity:           toTime(row.LastActivity),
+			UnreadCount:            row.UnreadCount,
+			LastMessageID:          row.LastMessageID,
+			LastMessageBody:        row.LastMessageBody,
 			LastMessageSenderID:    row.LastMessageSenderID,
 			LastMessageCreatedAt:   toTimestamptzPtr(row.LastMessageCreatedAt),
 			OtherLastReadMessageID: row.OtherLastReadMessageID,
