@@ -30,7 +30,7 @@ import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export default function ListingDetailScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const { width } = useWindowDimensions();
@@ -726,6 +726,7 @@ export default function ListingDetailScreen() {
                     <YaMap
                       style={{ width: '100%', height: '100%' }}
                       showUserPosition={false}
+                      nightMode={isDark}
                       initialRegion={{ lat: data.lat, lon: data.lng, zoom: 14 }}
                     >
                       {data.radius > 0 ? (

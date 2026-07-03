@@ -92,7 +92,7 @@ const STEP_TITLES = [
 ];
 
 export default function CreateListingScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const draft = useCreateListingStore();
   const { data: categories } = useCategories();
   const { data: services } = useServices();
@@ -972,6 +972,7 @@ export default function CreateListingScreen() {
                   }}
                   style={{ width: '100%', height: '100%' }}
                   showUserPosition={false}
+                  nightMode={isDark}
                   onCameraPositionChangeEnd={handleCameraChangeEnd}
                   initialRegion={{
                     lat: draft.lat || 55.7558,

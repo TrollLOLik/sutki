@@ -33,7 +33,7 @@ function OrangePin() {
 }
 
 export default function LocationScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -94,6 +94,7 @@ export default function LocationScreen() {
       {/* Yandex Map */}
       <YaMap
         showUserPosition={false}
+        nightMode={isDark}
         style={styles.map}
         initialRegion={{ lat: data.lat, lon: data.lng, zoom: 15 }}
       >

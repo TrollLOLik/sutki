@@ -111,7 +111,7 @@ async function detectCityByIP(): Promise<string | null> {
 }
 
 export default function MapScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -394,6 +394,7 @@ export default function MapScreen() {
           }
         }}
         initialRegion={initialRegion}
+        nightMode={isDark}
         showUserPosition
         clusteredMarkers={clusteredMarkers}
         renderMarker={renderMarker}
