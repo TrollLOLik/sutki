@@ -364,7 +364,7 @@ export default function IncomingBookingsScreen() {
           >
             <Pressable
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: palette.surface,
                 borderRadius: 20,
                 padding: 20,
                 shadowColor: '#000',

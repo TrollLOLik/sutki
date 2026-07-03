@@ -31,6 +31,8 @@ export interface Palette {
   surface: string;
   surfaceMuted: string;
   surfaceSkeleton: string;
+  /** Semi-transparent surface for floating controls layered over maps/photos. */
+  overlaySurface: string;
 
   line: string;
 }
@@ -58,6 +60,7 @@ export const lightPalette: Palette = {
   surface: '#FFFFFF',
   surfaceMuted: '#F5F6F8',
   surfaceSkeleton: '#E9EBEE',
+  overlaySurface: 'rgba(255, 255, 255, 0.9)',
 
   line: '#ECECEC',
 };
@@ -86,16 +89,10 @@ export const darkPalette: Palette = {
   surface: '#17181C',
   surfaceMuted: '#1F2126',
   surfaceSkeleton: '#2A2D33',
+  overlaySurface: 'rgba(23, 24, 28, 0.9)',
 
   line: '#2C2F35',
 };
-
-/**
- * @deprecated Static light palette kept only while screens are being migrated
- * to useAppTheme(). Will be removed at the end of the dark-theme migration —
- * do not add new usages.
- */
-export const palette = lightPalette;
 
 export const radii = {
   field: 12,

@@ -198,10 +198,10 @@ export default function IncomingBookingDetailScreen() {
                     onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(data.house!.id) } })}
                     activeOpacity={0.7}
                     style={{
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: palette.surface,
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: '#E8E8E8',
+                      borderColor: palette.line,
                       marginHorizontal: 16,
                       paddingHorizontal: 16,
                       paddingVertical: 14,
@@ -256,7 +256,7 @@ export default function IncomingBookingDetailScreen() {
               {data.status === 'cancelled' && data.rejection_reason ? (
                 <View
                   style={{
-                    backgroundColor: '#FDECEC',
+                    backgroundColor: palette.dangerLight,
                     marginHorizontal: 16,
                     borderRadius: 16,
                     padding: 16,
@@ -278,10 +278,10 @@ export default function IncomingBookingDetailScreen() {
               {/* Details block */}
               <View
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: palette.surface,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                   marginHorizontal: 16,
                   paddingVertical: 4,
                 }}
@@ -326,10 +326,10 @@ export default function IncomingBookingDetailScreen() {
                 return (
                   <View
                     style={{
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: palette.surface,
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: '#E8E8E8',
+                      borderColor: palette.line,
                       marginHorizontal: 16,
                       flexDirection: 'row',
                       justifyContent: 'space-between',
@@ -349,10 +349,10 @@ export default function IncomingBookingDetailScreen() {
               {/* Контакты гостя */}
               <View
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: palette.surface,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                   marginHorizontal: 16,
                   paddingHorizontal: 16,
                   paddingVertical: 16,
@@ -517,10 +517,10 @@ export default function IncomingBookingDetailScreen() {
               {/* Правила отмены */}
               <View
                 style={{
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: palette.surface,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                   marginHorizontal: 16,
                   paddingHorizontal: 16,
                   paddingVertical: 16,
@@ -640,7 +640,7 @@ export default function IncomingBookingDetailScreen() {
                           flex: 1,
                           borderWidth: 1.5,
                           borderColor: '#FDECEC',
-                          backgroundColor: '#FDECEC',
+                          backgroundColor: palette.dangerLight,
                           borderRadius: 999,
                           paddingVertical: 13,
                           alignItems: 'center',

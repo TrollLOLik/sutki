@@ -260,10 +260,10 @@ export default function FiltersScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: palette.surface,
             borderRadius: 14,
             borderWidth: 1,
-            borderColor: '#E8E8E8',
+            borderColor: palette.line,
             padding: 14,
             gap: 14,
           }}
@@ -273,7 +273,7 @@ export default function FiltersScreen() {
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: '#F5F6F8',
+              backgroundColor: palette.surfaceMuted,
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -295,10 +295,10 @@ export default function FiltersScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: palette.surface,
             borderRadius: 14,
             borderWidth: 1,
-            borderColor: '#E8E8E8',
+            borderColor: palette.line,
             padding: 14,
             gap: 14,
           }}
@@ -308,7 +308,7 @@ export default function FiltersScreen() {
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: '#F5F6F8',
+              backgroundColor: palette.surfaceMuted,
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -329,7 +329,7 @@ export default function FiltersScreen() {
           <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Цена за сутки, ₽</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {/* Min Price Input */}
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E8E8E8', paddingHorizontal: 16, height: 48 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
               <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>от</Text>
               <TextInput
                 value={priceMinInput}
@@ -362,7 +362,7 @@ export default function FiltersScreen() {
             </View>
 
             {/* Max Price Input */}
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E8E8E8', paddingHorizontal: 16, height: 48 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
               <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>до</Text>
               <TextInput
                 value={priceMaxInput}
@@ -439,7 +439,7 @@ export default function FiltersScreen() {
               justifyContent: 'space-between',
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: '#E8E8E8',
+              borderColor: palette.line,
               paddingHorizontal: 16,
               paddingVertical: 12,
             }}
@@ -459,7 +459,7 @@ export default function FiltersScreen() {
                     justifyContent: 'center',
                     borderRadius: 18,
                     borderWidth: 1,
-                    borderColor: '#E8E8E8',
+                    borderColor: palette.line,
                   },
                   guests <= 1 ? { opacity: 0.4 } : undefined,
                 ]}
@@ -480,7 +480,7 @@ export default function FiltersScreen() {
                   justifyContent: 'center',
                   borderRadius: 18,
                   borderWidth: 1,
-                  borderColor: '#E8E8E8',
+                  borderColor: palette.line,
                 }}
               >
                 <Ionicons name="add" size={18} color={palette.ink} />

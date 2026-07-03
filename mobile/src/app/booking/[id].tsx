@@ -332,7 +332,7 @@ export default function BookingScreen() {
                     width: 16,
                     height: 16,
                     borderRadius: 8,
-                    backgroundColor: '#FFF0F0',
+                    backgroundColor: palette.dangerLight,
                     borderWidth: 1,
                     borderColor: '#FAD2D2',
                     alignItems: 'center',

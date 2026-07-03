@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { AnimatePresence, MotiView } from 'moti';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatRating, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
+import type { Palette } from '@/theme/tokens';
 import type { ListingCard } from '@/types/listing';
 
 interface ListingMapCardProps {
@@ -24,6 +26,7 @@ interface ListingMapCardProps {
  */
 export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
   const { palette } = useAppTheme();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -77,7 +80,7 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
             </View>
 
             <Pressable hitSlop={10} onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close-circle" size={24} color="rgba(0,0,0,0.35)" />
+              <Ionicons name="close-circle" size={24} color={palette.inkMuted} />
             </Pressable>
           </Pressable>
         </MotiView>
@@ -86,7 +89,8 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
   container: {
     position: 'absolute',
     bottom: 0,
@@ -99,7 +103,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     height: 116,
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,

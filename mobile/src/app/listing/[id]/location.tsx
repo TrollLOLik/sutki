@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, Linking, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,12 +8,13 @@ import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 
 import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
+import type { Palette } from '@/theme/tokens';
 
 function OrangePin() {
   return (
-    <View style={styles.pinContainer}>
+    <View style={pinStyles.pinContainer}>
       {/* Subtle Halo */}
-      <View style={styles.pinHalo} />
+      <View style={pinStyles.pinHalo} />
       {/* Pin SVG */}
       <Svg width="36" height="42" viewBox="0 0 36 42" fill="none">
         <Path
@@ -33,6 +34,7 @@ function OrangePin() {
 
 export default function LocationScreen() {
   const { palette } = useAppTheme();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -148,23 +150,40 @@ export default function LocationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const pinStyles = StyleSheet.create({
+  pinContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+  },
+  pinHalo: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 90, 31, 0.15)',
+  },
+});
+
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: palette.surface,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: palette.surface,
   },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: '#fff',
+    backgroundColor: palette.surface,
   },
   errorText: {
     fontSize: 16,
@@ -201,7 +220,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: palette.overlaySurface,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -211,7 +230,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bottomSheet: {
-    backgroundColor: '#fff',
+    backgroundColor: palette.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 10,
@@ -302,18 +321,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: 'bold',
-  },
-  pinContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 44,
-    height: 44,
-  },
-  pinHalo: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 90, 31, 0.15)',
   },
 });

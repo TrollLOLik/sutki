@@ -636,7 +636,7 @@ export default function ChatDialogScreen() {
 					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }} className="px-4 py-4 border-t border-line/30 bg-surface items-center justify-center">
 						<View className="rounded-card border p-4 w-full" style={{ borderRadius: 16, backgroundColor: palette.dangerLight, borderColor: 'rgba(229, 72, 77, 0.2)' }}>
 							<View className="flex-row items-start gap-3">
-								<View className="h-11 w-11 items-center justify-center rounded-full bg-white">
+								<View className="h-11 w-11 items-center justify-center rounded-full bg-surface">
 									<Ionicons name="trash-outline" size={20} color={palette.danger} />
 								</View>
 								<View className="flex-1">

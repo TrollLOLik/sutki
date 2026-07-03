@@ -23,6 +23,7 @@ import { useBboxAutoReload } from '@/hooks/useBboxAutoReload';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
+import type { Palette } from '@/theme/tokens';
 import { env } from '@/lib/env';
 import type { ListingCard } from '@/types/listing';
 
@@ -111,6 +112,7 @@ async function detectCityByIP(): Promise<string | null> {
 
 export default function MapScreen() {
   const { palette } = useAppTheme();
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<any>(null);
@@ -555,7 +557,8 @@ export default function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (palette: Palette) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.surface,
@@ -580,7 +583,7 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 12,
     marginRight: 10,
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -608,7 +611,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -634,15 +637,15 @@ const styles = StyleSheet.create({
   countChip: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: palette.overlaySurface,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.05)',
+    borderColor: palette.line,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -667,7 +670,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -683,12 +686,12 @@ const styles = StyleSheet.create({
   topInfoBar: {
     flexDirection: 'row',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: palette.overlaySurface,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 20,
     alignItems: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -730,12 +733,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyBar: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: palette.overlaySurface,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: palette.ink,
+    shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
