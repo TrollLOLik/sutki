@@ -17,14 +17,14 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/config"
 	httpdelivery "github.com/TrollLOLik/sutki/backend/internal/delivery/http"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
-	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
-	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
 )
@@ -138,8 +138,6 @@ func main() {
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
-
-
 	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage)
 
 	chatRepo := postgres.NewChatRepo(queries)
@@ -155,6 +153,10 @@ func main() {
 		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
+		// Slow-client hardening: bound idle keep-alive connections and header
+		// sizes explicitly instead of relying on implicit defaults.
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MiB
 	}
 
 	go func() {

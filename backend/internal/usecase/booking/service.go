@@ -230,7 +230,7 @@ func (s *Service) Confirm(ctx context.Context, id, ownerID int32) (domain.Bookin
 			body := fmt.Sprintf("Здравствуйте!\nВаша заявка на бронирование жилья по адресу %s %s подтверждена владельцем.\nПриятного отдыха!", updated.House.Street, updated.House.HouseNumber)
 			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, updated.Email, subject, body)
 			if err != nil {
-				log.Printf("booking notify: failed to send email to %s: %v", updated.Email, err)
+				log.Printf("booking notify: failed to send email to %s: %v", domain.MaskEmail(updated.Email), err)
 			}
 		}()
 	}
@@ -265,7 +265,7 @@ func (s *Service) Reject(ctx context.Context, id, ownerID int32, reason string) 
 			}
 			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, updated.Email, subject, body)
 			if err != nil {
-				log.Printf("booking notify: failed to send email to %s: %v", updated.Email, err)
+				log.Printf("booking notify: failed to send email to %s: %v", domain.MaskEmail(updated.Email), err)
 			}
 		}()
 	}
