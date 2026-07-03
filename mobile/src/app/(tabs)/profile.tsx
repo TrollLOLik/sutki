@@ -347,7 +347,7 @@ export default function ProfileScreen() {
         const size = 1024 * 1024; // fallback size
 
         const target = await presignMediaUpload(fileName, size, mimeType, 'avatar');
-        await uploadToS3(formAvatarUri, target.url, mimeType);
+        await uploadToS3(formAvatarUri, target, fileName, mimeType);
         finalAvatarUrl = target.key;
       } else {
         finalAvatarUrl = formAvatarUri;

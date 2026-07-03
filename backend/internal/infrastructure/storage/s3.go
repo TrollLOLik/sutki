@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
 
 type S3Storage struct {
@@ -105,24 +105,42 @@ func NewS3Storage(endpoint, presignEndpoint, region, bucket, accessKey, secretKe
 	}, nil
 }
 
-func (s *S3Storage) PresignUpload(ctx context.Context, key string, exactBytes int64, contentType string) (domain.UploadTarget, error) {
-	// Sign only ContentType in the presigned PUT URL.
-	// ContentLength is intentionally NOT signed because mobile clients (React Native XHR)
-	// set it automatically based on the real file size on disk, which may differ from the
-	// value reported by expo-image-picker (e.g. fileSize=undefined for camera photos).
-	// The client already enforces the 15 MB limit before uploading.
-	req, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+func (s *S3Storage) PresignUpload(ctx context.Context, key string, maxBytes int64, contentType string) (domain.UploadTarget, error) {
+	// Presigned POST (not PUT): a POST policy is the only S3 mechanism that
+	// enforces an upload size cap on the storage side via content-length-range.
+	// Presigned PUT URLs accept objects of any size regardless of what the
+	// backend validated at presign time (audit finding H-1).
+	//
+	// The range upper bound is the server-side per-type limit, NOT the
+	// client-claimed size: mobile clients (expo-image-picker) report
+	// unreliable sizes (e.g. fileSize=undefined for camera photos).
+	// The policy also pins the exact key and Content-Type, so the client
+	// cannot upload under a different path or MIME type.
+	req, err := s.presignClient.PresignPostObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
 		ContentType: aws.String(contentType),
+	}, func(o *s3.PresignPostOptions) {
+		o.Expires = 15 * time.Minute
+		o.Conditions = []any{
+			[]any{"content-length-range", 1, maxBytes},
+			map[string]string{"Content-Type": contentType},
+		}
 	})
 	if err != nil {
 		return domain.UploadTarget{}, err
 	}
 
+	// The SDK does not include Content-Type in the returned form fields even
+	// though the policy requires it — add it so the client can submit the
+	// exact value the policy was signed against.
+	fields := req.Values
+	fields["Content-Type"] = contentType
+
 	return domain.UploadTarget{
-		URL: req.URL,
-		Key: key,
+		URL:      req.URL,
+		FormData: fields,
+		Key:      key,
 	}, nil
 }
 

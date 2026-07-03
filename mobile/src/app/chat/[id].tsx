@@ -34,6 +34,7 @@ import {
 	presignUpload,
 	useConversations,
 } from '@/lib/api/chat';
+import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
 import { api } from '@/lib/api/client';
 import { palette } from '@/theme/tokens';
@@ -369,29 +370,12 @@ export default function ChatDialogScreen() {
 
 		setUploading(true);
 		try {
-			// 1. Get presigned upload parameters from Go API
+			// 1. Get presigned POST upload parameters from Go API
 			const target = await presignUpload(fileName, size, mimeType);
 
-			// 2. Upload file directly to S3 / MinIO via PUT using XMLHttpRequest
-			// React Native XMLHttpRequest natively supports streaming files via { uri } body.
-			await new Promise<void>((resolve, reject) => {
-				const xhr = new XMLHttpRequest();
-				xhr.open('PUT', target.url);
-				xhr.setRequestHeader('Content-Type', mimeType);
-				xhr.onload = () => {
-					if (xhr.status >= 200 && xhr.status < 300) {
-						resolve();
-					} else {
-						console.log('[S3] response body:', xhr.responseText);
-						console.log('[S3] url was:', target.url);
-						reject(new Error(`S3 upload failed: status ${xhr.status}`));
-					}
-				};
-				xhr.onerror = () => {
-					reject(new Error('S3 upload failed: network error'));
-				};
-				xhr.send({ uri } as any);
-			});
+			// 2. Upload file directly to S3 / MinIO via presigned POST.
+			// The POST policy enforces the size limit on the storage side.
+			await uploadToS3(uri, target, fileName, mimeType);
 
 			// 3. Send message with the attachment metadata referencing S3 key
 			await performSendMessage({

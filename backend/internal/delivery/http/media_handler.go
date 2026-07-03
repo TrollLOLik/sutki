@@ -56,10 +56,15 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 
 	contentType := strings.ToLower(strings.TrimSpace(req.ContentType))
 
-	// 1. Size and MIME validation based on type
+	// 1. Size and MIME validation based on type. The per-type limit is also
+	// passed to PresignUpload as the POST policy's content-length-range upper
+	// bound, so S3 enforces it authoritatively regardless of the client-
+	// claimed size (which picker libraries often misreport).
+	var maxSize int64
 	switch uploadType {
 	case "avatar":
-		if req.Size > 5*1024*1024 {
+		maxSize = 5 * 1024 * 1024
+		if req.Size > maxSize {
 			writeError(w, http.StatusBadRequest, "avatar size exceeds 5MB limit")
 			return
 		}
@@ -68,7 +73,8 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "listing":
-		if req.Size > 10*1024*1024 {
+		maxSize = 10 * 1024 * 1024
+		if req.Size > maxSize {
 			writeError(w, http.StatusBadRequest, "listing image size exceeds 10MB limit")
 			return
 		}
@@ -77,7 +83,8 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "chat":
-		if req.Size > 15*1024*1024 {
+		maxSize = 15 * 1024 * 1024
+		if req.Size > maxSize {
 			writeError(w, http.StatusBadRequest, "chat attachment size exceeds 15MB limit")
 			return
 		}
@@ -110,8 +117,8 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 		key = fmt.Sprintf("chat/uploads/%s%s", uuid, ext)
 	}
 
-	// 3. Generate S3 presigned upload target
-	target, err := targetStorage.PresignUpload(r.Context(), key, req.Size, contentType)
+	// 3. Generate S3 presigned POST target (size capped by maxSize via policy)
+	target, err := targetStorage.PresignUpload(r.Context(), key, maxSize, contentType)
 	if err != nil {
 		// Log the full error server-side; never leak storage internals to the client.
 		log.Printf("[Media] PresignUpload error (type=%s): %v", uploadType, err)

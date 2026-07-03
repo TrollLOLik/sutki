@@ -40,7 +40,7 @@ export interface SendMessageBody {
 
 export interface UploadTarget {
 	url: string;
-	form_data?: Record<string, string>;
+	form_data: Record<string, string>;
 	key: string;
 }
 
