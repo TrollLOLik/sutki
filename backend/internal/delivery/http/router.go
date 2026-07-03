@@ -14,9 +14,16 @@ import (
 func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// middleware.RealIP rewrites r.RemoteAddr from X-Forwarded-For / X-Real-IP
+	// unconditionally, which would let any direct client spoof its IP (and
+	// silently bypass the TRUST_PROXY_HEADERS gate in getClientIP). Only
+	// enable it when the deployment explicitly trusts its proxy headers.
+	if trustProxyHeaders {
+		r.Use(middleware.RealIP)
+	}
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(securityHeaders)
 	r.Use(middleware.Timeout(30 * time.Second))
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {

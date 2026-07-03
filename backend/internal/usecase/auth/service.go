@@ -198,9 +198,9 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 			body := fmt.Sprintf("Ваш одноразовый код для входа: %s\nКод действителен в течение 10 минут.", code)
 			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, email, subject, body)
 			if err != nil {
-				log.Printf("auth: failed to send email to %s: %v", email, err)
+				log.Printf("auth: failed to send email to %s: %v", maskEmail(email), err)
 			} else {
-				log.Printf("auth: verification email sent to %s", email)
+				log.Printf("auth: verification email sent to %s", maskEmail(email))
 			}
 		}()
 	}
@@ -259,7 +259,7 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 
 	// Link guest requests and change their status to in_progress
 	if err := s.users.LinkGuestRequests(ctx, user.ID, email); err != nil {
-		log.Printf("auth: failed to link guest requests for user %d (email %s): %v", user.ID, email, err)
+		log.Printf("auth: failed to link guest requests for user %d (email %s): %v", user.ID, maskEmail(email), err)
 	}
 
 	return s.issueTokens(ctx, user, info)
@@ -466,6 +466,12 @@ func normalizeEmail(raw string) (string, error) {
 		return "", domain.ErrInvalidEmail
 	}
 	return addr.Address, nil
+}
+
+// maskEmail redacts an email address for log output; see domain.MaskEmail.
+// Dev-only paths gated by exposeCode may still log full addresses.
+func maskEmail(email string) string {
+	return domain.MaskEmail(email)
 }
 
 func generateCode() (string, error) {
