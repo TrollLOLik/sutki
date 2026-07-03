@@ -94,6 +94,12 @@ func (h *AIHandler) GenerateDescription(w http.ResponseWriter, r *http.Request) 
 	req.City = strings.TrimSpace(req.City)
 	req.Street = strings.TrimSpace(req.Street)
 
+	// Strip emails/phone numbers from free-text before it leaves our
+	// infrastructure for the (potentially third-party / cross-border) LLM. The
+	// owner-authored draft is the main vector for leaking guest/owner contact
+	// details; structured fields (city/street) are addresses, not PII.
+	req.DraftDescription = llm.ScrubPII(req.DraftDescription)
+
 	// Apply rate limiting per user (fallback to IP for safety) - Relaxed to 20 requests per hour for interactive editing
 	ip := getClientIP(r)
 	userID, _ := userIDFromContext(r.Context())

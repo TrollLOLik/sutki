@@ -30,6 +30,10 @@ var attachmentKeyPattern = regexp.MustCompile(`^chat/uploads/[0-9a-f]{32}(\.[A-Z
 // that was not minted by this service.
 var errInvalidAttachmentKey = errors.New("invalid attachment reference")
 
+// maxAttachmentBytes is the maximum accepted size for a chat attachment,
+// enforced server-side against the actual uploaded object.
+const maxAttachmentBytes = 15 * 1024 * 1024
+
 // Config holds settings for the chat service and Centrifugo
 type Config struct {
 	CentrifugoURL string
@@ -207,9 +211,17 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		if err != nil {
 			return domain.Message{}, fmt.Errorf("failed to verify attachment on S3: %w", err)
 		}
-		// Max size validation (15 MB)
-		if info.SizeBytes > 15*1024*1024 {
-			return domain.Message{}, fmt.Errorf("file %s exceeds 15MB limit", att.FileName)
+		// Enforce the size limit against the actual uploaded object, not a
+		// client-claimed size. Presigned PUT cannot cap upload size, so a
+		// client could push an oversized object; reject it and delete the
+		// orphaned object best-effort. Deletion is safe here because the key
+		// already matched attachmentKeyPattern and StatObject confirmed it
+		// exists (we never delete arbitrary client-supplied keys).
+		if info.SizeBytes > maxAttachmentBytes {
+			if delErr := s.storage.Delete(ctx, att.URL); delErr != nil {
+				log.Printf("[Chat] Failed to delete oversized attachment %q: %v", att.URL, delErr)
+			}
+			return domain.Message{}, fmt.Errorf("file %s exceeds %dMB limit", att.FileName, maxAttachmentBytes/(1024*1024))
 		}
 		// Save the clean S3 object key (e.g. chat/uploads/...) to the database, rather than the public URL
 		attachments[i].URL = att.URL
