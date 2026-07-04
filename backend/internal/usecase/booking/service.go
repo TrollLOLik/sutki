@@ -23,34 +23,24 @@ const (
 
 // Config tunes the booking service.
 type Config struct {
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
-	SMTPFrom     string
-	ExposeCode   bool
+	// Notifier queues booking status emails. May be nil in tests; sends are
+	// then skipped.
+	Notifier   domain.EmailNotifier
+	ExposeCode bool
 }
 
 // Service implements booking (rental request) use cases.
 type Service struct {
-	repo         domain.BookingRepository
-	smtpHost     string
-	smtpPort     int
-	smtpUsername string
-	smtpPassword string
-	smtpFrom     string
-	exposeCode   bool
+	repo       domain.BookingRepository
+	notifier   domain.EmailNotifier
+	exposeCode bool
 }
 
 func New(repo domain.BookingRepository, cfg Config) *Service {
 	return &Service{
-		repo:         repo,
-		smtpHost:     cfg.SMTPHost,
-		smtpPort:     cfg.SMTPPort,
-		smtpUsername: cfg.SMTPUsername,
-		smtpPassword: cfg.SMTPPassword,
-		smtpFrom:     cfg.SMTPFrom,
-		exposeCode:   cfg.ExposeCode,
+		repo:       repo,
+		notifier:   cfg.Notifier,
+		exposeCode: cfg.ExposeCode,
 	}
 }
 
@@ -82,7 +72,7 @@ func clamp(limit, offset int32) (int32, int32) {
 // Create validates and creates a booking for b.UserID. The listing must exist
 // and be active, and a user cannot book their own listing.
 func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booking, error) {
-	ownerID, status, _, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
+	ownerID, status, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
 	if err != nil {
 		return domain.Booking{}, err
 	}
@@ -101,7 +91,34 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	if overlap {
 		return domain.Booking{}, domain.ErrDatesUnavailable
 	}
-	return s.repo.Create(ctx, b)
+	created, err := s.repo.Create(ctx, b)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+
+	// Notify the listing owner about the new request. Guest bookings start
+	// as pending_verification (the email is not confirmed yet), so the owner
+	// is only notified once the request is genuinely pending. Queueing
+	// failures are logged, never surfaced: the booking itself succeeded.
+	if s.notifier != nil && created.Status == domain.BookingPending {
+		s.notifyOwnerOfNewRequest(ctx, created, ownerEmail)
+	}
+	return created, nil
+}
+
+// notifyOwnerOfNewRequest enqueues the "new booking request" email for the
+// listing owner. The create result carries no house summary, so the booking
+// is re-read to include the address in the email; if that lookup fails the
+// email is still sent with degraded copy.
+func (s *Service) notifyOwnerOfNewRequest(ctx context.Context, created domain.Booking, ownerEmail string) {
+	withHouse, err := s.repo.GetByID(ctx, created.ID)
+	if err != nil {
+		log.Printf("booking notify: reload booking %d for owner email: %v", created.ID, err)
+		withHouse = created
+	}
+	if err := s.notifier.NotifyBookingRequested(ctx, ownerEmail, withHouse); err != nil {
+		log.Printf("booking notify: queue owner email for booking %d: %v", created.ID, err)
+	}
 }
 
 // BlockingRanges returns all non-terminal date ranges for a house so clients

@@ -1,0 +1,36 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ДомРядом</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F5F2F0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F2F0;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#FFFFFF;border-radius:12px;overflow:hidden;">
+<tr>
+<td style="background-color:#FF5A1F;padding:20px 32px;">
+<span style="font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;color:#FFFFFF;">ДомРядом</span>
+</td>
+</tr>
+<tr>
+<td style="padding:32px;">
+{{template "content" .}}
+</td>
+</tr>
+<tr>
+<td style="padding:20px 32px;background-color:#F5F2F0;">
+<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#8A8078;">
+Это автоматическое письмо сервиса «ДомРядом», отвечать на него не нужно.<br>
+Вы получили его, потому что этот адрес указан в вашем аккаунте или заявке на бронирование.
+</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>{{end}}
