@@ -2,13 +2,7 @@ package booking
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
 	"log"
-	"mime"
-	"net/mail"
-	"net/smtp"
-	"strings"
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -236,20 +230,10 @@ func (s *Service) Confirm(ctx context.Context, id, ownerID int32) (domain.Bookin
 	}
 	updated.House = b.House
 
-	if updated.Email != "" && s.smtpUsername != "" && s.smtpPassword != "" {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("booking notify panic recovered: %v", r)
-				}
-			}()
-			subject := "Ваша заявка на бронирование подтверждена!"
-			body := fmt.Sprintf("Здравствуйте!\nВаша заявка на бронирование жилья по адресу %s %s подтверждена владельцем.\nПриятного отдыха!", updated.House.Street, updated.House.HouseNumber)
-			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, updated.Email, subject, body)
-			if err != nil {
-				log.Printf("booking notify: failed to send email to %s: %v", domain.MaskEmail(updated.Email), err)
-			}
-		}()
+	if s.notifier != nil && updated.Email != "" {
+		if err := s.notifier.NotifyBookingConfirmed(ctx, updated); err != nil {
+			log.Printf("booking notify: queue confirmed email for booking %d: %v", updated.ID, err)
+		}
 	}
 
 	return updated, nil
@@ -268,23 +252,10 @@ func (s *Service) Reject(ctx context.Context, id, ownerID int32, reason string) 
 	}
 	updated.House = b.House
 
-	if updated.Email != "" && s.smtpUsername != "" && s.smtpPassword != "" {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("booking notify panic recovered: %v", r)
-				}
-			}()
-			subject := "Ваша заявка на бронирование отклонена"
-			body := fmt.Sprintf("Здравствуйте!\nВаша заявка на бронирование жилья по адресу %s %s была отклонена владельцем.\n", updated.House.Street, updated.House.HouseNumber)
-			if reason != "" {
-				body += fmt.Sprintf("Причина отклонения: %s\n", reason)
-			}
-			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, updated.Email, subject, body)
-			if err != nil {
-				log.Printf("booking notify: failed to send email to %s: %v", domain.MaskEmail(updated.Email), err)
-			}
-		}()
+	if s.notifier != nil && updated.Email != "" {
+		if err := s.notifier.NotifyBookingRejected(ctx, updated, reason); err != nil {
+			log.Printf("booking notify: queue rejected email for booking %d: %v", updated.ID, err)
+		}
 	}
 
 	return updated, nil
@@ -341,65 +312,3 @@ func canView(b domain.Booking, actorID int32) bool {
 	return b.House != nil && b.House.OwnerID == actorID
 }
 
-func sendEmail(host string, port int, username, password, from, to, subject, body string) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: false,
-		ServerName:         host,
-	}
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
-	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
-	}
-	defer conn.Close()
-
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return fmt.Errorf("smtp client: %w", err)
-	}
-	defer client.Close()
-
-	auth := smtp.PlainAuth("", username, password, host)
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("auth: %w", err)
-	}
-
-	fromCleaned := strings.TrimSpace(from)
-	if len(fromCleaned) >= 2 && fromCleaned[0] == '\'' && fromCleaned[len(fromCleaned)-1] == '\'' {
-		fromCleaned = fromCleaned[1 : len(fromCleaned)-1]
-	}
-	fromCleaned = strings.TrimSpace(fromCleaned)
-
-	fromParsed, err := mail.ParseAddress(fromCleaned)
-	if err != nil {
-		return fmt.Errorf("parse sender address: %w", err)
-	}
-
-	if err = client.Mail(fromParsed.Address); err != nil {
-		return fmt.Errorf("mail: %w", err)
-	}
-	if err = client.Rcpt(to); err != nil {
-		return fmt.Errorf("rcpt: %w", err)
-	}
-
-	writer, err := client.Data()
-	if err != nil {
-		return fmt.Errorf("data: %w", err)
-	}
-	defer writer.Close()
-
-	var fromHeader string
-	if fromParsed.Name != "" {
-		fromHeader = fmt.Sprintf("%s <%s>", mime.BEncoding.Encode("utf-8", fromParsed.Name), fromParsed.Address)
-	} else {
-		fromHeader = fromParsed.Address
-	}
-	subjectHeader := mime.BEncoding.Encode("utf-8", subject)
-
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", fromHeader, to, subjectHeader, body)
-	if _, err = writer.Write([]byte(msg)); err != nil {
-		return fmt.Errorf("write: %w", err)
-	}
-
-	return nil
-}
