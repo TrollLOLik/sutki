@@ -64,6 +64,9 @@ type Config struct {
 	CentrifugoURL string
 	CentrifugoKey string // API Key for server API calls
 	HMACSecret    string // Shared secret to sign JWTs
+	// Notifier queues "new message" emails for offline recipients. May be
+	// nil; email notifications are then disabled.
+	Notifier domain.EmailNotifier
 }
 
 type Service struct {
@@ -72,6 +75,7 @@ type Service struct {
 	centrifugoURL string
 	centrifugoKey string
 	hmacSecret    string
+	notifier      domain.EmailNotifier
 }
 
 func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Service {
@@ -81,6 +85,7 @@ func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Se
 		centrifugoURL: cfg.CentrifugoURL,
 		centrifugoKey: cfg.CentrifugoKey,
 		hmacSecret:    cfg.HMACSecret,
+		notifier:      cfg.Notifier,
 	}
 }
 
@@ -279,7 +284,105 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	// Publish to Centrifugo in background (use detached context since HTTP ctx is cancelled after response)
 	go s.publishMessage(context.Background(), msg)
 
+	// Queue an email for the recipient if they are not connected right now.
+	// Runs in background: presence check + enqueue must not delay the HTTP
+	// response. The notifier dedups per conversation within a quiet window,
+	// so message bursts produce at most one email.
+	if s.notifier != nil {
+		go s.notifyRecipientByEmail(context.Background(), msg)
+	}
+
 	return msg, nil
+}
+
+// notifyRecipientByEmail emails the other participant about a new message
+// when they have no active Centrifugo connection. Never fails the send path;
+// all errors are logged and dropped.
+func (s *Service) notifyRecipientByEmail(ctx context.Context, msg domain.Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("chat email notify panic recovered: %v", r)
+		}
+	}()
+
+	recipientID, recipientEmail, senderName, err := s.repo.GetChatEmailInfo(ctx, msg.ConversationID, msg.SenderID)
+	if err != nil {
+		log.Printf("chat email notify: lookup for conv %d: %v", msg.ConversationID, err)
+		return
+	}
+	if recipientEmail == "" {
+		return // deleted/disabled account
+	}
+
+	// Skip when the recipient is online: they will see the message in-app.
+	// If the presence check itself fails we fall through and send the email —
+	// better a redundant notification than a missed message.
+	if online, err := s.isUserOnline(recipientID); err != nil {
+		log.Printf("chat email notify: presence check for user %d failed, emailing anyway: %v", recipientID, err)
+	} else if online {
+		return
+	}
+
+	if err := s.notifier.NotifyChatMessage(ctx, recipientID, recipientEmail, senderName, msg.ConversationID); err != nil {
+		log.Printf("chat email notify: queue email for conv %d: %v", msg.ConversationID, err)
+	}
+}
+
+// isUserOnline asks Centrifugo whether the user has any active connection on
+// their personal channel (the app subscribes to it on every launch).
+func (s *Service) isUserOnline(userID int32) (bool, error) {
+	if s.centrifugoURL == "" {
+		return false, nil
+	}
+
+	url := fmt.Sprintf("%s/api", strings.TrimRight(s.centrifugoURL, "/"))
+	body := map[string]any{
+		"method": "presence_stats",
+		"params": map[string]any{
+			"channel": fmt.Sprintf("user:#%d", userID),
+		},
+	}
+	jsonBytes, err := json.Marshal(body)
+	if err != nil {
+		return false, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if s.centrifugoKey != "" {
+		req.Header.Set("X-API-Key", s.centrifugoKey)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("centrifugo status %d", resp.StatusCode)
+	}
+
+	var parsed struct {
+		Result struct {
+			NumClients int `json:"num_clients"`
+		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return false, err
+	}
+	if parsed.Error != nil {
+		// Presence not enabled for the namespace, channel unknown, etc.
+		return false, fmt.Errorf("centrifugo error %d: %s", parsed.Error.Code, parsed.Error.Message)
+	}
+	return parsed.Result.NumClients > 0, nil
 }
 
 func (s *Service) ReadMessages(ctx context.Context, userID int32, convID int64, messageID int64) error {

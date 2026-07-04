@@ -33,4 +33,46 @@ type EmailNotifier interface {
 	// NotifyBookingRejected tells the tenant their request was rejected,
 	// optionally with a reason. Deduplicated per booking id.
 	NotifyBookingRejected(ctx context.Context, b Booking, reason string) error
+
+	// NotifyBookingCancelled tells the listing owner the tenant cancelled a
+	// pending request. Gated by the owner's "booking" email preference.
+	// Deduplicated per booking id.
+	NotifyBookingCancelled(ctx context.Context, ownerID int32, ownerEmail string, b Booking) error
+
+	// NotifyChatMessage tells a user someone wrote to them while they were
+	// away. Gated by the recipient's "chat_digest" preference and
+	// deduplicated per conversation within a quiet window, so a burst of
+	// messages produces at most one email per window. The message body is
+	// never included.
+	NotifyChatMessage(ctx context.Context, recipientID int32, recipientEmail, senderName string, convID int64) error
+}
+
+// EmailCategory names an opt-outable group of notifications. Values are
+// stable: they appear in unsubscribe links.
+type EmailCategory string
+
+const (
+	EmailCategoryBooking    EmailCategory = "booking"
+	EmailCategoryChatDigest EmailCategory = "chat_digest"
+	EmailCategoryReviews    EmailCategory = "reviews"
+)
+
+// EmailPreferences holds a user's per-category opt-outs. The zero row (no DB
+// record) means everything enabled, matching the table defaults.
+type EmailPreferences struct {
+	UserID     int32
+	Booking    bool
+	ChatDigest bool
+	Reviews    bool
+}
+
+// EmailPreferencesRepository persists per-user email opt-outs.
+type EmailPreferencesRepository interface {
+	// Get returns the user's preferences, or the all-enabled default when no
+	// row exists.
+	Get(ctx context.Context, userID int32) (EmailPreferences, error)
+	// Update upserts the full preference set for the user.
+	Update(ctx context.Context, p EmailPreferences) error
+	// SetCategory flips a single category (used by unsubscribe links).
+	SetCategory(ctx context.Context, userID int32, cat EmailCategory, enabled bool) error
 }

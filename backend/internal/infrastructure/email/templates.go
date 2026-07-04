@@ -17,6 +17,8 @@ const (
 	EventBookingNew       = "booking_new"
 	EventBookingConfirmed = "booking_confirmed"
 	EventBookingRejected  = "booking_rejected"
+	EventBookingCancelled = "booking_cancelled"
+	EventChatDigest       = "chat_digest"
 )
 
 var eventTypes = []string{
@@ -24,6 +26,8 @@ var eventTypes = []string{
 	EventBookingNew,
 	EventBookingConfirmed,
 	EventBookingRejected,
+	EventBookingCancelled,
+	EventChatDigest,
 }
 
 // renderer holds pre-parsed HTML and plain-text template sets per event.

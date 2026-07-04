@@ -288,6 +288,19 @@ func (s *Service) Cancel(ctx context.Context, id, userID int32, guestID string) 
 		return domain.Booking{}, err
 	}
 	updated.House = b.House
+
+	// Notify the owner only when the request was genuinely pending: for
+	// pending_verification the owner never learned about the request, so a
+	// cancellation email would only confuse them. Opt-outable via the
+	// owner's "booking" preference inside the notifier.
+	if s.notifier != nil && b.Status == domain.BookingPending {
+		ownerID, _, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
+		if err != nil {
+			log.Printf("booking notify: owner lookup for cancelled booking %d: %v", updated.ID, err)
+		} else if err := s.notifier.NotifyBookingCancelled(ctx, ownerID, ownerEmail, updated); err != nil {
+			log.Printf("booking notify: queue cancelled email for booking %d: %v", updated.ID, err)
+		}
+	}
 	return updated, nil
 }
 

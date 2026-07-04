@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// middleware.RealIP rewrites r.RemoteAddr from X-Forwarded-For / X-Real-IP
@@ -66,6 +66,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 
 		// Public/Guest endpoints
 		r.Get("/guest/requests", bookingHandler.ListGuest)
+		// Login-free unsubscribe link from email footers (HMAC-signed).
+		r.Get("/email/unsubscribe", emailHandler.Unsubscribe)
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
@@ -85,6 +87,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Post("/me/delete/confirm", authHandler.ConfirmDeleteMe)
 			r.Get("/me/reviews/written", reviewHandler.ListMineWritten)
 			r.Get("/me/reviews/received", reviewHandler.ListMineReceived)
+			r.Get("/me/email-preferences", emailHandler.GetPreferences)
+			r.Put("/me/email-preferences", emailHandler.UpdatePreferences)
 			r.Route("/requests", func(r chi.Router) {
 				// Authenticated sub-routes
 				r.Group(func(r chi.Router) {

@@ -98,10 +98,16 @@ func main() {
 	smtpSender := email.NewSMTPSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
 	mailer := email.NewMailer(postgres.NewEmailOutboxRepo(pool), smtpSender)
 	mailer.Start(ctx)
-	notifier, err := email.NewNotifier(mailer)
+	emailPrefsRepo := postgres.NewEmailPrefsRepo(pool)
+	notifier, err := email.NewNotifier(mailer, email.NotifierConfig{
+		Prefs:              emailPrefsRepo,
+		UnsubscribeBaseURL: cfg.PublicAPIBaseURL,
+		UnsubscribeSecret:  cfg.EmailUnsubscribeSecret,
+	})
 	if err != nil {
 		log.Fatalf("email templates: %v", err)
 	}
+	emailHandler := httpdelivery.NewEmailHandler(emailPrefsRepo, cfg.EmailUnsubscribeSecret)
 
 	listingRepo := postgres.NewListingRepo(queries)
 	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer)
@@ -148,12 +154,13 @@ func main() {
 		CentrifugoURL: cfg.CentrifugoURL,
 		CentrifugoKey: cfg.CentrifugoKey,
 		HMACSecret:    cfg.CentrifugoHMACSecret,
+		Notifier:      notifier,
 	})
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		// Slow-client hardening: bound idle keep-alive connections and header

@@ -2,6 +2,9 @@ package email
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"strings"
@@ -10,27 +13,50 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
 
+// NotifierConfig tunes preference gating and unsubscribe links.
+type NotifierConfig struct {
+	// Prefs gates non-transactional categories. May be nil: everything is
+	// then treated as enabled (and unsubscribe links are still generated).
+	Prefs domain.EmailPreferencesRepository
+	// UnsubscribeBaseURL is the public API origin used to build unsubscribe
+	// links, e.g. "https://api.example.com". Empty disables the footer link.
+	UnsubscribeBaseURL string
+	// UnsubscribeSecret signs unsubscribe links (HMAC-SHA256). Empty
+	// disables the footer link.
+	UnsubscribeSecret string
+}
+
 // Notifier implements domain.EmailNotifier on top of the durable Mailer.
-// It renders templates, assigns dedup keys, and skips silently when SMTP is
-// not configured (dev environments), mirroring the previous inline behavior.
+// It renders templates, assigns dedup keys, checks per-user preferences for
+// opt-outable categories, and skips silently when SMTP is not configured
+// (dev environments), mirroring the previous inline behavior.
 type Notifier struct {
 	mailer   *Mailer
 	renderer *renderer
+	cfg      NotifierConfig
 }
 
 // NewNotifier fails only on template parse errors, i.e. at startup.
-func NewNotifier(mailer *Mailer) (*Notifier, error) {
+func NewNotifier(mailer *Mailer, cfg NotifierConfig) (*Notifier, error) {
 	r, err := newRenderer()
 	if err != nil {
 		return nil, err
 	}
-	return &Notifier{mailer: mailer, renderer: r}, nil
+	return &Notifier{mailer: mailer, renderer: r, cfg: cfg}, nil
+}
+
+// commonData is embedded into every template data struct so the shared
+// layout can reference {{.UnsubscribeURL}} unconditionally. Transactional
+// emails leave it empty and render no unsubscribe link.
+type commonData struct {
+	UnsubscribeURL string
 }
 
 var _ domain.EmailNotifier = (*Notifier)(nil)
 
 func (n *Notifier) SendLoginCode(ctx context.Context, email, code string, ttl time.Duration) error {
 	data := struct {
+		commonData
 		Code       string
 		TTLMinutes int
 	}{Code: code, TTLMinutes: int(ttl.Minutes())}
@@ -46,6 +72,7 @@ func (n *Notifier) SendLoginCode(ctx context.Context, email, code string, ttl ti
 
 func (n *Notifier) NotifyBookingRequested(ctx context.Context, ownerEmail string, b domain.Booking) error {
 	data := struct {
+		commonData
 		Address     string
 		GuestName   string
 		Dates       string
@@ -67,6 +94,7 @@ func (n *Notifier) NotifyBookingRequested(ctx context.Context, ownerEmail string
 
 func (n *Notifier) NotifyBookingConfirmed(ctx context.Context, b domain.Booking) error {
 	data := struct {
+		commonData
 		Address string
 		Dates   string
 	}{Address: bookingAddress(b), Dates: bookingDates(b)}
@@ -82,6 +110,7 @@ func (n *Notifier) NotifyBookingConfirmed(ctx context.Context, b domain.Booking)
 
 func (n *Notifier) NotifyBookingRejected(ctx context.Context, b domain.Booking, reason string) error {
 	data := struct {
+		commonData
 		Address string
 		Dates   string
 		Reason  string
@@ -94,6 +123,118 @@ func (n *Notifier) NotifyBookingRejected(ctx context.Context, b domain.Booking, 
 		EventType: EventBookingRejected,
 		Subject:   "Ваша заявка на бронирование отклонена",
 	}, data)
+}
+
+func (n *Notifier) NotifyBookingCancelled(ctx context.Context, ownerID int32, ownerEmail string, b domain.Booking) error {
+	allowed, err := n.categoryEnabled(ctx, ownerID, domain.EmailCategoryBooking)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		log.Printf("email: %s to user %d skipped (opted out)", EventBookingCancelled, ownerID)
+		return nil
+	}
+
+	data := struct {
+		commonData
+		Address   string
+		GuestName string
+		Dates     string
+	}{
+		commonData: commonData{UnsubscribeURL: n.unsubscribeURL(ownerID, domain.EmailCategoryBooking)},
+		Address:    bookingAddress(b),
+		GuestName:  guestName(b),
+		Dates:      bookingDates(b),
+	}
+
+	return n.enqueue(ctx, OutboxMessage{
+		DedupKey:  fmt.Sprintf("%s:%d", EventBookingCancelled, b.ID),
+		UserID:    ownerID,
+		Recipient: ownerEmail,
+		EventType: EventBookingCancelled,
+		Subject:   "Гость отменил заявку на бронирование — ДомРядом",
+	}, data)
+}
+
+// chatDigestWindow is the quiet period per conversation: within one window a
+// burst of messages produces at most one email (enforced via the dedup key).
+const chatDigestWindow = 30 * time.Minute
+
+func (n *Notifier) NotifyChatMessage(ctx context.Context, recipientID int32, recipientEmail, senderName string, convID int64) error {
+	allowed, err := n.categoryEnabled(ctx, recipientID, domain.EmailCategoryChatDigest)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		log.Printf("email: %s to user %d skipped (opted out)", EventChatDigest, recipientID)
+		return nil
+	}
+
+	if senderName == "" {
+		senderName = "Пользователь"
+	}
+	data := struct {
+		commonData
+		SenderName string
+	}{
+		commonData: commonData{UnsubscribeURL: n.unsubscribeURL(recipientID, domain.EmailCategoryChatDigest)},
+		SenderName: senderName,
+	}
+
+	// The time bucket in the dedup key implements the quiet window: all
+	// messages in the same conversation within one bucket collapse into a
+	// single queued email.
+	bucket := time.Now().Unix() / int64(chatDigestWindow.Seconds())
+	return n.enqueue(ctx, OutboxMessage{
+		DedupKey:  fmt.Sprintf("%s:%d:%d:%d", EventChatDigest, convID, recipientID, bucket),
+		UserID:    recipientID,
+		Recipient: recipientEmail,
+		EventType: EventChatDigest,
+		Subject:   "Новое сообщение в чате — ДомРядом",
+	}, data)
+}
+
+// categoryEnabled consults the user's stored preferences. Errors are treated
+// as "enabled" so a prefs outage never silently drops notifications — but the
+// error is still returned to the caller's log via nil handling here.
+func (n *Notifier) categoryEnabled(ctx context.Context, userID int32, cat domain.EmailCategory) (bool, error) {
+	if n.cfg.Prefs == nil || userID == 0 {
+		return true, nil
+	}
+	p, err := n.cfg.Prefs.Get(ctx, userID)
+	if err != nil {
+		log.Printf("email: prefs lookup for user %d failed, sending anyway: %v", userID, err)
+		return true, nil
+	}
+	switch cat {
+	case domain.EmailCategoryBooking:
+		return p.Booking, nil
+	case domain.EmailCategoryChatDigest:
+		return p.ChatDigest, nil
+	case domain.EmailCategoryReviews:
+		return p.Reviews, nil
+	default:
+		return true, nil
+	}
+}
+
+// unsubscribeURL builds an HMAC-signed opt-out link that works without login.
+// Returns "" (no link rendered) when the base URL or secret is not configured.
+func (n *Notifier) unsubscribeURL(userID int32, cat domain.EmailCategory) string {
+	if n.cfg.UnsubscribeBaseURL == "" || n.cfg.UnsubscribeSecret == "" || userID == 0 {
+		return ""
+	}
+	sig := UnsubscribeSignature(n.cfg.UnsubscribeSecret, userID, cat)
+	return fmt.Sprintf("%s/api/v1/email/unsubscribe?uid=%d&cat=%s&sig=%s",
+		strings.TrimRight(n.cfg.UnsubscribeBaseURL, "/"), userID, cat, sig)
+}
+
+// UnsubscribeSignature computes the HMAC-SHA256 hex signature for an
+// unsubscribe link. Exported so the HTTP handler verifies with the same code.
+func UnsubscribeSignature(secret string, userID int32, cat domain.EmailCategory) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	fmt.Fprintf(mac, "unsubscribe:%d:%s", userID, cat)
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // enqueue renders the event and persists it into the outbox. All EmailNotifier

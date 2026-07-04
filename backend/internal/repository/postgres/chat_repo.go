@@ -386,6 +386,32 @@ func (r *ChatRepo) GetOtherParticipantID(ctx context.Context, convID int64, user
 	})
 }
 
+// GetChatEmailInfo returns the other participant's id and email plus the
+// sender's display name in a single round-trip, for the "new message" email.
+// The recipient's email is returned empty when their account is deleted or
+// disabled, so callers naturally skip sending.
+func (r *ChatRepo) GetChatEmailInfo(ctx context.Context, convID int64, senderID int32) (int32, string, string, error) {
+	const q = `
+SELECT
+  ru.id,
+  CASE WHEN ru.deleted OR NOT ru.enable THEN '' ELSE ru.email END,
+  COALESCE(NULLIF(TRIM(COALESCE(su.name, '') || ' ' || COALESCE(su.surname, '')), ''), 'Пользователь')
+FROM conversation_participant cp
+JOIN "user" ru ON ru.id = cp.user_id
+JOIN "user" su ON su.id = $2
+WHERE cp.conversation_id = $1 AND cp.user_id <> $2
+LIMIT 1`
+	var (
+		recipientID    int32
+		recipientEmail string
+		senderName     string
+	)
+	if err := r.q.DB().QueryRow(ctx, q, convID, senderID).Scan(&recipientID, &recipientEmail, &senderName); err != nil {
+		return 0, "", "", fmt.Errorf("chat email info: %w", err)
+	}
+	return recipientID, recipientEmail, senderName, nil
+}
+
 func derefString(s *string) string {
 	if s == nil {
 		return ""
