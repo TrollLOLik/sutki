@@ -96,7 +96,7 @@ func main() {
 	// Durable email pipeline: DB-backed outbox + single worker draining it
 	// over SMTP. Usecases only enqueue; delivery, retries and dedup live here.
 	smtpSender := email.NewSMTPSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
-	mailer := email.NewMailer(postgres.NewEmailOutboxRepo(pool), smtpSender)
+	mailer := email.NewMailer(postgres.NewEmailOutboxRepo(pool), smtpSender, int64(cfg.EmailDailyLimit))
 	mailer.Start(ctx)
 	emailPrefsRepo := postgres.NewEmailPrefsRepo(pool)
 	notifier, err := email.NewNotifier(mailer, email.NotifierConfig{
@@ -140,7 +140,7 @@ func main() {
 	favoriteHandler := httpdelivery.NewFavoriteHandler(favoriteSvc, cfg.MediaBaseURL)
 
 	reviewRepo := postgres.NewReviewRepo(queries)
-	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer)
+	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 
 	aiHandler := httpdelivery.NewAIHandler(llmClient, listingSvc, true)

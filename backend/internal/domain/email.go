@@ -45,6 +45,15 @@ type EmailNotifier interface {
 	// messages produces at most one email per window. The message body is
 	// never included.
 	NotifyChatMessage(ctx context.Context, recipientID int32, recipientEmail, senderName string, convID int64) error
+
+	// SendWelcome greets a newly registered user. Deduplicated per user id,
+	// so at-most-one welcome email is ever sent to an account.
+	SendWelcome(ctx context.Context, userID int32, email string) error
+
+	// NotifyReviewReceived tells a listing owner a new review was published.
+	// Gated by the owner's "reviews" preference. The review body is not
+	// included, only the rating. Deduplicated per review id.
+	NotifyReviewReceived(ctx context.Context, ownerID int32, ownerEmail string, reviewID int64, rating int32, address string) error
 }
 
 // EmailCategory names an opt-outable group of notifications. Values are

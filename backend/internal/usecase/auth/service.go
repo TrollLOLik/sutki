@@ -233,11 +233,20 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 	_ = s.codes.Delete(ctx, email)
 
 	user, err := s.users.GetByEmail(ctx, email)
-	if errors.Is(err, domain.ErrNotFound) {
+	isNewUser := errors.Is(err, domain.ErrNotFound)
+	if isNewUser {
 		user, err = s.users.Create(ctx, email)
 	}
 	if err != nil {
 		return AuthResult{}, err
+	}
+
+	// Greet brand-new accounts. The outbox dedups per user id, so even a
+	// race between two concurrent first logins yields a single welcome.
+	if isNewUser && s.notifier != nil {
+		if err := s.notifier.SendWelcome(ctx, user.ID, email); err != nil {
+			log.Printf("auth: failed to queue welcome email for user %d: %v", user.ID, err)
+		}
 	}
 
 	// Link guest requests and change their status to in_progress

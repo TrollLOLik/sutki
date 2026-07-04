@@ -194,6 +194,50 @@ func (n *Notifier) NotifyChatMessage(ctx context.Context, recipientID int32, rec
 	}, data)
 }
 
+func (n *Notifier) SendWelcome(ctx context.Context, userID int32, email string) error {
+	data := struct {
+		commonData
+	}{}
+
+	return n.enqueue(ctx, OutboxMessage{
+		// Dedup per user: re-login flows can never produce a second welcome.
+		DedupKey:  fmt.Sprintf("%s:%d", EventWelcome, userID),
+		UserID:    userID,
+		Recipient: email,
+		EventType: EventWelcome,
+		Subject:   "Добро пожаловать в «ДомРядом»!",
+	}, data)
+}
+
+func (n *Notifier) NotifyReviewReceived(ctx context.Context, ownerID int32, ownerEmail string, reviewID int64, rating int32, address string) error {
+	allowed, err := n.categoryEnabled(ctx, ownerID, domain.EmailCategoryReviews)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		log.Printf("email: %s to user %d skipped (opted out)", EventReviewReceived, ownerID)
+		return nil
+	}
+
+	data := struct {
+		commonData
+		Rating  int32
+		Address string
+	}{
+		commonData: commonData{UnsubscribeURL: n.unsubscribeURL(ownerID, domain.EmailCategoryReviews)},
+		Rating:     rating,
+		Address:    address,
+	}
+
+	return n.enqueue(ctx, OutboxMessage{
+		DedupKey:  fmt.Sprintf("%s:%d", EventReviewReceived, reviewID),
+		UserID:    ownerID,
+		Recipient: ownerEmail,
+		EventType: EventReviewReceived,
+		Subject:   "У вас новый отзыв — ДомРядом",
+	}, data)
+}
+
 // categoryEnabled consults the user's stored preferences. Errors are treated
 // as "enabled" so a prefs outage never silently drops notifications — but the
 // error is still returned to the caller's log via nil handling here.

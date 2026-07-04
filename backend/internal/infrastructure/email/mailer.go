@@ -49,6 +49,12 @@ type OutboxRepository interface {
 	MarkRetry(ctx context.Context, id int64, lastError string, nextAttemptAt time.Time) error
 	// MarkFailed records a permanently failed delivery (attempts exhausted).
 	MarkFailed(ctx context.Context, id int64, lastError string) error
+	// CountSentSince returns delivered-email count since the cutoff (for
+	// the daily SMTP quota).
+	CountSentSince(ctx context.Context, since time.Time) (int64, error)
+	// Postpone reschedules a queued row without counting an attempt (quota
+	// deferral, not a delivery failure).
+	Postpone(ctx context.Context, id int64, until time.Time) error
 	// Prune deletes terminal (sent/failed) rows created before the cutoff.
 	Prune(ctx context.Context, before time.Time) (int64, error)
 }
@@ -90,13 +96,19 @@ type Mailer struct {
 	repo   OutboxRepository
 	sender Sender
 	wake   chan struct{}
+	// dailyLimit caps SMTP sends per calendar day (server local time) to
+	// stay under the Yandex 360 mailbox quota. 0 disables the cap.
+	// Transactional login codes (otp_code) are exempt: they must always go
+	// out; everything else is postponed to the next day when the cap hits.
+	dailyLimit int64
 }
 
-func NewMailer(repo OutboxRepository, sender Sender) *Mailer {
+func NewMailer(repo OutboxRepository, sender Sender, dailyLimit int64) *Mailer {
 	return &Mailer{
-		repo:   repo,
-		sender: sender,
-		wake:   make(chan struct{}, 1),
+		repo:       repo,
+		sender:     sender,
+		wake:       make(chan struct{}, 1),
+		dailyLimit: dailyLimit,
 	}
 }
 
@@ -163,6 +175,8 @@ func (m *Mailer) Start(ctx context.Context) {
 
 // processDue drains due rows in batches until the table has no more work.
 func (m *Mailer) processDue(ctx context.Context) {
+	sentToday := m.sentToday(ctx)
+
 	for {
 		items, err := m.repo.DueBatch(ctx, batchSize)
 		if err != nil {
@@ -176,11 +190,60 @@ func (m *Mailer) processDue(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+
+			// Daily quota: transactional login codes always go out; other
+			// events are postponed to just after local midnight. Postponing
+			// removes the row from the due set, so the drain loop cannot
+			// spin on it.
+			if m.dailyLimit > 0 && sentToday >= m.dailyLimit && item.EventType != EventOTPCode {
+				next := nextMidnight()
+				if err := m.repo.Postpone(ctx, item.ID, next); err != nil {
+					log.Printf("email worker: postpone id=%d: %v", item.ID, err)
+					return // avoid a hot loop if postponing itself fails
+				}
+				log.Printf("email worker: daily limit %d reached, postponed %s to %s until %s",
+					m.dailyLimit, item.EventType, domain.MaskEmail(item.Recipient),
+					next.Format(time.RFC3339))
+				continue
+			}
+
 			m.deliver(ctx, item)
+			sentToday++
+			// One-shot alert when crossing 80% of the daily quota.
+			if threshold := m.dailyLimit * 4 / 5; m.dailyLimit > 0 &&
+				sentToday >= threshold && sentToday-1 < threshold {
+				log.Printf("email worker: WARNING sent volume at 80%% of daily limit (%d/%d)",
+					sentToday, m.dailyLimit)
+			}
 			// Global throttle between sends (single worker => serialized).
 			time.Sleep(sendInterval)
 		}
 	}
+}
+
+// sentToday counts today's deliveries (server local midnight). On error the
+// count is treated as 0: better to risk brushing the provider limit than to
+// stop sending login codes because of a transient DB hiccup.
+func (m *Mailer) sentToday(ctx context.Context) int64 {
+	if m.dailyLimit <= 0 {
+		return 0
+	}
+	now := time.Now()
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	n, err := m.repo.CountSentSince(ctx, midnight)
+	if err != nil {
+		log.Printf("email worker: count sent today: %v", err)
+		return 0
+	}
+	return n
+}
+
+// nextMidnight returns the start of the next local day plus a small offset
+// so postponed mail does not all fire at exactly 00:00:00.
+func nextMidnight() time.Time {
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).
+		Add(24*time.Hour + 5*time.Minute)
 }
 
 func (m *Mailer) deliver(ctx context.Context, item OutboxItem) {

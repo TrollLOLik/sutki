@@ -47,6 +47,10 @@ type Config struct {
 	// EmailUnsubscribeSecret signs login-free unsubscribe links. Falls back
 	// to JWTSecret when unset so no extra env var is strictly required.
 	EmailUnsubscribeSecret string
+	// EmailDailyLimit caps outgoing emails per calendar day to stay under
+	// the Yandex 360 mailbox quota. Login codes are exempt from the cap;
+	// other notifications are postponed to the next day. 0 disables the cap.
+	EmailDailyLimit int
 
 	DadataAPIKey string
 
@@ -93,6 +97,7 @@ func Load() (Config, error) {
 
 		PublicAPIBaseURL:       getEnv("PUBLIC_API_BASE_URL", ""),
 		EmailUnsubscribeSecret: getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
+		EmailDailyLimit:        getInt("EMAIL_DAILY_LIMIT", 500),
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
 

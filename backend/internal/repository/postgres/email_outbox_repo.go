@@ -109,6 +109,28 @@ func (r *EmailOutboxRepo) MarkFailed(ctx context.Context, id int64, lastError st
 	return err
 }
 
+// CountSentSince returns how many emails were delivered since the cutoff;
+// used for the daily SMTP quota.
+func (r *EmailOutboxRepo) CountSentSince(ctx context.Context, since time.Time) (int64, error) {
+	var n int64
+	err := r.pool.QueryRow(ctx, `
+		SELECT count(*) FROM email_outbox
+		WHERE status = 'sent' AND sent_at >= $1
+	`, since).Scan(&n)
+	return n, err
+}
+
+// Postpone reschedules a queued row without counting an attempt (used when
+// the daily quota is exhausted, not when delivery failed).
+func (r *EmailOutboxRepo) Postpone(ctx context.Context, id int64, until time.Time) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE email_outbox
+		SET next_attempt_at = $2
+		WHERE id = $1 AND status = 'queued'
+	`, id, until)
+	return err
+}
+
 // Prune deletes terminal rows older than the cutoff.
 func (r *EmailOutboxRepo) Prune(ctx context.Context, before time.Time) (int64, error) {
 	tag, err := r.pool.Exec(ctx, `

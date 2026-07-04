@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -20,10 +21,14 @@ type Service struct {
 	repo         domain.ReviewRepository
 	listingRepo  domain.ListingRepository
 	aiSummarizer domain.AISummarizer
+	users        domain.UserRepository
+	notifier     domain.EmailNotifier
 }
 
-func New(repo domain.ReviewRepository, listingRepo domain.ListingRepository, aiSummarizer domain.AISummarizer) *Service {
-	return &Service{repo: repo, listingRepo: listingRepo, aiSummarizer: aiSummarizer}
+// New wires the review service. users and notifier may be nil (tests, or
+// email disabled): the "new review" owner email is then skipped.
+func New(repo domain.ReviewRepository, listingRepo domain.ListingRepository, aiSummarizer domain.AISummarizer, users domain.UserRepository, notifier domain.EmailNotifier) *Service {
+	return &Service{repo: repo, listingRepo: listingRepo, aiSummarizer: aiSummarizer, users: users, notifier: notifier}
 }
 
 // ListResult is a page of a listing's reviews plus the rating summary.
@@ -118,7 +123,50 @@ func (s *Service) Create(ctx context.Context, r domain.NewReview) (domain.Review
 		}()
 	}
 
+	// Notify the owner about the new review in background: the owner email
+	// lookup is an extra query that must not delay the author's response.
+	// Opt-outable via the "reviews" preference inside the notifier; dedup
+	// per review id makes retries safe.
+	if s.notifier != nil && s.users != nil {
+		go s.notifyOwner(context.Background(), house, created)
+	}
+
 	return created, nil
+}
+
+// notifyOwner queues the "new review" email for the listing owner. Errors
+// are logged and dropped: the review is already published.
+func (s *Service) notifyOwner(ctx context.Context, house domain.House, rev domain.Review) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("review notify panic recovered: %v", r)
+		}
+	}()
+
+	owner, err := s.users.GetByID(ctx, house.OwnerID)
+	if err != nil {
+		log.Printf("review notify: owner %d lookup for review %d: %v", house.OwnerID, rev.ID, err)
+		return
+	}
+	if owner.Email == "" {
+		return
+	}
+
+	address := strings.TrimSpace(strings.Join(nonEmpty(house.City, strings.TrimSpace(house.Street+" "+house.HouseNumber)), ", "))
+	if err := s.notifier.NotifyReviewReceived(ctx, owner.ID, owner.Email, int64(rev.ID), rev.Rating, address); err != nil {
+		log.Printf("review notify: queue email for review %d: %v", rev.ID, err)
+	}
+}
+
+// nonEmpty filters out empty strings, keeping order.
+func nonEmpty(parts ...string) []string {
+	out := parts[:0]
+	for _, p := range parts {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (s *Service) regenerateReviewsSummary(ctx context.Context, houseID int32) error {
