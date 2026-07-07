@@ -194,7 +194,12 @@ func (r *UserRepo) AnonymizeAndRevoke(ctx context.Context, id int32, emailHash s
 	return tx.Commit(ctx)
 }
 
-func (r *UserRepo) LinkGuestRequests(ctx context.Context, userID int32, email string) error {
+// LinkGuestRequests runs the full guest-request linking flow in one
+// transaction. Raw SQL rather than sqlc: the generated LinkGuestRequests
+// query only contained the first statement (the DELETE), so the actual
+// linking UPDATE and the profile backfill were silently never executed.
+// Returns the linked request IDs so callers can notify the listing owners.
+func (r *UserRepo) LinkGuestRequests(ctx context.Context, userID int32, email string) ([]int32, error) {
 	type TxBeginner interface {
 		Begin(ctx context.Context) (pgx.Tx, error)
 	}
@@ -202,24 +207,76 @@ func (r *UserRepo) LinkGuestRequests(ctx context.Context, userID int32, email st
 	db := r.q.DB()
 	txb, ok := db.(TxBeginner)
 	if !ok {
-		return errors.New("underlying database connection does not support transactions")
+		return nil, errors.New("underlying database connection does not support transactions")
 	}
 
 	tx, err := txb.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	qtx := r.q.WithTx(tx)
-	if err := qtx.LinkGuestRequests(ctx, sqlc.LinkGuestRequestsParams{
-		UserID: userID,
-		Email:  email,
-	}); err != nil {
-		return err
+	// 1. Drop guest requests the user made on their own listings.
+	const deleteOwn = `
+DELETE FROM request
+USING house
+WHERE request.house_id = house.id
+  AND LOWER(TRIM(request.email)) = LOWER(TRIM($1))
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id = $2::int`
+	if _, err := tx.Exec(ctx, deleteOwn, email, userID); err != nil {
+		return nil, err
 	}
 
-	return tx.Commit(ctx)
+	// 2. Link the remaining guest requests to the verified user and move
+	// them to in_progress so owners finally see them as pending.
+	const linkRequests = `
+UPDATE request
+SET user_id = $2::int, status = 'in_progress', updated_at = now()
+FROM house
+WHERE request.house_id = house.id
+  AND LOWER(TRIM(request.email)) = LOWER(TRIM($1))
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id != $2::int
+RETURNING request.id`
+	rows, err := tx.Query(ctx, linkRequests, email, userID)
+	if err != nil {
+		return nil, err
+	}
+	var linkedIDs []int32
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		linkedIDs = append(linkedIDs, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 3. Backfill the empty profile from the freshest guest request data.
+	const backfillProfile = `
+UPDATE "user"
+SET
+  name = COALESCE(NULLIF(name, ''), (SELECT name FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) AND name IS NOT NULL AND name != '' ORDER BY created_at DESC LIMIT 1)),
+  surname = COALESCE(NULLIF(surname, ''), (SELECT surname FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) AND surname IS NOT NULL AND surname != '' ORDER BY created_at DESC LIMIT 1)),
+  patronymic = COALESCE(NULLIF(patronymic, ''), (SELECT lastname FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) AND lastname IS NOT NULL AND lastname != '' ORDER BY created_at DESC LIMIT 1)),
+  phone = COALESCE(NULLIF(phone, ''), (SELECT phone FROM request WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) AND phone IS NOT NULL AND phone != '' ORDER BY created_at DESC LIMIT 1))
+WHERE id = $2::int
+  AND (name IS NULL OR name = '' OR phone IS NULL OR phone = '')`
+	if _, err := tx.Exec(ctx, backfillProfile, email, userID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return linkedIDs, nil
 }
 
 

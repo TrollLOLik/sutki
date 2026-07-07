@@ -1,6 +1,46 @@
 package domain
 
-import "time"
+import (
+	"context"
+	"encoding/json"
+	"time"
+)
+
+// Message kinds. User messages are the default; system kinds are created
+// exclusively by backend use cases (never accepted from clients).
+const (
+	MessageKindUser          = "user"
+	MessageKindBookingStatus = "booking_status"
+)
+
+// Booking card events carried in the booking_status payload.
+const (
+	BookingEventNew       = "new"
+	BookingEventConfirmed = "confirmed"
+	BookingEventRejected  = "rejected"
+	BookingEventCancelled = "cancelled"
+)
+
+// BookingStatusPayload is the machine-readable content of a booking_status
+// system message. Address is only populated for the confirmed event (the
+// exact apartment number stays private until the owner approves).
+type BookingStatusPayload struct {
+	RequestID int32  `json:"request_id"`
+	Event     string `json:"event"`
+	StartDate string `json:"start_date,omitempty"`
+	EndDate   string `json:"end_date,omitempty"`
+	Guests    int32  `json:"guests,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Address   string `json:"address,omitempty"`
+}
+
+// ChatSystemPoster posts server-generated system messages into the
+// conversation between a listing owner and a guest, creating the
+// conversation if it does not exist yet. Implemented by the chat service;
+// consumed by the booking use case so booking never depends on chat directly.
+type ChatSystemPoster interface {
+	PostBookingStatus(ctx context.Context, houseID, ownerID, guestID int32, payload BookingStatusPayload) error
+}
 
 // Conversation represents a chat room between participants
 type Conversation struct {
@@ -31,11 +71,15 @@ type MessageAttachment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Message represents a text message optionally containing S3 attachments
+// Message represents a text message optionally containing S3 attachments.
+// SenderID is nil for system messages (kind != "user"); Payload carries the
+// machine-readable card data for system kinds.
 type Message struct {
 	ID             int64               `json:"id"`
 	ConversationID int64               `json:"conversation_id"`
-	SenderID       int32               `json:"sender_id"`
+	SenderID       *int32              `json:"sender_id"`
+	Kind           string              `json:"kind"`
+	Payload        json.RawMessage     `json:"payload,omitempty"`
 	Body           *string             `json:"body,omitempty"`
 	CreatedAt      time.Time           `json:"created_at"`
 	Attachments    []MessageAttachment `json:"attachments,omitempty"`

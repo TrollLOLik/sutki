@@ -93,7 +93,10 @@ type UserRepository interface {
 	Create(ctx context.Context, email string) (User, error)
 	UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (User, error)
 	UpdateEmail(ctx context.Context, id int32, email string) (User, error)
-	LinkGuestRequests(ctx context.Context, userID int32, email string) error
+	// LinkGuestRequests attaches pending_verification guest requests matching
+	// email to userID (moving them to in_progress) and returns the linked
+	// request IDs so callers can fire owner notifications for each.
+	LinkGuestRequests(ctx context.Context, userID int32, email string) ([]int32, error)
 	Delete(ctx context.Context, id int32) error
 	CheckActiveBookings(ctx context.Context, id int32) (int64, error)
 	AnonymizeAndRevoke(ctx context.Context, id int32, emailHash string) error
@@ -129,6 +132,11 @@ type ChatRepository interface {
 	// either direction.
 	CanContact(ctx context.Context, houseID *int32, initiatorID, targetID int32) (bool, error)
 	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, attachments []MessageAttachment) (Message, error)
+	// CreateSystemMessage inserts a server-generated message (sender_id NULL)
+	// with the given kind/payload and a human-readable fallback body. Returns
+	// created=false without error when the unique (conversation, request,
+	// event) guard already holds a card for this payload.
+	CreateSystemMessage(ctx context.Context, convID int64, kind string, payload []byte, fallbackBody string) (msg Message, created bool, err error)
 	ListUserConversations(ctx context.Context, userID int32) ([]ConversationSummary, error)
 	GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]Message, error)
 	UpdateLastReadMessage(ctx context.Context, messageID int64, convID int64, userID int32) error

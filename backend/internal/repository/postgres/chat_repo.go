@@ -258,11 +258,53 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 	return domain.Message{
 		ID:             msg.ID,
 		ConversationID: msg.ConversationID,
-		SenderID:       msg.SenderID,
+		SenderID:       &senderID,
+		Kind:           domain.MessageKindUser,
 		Body:           msg.Body,
 		CreatedAt:      toTime(msg.CreatedAt),
 		Attachments:    dbAttachments,
 	}, nil
+}
+
+// CreateSystemMessage inserts a server-generated message with sender_id NULL.
+// The partial unique index uniq_message_booking_event dedups booking cards per
+// (conversation, request_id, event); on conflict the insert is a no-op and
+// created=false is returned so callers skip publishing.
+func (r *ChatRepo) CreateSystemMessage(ctx context.Context, convID int64, kind string, payload []byte, fallbackBody string) (domain.Message, bool, error) {
+	const insertQ = `
+INSERT INTO message (conversation_id, sender_id, kind, payload, body, created_at)
+VALUES ($1, NULL, $2, $3, $4, now())
+ON CONFLICT (conversation_id, ((payload ->> 'request_id')), ((payload ->> 'event'))) WHERE kind = 'booking_status'
+DO NOTHING
+RETURNING id, created_at`
+
+	var (
+		id        int64
+		createdAt pgtype.Timestamptz
+	)
+	err := r.q.DB().QueryRow(ctx, insertQ, convID, kind, payload, fallbackBody).Scan(&id, &createdAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Conflict: a card for this (conversation, request, event) exists.
+			return domain.Message{}, false, nil
+		}
+		return domain.Message{}, false, fmt.Errorf("create system message: %w", err)
+	}
+
+	if err := r.q.UpdateConversationTimestamp(ctx, convID); err != nil {
+		return domain.Message{}, false, fmt.Errorf("bump conversation timestamp: %w", err)
+	}
+
+	body := fallbackBody
+	return domain.Message{
+		ID:             id,
+		ConversationID: convID,
+		SenderID:       nil,
+		Kind:           kind,
+		Payload:        payload,
+		Body:           &body,
+		CreatedAt:      toTime(createdAt),
+	}, true, nil
 }
 
 func (r *ChatRepo) ListUserConversations(ctx context.Context, userID int32) ([]domain.ConversationSummary, error) {
@@ -300,12 +342,40 @@ func (r *ChatRepo) ListUserConversations(ctx context.Context, userID int32) ([]d
 }
 
 func (r *ChatRepo) GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]domain.Message, error) {
-	rows, err := r.q.GetConversationMessages(ctx, sqlc.GetConversationMessagesParams{
-		ConversationID: convID,
-		Column2:        cursorMessageID,
-		Limit:          limit,
-	})
+	// Raw SQL (not sqlc) so system-message columns kind/payload are included.
+	const q = `
+SELECT id, conversation_id, sender_id, kind, payload, body, created_at
+FROM message
+WHERE conversation_id = $1
+  AND ($2::bigint = 0 OR id < $2)
+ORDER BY id DESC
+LIMIT $3`
+
+	dbRows, err := r.q.DB().Query(ctx, q, convID, cursorMessageID, limit)
 	if err != nil {
+		return nil, err
+	}
+	defer dbRows.Close()
+
+	type msgRow struct {
+		ID             int64
+		ConversationID int64
+		SenderID       *int32
+		Kind           string
+		Payload        []byte
+		Body           *string
+		CreatedAt      pgtype.Timestamptz
+	}
+
+	var rows []msgRow
+	for dbRows.Next() {
+		var row msgRow
+		if err := dbRows.Scan(&row.ID, &row.ConversationID, &row.SenderID, &row.Kind, &row.Payload, &row.Body, &row.CreatedAt); err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	if err := dbRows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -344,6 +414,8 @@ func (r *ChatRepo) GetConversationMessages(ctx context.Context, convID int64, cu
 			ID:             row.ID,
 			ConversationID: row.ConversationID,
 			SenderID:       row.SenderID,
+			Kind:           row.Kind,
+			Payload:        row.Payload,
 			Body:           row.Body,
 			CreatedAt:      toTime(row.CreatedAt),
 			Attachments:    attMap[row.ID],

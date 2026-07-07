@@ -127,13 +127,29 @@ func main() {
 	})
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 
+	// Chat is constructed before booking: booking posts system status cards
+	// into owner-guest conversations via the ChatSystemPoster interface.
+	chatRepo := postgres.NewChatRepo(queries)
+	chatSvc := chat.New(chatRepo, privateStorage, chat.Config{
+		CentrifugoURL: cfg.CentrifugoURL,
+		CentrifugoKey: cfg.CentrifugoKey,
+		HMACSecret:    cfg.CentrifugoHMACSecret,
+		Notifier:      notifier,
+	})
+	chatHandler := httpdelivery.NewChatHandler(chatSvc)
+
 	bookingRepo := postgres.NewBookingRepo(queries)
 	bookingSvc := booking.New(bookingRepo, booking.Config{
 		Notifier:   notifier,
+		Chat:       chatSvc,
 		ExposeCode: cfg.AuthExposeCode,
 	})
 	bookingSvc.StartCleanupJob(ctx, 1*time.Hour)
 	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
+
+	// When email verification links guest requests to a new user, booking
+	// notifies the listing owners (email + chat card).
+	authSvc.SetGuestRequestsLinkedHook(bookingSvc.HandleGuestRequestsLinked)
 
 	favoriteRepo := postgres.NewFavoriteRepo(queries)
 	favoriteSvc := favorite.New(favoriteRepo)
@@ -148,15 +164,6 @@ func main() {
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
 	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage)
-
-	chatRepo := postgres.NewChatRepo(queries)
-	chatSvc := chat.New(chatRepo, privateStorage, chat.Config{
-		CentrifugoURL: cfg.CentrifugoURL,
-		CentrifugoKey: cfg.CentrifugoKey,
-		HMACSecret:    cfg.CentrifugoHMACSecret,
-		Notifier:      notifier,
-	})
-	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

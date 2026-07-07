@@ -36,10 +36,20 @@ import {
 } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
+import { useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { api } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { formatRooms } from '@/lib/format';
 import { Button, BottomSheet } from '@/components/ui';
+import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
+
+/** Canned owner replies shown as chips above the input. Client-only. */
+const QUICK_REPLIES = [
+	'Здравствуйте! Даты свободны',
+	'Уточните, пожалуйста, даты заезда и выезда',
+	'Заселение после 14:00, выезд до 12:00',
+	'Напишу вам чуть позже',
+];
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
 	UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -63,6 +73,10 @@ export default function ChatDialogScreen() {
 	const [inputText, setInputText] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
+	// Contextual anti-scam notice: shown in fresh dialogs (few user messages),
+	// dismissible for the rest of the session. Not a chat message — it never
+	// pollutes history or unread counters.
+	const [safetyNoticeDismissed, setSafetyNoticeDismissed] = useState(false);
 
 	const {
 		data,
@@ -83,6 +97,63 @@ export default function ChatDialogScreen() {
 	const { mutate: performReadMessages } = useReadMessages(convID);
 
 	const messages = data?.pages.flat().filter(Boolean) ?? [];
+
+	// Booking card actions (owner shortcuts to the same confirm/reject
+	// endpoints as the requests screen).
+	const isListingOwner = !!listing && !!sessionUser && listing.owner_id === sessionUser.id;
+	const confirmBookingMutation = useConfirmBooking();
+	const rejectBookingMutation = useRejectBooking();
+	const [actioningRequestId, setActioningRequestId] = useState<number | null>(null);
+
+	// A `new` card keeps its buttons only while no later card exists for the
+	// same request (confirmed/rejected/cancelled cards arrive via socket and
+	// supersede it). messages[0] is the newest (inverted list).
+	const latestCardEventByRequest = React.useMemo(() => {
+		const map = new Map<number, string>();
+		for (const m of messages) {
+			const rid = m.payload?.request_id;
+			if (m.kind === 'booking_status' && rid && !map.has(rid)) {
+				map.set(rid, m.payload!.event);
+			}
+		}
+		return map;
+	}, [messages]);
+
+	const handleConfirmBooking = (requestID: number) => {
+		Alert.alert('Подтвердить бронирование?', 'Гость получит уведомление и точный адрес.', [
+			{ text: 'Отмена', style: 'cancel' },
+			{
+				text: 'Подтвердить',
+				onPress: () => {
+					setActioningRequestId(requestID);
+					confirmBookingMutation.mutate(requestID, {
+						onError: () => Alert.alert('Ошибка', 'Не удалось подтвердить заявку. Попробуйте еще раз.'),
+						onSettled: () => setActioningRequestId(null),
+					});
+				},
+			},
+		]);
+	};
+
+	const handleRejectBooking = (requestID: number) => {
+		Alert.alert('Отклонить заявку?', 'Гость получит уведомление об отказе.', [
+			{ text: 'Отмена', style: 'cancel' },
+			{
+				text: 'Отклонить',
+				style: 'destructive',
+				onPress: () => {
+					setActioningRequestId(requestID);
+					rejectBookingMutation.mutate(
+						{ id: requestID },
+						{
+							onError: () => Alert.alert('Ошибка', 'Не удалось отклонить заявку. Попробуйте еще раз.'),
+							onSettled: () => setActioningRequestId(null),
+						},
+					);
+				},
+			},
+		]);
+	};
 
 	const [galleryVisible, setGalleryVisible] = useState(false);
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -408,7 +479,24 @@ export default function ChatDialogScreen() {
 	};
 
 	const renderMessage = ({ item }: { item: ChatMessage }) => {
-		const isMe = item.sender_id === sessionUser?.id;
+		// System booking card: centered, no bubble, optional owner actions.
+		if (item.kind === 'booking_status' && item.payload) {
+			const rid = item.payload.request_id;
+			return (
+				<BookingStatusCard
+					payload={item.payload}
+					createdAt={item.created_at}
+					isOwner={isListingOwner}
+					isActionable={latestCardEventByRequest.get(rid) === 'new'}
+					confirming={actioningRequestId === rid && confirmBookingMutation.isPending}
+					rejecting={actioningRequestId === rid && rejectBookingMutation.isPending}
+					onConfirm={handleConfirmBooking}
+					onReject={handleRejectBooking}
+				/>
+			);
+		}
+
+		const isMe = item.sender_id != null && item.sender_id === sessionUser?.id;
 		const isPending = item.pending;
 		const isFailed = item.failed;
 
@@ -500,6 +588,15 @@ export default function ChatDialogScreen() {
 	const initials = (otherUserTitle[0] || '?').toUpperCase();
 	const isInputEmpty = !inputText.trim();
 	const isDeletedUser = !!activeConv?.other_user_deleted;
+
+	// Fresh dialog = fewer than 3 human messages so far. Once the parties are
+	// clearly talking, the safety notice retires on its own.
+	const userMessageCount = messages.filter((m) => !m.kind || m.kind === 'user').length;
+	const showSafetyNotice = !isLoading && !safetyNoticeDismissed && !isDeletedUser && userMessageCount < 3;
+
+	// Quick replies: shown to the listing owner in a fresh dialog while the
+	// input is empty — one tap prefills a typical answer.
+	const showQuickReplies = isListingOwner && !isDeletedUser && isInputEmpty && userMessageCount < 3;
 
 	return (
 		<View style={{ flex: 1, backgroundColor: palette.surface }}>
@@ -593,6 +690,23 @@ export default function ChatDialogScreen() {
 				</View>
 			)}
 
+			{/* Contextual anti-scam notice for fresh dialogs, dismissible */}
+			{showSafetyNotice && (
+				<View className="flex-row items-start px-4 py-2.5 bg-primaryLight border-b border-line/30">
+					<Ionicons name="shield-checkmark-outline" size={18} color={palette.primary} style={{ marginTop: 1 }} />
+					<Text className="flex-1 text-[12px] text-ink-secondary leading-4 ml-2.5 mr-2">
+						Не переводите предоплату вне приложения и не переходите по внешним ссылкам на оплату.
+					</Text>
+					<TouchableOpacity
+						onPress={() => setSafetyNoticeDismissed(true)}
+						hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+						accessibilityLabel="Скрыть предупреждение"
+					>
+						<Ionicons name="close" size={16} color={palette.inkMuted} />
+					</TouchableOpacity>
+				</View>
+			)}
+
 			{isLoading ? (
 				<View className="flex-1 justify-center items-center bg-surface">
 					<ActivityIndicator size="large" color={palette.primary} />
@@ -649,7 +763,27 @@ export default function ChatDialogScreen() {
 						</View>
 					</View>
 				) : (
-					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 12 }} className="flex-row items-center px-4 py-3 border-t border-line/30 bg-surface shadow-sm">
+					<View className="border-t border-line/30 bg-surface shadow-sm">
+					{/* Quick replies for the owner in fresh dialogs */}
+					{showQuickReplies && (
+						<FlatList
+							horizontal
+							data={QUICK_REPLIES}
+							keyExtractor={(text) => text}
+							showsHorizontalScrollIndicator={false}
+							contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, gap: 8 }}
+							renderItem={({ item: reply }) => (
+								<TouchableOpacity
+									onPress={() => setInputText(reply)}
+									activeOpacity={0.7}
+									className="px-3.5 py-2 rounded-full bg-surfaceMuted border border-line/40"
+								>
+									<Text className="text-[12px] text-ink-secondary font-medium">{reply}</Text>
+								</TouchableOpacity>
+							)}
+						/>
+					)}
+					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 12 }} className="flex-row items-center px-4 py-3">
 						{/* Add Attachment Button */}
 						<TouchableOpacity
 							onPress={handlePickMedia}
@@ -689,6 +823,7 @@ export default function ChatDialogScreen() {
 								color={isInputEmpty ? palette.inkMuted : '#fff'}
 							/>
 						</TouchableOpacity>
+					</View>
 					</View>
 				)}
 			</KeyboardAvoidingView>
