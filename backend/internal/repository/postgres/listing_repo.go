@@ -276,6 +276,7 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		Area:           row.Area,
 		City:           row.Country,
 		Status:         row.Status,
+		RejectionReason: row.RejectionReason,
 		MaxGuests:      row.MaxGuests,
 		Lat:            row.Lat,
 		Lng:            row.Lng,

@@ -14,6 +14,7 @@ export default function AuthLayout() {
         headerShown: false,
         headerShadowVisible: false,
         headerTintColor: palette.ink,
+        headerStyle: { backgroundColor: palette.surface },
         headerTitleStyle: { fontWeight: '600' },
         contentStyle: { backgroundColor: palette.surface },
       }}>

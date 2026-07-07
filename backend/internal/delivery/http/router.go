@@ -33,7 +33,6 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/listings", func(r chi.Router) {
 			r.Get("/", listingHandler.list)
-			r.Get("/{id}", listingHandler.get)
 			r.Get("/{id}/availability", bookingHandler.Availability)
 			r.Get("/{id}/reviews", reviewHandler.List)
 			r.Get("/{id}/reviews-summary", aiHandler.GetReviewsSummary)
@@ -53,6 +52,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			// Endpoints with optional authentication under /listings
 			r.Group(func(r chi.Router) {
 				r.Use(OptionalAuthMiddleware(authSvc.TokenManager(), authSvc))
+				r.Get("/{id}", listingHandler.get)
 				r.Post("/{id}/requests", bookingHandler.Create)
 			})
 		})

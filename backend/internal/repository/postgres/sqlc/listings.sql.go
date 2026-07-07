@@ -299,6 +299,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.rejection_reason,
   h.max_guests,
   h.lat,
   h.lng,
@@ -364,6 +365,7 @@ type GetHouseByIDRow struct {
 	Area               int32
 	Country            string
 	Status             string
+	RejectionReason    *string
 	MaxGuests          *int32
 	Lat                *float64
 	Lng                *float64
@@ -407,6 +409,7 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.Area,
 		&i.Country,
 		&i.Status,
+		&i.RejectionReason,
 		&i.MaxGuests,
 		&i.Lat,
 		&i.Lng,

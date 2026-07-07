@@ -146,7 +146,7 @@ export default function MessagesScreen() {
                             </Text>
                           </View>
                           <Text
-                            style={{ lineHeight: 20, includeFontPadding: false, textAlignVertical: 'right' }}
+                            style={{ lineHeight: 20, includeFontPadding: false, textAlignVertical: 'center' }}
                             className={`text-xs ${hasUnread ? 'text-primary font-bold' : 'text-ink-muted font-medium'}`}
                           >
                             {formatRelativeTime(item.last_activity)}

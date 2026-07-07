@@ -321,7 +321,7 @@ type moderationLLMVerdict struct {
 	Confidence float32 `json:"confidence"`
 }
 
-const moderationSystemPrompt = `Ты — модератор объявлений о посуточной аренде жилья на платформе «ДомРядом» (Магнитогорск). Оцени текст объявления по правилам:
+const moderationSystemPrompt = `Ты — модератор объявлений о посуточной аренде жилья на платформе «ДомРядом» (Россия). Оцени текст объявления по правилам:
 1) Запрещённые товары/услуги (наркотики, оружие, интим-услуги, поддельные документы).
 2) Мошеннические паттерны: требование предоплаты на карту, внешние ссылки на оплату, аномально низкая цена в сочетании со срочностью.
 3) Контакты или призывы увести сделку с платформы.
@@ -350,32 +350,39 @@ func (s *Service) askLLM(ctx context.Context, h domain.ModerationHouse) (moderat
 		return moderationLLMVerdict{}, nil, err
 	}
 
-	v, perr := parseLLMVerdict(answer)
+	v, trimmed, perr := parseLLMVerdict(answer)
 	if perr != nil {
 		// One repair attempt: re-ask insisting on pure JSON.
 		answer2, err2 := s.llm.Generate(callCtx, system, userPrompt+"\n\nПредыдущий ответ не был валидным JSON. Ответь строго одним JSON-объектом.", 250, 0)
 		if err2 != nil {
 			return moderationLLMVerdict{}, nil, err2
 		}
-		v, perr = parseLLMVerdict(answer2)
+		v, trimmed, perr = parseLLMVerdict(answer2)
 		if perr != nil {
 			// Unparseable model output is NEVER trusted as approve or
 			// reject — it degrades to a human review.
 			log.Printf("moderation: unparseable LLM verdict, downgrading to review: %v", perr)
+			
+			errPayload := map[string]string{
+				"raw_text":    answer2,
+				"parse_error": perr.Error(),
+			}
+			rawJSON, _ := json.Marshal(errPayload)
+
 			return moderationLLMVerdict{
 				Decision: domain.ModerationReview,
 				Category: "llm_unparseable",
 				Reason:   "Ответ модели не распознан",
-			}, []byte(answer2), nil
+			}, rawJSON, nil
 		}
-		return v, []byte(answer2), nil
+		return v, []byte(trimmed), nil
 	}
-	return v, []byte(answer), nil
+	return v, []byte(trimmed), nil
 }
 
 // parseLLMVerdict extracts and validates the JSON verdict. Only the parsed
 // decision field is ever interpreted; free text is never executed as policy.
-func parseLLMVerdict(answer string) (moderationLLMVerdict, error) {
+func parseLLMVerdict(answer string) (moderationLLMVerdict, string, error) {
 	trimmed := strings.TrimSpace(answer)
 	// Tolerate models that wrap JSON in code fences.
 	trimmed = strings.TrimPrefix(trimmed, "```json")
@@ -392,17 +399,17 @@ func parseLLMVerdict(answer string) (moderationLLMVerdict, error) {
 
 	var v moderationLLMVerdict
 	if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
-		return moderationLLMVerdict{}, fmt.Errorf("unmarshal verdict: %w", err)
+		return moderationLLMVerdict{}, "", fmt.Errorf("unmarshal verdict: %w", err)
 	}
 	switch v.Decision {
 	case domain.ModerationApprove, domain.ModerationReject, domain.ModerationReview:
 	default:
-		return moderationLLMVerdict{}, fmt.Errorf("invalid decision %q", v.Decision)
+		return moderationLLMVerdict{}, "", fmt.Errorf("invalid decision %q", v.Decision)
 	}
 	if v.Confidence < 0 || v.Confidence > 1 {
 		v.Confidence = 0
 	}
-	return v, nil
+	return v, trimmed, nil
 }
 
 // applyVerdict flips the house status per policy and notifies the owner.

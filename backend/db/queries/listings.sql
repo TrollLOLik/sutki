@@ -189,6 +189,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.rejection_reason,
   h.max_guests,
   h.lat,
   h.lng,

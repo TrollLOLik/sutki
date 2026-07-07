@@ -362,7 +362,12 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, h.detailDTO(hs, exactCoords))
+	dto := h.detailDTO(hs, exactCoords)
+	if isAuthed && callerID == hs.OwnerID {
+		dto.Status = hs.Status
+		dto.RejectionReason = hs.RejectionReason
+	}
+	writeJSON(w, http.StatusOK, dto)
 }
 
 func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {

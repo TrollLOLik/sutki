@@ -499,6 +499,47 @@ export default function ListingDetailScreen() {
             />
 
             <View className="bg-surface rounded-t-[24px] mt-[-20px] px-4 pt-5 pb-8 gap-5">
+              {/* Moderation Banner for Owner */}
+              {isOwnListing && data.status && data.status !== 'active' && (
+                <View
+                  className="rounded-card border p-4"
+                  style={{
+                    borderRadius: 16,
+                    backgroundColor: data.status === 'rejected' ? palette.dangerLight : palette.primaryLight,
+                    borderColor: data.status === 'rejected' ? 'rgba(229, 72, 77, 0.2)' : 'rgba(255, 90, 31, 0.2)',
+                  }}
+                >
+                  <View className="flex-row items-start gap-3">
+                    <View className="h-10 w-10 items-center justify-center rounded-full bg-surface">
+                      <Ionicons
+                        name={data.status === 'rejected' ? 'alert-circle-outline' : 'time-outline'}
+                        size={22}
+                        color={data.status === 'rejected' ? palette.danger : palette.primary}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-base font-extrabold text-ink">
+                        {data.status === 'rejected'
+                          ? 'Объявление отклонено'
+                          : data.status === 'moderation_review'
+                          ? 'На ручной проверке'
+                          : 'На проверке'}
+                      </Text>
+                      {data.status === 'rejected' && data.rejection_reason ? (
+                        <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                          Причина: {data.rejection_reason}. Отредактируйте объявление, чтобы отправить его на повторную проверку.
+                        </Text>
+                      ) : null}
+                      {(data.status === 'pending_moderation' || data.status === 'moderation_review') && (
+                        <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                          Объявление проходит проверку модерации и скоро появится на платформе.
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              )}
+
               <View
                 className="gap-1"
                 onLayout={(event) => {

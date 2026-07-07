@@ -127,7 +127,7 @@ export function fetchListings(
 }
 
 export function fetchListing(id: number): Promise<ListingDetail> {
-  return api.get<ListingDetail>(`/api/v1/listings/${id}`, { auth: false });
+  return api.get<ListingDetail>(`/api/v1/listings/${id}`);
 }
 
 export function useListings(
