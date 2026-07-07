@@ -274,9 +274,10 @@ WHERE deleted = false
 ORDER BY name;
 
 -- name: CreateHouse :one
--- Creates a new listing owned by the given user. New listings are published
--- immediately (status='active') for the MVP; the one-time publication fee is a
--- front-end stub until YooKassa is wired (then `pay` flips via webhook).
+-- Creates a new listing owned by the given user. New listings start in
+-- 'pending_moderation': the moderation pipeline (prefilter + LLM verdict)
+-- flips them to 'active' / 'moderation_review' / 'rejected'. The one-time
+-- publication fee is a front-end stub until YooKassa is wired.
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
   area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
@@ -284,7 +285,7 @@ INSERT INTO house (
   created_at, updated_at
 ) VALUES (
   @owner_id, @street, @house_number, @description, @price, @count_room,
-  sqlc.narg('number_room'), @area, @country, 'active', false, false, 0,
+  sqlc.narg('number_room'), @area, @country, 'pending_moderation', false, false, 0,
   sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('qc_geo'), sqlc.narg('max_guests'),
   sqlc.narg('check_in_after'), sqlc.narg('check_out_before'), sqlc.narg('smoking_allowed'),
   sqlc.narg('pets_allowed'), sqlc.narg('children_allowed'), sqlc.narg('events_allowed'),
@@ -344,6 +345,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.rejection_reason,
   h.max_guests,
   h.lat,
   h.lng,

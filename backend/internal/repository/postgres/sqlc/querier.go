@@ -32,11 +32,12 @@ type Querier interface {
 	CountReviewsForHost(ctx context.Context, ownerID int32) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (CreateAttachmentRow, error)
 	CreateConversation(ctx context.Context, houseID *int32) (Conversation, error)
-	// Creates a new listing owned by the given user. New listings are published
-	// immediately (status='active') for the MVP; the one-time publication fee is a
-	// front-end stub until YooKassa is wired (then `pay` flips via webhook).
+	// Creates a new listing owned by the given user. New listings start in
+	// 'pending_moderation': the moderation pipeline (prefilter + LLM verdict)
+	// flips them to 'active' / 'moderation_review' / 'rejected'. The one-time
+	// publication fee is a front-end stub until YooKassa is wired.
 	CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error)
-	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error)
 	CreatePersonalDataRevocation(ctx context.Context, arg CreatePersonalDataRevocationParams) error
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (int64, error)
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
@@ -54,7 +55,7 @@ type Querier interface {
 	GetConversationByParticipantsAndHouse(ctx context.Context, arg GetConversationByParticipantsAndHouseParams) (int64, error)
 	// 2. Поиск общего диалога между пользователями (house_id IS NULL)
 	GetConversationByParticipantsGeneral(ctx context.Context, arg GetConversationByParticipantsGeneralParams) (int64, error)
-	GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]Message, error)
+	GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]GetConversationMessagesRow, error)
 	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)

@@ -21,6 +21,9 @@ const (
 	EventChatDigest       = "chat_digest"
 	EventWelcome          = "welcome"
 	EventReviewReceived   = "review_received"
+	EventListingApproved  = "listing_approved"
+	EventListingRejected  = "listing_rejected"
+	EventAdminAlert       = "admin_alert"
 )
 
 var eventTypes = []string{
@@ -32,6 +35,9 @@ var eventTypes = []string{
 	EventChatDigest,
 	EventWelcome,
 	EventReviewReceived,
+	EventListingApproved,
+	EventListingRejected,
+	EventAdminAlert,
 }
 
 // renderer holds pre-parsed HTML and plain-text template sets per event.

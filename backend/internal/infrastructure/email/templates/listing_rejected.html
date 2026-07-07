@@ -1,0 +1,10 @@
+{{define "content"}}
+<h1 style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:20px;line-height:1.4;color:#1A0D1D;">Объявление не прошло проверку</h1>
+<p style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1A0D1D;">Здравствуйте!<br>К сожалению, ваше объявление по адресу <strong>{{.Address}}</strong> не прошло модерацию и скрыто из поиска.</p>
+{{if .Reason}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F5F2F0;border-radius:8px;">
+<tr><td style="padding:16px 20px;">
+<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1A0D1D;"><strong>Причина:</strong> {{.Reason}}</p>
+</td></tr>
+</table>{{end}}
+<p style="margin:20px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1A0D1D;">Исправьте текст объявления в приложении «ДомРядом» — после сохранения оно автоматически пройдёт проверку повторно.</p>
+{{end}}

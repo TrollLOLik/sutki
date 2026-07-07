@@ -122,13 +122,21 @@ RETURNING id, conversation_id, sender_id, body, created_at
 
 type CreateMessageParams struct {
 	ConversationID int64
-	SenderID       int32
+	SenderID       *int32
 	Body           *string
 }
 
-func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
+type CreateMessageRow struct {
+	ID             int64
+	ConversationID int64
+	SenderID       *int32
+	Body           *string
+	CreatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error) {
 	row := q.db.QueryRow(ctx, createMessage, arg.ConversationID, arg.SenderID, arg.Body)
-	var i Message
+	var i CreateMessageRow
 	err := row.Scan(
 		&i.ID,
 		&i.ConversationID,
@@ -205,15 +213,23 @@ type GetConversationMessagesParams struct {
 	Limit          int32
 }
 
-func (q *Queries) GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]Message, error) {
+type GetConversationMessagesRow struct {
+	ID             int64
+	ConversationID int64
+	SenderID       *int32
+	Body           *string
+	CreatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]GetConversationMessagesRow, error) {
 	rows, err := q.db.Query(ctx, getConversationMessages, arg.ConversationID, arg.Column2, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Message
+	var items []GetConversationMessagesRow
 	for rows.Next() {
-		var i Message
+		var i GetConversationMessagesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ConversationID,

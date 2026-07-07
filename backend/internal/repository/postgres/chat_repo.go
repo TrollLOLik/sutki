@@ -187,10 +187,11 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 
 	qtx := r.q.WithTx(tx)
 
-	// Create message
+	// Create message (sender_id is nullable in the schema for system
+	// messages; user messages always carry a concrete sender).
 	msg, err := qtx.CreateMessage(ctx, sqlc.CreateMessageParams{
 		ConversationID: convID,
-		SenderID:       senderID,
+		SenderID:       &senderID,
 		Body:           body,
 	})
 	if err != nil {

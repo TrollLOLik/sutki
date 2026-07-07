@@ -238,6 +238,74 @@ func (n *Notifier) NotifyReviewReceived(ctx context.Context, ownerID int32, owne
 	}, data)
 }
 
+// NotifyListingApproved tells the owner their listing passed moderation and
+// is now published. Transactional (no opt-out); deduped per house+day so a
+// re-check after LLM recovery cannot double-mail.
+func (n *Notifier) NotifyListingApproved(ctx context.Context, ownerID int32, ownerEmail string, houseID int32, address string) error {
+	data := struct {
+		commonData
+		Address string
+	}{Address: address}
+
+	return n.enqueue(ctx, OutboxMessage{
+		DedupKey:  fmt.Sprintf("%s:%d:%s", EventListingApproved, houseID, time.Now().Format("2006-01-02")),
+		UserID:    ownerID,
+		Recipient: ownerEmail,
+		EventType: EventListingApproved,
+		Subject:   "Ваше объявление опубликовано — ДомРядом",
+	}, data)
+}
+
+// NotifyListingRejected tells the owner their listing failed moderation, with
+// the reason. Transactional; deduped per house+day.
+func (n *Notifier) NotifyListingRejected(ctx context.Context, ownerID int32, ownerEmail string, houseID int32, address, reason string) error {
+	data := struct {
+		commonData
+		Address string
+		Reason  string
+	}{Address: address, Reason: reason}
+
+	return n.enqueue(ctx, OutboxMessage{
+		DedupKey:  fmt.Sprintf("%s:%d:%s", EventListingRejected, houseID, time.Now().Format("2006-01-02")),
+		UserID:    ownerID,
+		Recipient: ownerEmail,
+		EventType: EventListingRejected,
+		Subject:   "Объявление не прошло проверку — ДомРядом",
+	}, data)
+}
+
+// AdminNotifier wraps a Notifier with a fixed admin recipient for
+// operational alerts. Satisfies moderation.AdminAlerter.
+type AdminNotifier struct {
+	n     *Notifier
+	email string
+}
+
+// NewAdminNotifier returns nil when adminEmail is empty (alerts disabled).
+func NewAdminNotifier(n *Notifier, adminEmail string) *AdminNotifier {
+	if adminEmail == "" {
+		return nil
+	}
+	return &AdminNotifier{n: n, email: adminEmail}
+}
+
+// SendAdminAlert queues an operational alert. dedupKey scopes suppression
+// (e.g. one degraded-mode alert per day).
+func (a *AdminNotifier) SendAdminAlert(ctx context.Context, dedupKey, subject, body string) error {
+	data := struct {
+		commonData
+		Title string
+		Body  string
+	}{Title: subject, Body: body}
+
+	return a.n.enqueue(ctx, OutboxMessage{
+		DedupKey:  EventAdminAlert + ":" + dedupKey,
+		Recipient: a.email,
+		EventType: EventAdminAlert,
+		Subject:   subject + " — ДомРядом",
+	}, data)
+}
+
 // categoryEnabled consults the user's stored preferences. Errors are treated
 // as "enabled" so a prefs outage never silently drops notifications — but the
 // error is still returned to the caller's log via nil handling here.

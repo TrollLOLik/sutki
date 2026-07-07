@@ -16,15 +16,30 @@ const (
 // ErrInvalidListing is returned when create input fails validation.
 var ErrInvalidListing = errors.New("invalid listing")
 
+// ErrTooManySubmissions is returned when the owner exceeds the daily
+// create/update moderation rate limit.
+var ErrTooManySubmissions = errors.New("too many listing submissions today")
+
+// Moderator runs the moderation pipeline for created/updated listings.
+// Implemented by the moderation service; nil disables moderation (tests).
+type Moderator interface {
+	// AllowSubmission enforces the per-owner daily submission limit.
+	AllowSubmission(ctx context.Context, ownerID int32) (bool, error)
+	// Submit runs the synchronous prefilter and enqueues the async LLM
+	// verdict. Returns the resulting house status.
+	Submit(ctx context.Context, houseID int32) (string, error)
+}
+
 // Service implements listing read use cases over a ListingRepository.
 type Service struct {
 	repo         domain.ListingRepository
 	storage      domain.FileStorage
 	aiSummarizer domain.AISummarizer
+	moderator    Moderator
 }
 
-func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer) *Service {
-	return &Service{repo: repo, storage: storage, aiSummarizer: aiSummarizer}
+func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer, moderator Moderator) *Service {
+	return &Service{repo: repo, storage: storage, aiSummarizer: aiSummarizer, moderator: moderator}
 }
 
 // ListResult is a page of active listings plus pagination metadata.
@@ -92,9 +107,28 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 		return domain.House{}, ErrInvalidListing
 	}
 
+	// Daily moderation rate limit: blocks flooding and iterative prompt
+	// probing before anything is persisted.
+	if s.moderator != nil {
+		ok, err := s.moderator.AllowSubmission(ctx, in.OwnerID)
+		if err == nil && !ok {
+			return domain.House{}, ErrTooManySubmissions
+		}
+	}
+
 	id, err := s.repo.Create(ctx, in)
 	if err != nil {
 		return domain.House{}, err
+	}
+
+	// Moderation: synchronous prefilter + async LLM verdict. The listing was
+	// inserted as pending_moderation; Submit may flip it (e.g. provisional
+	// active in degraded mode). Failures keep it pending — fail-closed.
+	if s.moderator != nil {
+		if _, err := s.moderator.Submit(ctx, id); err != nil {
+			// Log-only: the listing exists; the worker will pick it up.
+			_ = err
+		}
 	}
 
 	// Trigger background location summary generation
@@ -211,9 +245,26 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		return domain.House{}, err
 	}
 
+	// Rate limit shared with Create: edits also re-enter moderation.
+	if s.moderator != nil {
+		ok, rlErr := s.moderator.AllowSubmission(ctx, in.OwnerID)
+		if rlErr == nil && !ok {
+			return domain.House{}, ErrTooManySubmissions
+		}
+	}
+
 	err = s.repo.Update(ctx, id, in)
 	if err != nil {
 		return domain.House{}, err
+	}
+
+	// Re-moderate the edited content. Unchanged text keeps the current
+	// status (idempotent by content hash); changed text goes back through
+	// the pipeline, which also handles the rejected -> resubmit appeal flow.
+	if s.moderator != nil {
+		if _, mErr := s.moderator.Submit(ctx, id); mErr != nil {
+			_ = mErr
+		}
 	}
 
 	addressChanged := oldHouse.Street != in.Street || 

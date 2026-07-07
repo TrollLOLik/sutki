@@ -746,12 +746,12 @@ export default function CreateListingScreen() {
             <Ionicons name="checkmark" size={44} color={palette.success} />
           </MotiView>
           <Text className="mt-6 text-center text-2xl font-bold text-ink">
-            {isEditing ? 'Объявление обновлено!' : 'Объявление опубликовано!'}
+            {isEditing ? 'Объявление обновлено!' : 'Объявление отправлено!'}
           </Text>
           <Text className="mt-2 text-center text-base text-ink-secondary">
             {isEditing
-              ? 'Изменения уже видны в поиске. Управлять им можно в разделе «Мои объявления».'
-              : 'Оно уже доступно в поиске. Управлять им можно в разделе «Мои объявления».'}
+              ? 'Изменения отправлены на проверку и появятся в поиске после её прохождения — обычно это занимает пару минут. Статус виден в разделе «Мои объявления».'
+              : 'Объявление проходит проверку и появится в поиске после её завершения — обычно это занимает пару минут. Статус виден в разделе «Мои объявления».'}
           </Text>
           <View style={{ width: '100%', maxWidth: 320, gap: 12, marginTop: 32 }}>
             <Button

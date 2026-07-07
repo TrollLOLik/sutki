@@ -206,7 +206,7 @@ INSERT INTO house (
   created_at, updated_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6,
-  $7, $8, $9, 'active', false, false, 0,
+  $7, $8, $9, 'pending_moderation', false, false, 0,
   $10, $11, $12, $13,
   $14, $15, $16,
   $17, $18, $19,
@@ -237,9 +237,10 @@ type CreateHouseParams struct {
 	EventsAllowed   *string
 }
 
-// Creates a new listing owned by the given user. New listings are published
-// immediately (status='active') for the MVP; the one-time publication fee is a
-// front-end stub until YooKassa is wired (then `pay` flips via webhook).
+// Creates a new listing owned by the given user. New listings start in
+// 'pending_moderation': the moderation pipeline (prefilter + LLM verdict)
+// flips them to 'active' / 'moderation_review' / 'rejected'. The one-time
+// publication fee is a front-end stub until YooKassa is wired.
 func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error) {
 	row := q.db.QueryRow(ctx, createHouse,
 		arg.OwnerID,
@@ -616,6 +617,7 @@ SELECT
   h.area,
   h.country,
   h.status,
+  h.rejection_reason,
   h.max_guests,
   h.lat,
   h.lng,
@@ -667,6 +669,7 @@ type ListHousesByOwnerRow struct {
 	Area            int32
 	Country         string
 	Status          string
+	RejectionReason *string
 	MaxGuests       *int32
 	Lat             *float64
 	Lng             *float64
@@ -703,6 +706,7 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.Area,
 			&i.Country,
 			&i.Status,
+			&i.RejectionReason,
 			&i.MaxGuests,
 			&i.Lat,
 			&i.Lng,
