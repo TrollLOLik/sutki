@@ -187,6 +187,8 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 	// Carrying the current status over avoids re-hiding an approved listing.
 	if !enqueued && !flagged {
 		s.Wake()
+		// Photos may have changed even when the text did not.
+		s.spawnPhotoCheck(houseID)
 		return h.Status, nil
 	}
 
@@ -211,7 +213,21 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		return "", err
 	}
 	s.Wake()
+	s.spawnPhotoCheck(houseID)
 	return target, nil
+}
+
+// spawnPhotoCheck runs the perceptual-hash duplicate scan in the background:
+// photo downloads must never add latency to the create/update request.
+func (s *Service) spawnPhotoCheck(houseID int32) {
+	if s.photo == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		s.CheckPhotos(ctx, houseID)
+	}()
 }
 
 // Wake nudges the worker to poll immediately.

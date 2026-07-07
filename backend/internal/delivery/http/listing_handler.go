@@ -209,11 +209,14 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	hs, err := h.svc.Create(r.Context(), in)
 	if err != nil {
-		if errors.Is(err, listing.ErrInvalidListing) {
+		switch {
+		case errors.Is(err, listing.ErrInvalidListing):
 			writeError(w, http.StatusBadRequest, "invalid listing")
-			return
+		case errors.Is(err, listing.ErrTooManySubmissions):
+			writeError(w, http.StatusTooManyRequests, "daily listing submission limit reached")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal error")
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusCreated, h.detailDTO(hs, true)) // owner always sees exact coords
@@ -265,6 +268,8 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, listing.ErrInvalidListing):
 			writeError(w, http.StatusBadRequest, "invalid listing")
+		case errors.Is(err, listing.ErrTooManySubmissions):
+			writeError(w, http.StatusTooManyRequests, "daily listing submission limit reached")
 		case errors.Is(err, domain.ErrNotFound):
 			writeError(w, http.StatusNotFound, "listing not found")
 		default:

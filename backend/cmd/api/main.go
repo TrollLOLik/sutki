@@ -27,6 +27,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/moderation"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
 )
 
@@ -109,8 +110,19 @@ func main() {
 	}
 	emailHandler := httpdelivery.NewEmailHandler(emailPrefsRepo, cfg.EmailUnsubscribeSecret)
 
+	// Listing moderation: synchronous prefilter on create/update plus a
+	// background LLM verdict worker with circuit breaker + degraded mode.
+	moderationRepo := postgres.NewModerationRepo(pool)
+	var adminAlerter moderation.AdminAlerter
+	if a := email.NewAdminNotifier(notifier, cfg.AdminEmail); a != nil {
+		adminAlerter = a
+	}
+	moderationSvc := moderation.New(moderationRepo, llmClient, adminAlerter, notifier)
+	moderationSvc.StartWorker(ctx)
+
 	listingRepo := postgres.NewListingRepo(queries)
-	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer)
+	moderationSvc.SetPhotoPipeline(listingRepo, publicStorage)
+	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer, moderationSvc)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
 	userRepo := postgres.NewUserRepo(queries)

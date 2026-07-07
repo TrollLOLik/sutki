@@ -51,6 +51,9 @@ type Config struct {
 	// the Yandex 360 mailbox quota. Login codes are exempt from the cap;
 	// other notifications are postponed to the next day. 0 disables the cap.
 	EmailDailyLimit int
+	// AdminEmail receives operational alerts (moderation degraded mode,
+	// review queue growth). Empty disables admin alerts.
+	AdminEmail string
 
 	DadataAPIKey string
 
@@ -98,6 +101,7 @@ func Load() (Config, error) {
 		PublicAPIBaseURL:       getEnv("PUBLIC_API_BASE_URL", ""),
 		EmailUnsubscribeSecret: getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
 		EmailDailyLimit:        getInt("EMAIL_DAILY_LIMIT", 500),
+		AdminEmail:             getEnv("ADMIN_EMAIL", ""),
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
 
