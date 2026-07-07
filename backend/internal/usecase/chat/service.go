@@ -295,6 +295,79 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	return msg, nil
 }
 
+// PostBookingStatus implements domain.ChatSystemPoster. It finds or creates
+// the owner-guest conversation for the listing and inserts a booking status
+// card as a system message (sender_id NULL). The card is published to the
+// conversation channel plus both participants' personal channels. Dedup is
+// enforced by the DB unique index: reposting the same (request, event) is a
+// silent no-op. Never called from HTTP handlers — only backend use cases.
+func (s *Service) PostBookingStatus(ctx context.Context, houseID, ownerID, guestID int32, payload domain.BookingStatusPayload) error {
+	if guestID == 0 || ownerID == 0 || guestID == ownerID {
+		return nil // guest bookings without an account have no conversation
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal booking status payload: %w", err)
+	}
+
+	// Bypass CanContact: a booking relationship exists by construction here.
+	convID, err := s.repo.FindOrCreateConversation(ctx, &houseID, guestID, ownerID)
+	if err != nil {
+		return fmt.Errorf("find/create conversation for booking card: %w", err)
+	}
+
+	msg, created, err := s.repo.CreateSystemMessage(ctx, convID, domain.MessageKindBookingStatus, payloadJSON, bookingCardFallback(payload))
+	if err != nil {
+		return fmt.Errorf("create booking status message: %w", err)
+	}
+	if !created {
+		return nil // duplicate card, already posted
+	}
+
+	// Publish to the conversation channel and both personal channels so the
+	// dialog and both users' conversation lists update in real time.
+	go func() {
+		channel := fmt.Sprintf("chat:conv_%d", msg.ConversationID)
+		_ = s.centrifugoPublish(channel, map[string]any{
+			"type":    "message.new",
+			"message": msg,
+		})
+		for _, uid := range []int32{ownerID, guestID} {
+			_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", uid), map[string]any{
+				"type":            "unread_update",
+				"conversation_id": msg.ConversationID,
+			})
+		}
+	}()
+
+	return nil
+}
+
+// bookingCardFallback builds the human-readable body stored alongside a
+// booking card. Old app versions (unaware of kind/payload) render this text
+// as a plain message, so it must be self-explanatory.
+func bookingCardFallback(p domain.BookingStatusPayload) string {
+	switch p.Event {
+	case domain.BookingEventNew:
+		if p.StartDate != "" && p.EndDate != "" {
+			return fmt.Sprintf("Новая заявка на бронирование: %s — %s", p.StartDate, p.EndDate)
+		}
+		return "Новая заявка на бронирование"
+	case domain.BookingEventConfirmed:
+		return "Заявка на бронирование подтверждена"
+	case domain.BookingEventRejected:
+		if p.Reason != "" {
+			return "Заявка отклонена: " + p.Reason
+		}
+		return "Заявка на бронирование отклонена"
+	case domain.BookingEventCancelled:
+		return "Заявка на бронирование отменена гостем"
+	default:
+		return "Обновление статуса бронирования"
+	}
+}
+
 // notifyRecipientByEmail emails the other participant about a new message
 // when they have no active Centrifugo connection. Never fails the send path;
 // all errors are logged and dropped.
@@ -305,7 +378,10 @@ func (s *Service) notifyRecipientByEmail(ctx context.Context, msg domain.Message
 		}
 	}()
 
-	recipientID, recipientEmail, senderName, err := s.repo.GetChatEmailInfo(ctx, msg.ConversationID, msg.SenderID)
+	if msg.SenderID == nil {
+		return // system messages never trigger chat emails
+	}
+	recipientID, recipientEmail, senderName, err := s.repo.GetChatEmailInfo(ctx, msg.ConversationID, *msg.SenderID)
 	if err != nil {
 		log.Printf("chat email notify: lookup for conv %d: %v", msg.ConversationID, err)
 		return
@@ -455,7 +531,10 @@ func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
 	_ = s.centrifugoPublish(channel, payload)
 
 	// 2. Notify the recipient's personal channel (for conversation list updates)
-	recipientID, err := s.repo.GetOtherParticipantID(ctx, msg.ConversationID, msg.SenderID)
+	if msg.SenderID == nil {
+		return // system messages publish personal-channel updates themselves
+	}
+	recipientID, err := s.repo.GetOtherParticipantID(ctx, msg.ConversationID, *msg.SenderID)
 	if err != nil {
 		log.Printf("chat: failed to get recipient for personal notification: %v", err)
 		return

@@ -62,6 +62,12 @@ type Service struct {
 	notifier     domain.EmailNotifier
 	dadataAPIKey string
 
+	// onGuestRequestsLinked is called (in background) with the request IDs
+	// that were just linked to a freshly verified user, so the booking use
+	// case can notify listing owners. Set via SetGuestRequestsLinkedHook to
+	// avoid a construction-order cycle in main. May be nil.
+	onGuestRequestsLinked func(ctx context.Context, requestIDs []int32)
+
 	// NOTE(multi-instance): these in-memory maps are correct for a single
 	// backend instance only. Before scaling horizontally they must move to a
 	// shared store (e.g. Redis or the DB), otherwise email-change tokens and
@@ -121,6 +127,13 @@ func New(
 		notifier:     cfg.Notifier,
 		dadataAPIKey: cfg.DadataAPIKey,
 	}
+}
+
+// SetGuestRequestsLinkedHook registers the callback fired after guest
+// requests are linked to a verified user (booking.Service.HandleGuestRequestsLinked).
+// Setter injection because the booking service is constructed after auth.
+func (s *Service) SetGuestRequestsLinkedHook(fn func(ctx context.Context, requestIDs []int32)) {
+	s.onGuestRequestsLinked = fn
 }
 
 // TokenManager exposes the access-token parser for HTTP middleware.
@@ -249,9 +262,16 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 		}
 	}
 
-	// Link guest requests and change their status to in_progress
-	if err := s.users.LinkGuestRequests(ctx, user.ID, email); err != nil {
+	// Link guest requests and change their status to in_progress. For each
+	// linked request the booking hook notifies the listing owner (email +
+	// chat card) — this is the first moment the guest has a user account.
+	linkedIDs, err := s.users.LinkGuestRequests(ctx, user.ID, email)
+	if err != nil {
 		log.Printf("auth: failed to link guest requests for user %d (email %s): %v", user.ID, maskEmail(email), err)
+	} else if len(linkedIDs) > 0 && s.onGuestRequestsLinked != nil {
+		// Detached context: notifications must not be cut off when the HTTP
+		// request context is cancelled after the response.
+		go s.onGuestRequestsLinked(context.Background(), linkedIDs)
 	}
 
 	return s.issueTokens(ctx, user, info)

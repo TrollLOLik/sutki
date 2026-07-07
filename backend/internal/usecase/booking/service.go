@@ -3,6 +3,7 @@ package booking
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -19,7 +20,11 @@ const (
 type Config struct {
 	// Notifier queues booking status emails. May be nil in tests; sends are
 	// then skipped.
-	Notifier   domain.EmailNotifier
+	Notifier domain.EmailNotifier
+	// Chat posts booking status cards into the owner-guest conversation.
+	// May be nil; cards are then skipped. Only the backend creates these
+	// system messages — clients can never post non-user kinds.
+	Chat       domain.ChatSystemPoster
 	ExposeCode bool
 }
 
@@ -27,6 +32,7 @@ type Config struct {
 type Service struct {
 	repo       domain.BookingRepository
 	notifier   domain.EmailNotifier
+	chat       domain.ChatSystemPoster
 	exposeCode bool
 }
 
@@ -34,8 +40,56 @@ func New(repo domain.BookingRepository, cfg Config) *Service {
 	return &Service{
 		repo:       repo,
 		notifier:   cfg.Notifier,
+		chat:       cfg.Chat,
 		exposeCode: cfg.ExposeCode,
 	}
+}
+
+// postBookingCard fires a booking status card into the owner-guest chat in
+// the background. Best-effort: failures are logged, never surfaced — the
+// booking transition itself already succeeded. Uses a detached context since
+// the HTTP request context is cancelled right after the response.
+func (s *Service) postBookingCard(b domain.Booking, ownerID int32, event, reason string, withAddress bool) {
+	if s.chat == nil || b.UserID == 0 || ownerID == 0 {
+		return
+	}
+	payload := domain.BookingStatusPayload{
+		RequestID: b.ID,
+		Event:     event,
+		StartDate: b.StartDate.Format("2006-01-02"),
+		Guests:    b.Count,
+		Reason:    reason,
+	}
+	if b.EndDate != nil {
+		payload.EndDate = b.EndDate.Format("2006-01-02")
+	}
+	if withAddress && b.House != nil {
+		payload.Address = formatBookingAddress(*b.House)
+	}
+	go func() {
+		if err := s.chat.PostBookingStatus(context.Background(), b.HouseID, ownerID, b.UserID, payload); err != nil {
+			log.Printf("booking chat card: post %s card for booking %d: %v", event, b.ID, err)
+		}
+	}()
+}
+
+// formatBookingAddress builds the full address revealed on confirmation,
+// including the private apartment number.
+func formatBookingAddress(h domain.BookingHouse) string {
+	parts := make([]string, 0, 4)
+	if h.City != "" {
+		parts = append(parts, h.City)
+	}
+	if h.Street != "" {
+		parts = append(parts, h.Street)
+	}
+	if h.HouseNumber != "" {
+		parts = append(parts, "д. "+h.HouseNumber)
+	}
+	if h.NumberRoom != "" {
+		parts = append(parts, "кв. "+h.NumberRoom)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (s *Service) ExposeCode() bool {
@@ -94,8 +148,14 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	// as pending_verification (the email is not confirmed yet), so the owner
 	// is only notified once the request is genuinely pending. Queueing
 	// failures are logged, never surfaced: the booking itself succeeded.
-	if s.notifier != nil && created.Status == domain.BookingPending {
-		s.notifyOwnerOfNewRequest(ctx, created, ownerEmail)
+	if created.Status == domain.BookingPending {
+		if s.notifier != nil {
+			s.notifyOwnerOfNewRequest(ctx, created, ownerEmail)
+		}
+		// Post the "new request" card into the owner-guest chat. Guest
+		// bookings (pending_verification) get their card later, when email
+		// verification links them to a user (HandleGuestRequestsLinked).
+		s.postBookingCard(created, ownerID, domain.BookingEventNew, "", false)
 	}
 	return created, nil
 }
@@ -112,6 +172,33 @@ func (s *Service) notifyOwnerOfNewRequest(ctx context.Context, created domain.Bo
 	}
 	if err := s.notifier.NotifyBookingRequested(ctx, ownerEmail, withHouse); err != nil {
 		log.Printf("booking notify: queue owner email for booking %d: %v", created.ID, err)
+	}
+}
+
+// HandleGuestRequestsLinked fires owner notifications for guest requests that
+// just got linked to a verified user (pending_verification -> in_progress).
+// This is the point where guest bookings finally have a user account, so the
+// owner email and the "new request" chat card — both impossible earlier —
+// are sent now. Best-effort per request: one failure never blocks the rest.
+func (s *Service) HandleGuestRequestsLinked(ctx context.Context, requestIDs []int32) {
+	for _, id := range requestIDs {
+		b, err := s.repo.GetByID(ctx, id)
+		if err != nil {
+			log.Printf("booking linked: reload booking %d: %v", id, err)
+			continue
+		}
+		if b.Status != domain.BookingPending || b.House == nil {
+			continue
+		}
+		if s.notifier != nil {
+			_, _, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
+			if err != nil {
+				log.Printf("booking linked: owner lookup for booking %d: %v", id, err)
+			} else if err := s.notifier.NotifyBookingRequested(ctx, ownerEmail, b); err != nil {
+				log.Printf("booking linked: queue owner email for booking %d: %v", id, err)
+			}
+		}
+		s.postBookingCard(b, b.House.OwnerID, domain.BookingEventNew, "", false)
 	}
 }
 
@@ -236,6 +323,10 @@ func (s *Service) Confirm(ctx context.Context, id, ownerID int32) (domain.Bookin
 		}
 	}
 
+	// Card with the full address: the exact apartment is revealed only after
+	// the owner approves, matching the DTO privacy rule.
+	s.postBookingCard(updated, ownerID, domain.BookingEventConfirmed, "", true)
+
 	return updated, nil
 }
 
@@ -257,6 +348,8 @@ func (s *Service) Reject(ctx context.Context, id, ownerID int32, reason string) 
 			log.Printf("booking notify: queue rejected email for booking %d: %v", updated.ID, err)
 		}
 	}
+
+	s.postBookingCard(updated, ownerID, domain.BookingEventRejected, reason, false)
 
 	return updated, nil
 }
@@ -293,12 +386,17 @@ func (s *Service) Cancel(ctx context.Context, id, userID int32, guestID string) 
 	// pending_verification the owner never learned about the request, so a
 	// cancellation email would only confuse them. Opt-outable via the
 	// owner's "booking" preference inside the notifier.
-	if s.notifier != nil && b.Status == domain.BookingPending {
+	if b.Status == domain.BookingPending {
 		ownerID, _, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
 		if err != nil {
 			log.Printf("booking notify: owner lookup for cancelled booking %d: %v", updated.ID, err)
-		} else if err := s.notifier.NotifyBookingCancelled(ctx, ownerID, ownerEmail, updated); err != nil {
-			log.Printf("booking notify: queue cancelled email for booking %d: %v", updated.ID, err)
+		} else {
+			if s.notifier != nil {
+				if err := s.notifier.NotifyBookingCancelled(ctx, ownerID, ownerEmail, updated); err != nil {
+					log.Printf("booking notify: queue cancelled email for booking %d: %v", updated.ID, err)
+				}
+			}
+			s.postBookingCard(updated, ownerID, domain.BookingEventCancelled, "", false)
 		}
 	}
 	return updated, nil
