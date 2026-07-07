@@ -40,6 +40,18 @@ type Config struct {
 	SMTPPassword string
 	SMTPFrom     string
 
+	// PublicAPIBaseURL is the public origin of this API, used to build
+	// unsubscribe links in emails (e.g. "https://api.example.com").
+	// Empty disables unsubscribe links (transactional mail still works).
+	PublicAPIBaseURL string
+	// EmailUnsubscribeSecret signs login-free unsubscribe links. Falls back
+	// to JWTSecret when unset so no extra env var is strictly required.
+	EmailUnsubscribeSecret string
+	// EmailDailyLimit caps outgoing emails per calendar day to stay under
+	// the Yandex 360 mailbox quota. Login codes are exempt from the cap;
+	// other notifications are postponed to the next day. 0 disables the cap.
+	EmailDailyLimit int
+
 	DadataAPIKey string
 
 	// LLM (OpenAI-compatible) config
@@ -82,6 +94,10 @@ func Load() (Config, error) {
 		SMTPUsername: getEnv("SMTP_USERNAME", ""),
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
+
+		PublicAPIBaseURL:       getEnv("PUBLIC_API_BASE_URL", ""),
+		EmailUnsubscribeSecret: getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
+		EmailDailyLimit:        getInt("EMAIL_DAILY_LIMIT", 500),
 
 		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
 
@@ -144,6 +160,11 @@ func Load() (Config, error) {
 		}
 		cfg.JWTSecret = secret
 		log.Println("config: JWT_SECRET not set, using a random ephemeral secret (tokens invalid across restarts)")
+	}
+	// Unsubscribe links only need to be unforgeable, so reusing the JWT
+	// secret is acceptable when a dedicated secret is not configured.
+	if cfg.EmailUnsubscribeSecret == "" {
+		cfg.EmailUnsubscribeSecret = cfg.JWTSecret
 	}
 	return cfg, nil
 }

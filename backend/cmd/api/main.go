@@ -17,6 +17,7 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/config"
 	httpdelivery "github.com/TrollLOLik/sutki/backend/internal/delivery/http"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/email"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
@@ -92,6 +93,22 @@ func main() {
 	llmClient := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, cfg.LLMTimeout)
 	aiSummarizer := llm.NewSummarizer(llmClient)
 
+	// Durable email pipeline: DB-backed outbox + single worker draining it
+	// over SMTP. Usecases only enqueue; delivery, retries and dedup live here.
+	smtpSender := email.NewSMTPSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
+	mailer := email.NewMailer(postgres.NewEmailOutboxRepo(pool), smtpSender, int64(cfg.EmailDailyLimit))
+	mailer.Start(ctx)
+	emailPrefsRepo := postgres.NewEmailPrefsRepo(pool)
+	notifier, err := email.NewNotifier(mailer, email.NotifierConfig{
+		Prefs:              emailPrefsRepo,
+		UnsubscribeBaseURL: cfg.PublicAPIBaseURL,
+		UnsubscribeSecret:  cfg.EmailUnsubscribeSecret,
+	})
+	if err != nil {
+		log.Fatalf("email templates: %v", err)
+	}
+	emailHandler := httpdelivery.NewEmailHandler(emailPrefsRepo, cfg.EmailUnsubscribeSecret)
+
 	listingRepo := postgres.NewListingRepo(queries)
 	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
@@ -104,11 +121,7 @@ func main() {
 		AccessTTL:    cfg.AccessTTL,
 		RefreshTTL:   cfg.RefreshTTL,
 		ExposeCode:   cfg.AuthExposeCode,
-		SMTPHost:     cfg.SMTPHost,
-		SMTPPort:     cfg.SMTPPort,
-		SMTPUsername: cfg.SMTPUsername,
-		SMTPPassword: cfg.SMTPPassword,
-		SMTPFrom:     cfg.SMTPFrom,
+		Notifier:     notifier,
 		DadataAPIKey: cfg.DadataAPIKey,
 		Storage:      publicStorage,
 	})
@@ -116,12 +129,8 @@ func main() {
 
 	bookingRepo := postgres.NewBookingRepo(queries)
 	bookingSvc := booking.New(bookingRepo, booking.Config{
-		SMTPHost:     cfg.SMTPHost,
-		SMTPPort:     cfg.SMTPPort,
-		SMTPUsername: cfg.SMTPUsername,
-		SMTPPassword: cfg.SMTPPassword,
-		SMTPFrom:     cfg.SMTPFrom,
-		ExposeCode:   cfg.AuthExposeCode,
+		Notifier:   notifier,
+		ExposeCode: cfg.AuthExposeCode,
 	})
 	bookingSvc.StartCleanupJob(ctx, 1*time.Hour)
 	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
@@ -131,7 +140,7 @@ func main() {
 	favoriteHandler := httpdelivery.NewFavoriteHandler(favoriteSvc, cfg.MediaBaseURL)
 
 	reviewRepo := postgres.NewReviewRepo(queries)
-	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer)
+	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 
 	aiHandler := httpdelivery.NewAIHandler(llmClient, listingSvc, true)
@@ -145,12 +154,13 @@ func main() {
 		CentrifugoURL: cfg.CentrifugoURL,
 		CentrifugoKey: cfg.CentrifugoKey,
 		HMACSecret:    cfg.CentrifugoHMACSecret,
+		Notifier:      notifier,
 	})
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		// Slow-client hardening: bound idle keep-alive connections and header

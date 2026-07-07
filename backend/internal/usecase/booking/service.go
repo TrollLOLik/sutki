@@ -2,13 +2,7 @@ package booking
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
 	"log"
-	"mime"
-	"net/mail"
-	"net/smtp"
-	"strings"
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -23,34 +17,24 @@ const (
 
 // Config tunes the booking service.
 type Config struct {
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
-	SMTPFrom     string
-	ExposeCode   bool
+	// Notifier queues booking status emails. May be nil in tests; sends are
+	// then skipped.
+	Notifier   domain.EmailNotifier
+	ExposeCode bool
 }
 
 // Service implements booking (rental request) use cases.
 type Service struct {
-	repo         domain.BookingRepository
-	smtpHost     string
-	smtpPort     int
-	smtpUsername string
-	smtpPassword string
-	smtpFrom     string
-	exposeCode   bool
+	repo       domain.BookingRepository
+	notifier   domain.EmailNotifier
+	exposeCode bool
 }
 
 func New(repo domain.BookingRepository, cfg Config) *Service {
 	return &Service{
-		repo:         repo,
-		smtpHost:     cfg.SMTPHost,
-		smtpPort:     cfg.SMTPPort,
-		smtpUsername: cfg.SMTPUsername,
-		smtpPassword: cfg.SMTPPassword,
-		smtpFrom:     cfg.SMTPFrom,
-		exposeCode:   cfg.ExposeCode,
+		repo:       repo,
+		notifier:   cfg.Notifier,
+		exposeCode: cfg.ExposeCode,
 	}
 }
 
@@ -82,7 +66,7 @@ func clamp(limit, offset int32) (int32, int32) {
 // Create validates and creates a booking for b.UserID. The listing must exist
 // and be active, and a user cannot book their own listing.
 func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booking, error) {
-	ownerID, status, _, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
+	ownerID, status, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
 	if err != nil {
 		return domain.Booking{}, err
 	}
@@ -101,7 +85,34 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	if overlap {
 		return domain.Booking{}, domain.ErrDatesUnavailable
 	}
-	return s.repo.Create(ctx, b)
+	created, err := s.repo.Create(ctx, b)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+
+	// Notify the listing owner about the new request. Guest bookings start
+	// as pending_verification (the email is not confirmed yet), so the owner
+	// is only notified once the request is genuinely pending. Queueing
+	// failures are logged, never surfaced: the booking itself succeeded.
+	if s.notifier != nil && created.Status == domain.BookingPending {
+		s.notifyOwnerOfNewRequest(ctx, created, ownerEmail)
+	}
+	return created, nil
+}
+
+// notifyOwnerOfNewRequest enqueues the "new booking request" email for the
+// listing owner. The create result carries no house summary, so the booking
+// is re-read to include the address in the email; if that lookup fails the
+// email is still sent with degraded copy.
+func (s *Service) notifyOwnerOfNewRequest(ctx context.Context, created domain.Booking, ownerEmail string) {
+	withHouse, err := s.repo.GetByID(ctx, created.ID)
+	if err != nil {
+		log.Printf("booking notify: reload booking %d for owner email: %v", created.ID, err)
+		withHouse = created
+	}
+	if err := s.notifier.NotifyBookingRequested(ctx, ownerEmail, withHouse); err != nil {
+		log.Printf("booking notify: queue owner email for booking %d: %v", created.ID, err)
+	}
 }
 
 // BlockingRanges returns all non-terminal date ranges for a house so clients
@@ -219,20 +230,10 @@ func (s *Service) Confirm(ctx context.Context, id, ownerID int32) (domain.Bookin
 	}
 	updated.House = b.House
 
-	if updated.Email != "" && s.smtpUsername != "" && s.smtpPassword != "" {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("booking notify panic recovered: %v", r)
-				}
-			}()
-			subject := "Ваша заявка на бронирование подтверждена!"
-			body := fmt.Sprintf("Здравствуйте!\nВаша заявка на бронирование жилья по адресу %s %s подтверждена владельцем.\nПриятного отдыха!", updated.House.Street, updated.House.HouseNumber)
-			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, updated.Email, subject, body)
-			if err != nil {
-				log.Printf("booking notify: failed to send email to %s: %v", domain.MaskEmail(updated.Email), err)
-			}
-		}()
+	if s.notifier != nil && updated.Email != "" {
+		if err := s.notifier.NotifyBookingConfirmed(ctx, updated); err != nil {
+			log.Printf("booking notify: queue confirmed email for booking %d: %v", updated.ID, err)
+		}
 	}
 
 	return updated, nil
@@ -251,23 +252,10 @@ func (s *Service) Reject(ctx context.Context, id, ownerID int32, reason string) 
 	}
 	updated.House = b.House
 
-	if updated.Email != "" && s.smtpUsername != "" && s.smtpPassword != "" {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("booking notify panic recovered: %v", r)
-				}
-			}()
-			subject := "Ваша заявка на бронирование отклонена"
-			body := fmt.Sprintf("Здравствуйте!\nВаша заявка на бронирование жилья по адресу %s %s была отклонена владельцем.\n", updated.House.Street, updated.House.HouseNumber)
-			if reason != "" {
-				body += fmt.Sprintf("Причина отклонения: %s\n", reason)
-			}
-			err := sendEmail(s.smtpHost, s.smtpPort, s.smtpUsername, s.smtpPassword, s.smtpFrom, updated.Email, subject, body)
-			if err != nil {
-				log.Printf("booking notify: failed to send email to %s: %v", domain.MaskEmail(updated.Email), err)
-			}
-		}()
+	if s.notifier != nil && updated.Email != "" {
+		if err := s.notifier.NotifyBookingRejected(ctx, updated, reason); err != nil {
+			log.Printf("booking notify: queue rejected email for booking %d: %v", updated.ID, err)
+		}
 	}
 
 	return updated, nil
@@ -300,6 +288,19 @@ func (s *Service) Cancel(ctx context.Context, id, userID int32, guestID string) 
 		return domain.Booking{}, err
 	}
 	updated.House = b.House
+
+	// Notify the owner only when the request was genuinely pending: for
+	// pending_verification the owner never learned about the request, so a
+	// cancellation email would only confuse them. Opt-outable via the
+	// owner's "booking" preference inside the notifier.
+	if s.notifier != nil && b.Status == domain.BookingPending {
+		ownerID, _, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
+		if err != nil {
+			log.Printf("booking notify: owner lookup for cancelled booking %d: %v", updated.ID, err)
+		} else if err := s.notifier.NotifyBookingCancelled(ctx, ownerID, ownerEmail, updated); err != nil {
+			log.Printf("booking notify: queue cancelled email for booking %d: %v", updated.ID, err)
+		}
+	}
 	return updated, nil
 }
 
@@ -324,65 +325,3 @@ func canView(b domain.Booking, actorID int32) bool {
 	return b.House != nil && b.House.OwnerID == actorID
 }
 
-func sendEmail(host string, port int, username, password, from, to, subject, body string) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: false,
-		ServerName:         host,
-	}
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
-	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
-	}
-	defer conn.Close()
-
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return fmt.Errorf("smtp client: %w", err)
-	}
-	defer client.Close()
-
-	auth := smtp.PlainAuth("", username, password, host)
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("auth: %w", err)
-	}
-
-	fromCleaned := strings.TrimSpace(from)
-	if len(fromCleaned) >= 2 && fromCleaned[0] == '\'' && fromCleaned[len(fromCleaned)-1] == '\'' {
-		fromCleaned = fromCleaned[1 : len(fromCleaned)-1]
-	}
-	fromCleaned = strings.TrimSpace(fromCleaned)
-
-	fromParsed, err := mail.ParseAddress(fromCleaned)
-	if err != nil {
-		return fmt.Errorf("parse sender address: %w", err)
-	}
-
-	if err = client.Mail(fromParsed.Address); err != nil {
-		return fmt.Errorf("mail: %w", err)
-	}
-	if err = client.Rcpt(to); err != nil {
-		return fmt.Errorf("rcpt: %w", err)
-	}
-
-	writer, err := client.Data()
-	if err != nil {
-		return fmt.Errorf("data: %w", err)
-	}
-	defer writer.Close()
-
-	var fromHeader string
-	if fromParsed.Name != "" {
-		fromHeader = fmt.Sprintf("%s <%s>", mime.BEncoding.Encode("utf-8", fromParsed.Name), fromParsed.Address)
-	} else {
-		fromHeader = fromParsed.Address
-	}
-	subjectHeader := mime.BEncoding.Encode("utf-8", subject)
-
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", fromHeader, to, subjectHeader, body)
-	if _, err = writer.Write([]byte(msg)); err != nil {
-		return fmt.Errorf("write: %w", err)
-	}
-
-	return nil
-}
