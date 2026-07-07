@@ -41,6 +41,14 @@ export interface ListingCard {
   rating: number;
   /** Number of published reviews. */
   reviews_count: number;
+  /**
+   * Moderation status — owner-only, populated exclusively by /listings/mine.
+   * 'active' | 'pending_moderation' | 'moderation_review' | 'rejected'.
+   * Absent in public list responses.
+   */
+  status?: string;
+  /** Rejection reason shown to the owner when status === 'rejected'. */
+  rejection_reason?: string | null;
 }
 
 export interface ListingDetail extends ListingCard {

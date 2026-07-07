@@ -14,6 +14,16 @@ interface ListingCardProps {
   onToggleFavorite?: () => void;
 }
 
+/**
+ * Owner-facing moderation states. `status` is only present in /listings/mine
+ * responses, so public cards never render these badges.
+ */
+const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string }> = {
+  pending_moderation: { label: 'На проверке', bg: '#FFF4E0', fg: '#B25E00' },
+  moderation_review: { label: 'На ручной проверке', bg: '#FFF4E0', fg: '#B25E00' },
+  rejected: { label: 'Отклонено', bg: '#FDEBEC', fg: '#C0362C' },
+};
+
 export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: ListingCardProps) {
   const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -43,6 +53,9 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
   };
 
   const metroTime = (listing.id % 12) + 4;
+
+  const moderationBadge =
+    listing.status && listing.status !== 'active' ? MODERATION_BADGES[listing.status] : undefined;
 
   return (
     <Pressable
@@ -179,6 +192,31 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
           </View>
         </View>
       </View>
+
+      {/* Owner-only moderation status (my listings screen) */}
+      {moderationBadge ? (
+        <View className="mt-3 gap-1">
+          <View
+            className="self-start flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
+            style={{ backgroundColor: moderationBadge.bg }}
+          >
+            <Ionicons
+              name={listing.status === 'rejected' ? 'close-circle' : 'time-outline'}
+              size={13}
+              color={moderationBadge.fg}
+            />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: moderationBadge.fg }}>
+              {moderationBadge.label}
+            </Text>
+          </View>
+          {listing.status === 'rejected' && listing.rejection_reason ? (
+            <Text numberOfLines={3} className="text-[11px] text-ink-secondary leading-4">
+              Причина: {listing.rejection_reason}. Отредактируйте объявление, чтобы отправить его на
+              повторную проверку.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Bottom Part: Price on Left, Button on Right */}
       <View className="flex-row justify-between items-center mt-3 pt-1">

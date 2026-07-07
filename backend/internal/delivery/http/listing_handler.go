@@ -81,6 +81,10 @@ type listingCardDTO struct {
 	// ReviewsCount is the published review count.
 	Rating       float64 `json:"rating"`
 	ReviewsCount int32   `json:"reviews_count"`
+	// Status and RejectionReason are owner-only moderation fields, populated
+	// exclusively by listMine (public list endpoints never set them).
+	Status          string  `json:"status,omitempty"`
+	RejectionReason *string `json:"rejection_reason,omitempty"`
 }
 
 type listingDetailDTO struct {
@@ -300,7 +304,14 @@ func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]listingCardDTO, 0, len(res.Items))
 	for _, hs := range res.Items {
-		items = append(items, h.cardDTO(hs))
+		card := h.cardDTO(hs)
+		// Owner-only: expose moderation state so the app can render badges
+		// ("На проверке", "Отклонено: причина") in "My listings".
+		card.Status = hs.Status
+		if hs.Status == domain.HouseStatusRejected {
+			card.RejectionReason = hs.RejectionReason
+		}
+		items = append(items, card)
 	}
 	writeJSON(w, http.StatusOK, listResponse{
 		Items:  items,
@@ -324,6 +335,15 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Non-active listings (pending moderation / review / rejected) are only
+	// visible to their owner. GetHouseByID has no status filter, so enforce
+	// it here; 404 (not 403) to avoid leaking the listing's existence.
+	callerID, isAuthed := userIDFromContext(r.Context())
+	if hs.Status != domain.HouseStatusActive && (!isAuthed || callerID != hs.OwnerID) {
+		writeError(w, http.StatusNotFound, "listing not found")
 		return
 	}
 
