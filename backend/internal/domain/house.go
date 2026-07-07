@@ -25,6 +25,9 @@ type House struct {
 	Area        int32
 	City        string
 	Status      string
+	// RejectionReason is set when Status == "rejected" (moderation outcome);
+	// only exposed to the owner.
+	RejectionReason *string
 	// MaxGuests is the sleeping capacity; nil means unknown (legacy listings).
 	MaxGuests      *int32
 	Lat            *float64

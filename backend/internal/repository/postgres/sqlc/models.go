@@ -74,6 +74,31 @@ type EmailLoginCode struct {
 	CreatedAt pgtype.Timestamp
 }
 
+type EmailOutbox struct {
+	ID            int64
+	DedupKey      *string
+	UserID        *int32
+	Recipient     string
+	EventType     string
+	Subject       string
+	BodyText      *string
+	BodyHtml      *string
+	Status        string
+	Attempts      int32
+	LastError     *string
+	NextAttemptAt pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+	SentAt        pgtype.Timestamptz
+}
+
+type EmailPreference struct {
+	UserID     int32
+	Booking    bool
+	ChatDigest bool
+	Reviews    bool
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type Favorite struct {
 	ID        int64
 	UserID    int32
@@ -156,9 +181,11 @@ type HouseHouseService struct {
 type Message struct {
 	ID             int64
 	ConversationID int64
-	SenderID       int32
+	SenderID       *int32
 	Body           *string
 	CreatedAt      pgtype.Timestamptz
+	Kind           string
+	Payload        []byte
 }
 
 type MessageAttachment struct {
@@ -171,6 +198,25 @@ type MessageAttachment struct {
 	Width     *int32
 	Height    *int32
 	CreatedAt pgtype.Timestamptz
+}
+
+type ModerationVerdict struct {
+	ID            int64
+	HouseID       int32
+	ContentHash   string
+	Source        string
+	Decision      *string
+	Category      *string
+	Reason        *string
+	Confidence    *float32
+	RawResponse   []byte
+	ModeratorID   *int32
+	Status        string
+	Attempts      int32
+	NextAttemptAt pgtype.Timestamptz
+	LastError     *string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
 }
 
 type Payment struct {
@@ -193,6 +239,14 @@ type PersonalDataRevocation struct {
 	UserID    int32
 	RevokedAt pgtype.Timestamp
 	EmailHash string
+}
+
+type PhotoHash struct {
+	ID        int64
+	HouseID   int32
+	MediaKey  string
+	Phash     int64
+	CreatedAt pgtype.Timestamptz
 }
 
 type RefreshToken struct {
