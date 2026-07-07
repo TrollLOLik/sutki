@@ -4,10 +4,25 @@ import { env } from '@/lib/env';
 import { api } from '@/lib/api/client';
 import { queryClient } from '@/lib/query';
 
+/** Machine-readable payload of a booking_status system message. */
+interface BookingStatusPayload {
+	request_id: number;
+	event: 'new' | 'confirmed' | 'rejected' | 'cancelled';
+	start_date?: string;
+	end_date?: string;
+	guests?: number;
+	reason?: string;
+	address?: string;
+}
+
 interface ChatMessage {
 	id: number;
 	conversation_id: number;
-	sender_id: number;
+	/** null for system messages (booking status cards) */
+	sender_id: number | null;
+	/** 'user' (default) or 'booking_status'; older cache entries may omit it */
+	kind?: string;
+	payload?: BookingStatusPayload;
 	body?: string;
 	created_at: string;
 	attachments?: Array<{
@@ -103,4 +118,4 @@ export const useChatStore = create<ChatState>((set, get) => ({
 		set({ activeConversationId: id });
 	},
 }));
-export type { ChatMessage };
+export type { ChatMessage, BookingStatusPayload };
