@@ -33,6 +33,8 @@ import { formatRub } from '@/lib/format';
 import { useFiltersStore, countActiveFilters } from '@/store/filters';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
+import { useHostResponseStats } from '@/lib/api/hostStats';
+import { formatHostResponseTime } from '@/lib/formatHostStats';
 import { shadows } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
@@ -223,6 +225,10 @@ export default function PublicProfileScreen() {
 
   // Listings list (load up to 100 listings so local filtering doesn't break pagination)
   const { data: listingsData, isLoading: listingsLoading } = useListings({ limit: 100 });
+  const {
+    data: hostResponseStats,
+    isLoading: hostResponseStatsLoading,
+  } = useHostResponseStats(Number.isFinite(numericId) ? numericId : undefined);
   const allListings = listingsData?.items ?? [];
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -566,7 +572,8 @@ export default function PublicProfileScreen() {
             />
             <MetricTile
               label="Среднее время ответа"
-              value="12 мин"
+              value={formatHostResponseTime(hostResponseStats)}
+              loading={hostResponseStatsLoading}
               icon={<PastelIcon name="chatbubbles-outline" />}
             />
           </View>

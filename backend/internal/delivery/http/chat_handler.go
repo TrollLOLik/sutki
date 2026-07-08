@@ -33,6 +33,22 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Post("/attachments/presign", h.presignUpload)
 }
 
+func (h *ChatHandler) HostResponseStats(w http.ResponseWriter, r *http.Request) {
+	hostID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || hostID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	stats, err := h.svc.HostResponseStats(r.Context(), int32(hostID))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get host response stats")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, stats)
+}
+
 func (h *ChatHandler) wsTokens(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {

@@ -60,14 +60,14 @@ type ConversationParticipant struct {
 
 // MessageAttachment represents a file or image attachment linked to a message
 type MessageAttachment struct {
-	ID        int64  `json:"id"`
-	MessageID int64  `json:"message_id"`
-	URL       string `json:"url"`
-	FileName  string `json:"file_name"`
-	MimeType  string `json:"mime_type"`
-	SizeBytes int64  `json:"size_bytes"`
-	Width     *int32 `json:"width,omitempty"`
-	Height    *int32 `json:"height,omitempty"`
+	ID        int64     `json:"id"`
+	MessageID int64     `json:"message_id"`
+	URL       string    `json:"url"`
+	FileName  string    `json:"file_name"`
+	MimeType  string    `json:"mime_type"`
+	SizeBytes int64     `json:"size_bytes"`
+	Width     *int32    `json:"width,omitempty"`
+	Height    *int32    `json:"height,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -87,10 +87,10 @@ type Message struct {
 
 // ConversationSummary represents a conversation list item with unread counts and last message preview
 type ConversationSummary struct {
-	ConversationID       int64      `json:"conversation_id"`
-	HouseID              *int32     `json:"house_id,omitempty"`
-	LastActivity         time.Time  `json:"last_activity"`
-	UnreadCount          int64      `json:"unread_count"`
+	ConversationID         int64      `json:"conversation_id"`
+	HouseID                *int32     `json:"house_id,omitempty"`
+	LastActivity           time.Time  `json:"last_activity"`
+	UnreadCount            int64      `json:"unread_count"`
 	LastMessageID          *int64     `json:"last_message_id,omitempty"`
 	LastMessageBody        string     `json:"last_message_body"`
 	LastMessageSenderID    *int32     `json:"last_message_sender_id,omitempty"`
@@ -107,4 +107,11 @@ type ConversationSummary struct {
 	HouseCountRoom         *string    `json:"house_count_room,omitempty"`
 	HousePrice             *int32     `json:"house_price,omitempty"`
 	HouseCoverPath         string     `json:"house_cover_path"`
+}
+
+// HostResponseStats summarizes how quickly a host replies to guest message
+// batches in one-on-one conversations.
+type HostResponseStats struct {
+	AvgResponseMinutes int32 `json:"avg_response_minutes"`
+	ResponsesCount     int32 `json:"responses_count"`
 }

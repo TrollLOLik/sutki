@@ -138,6 +138,7 @@ type ChatRepository interface {
 	// event) guard already holds a card for this payload.
 	CreateSystemMessage(ctx context.Context, convID int64, kind string, payload []byte, fallbackBody string) (msg Message, created bool, err error)
 	ListUserConversations(ctx context.Context, userID int32) ([]ConversationSummary, error)
+	GetHostResponseStats(ctx context.Context, hostID int32) (HostResponseStats, error)
 	GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]Message, error)
 	UpdateLastReadMessage(ctx context.Context, messageID int64, convID int64, userID int32) error
 	CheckParticipantExists(ctx context.Context, convID int64, userID int32) (bool, error)

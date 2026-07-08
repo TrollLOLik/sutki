@@ -22,6 +22,8 @@ import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import * as ImagePicker from 'expo-image-picker';
 import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
+import { useHostResponseStats } from '@/lib/api/hostStats';
+import { formatHostResponseTime } from '@/lib/formatHostStats';
 import type { UpdateProfileBody } from '@/types/auth';
 import type { User } from '@/types/user';
 import { GuestProfile } from '@/components/profile/GuestProfile';
@@ -30,11 +32,6 @@ import { ThemeSelector } from '@/components/profile/ThemeSelector';
 type SettingsTab = 'basic' | 'security';
 
 const FALLBACK_AVATAR = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&h=240&fit=crop';
-
-const TRUST_ITEMS = [
-  { icon: 'shield-checkmark-outline', label: 'Проверка профиля', value: 'Готово' },
-  { icon: 'chatbubbles-outline', label: 'Ответы хозяев', value: '12 мин' },
-] as const;
 
 const formatRelativeTime = (isoString: string) => {
   try {
@@ -190,6 +187,10 @@ export default function ProfileScreen() {
   const vkLinked = !!user?.vk_id;
 
   const { data: sessionsData, refetch: refetchSessions, isLoading: sessionsLoading } = useSessions();
+  const {
+    data: hostResponseStats,
+    isLoading: hostResponseStatsLoading,
+  } = useHostResponseStats(user?.id, status === 'authenticated');
   const revokeSession = useRevokeSession();
   const revokeOtherSessions = useRevokeOtherSessions();
 
@@ -758,14 +759,17 @@ export default function ProfileScreen() {
           </View>
 
           <View className="mt-5 flex-row gap-3">
-            {TRUST_ITEMS.map((item) => (
-              <MetricTile
-                key={item.label}
-                label={item.label}
-                value={item.value}
-                icon={<PastelIcon name={item.icon} />}
-              />
-            ))}
+            <MetricTile
+              label="Проверка профиля"
+              value="Готово"
+              icon={<PastelIcon name="shield-checkmark-outline" />}
+            />
+            <MetricTile
+              label="Ответы хозяев"
+              value={formatHostResponseTime(hostResponseStats)}
+              loading={hostResponseStatsLoading}
+              icon={<PastelIcon name="chatbubbles-outline" />}
+            />
           </View>
 
           <View className="mt-6 gap-3">

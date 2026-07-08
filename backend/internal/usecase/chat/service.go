@@ -131,6 +131,13 @@ func (s *Service) ListUserConversations(ctx context.Context, userID int32) ([]do
 	return convs, nil
 }
 
+func (s *Service) HostResponseStats(ctx context.Context, hostID int32) (domain.HostResponseStats, error) {
+	if hostID <= 0 {
+		return domain.HostResponseStats{}, nil
+	}
+	return s.repo.GetHostResponseStats(ctx, hostID)
+}
+
 func (s *Service) FindOrCreateConversation(ctx context.Context, houseID *int32, user1, user2 int32) (int64, error) {
 	if user1 == user2 {
 		return 0, ErrSelfConversation

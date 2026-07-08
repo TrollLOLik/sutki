@@ -343,6 +343,58 @@ func (r *ChatRepo) ListUserConversations(ctx context.Context, userID int32) ([]d
 	return summaries, nil
 }
 
+func (r *ChatRepo) GetHostResponseStats(ctx context.Context, hostID int32) (domain.HostResponseStats, error) {
+	const q = `
+WITH ordered AS (
+  SELECT
+    m.id,
+    m.conversation_id,
+    m.sender_id,
+    m.created_at,
+    lag(m.sender_id) OVER (
+      PARTITION BY m.conversation_id
+      ORDER BY m.created_at, m.id
+    ) AS prev_sender_id
+  FROM message m
+  JOIN conversation_participant host_cp
+    ON host_cp.conversation_id = m.conversation_id
+   AND host_cp.user_id = $1
+  WHERE m.kind = 'user'
+    AND m.sender_id IS NOT NULL
+    AND m.created_at >= now() - interval '90 days'
+),
+guest_starts AS (
+  SELECT conversation_id, created_at AS guest_at
+  FROM ordered
+  WHERE sender_id <> $1
+    AND (prev_sender_id IS NULL OR prev_sender_id = $1)
+),
+responses AS (
+  SELECT
+    gs.guest_at,
+    (
+      SELECT min(m2.created_at)
+      FROM message m2
+      WHERE m2.conversation_id = gs.conversation_id
+        AND m2.sender_id = $1
+        AND m2.kind = 'user'
+        AND m2.created_at > gs.guest_at
+    ) AS host_at
+  FROM guest_starts gs
+)
+SELECT
+  COALESCE(round(avg(extract(epoch FROM (host_at - guest_at)) / 60.0))::int, 0)::int AS avg_response_minutes,
+  count(*)::int AS responses_count
+FROM responses
+WHERE host_at IS NOT NULL`
+
+	var stats domain.HostResponseStats
+	if err := r.q.DB().QueryRow(ctx, q, hostID).Scan(&stats.AvgResponseMinutes, &stats.ResponsesCount); err != nil {
+		return domain.HostResponseStats{}, fmt.Errorf("host response stats: %w", err)
+	}
+	return stats, nil
+}
+
 func (r *ChatRepo) GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]domain.Message, error) {
 	// Raw SQL (not sqlc) so system-message columns kind/payload are included.
 	const q = `
