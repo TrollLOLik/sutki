@@ -7,6 +7,7 @@ import { MetricTile } from '@/components/ui';
 import { useFiltersStore } from '@/store/filters';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ThemeSelector } from '@/components/profile/ThemeSelector';
 
 function GuestProfileAction({
   icon,
@@ -92,7 +93,7 @@ export function GuestProfile({
         <View className="items-center">
           <Text className="text-xl font-extrabold text-ink">Вы не вошли</Text>
           <Text className="text-sm text-ink-secondary mt-1 text-center px-6 leading-5">
-            Войдите, чтобы бронировать жилье, общаться с хозяевами и сохранять избранное
+            Войдите, чтобы бронировать жилье и общаться с хозяевами. Избранное пока хранится на этом устройстве
           </Text>
           <Pressable
             onPress={() => router.push('/email')}
@@ -118,13 +119,6 @@ export function GuestProfile({
             disabled
           />
           <GuestProfileAction
-            icon="file-tray-full-outline"
-            title="Входящие заявки"
-            subtitle="Новые запросы гостей и подтверждения"
-            onPress={() => handleAuthAction('host')}
-            disabled
-          />
-          <GuestProfileAction
             icon="star-outline"
             title="Мои отзывы"
             subtitle="Отзывы, которые вы оставили или получили"
@@ -140,12 +134,10 @@ export function GuestProfile({
             subtitle="Жилье, сохраненное на этом устройстве"
             onPress={handleShowLocalFavorites}
           />
-          <GuestProfileAction
-            icon="reader-outline"
-            title="Мои заявки"
-            subtitle="Заявки на бронирование, отправленные гостем"
-            onPress={() => router.push('/bookings')}
-          />
+        </View>
+
+        <View className="mt-4">
+          <ThemeSelector />
         </View>
 
         <View className="mt-6 border border-line bg-surface p-4 rounded-card" style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10 }}>

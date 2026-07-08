@@ -101,6 +101,7 @@ type conversationSummaryDTO struct {
 	OtherUserName          string     `json:"other_user_name"`
 	OtherUserSurname       string     `json:"other_user_surname"`
 	OtherUserAvatarUrl     string     `json:"other_user_avatar_url"`
+	OtherUserPhone         string     `json:"other_user_phone"`
 	OtherUserDeleted       bool       `json:"other_user_deleted"`
 	HouseStreet            *string    `json:"house_street,omitempty"`
 	HouseNumber            *string    `json:"house_number,omitempty"`
@@ -138,6 +139,7 @@ func (h *ChatHandler) listConversations(w http.ResponseWriter, r *http.Request) 
 			OtherUserName:          c.OtherUserName,
 			OtherUserSurname:       c.OtherUserSurname,
 			OtherUserAvatarUrl:     resolveMediaURL(c.OtherUserAvatarUrl),
+			OtherUserPhone:         c.OtherUserPhone,
 			OtherUserDeleted:       c.OtherUserDeleted,
 			HouseStreet:            c.HouseStreet,
 			HouseNumber:            c.HouseNumber,

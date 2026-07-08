@@ -84,12 +84,5 @@ export interface CreateBookingBody {
   end_date?: string;
   /** Guest email for OTP verification (guest-mode only). */
   email?: string;
-  /** Guest device UUID, sent for anonymous bookings. */
-  guest_id?: string;
-}
-
-/** Email field added to Booking for guest tracking. */
-export interface BookingWithEmail extends Booking {
-  email?: string;
 }
 

@@ -20,8 +20,7 @@ import { BookingCard } from '@/components/BookingCard';
 import { EmptyState } from '@/components/EmptyState';
 import { HistoryBookingCard } from '@/components/HistoryBookingCard';
 import { Button } from '@/components/ui';
-import { useMyBookings, useGuestRequests } from '@/lib/api/bookings';
-import { requestEmailCode } from '@/lib/api/auth';
+import { useMyBookings } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { useSessionStore } from '@/store/session';
@@ -40,28 +39,10 @@ export default function MyBookingsScreen() {
   const { mutateAsync: findOrCreateConv } = useFindOrCreateConversation();
 
   const { status: authStatus } = useSessionStore();
-  const isGuest = authStatus === 'guest';
+  const isAuthenticated = authStatus === 'authenticated';
 
-  const activeQuery = useMyBookings({ limit: 50, scope: 'active' }, { enabled: !isGuest });
-  const historyQuery = useMyBookings({ limit: 50, scope: 'history' }, { enabled: !isGuest });
-  const guestQuery = useGuestRequests({ limit: 100 }, { enabled: isGuest });
-
-  const isActive = (item: Booking) => {
-    if (item.status === 'cancelled') return false;
-    if (item.status === 'pending_verification' || item.status === 'in_progress') return true;
-    if (item.status === 'confirmed') {
-      if (item.end_date) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const end = new Date(item.end_date);
-        return end >= today;
-      }
-      return true;
-    }
-    return false;
-  };
-
-  const allGuestItems = guestQuery.data?.items ?? [];
+  const activeQuery = useMyBookings({ limit: 50, scope: 'active' }, { enabled: isAuthenticated });
+  const historyQuery = useMyBookings({ limit: 50, scope: 'history' }, { enabled: isAuthenticated });
 
   const handleOpenChat = async (booking: Booking) => {
     if (!booking.house) return;
@@ -83,25 +64,17 @@ export default function MyBookingsScreen() {
     }
   };
 
-  const activeItems = isGuest
-    ? allGuestItems.filter(isActive)
-    : activeQuery.data?.items ?? [];
+  const activeItems = activeQuery.data?.items ?? [];
 
-  const historyItems = isGuest
-    ? allGuestItems.filter((item) => !isActive(item))
-    : historyQuery.data?.items ?? [];
+  const historyItems = historyQuery.data?.items ?? [];
 
-  const isLoading = isGuest ? guestQuery.isLoading : (activeQuery.isLoading || historyQuery.isLoading);
-  const isError = isGuest ? guestQuery.isError : (activeQuery.isError || historyQuery.isError);
-  const isRefetching = isGuest ? guestQuery.isRefetching : (activeQuery.isRefetching || historyQuery.isRefetching);
+  const isLoading = activeQuery.isLoading || historyQuery.isLoading;
+  const isError = activeQuery.isError || historyQuery.isError;
+  const isRefetching = activeQuery.isRefetching || historyQuery.isRefetching;
 
   const refetch = () => {
-    if (isGuest) {
-      guestQuery.refetch();
-    } else {
-      activeQuery.refetch();
-      historyQuery.refetch();
-    }
+    activeQuery.refetch();
+    historyQuery.refetch();
   };
 
   useEffect(() => {
@@ -128,19 +101,44 @@ export default function MyBookingsScreen() {
   const open = (b: Booking) =>
     router.push({ pathname: '/bookings/[id]', params: { id: String(b.id) } });
 
-  const handleVerifyEmail = async (booking: Booking) => {
-    const email = (booking as any).email as string | undefined;
-    if (!email) {
-      router.push('/email' as any);
-      return;
-    }
-    try {
-      const res = await requestEmailCode(email);
-      router.push({ pathname: '/code', params: { email, devCode: res.dev_code ?? '', fromBooking: 'true' } } as any);
-    } catch {
-      router.push({ pathname: '/email', params: { fromBooking: 'true' } } as any);
-    }
-  };
+  if (!isAuthenticated) {
+    return (
+      <View className="flex-1 bg-surface">
+        <SafeAreaView edges={['top']} className="flex-1">
+          <View className="flex-row items-center px-4 py-2">
+            <Pressable
+              onPress={() => router.back()}
+              accessibilityLabel="Назад"
+              className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
+              <Ionicons name="chevron-back" size={22} color={palette.ink} />
+            </Pressable>
+            <Text className="flex-1 text-center text-lg font-semibold text-ink">Заявки</Text>
+            <View className="h-10 w-10" />
+          </View>
+
+          {authStatus === 'loading' ? (
+            <View className="flex-1 items-center justify-center">
+              <ActivityIndicator color={palette.primary} />
+            </View>
+          ) : (
+            <View className="flex-1 gap-4 px-4">
+              <EmptyState
+                icon="lock-closed-outline"
+                title="Войдите, чтобы видеть заявки"
+                subtitle="Заявки привязываются к email-аккаунту. Локально у гостя остается только избранное."
+              />
+              <View className="px-8">
+                <Button
+                  label="Войти по email"
+                  onPress={() => router.push({ pathname: '/email', params: { fromBooking: 'true' } } as any)}
+                />
+              </View>
+            </View>
+          )}
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-surface">
@@ -205,25 +203,6 @@ export default function MyBookingsScreen() {
           </Pressable>
         </View>
 
-        {/* Guest verification banner */}
-        {isGuest && (
-          <Pressable
-            onPress={() => router.push({ pathname: '/email', params: { fromBooking: 'true' } } as any)}
-            className="mx-4 mb-3 flex-row items-center gap-3 rounded-card bg-primary-light border border-primary/20 p-3 active:opacity-90"
-          >
-            <View className="h-9 w-9 items-center justify-center rounded-full bg-primary/15">
-              <Ionicons name="mail-outline" size={18} color={palette.primary} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-sm font-bold text-ink">Подтвердите почту</Text>
-              <Text className="text-xs text-ink-secondary mt-0.5" numberOfLines={2}>
-                Чтобы получать уведомления и открыть чат с хозяином, войдите через email.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={14} color={palette.primary} />
-          </Pressable>
-        )}
-
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator color={palette.primary} />
@@ -281,8 +260,7 @@ export default function MyBookingsScreen() {
                     <BookingCard
                       booking={item}
                       onPress={() => open(item)}
-                      onRepeat={item.status !== 'pending_verification' ? () => repeat(item) : undefined}
-                      onVerifyEmail={item.status === 'pending_verification' ? () => handleVerifyEmail(item) : undefined}
+                      onRepeat={() => repeat(item)}
                       onChatPress={() => handleOpenChat(item)}
                     />
                   )}

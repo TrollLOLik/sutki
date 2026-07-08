@@ -28,7 +28,6 @@ import { ApiError } from '@/lib/api/client';
 import { requestEmailCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
-import { initGuestId } from '@/lib/guestId';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 const ISO = 'yyyy-MM-dd';
@@ -169,7 +168,6 @@ export default function BookingScreen() {
     }
     setDateError(null);
     try {
-      const guestId = isGuest ? await initGuestId() : undefined;
       await createBooking.mutateAsync({
         count,
         name: values.name,
@@ -180,7 +178,6 @@ export default function BookingScreen() {
         start_date: format(range.start, ISO),
         end_date: format(range.end, ISO),
         ...(isGuest && values.email ? { email: values.email.trim().toLowerCase() } : {}),
-        ...(guestId ? { guest_id: guestId } : {}),
       });
 
       if (isGuest && values.email) {
@@ -192,8 +189,7 @@ export default function BookingScreen() {
             params: { email: values.email.trim().toLowerCase(), devCode: res.dev_code ?? '', fromBooking: 'true' },
           } as any);
         } catch {
-          // If OTP request fails, still go to bookings
-          router.replace('/bookings');
+          router.replace({ pathname: '/email', params: { fromBooking: 'true' } } as any);
         }
         return;
       }

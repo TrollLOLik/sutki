@@ -330,6 +330,7 @@ func (r *ChatRepo) ListUserConversations(ctx context.Context, userID int32) ([]d
 			OtherUserName:          derefString(row.OtherUserName),
 			OtherUserSurname:       derefString(row.OtherUserSurname),
 			OtherUserAvatarUrl:     derefString(row.OtherUserAvatarUrl),
+			OtherUserPhone:         derefString(row.OtherUserPhone),
 			OtherUserDeleted:       row.OtherUserDeleted,
 			HouseStreet:            row.HouseStreet,
 			HouseNumber:            row.HouseNumber,

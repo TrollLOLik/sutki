@@ -13,6 +13,7 @@ import {
 	Keyboard,
 	LayoutAnimation,
 	UIManager,
+	Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -51,6 +52,8 @@ const QUICK_REPLIES = [
 	'Напишу вам чуть позже',
 ];
 
+const EMOJI_OPTIONS = ['😀', '😊', '🙂', '😍', '😂', '👍', '🙏', '👌', '🔥', '❤️', '🎉', '🏠', '📍', '✅', '🙌', '☀️'];
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
 	UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -73,6 +76,7 @@ export default function ChatDialogScreen() {
 	const [inputText, setInputText] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
+	const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
 	// Contextual anti-scam notice: shown in fresh dialogs (few user messages),
 	// dismissible for the rest of the session. Not a chat message — it never
 	// pollutes history or unread counters.
@@ -588,6 +592,21 @@ export default function ChatDialogScreen() {
 	const initials = (otherUserTitle[0] || '?').toUpperCase();
 	const isInputEmpty = !inputText.trim();
 	const isDeletedUser = !!activeConv?.other_user_deleted;
+	const callPhone = activeConv?.other_user_phone || listing?.owner_phone || '';
+	const normalizedCallPhone = callPhone.replace(/[^\d+]/g, '');
+	const canCall = !isDeletedUser && normalizedCallPhone.length > 0;
+
+	const handleCallPress = () => {
+		if (!canCall) return;
+		Linking.openURL(`tel:${normalizedCallPhone}`).catch(() => {
+			Alert.alert('Ошибка', 'Не удалось открыть телефон.');
+		});
+	};
+
+	const handleEmojiPress = (emoji: string) => {
+		setInputText((text) => `${text}${emoji}`);
+		setIsEmojiPickerVisible(false);
+	};
 
 	// Fresh dialog = fewer than 3 human messages so far. Once the parties are
 	// clearly talking, the safety notice retires on its own.
@@ -650,6 +669,16 @@ export default function ChatDialogScreen() {
 				</View>
 
 				<View className="flex-row items-center">
+					<TouchableOpacity
+						onPress={handleCallPress}
+						disabled={!canCall}
+						activeOpacity={0.75}
+						accessibilityRole="button"
+						accessibilityLabel="Позвонить"
+						className={`w-10 h-10 rounded-full items-center justify-center mr-2 ${canCall ? 'bg-surfaceMuted active:bg-line/40' : 'opacity-40'}`}
+					>
+						<Ionicons name="call-outline" size={20} color={canCall ? palette.primary : palette.inkMuted} />
+					</TouchableOpacity>
 					{!isDeletedUser && (
 						socketStatus === 'connecting' ? (
 							<ActivityIndicator size="small" color={palette.primary} className="mr-2" />
@@ -807,6 +836,17 @@ export default function ChatDialogScreen() {
 							multiline
 						/>
 
+						{/* Emoji Button */}
+						<TouchableOpacity
+							onPress={() => setIsEmojiPickerVisible(true)}
+							className="w-10 h-10 rounded-full bg-surfaceMuted items-center justify-center ml-2 active:bg-line/40"
+							activeOpacity={0.7}
+							accessibilityRole="button"
+							accessibilityLabel="Выбрать смайлик"
+						>
+							<Ionicons name="happy-outline" size={22} color={palette.inkSecondary} />
+						</TouchableOpacity>
+
 						{/* Send Button */}
 						<TouchableOpacity
 							onPress={handleSend}
@@ -827,6 +867,28 @@ export default function ChatDialogScreen() {
 					</View>
 				)}
 			</KeyboardAvoidingView>
+
+			<BottomSheet visible={isEmojiPickerVisible} onClose={() => setIsEmojiPickerVisible(false)}>
+				<View className="py-2">
+					<Text className="text-lg font-bold text-ink text-center mb-5">
+						Смайлик
+					</Text>
+					<View className="flex-row flex-wrap justify-center gap-3 px-2 pb-2">
+						{EMOJI_OPTIONS.map((emoji) => (
+							<TouchableOpacity
+								key={emoji}
+								onPress={() => handleEmojiPress(emoji)}
+								activeOpacity={0.75}
+								className="w-12 h-12 rounded-2xl bg-surfaceMuted items-center justify-center active:bg-line/40"
+								accessibilityRole="button"
+								accessibilityLabel={`Добавить ${emoji}`}
+							>
+								<Text className="text-2xl">{emoji}</Text>
+							</TouchableOpacity>
+						))}
+					</View>
+				</View>
+			</BottomSheet>
 
 			{/* Premium Bottom Sheet for Attachments */}
 			<BottomSheet visible={isAttachMenuVisible} onClose={() => setIsAttachMenuVisible(false)}>

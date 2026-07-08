@@ -71,6 +71,7 @@ SELECT
     other_u.name AS other_user_name,
     other_u.surname AS other_user_surname,
     other_u.avatar_url AS other_user_avatar_url,
+    other_u.phone AS other_user_phone,
     other_u.deleted AS other_user_deleted,
     h.street AS house_street,
     h.house_number AS house_number,

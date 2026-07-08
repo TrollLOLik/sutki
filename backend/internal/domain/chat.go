@@ -100,6 +100,7 @@ type ConversationSummary struct {
 	OtherUserName          string     `json:"other_user_name"`
 	OtherUserSurname       string     `json:"other_user_surname"`
 	OtherUserAvatarUrl     string     `json:"other_user_avatar_url"`
+	OtherUserPhone         string     `json:"other_user_phone"`
 	OtherUserDeleted       bool       `json:"other_user_deleted"`
 	HouseStreet            *string    `json:"house_street,omitempty"`
 	HouseNumber            *string    `json:"house_number,omitempty"`

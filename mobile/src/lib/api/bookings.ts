@@ -100,23 +100,6 @@ export function useMyBookings(
   });
 }
 
-/** My bookings as a guest. */
-export function fetchGuestBookings(params: ListBookingsParams = {}): Promise<BookingsPage> {
-  return api.get<BookingsPage>(`/api/v1/guest/requests${buildQuery(params)}`);
-}
-
-export function useGuestRequests(
-  params: ListBookingsParams = {},
-  options?: { enabled?: boolean },
-) {
-  return useQuery({
-    queryKey: [...bookingKeys.all, 'guest', params] as const,
-    queryFn: () => fetchGuestBookings(params),
-    placeholderData: keepPreviousData,
-    ...options,
-  });
-}
-
 export function useIncomingBookings(params: ListBookingsParams = {}) {
   return useQuery({
     queryKey: bookingKeys.incoming(params),

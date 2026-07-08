@@ -16,6 +16,7 @@ export interface ConversationSummary {
 	other_user_name: string;
 	other_user_surname: string;
 	other_user_avatar_url: string;
+	other_user_phone?: string;
 	other_user_deleted?: boolean;
 	house_street?: string;
 	house_number?: string;
