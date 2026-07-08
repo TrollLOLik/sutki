@@ -91,6 +91,8 @@ const STEP_TITLES = [
   'Публикация',
 ];
 
+const ListingPublishPreview = ListingPublishPreviewImpl;
+
 export default function CreateListingScreen() {
   const { palette, isDark } = useAppTheme();
   const draft = useCreateListingStore();
@@ -819,7 +821,11 @@ export default function CreateListingScreen() {
                   ))}
                   {categories == null && <ActivityIndicator color={palette.primary} />}
                 </View>
+                <Text className="text-sm leading-5 text-ink-secondary">
+                  Выберите категорию, которая лучше всего описывает ваше жильё.
+                </Text>
               </View>
+              <View className="h-px bg-line" />
               <View className="gap-3">
                 <Text className="text-base font-semibold text-ink">Количество комнат</Text>
                 <View className="flex-row flex-wrap gap-2">
@@ -832,7 +838,16 @@ export default function CreateListingScreen() {
                     />
                   ))}
                 </View>
+                <Text className="text-sm leading-5 text-ink-secondary">
+                  Укажите количество комнат в вашем жилье.
+                </Text>
               </View>
+              <HintCard>
+                <HintCard.Title>Подсказка</HintCard.Title>
+                <HintCard.Text>
+                  Выберите точный тип жилья — это поможет гостям быстрее найти ваше объявление и повысит количество бронирований.
+                </HintCard.Text>
+              </HintCard>
             </View>
           )}
 
@@ -961,71 +976,93 @@ export default function CreateListingScreen() {
                 )}
               </View>
 
+              <HintCard>
+                <HintCard.Title>Точка на карте</HintCard.Title>
+                <HintCard.Text>
+                  Укажите адрес и проверьте метку на карте. Гости увидят примерный район до подтверждения брони.
+                </HintCard.Text>
+              </HintCard>
+
               {/* Interactive Yandex Map */}
-              <View className="h-[280px] rounded-2xl border border-line overflow-hidden relative mt-2 bg-surface-muted">
-                <YaMap
-                  ref={(ref) => {
-                    mapRef.current = ref;
-                    if (ref && !mapReady) {
-                      setMapReady(true);
-                    }
-                  }}
-                  style={{ width: '100%', height: '100%' }}
-                  showUserPosition={false}
-                  nightMode={isDark}
-                  onCameraPositionChangeEnd={handleCameraChangeEnd}
-                  initialRegion={{
-                    lat: draft.lat || 55.7558,
-                    lon: draft.lng || 37.6173,
-                    zoom: draft.lat ? 16 : 10,
-                  }}
-                >
-                  {draft.lat != null && draft.lng != null && (
-                    <Marker point={{ lat: draft.lat, lon: draft.lng }} />
-                  )}
-                </YaMap>
-                
-                {/* Static Center Pin Selector */}
-                <View style={{ position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -18 }, { translateY: -42 }] }} pointerEvents="none">
-                  <Ionicons name="location" size={36} color={palette.primary} />
+              <View className="overflow-hidden rounded-card border border-line bg-surface p-3">
+                <View className="mb-3 flex-row items-center justify-between">
+                  <View className="flex-1 pr-3">
+                    <Text className="text-base font-semibold text-ink">Положение дома</Text>
+                    <Text className="mt-0.5 text-xs leading-4 text-ink-secondary">
+                      Переместите карту так, чтобы метка стояла на нужном доме.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={locateMe}
+                    disabled={isLocating}
+                    className="h-10 w-10 items-center justify-center rounded-full border border-line bg-surface-muted active:bg-line/40"
+                  >
+                    {isLocating ? (
+                      <ActivityIndicator size="small" color={palette.primary} />
+                    ) : (
+                      <Ionicons name="locate-outline" size={20} color={palette.ink} />
+                    )}
+                  </Pressable>
                 </View>
 
-                {/* Locate Me FAB */}
-                <Pressable
-                  onPress={locateMe}
-                  disabled={isLocating}
-                  className="absolute top-3 right-3 bg-surface border border-line h-10 w-10 rounded-full items-center justify-center shadow active:bg-surface-muted"
-                >
-                  {isLocating ? (
-                    <ActivityIndicator size="small" color={palette.primary} />
-                  ) : (
-                    <Ionicons name="locate-outline" size={20} color={palette.ink} />
-                  )}
-                </Pressable>
+                <View className="h-[280px] overflow-hidden rounded-[14px] bg-surface-muted relative">
+                  <YaMap
+                    ref={(ref) => {
+                      mapRef.current = ref;
+                      if (ref && !mapReady) {
+                        setMapReady(true);
+                      }
+                    }}
+                    style={{ width: '100%', height: '100%' }}
+                    showUserPosition={false}
+                    nightMode={isDark}
+                    onCameraPositionChangeEnd={handleCameraChangeEnd}
+                    initialRegion={{
+                      lat: draft.lat || 55.7558,
+                      lon: draft.lng || 37.6173,
+                      zoom: draft.lat ? 16 : 10,
+                    }}
+                  >
+                    {draft.lat != null && draft.lng != null && (
+                      <Marker point={{ lat: draft.lat, lon: draft.lng }} />
+                    )}
+                  </YaMap>
 
-                {/* Non-modal geocoded address banner */}
-                {suggestedAddressText && (
-                  <View className="absolute bottom-3 left-3 right-3 bg-surface border border-line rounded-2xl p-3 flex-row items-center justify-between shadow-lg">
-                    <View className="flex-1 mr-3">
-                      <Text className="text-[10px] uppercase font-bold text-ink-secondary tracking-wider">Найдено на карте</Text>
-                      <Text className="text-xs font-semibold text-ink mt-0.5" numberOfLines={2}>
-                        {suggestedAddressText}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={applySuggestedAddress}
-                      className="bg-primary px-3 py-2 rounded-xl active:opacity-85"
-                    >
-                      <Text className="text-xs font-bold text-white">Применить</Text>
-                    </Pressable>
+                  {/* Static Center Pin Selector */}
+                  <View style={{ position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -18 }, { translateY: -42 }] }} pointerEvents="none">
+                    <Ionicons name="location" size={36} color={palette.primary} />
                   </View>
-                )}
+
+                  {/* Non-modal geocoded address banner */}
+                  {suggestedAddressText && (
+                    <View className="absolute bottom-3 left-3 right-3 bg-surface border border-line rounded-2xl p-3 flex-row items-center justify-between shadow-lg">
+                      <View className="flex-1 mr-3">
+                        <Text className="text-[10px] uppercase font-bold text-ink-secondary tracking-wider">Найдено на карте</Text>
+                        <Text className="text-xs font-semibold text-ink mt-0.5" numberOfLines={2}>
+                          {suggestedAddressText}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={applySuggestedAddress}
+                        className="bg-primary px-3 py-2 rounded-xl active:opacity-85"
+                      >
+                        <Text className="text-xs font-bold text-white">Применить</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
           )}
 
           {step === 2 && (
             <View className="gap-5">
+              <HintCard>
+                <HintCard.Title>Подсказка</HintCard.Title>
+                <HintCard.Text>
+                  Укажите параметры жилья и удобства. Это поможет гостям точно понять, что их ждёт.
+                </HintCard.Text>
+              </HintCard>
               <View className="flex-row gap-3">
                 <View className="flex-1 gap-2">
                   <Text className="text-sm font-medium text-ink-secondary">Площадь, м²</Text>
@@ -1279,6 +1316,14 @@ export default function CreateListingScreen() {
 
           {step === 4 && (
             <View className="gap-4">
+              <HintCard title="Как сделать хорошие фотографии">
+                <HintCard.Text>
+                  Качественные фотографии привлекают больше внимания и помогают быстрее сдать жильё.
+                </HintCard.Text>
+              </HintCard>
+
+              <PhotoTipsCard />
+
               <View className="flex-row items-center justify-between">
                 <Text className="text-base font-semibold text-ink">Фотографии ({draft.photos.length} / 10)</Text>
                 {draft.photos.length > 0 && draft.photos.length < 10 && (
@@ -1358,26 +1403,51 @@ export default function CreateListingScreen() {
 
           {step === 5 && (
             <View className="gap-5">
-              <Text className="text-base font-semibold text-ink">
-                {isEditing ? 'Проверьте и сохраните' : 'Проверьте и опубликуйте'}
-              </Text>
-              <View className="gap-3 rounded-card border border-line bg-surface p-4">
-                <SummaryRow label="Адрес" value={`${draft.city}, ${draft.street} ${draft.houseNumber}`} />
-                <SummaryRow label="Комнат" value={draft.countRoom} />
-                <SummaryRow label="Площадь" value={`${draft.area} м²`} />
-                <SummaryRow label="Цена" value={`${draft.price} ₽ / ночь`} />
-                {draft.checkInAfter ? <SummaryRow label="Заезд после" value={draft.checkInAfter} /> : null}
-                {draft.checkOutBefore ? <SummaryRow label="Выезд до" value={draft.checkOutBefore} /> : null}
+              <View>
+                <Text className="text-lg font-extrabold text-ink">
+                  {isEditing ? 'Проверьте объявление' : 'Почти готово к публикации'}
+                </Text>
+                <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                  Так гости увидят ключевые детали вашего жилья в поиске и карточке объявления.
+                </Text>
               </View>
+
+              <ListingPublishPreview
+                coverUri={draft.photos[0]}
+                categoryName={(categories ?? []).find((c) => draft.categoryIds.includes(c.id))?.name}
+                address={`${draft.city}, ${draft.street} ${draft.houseNumber}`.replace(/\s+/g, ' ').trim()}
+                rooms={draft.countRoom}
+                area={draft.area}
+                maxGuests={draft.maxGuests}
+                price={draft.price}
+                description={draft.description}
+                amenityNames={(services ?? [])
+                  .filter((s) => draft.serviceIds.includes(s.id))
+                  .slice(0, 4)
+                  .map((s) => s.name)}
+                checkInAfter={draft.checkInAfter}
+                checkOutBefore={draft.checkOutBefore}
+              />
+
               {!isEditing && (
-                <View className="flex-row items-center justify-between rounded-card bg-primary-light p-4">
-                  <View className="flex-1 pr-3">
-                    <Text className="text-base font-semibold text-ink">Разовая плата за публикацию</Text>
-                    <Text className="text-sm text-ink-secondary">
-                      Объявление будет активно сразу после оплаты.
+                <View className="rounded-card border border-line bg-surface p-4">
+                  <View className="flex-row items-start justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="text-base font-extrabold text-ink">Разовая плата за публикацию</Text>
+                      <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                        Объявление отправится на публикацию сразу после оплаты.
+                      </Text>
+                    </View>
+                    <View className="rounded-pill bg-primary-light px-3 py-1.5">
+                      <Text className="text-lg font-extrabold text-primary">{LISTING_PRICE_RUB} ₽</Text>
+                    </View>
+                  </View>
+                  <View className="mt-4 flex-row items-center gap-2 rounded-field bg-surface-muted px-3 py-2">
+                    <Ionicons name="shield-checkmark-outline" size={17} color={palette.primary} />
+                    <Text className="flex-1 text-xs leading-4 text-ink-secondary">
+                      Перед публикацией проверьте адрес, цену и фотографии. Изменить объявление можно будет позже в профиле.
                     </Text>
                   </View>
-                  <Text className="text-xl font-bold text-primary">{LISTING_PRICE_RUB} ₽</Text>
                 </View>
               )}
             </View>
@@ -1397,7 +1467,7 @@ export default function CreateListingScreen() {
                   ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
                   : (paying ? 'Оплата…' : `Оплатить ${LISTING_PRICE_RUB} ₽ и опубликовать`)
               }
-              variant="success"
+              variant={isEditing ? 'primary' : 'success'}
               loading={isEditing ? updateListing.isPending : (paying || createListing.isPending)}
               onPress={handlePublish}
             />
@@ -1408,11 +1478,210 @@ export default function CreateListingScreen() {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function ListingPublishPreviewImpl({
+  coverUri,
+  categoryName,
+  address,
+  rooms,
+  area,
+  maxGuests,
+  price,
+  description,
+  amenityNames,
+  checkInAfter,
+  checkOutBefore,
+}: {
+  coverUri?: string;
+  categoryName?: string;
+  address: string;
+  rooms: string;
+  area: string;
+  maxGuests: string;
+  price: string;
+  description: string;
+  amenityNames: string[];
+  checkInAfter: string;
+  checkOutBefore: string;
+}) {
+  const { palette } = useAppTheme();
+  const details = [
+    rooms ? `${rooms} комн.` : null,
+    area ? `${area} м²` : null,
+    maxGuests ? `до ${maxGuests} гостей` : null,
+  ].filter((item): item is string => Boolean(item));
+  const schedule = [
+    checkInAfter ? `заезд после ${checkInAfter}` : null,
+    checkOutBefore ? `выезд до ${checkOutBefore}` : null,
+  ].filter((item): item is string => Boolean(item));
+  const title = rooms === '5+' ? 'Жильё с 5+ комнатами' : rooms ? `${rooms}-комнатное жильё` : 'Ваше объявление';
+
   return (
-    <View className="flex-row items-center justify-between">
-      <Text className="text-sm text-ink-secondary">{label}</Text>
-      <Text className="flex-1 pl-4 text-right text-sm font-medium text-ink">{value}</Text>
+    <View className="overflow-hidden rounded-card border border-line bg-surface">
+      <View className="relative h-48 bg-surface-muted">
+        {coverUri ? (
+          <Image source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+        ) : (
+          <View className="h-full w-full items-center justify-center gap-2">
+            <Ionicons name="images-outline" size={38} color={palette.inkMuted} />
+            <Text className="text-sm font-semibold text-ink-secondary">Фотографии пока не добавлены</Text>
+          </View>
+        )}
+        <View className="absolute left-3 top-3 rounded-pill bg-black/55 px-3 py-1">
+          <Text className="text-xs font-bold text-white">{categoryName || 'Жильё'}</Text>
+        </View>
+        <View className="absolute bottom-3 left-3 rounded-pill bg-primary px-3 py-1.5">
+          <Text className="text-sm font-extrabold text-white">
+            {price ? `${Number(price).toLocaleString('ru-RU')} ₽ / ночь` : 'Цена не указана'}
+          </Text>
+        </View>
+      </View>
+
+      <View className="gap-4 p-4">
+        <View>
+          <Text className="text-lg font-extrabold text-ink" numberOfLines={2}>
+            {title}
+          </Text>
+          <View className="mt-2 flex-row items-start gap-2">
+            <Ionicons name="location-outline" size={17} color={palette.inkSecondary} style={{ marginTop: 1 }} />
+            <Text className="flex-1 text-sm leading-5 text-ink-secondary" numberOfLines={2}>
+              {address || 'Адрес не указан'}
+            </Text>
+          </View>
+        </View>
+
+        {details.length > 0 ? (
+          <View className="flex-row flex-wrap gap-2">
+            {details.map((item) => (
+              <View key={item} className="rounded-pill bg-surface-muted px-3 py-1.5">
+                <Text className="text-xs font-bold text-ink-secondary">{item}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {description.trim() ? (
+          <Text className="text-sm leading-5 text-ink-secondary" numberOfLines={3}>
+            {description.trim()}
+          </Text>
+        ) : (
+          <View className="rounded-field bg-surface-muted px-3 py-2">
+            <Text className="text-sm text-ink-secondary">
+              Добавьте описание, чтобы гости быстрее поняли преимущества жилья.
+            </Text>
+          </View>
+        )}
+
+        {amenityNames.length > 0 || schedule.length > 0 ? (
+          <View className="gap-3 border-t border-line pt-4">
+            {amenityNames.length > 0 ? (
+              <View className="flex-row items-start gap-2">
+                <Ionicons name="sparkles-outline" size={17} color={palette.primary} style={{ marginTop: 1 }} />
+                <Text className="flex-1 text-sm leading-5 text-ink-secondary">
+                  {amenityNames.join(' · ')}
+                </Text>
+              </View>
+            ) : null}
+            {schedule.length > 0 ? (
+              <View className="flex-row items-start gap-2">
+                <Ionicons name="time-outline" size={17} color={palette.primary} style={{ marginTop: 1 }} />
+                <Text className="flex-1 text-sm leading-5 text-ink-secondary">
+                  {schedule.join(' · ')}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const HintCard = Object.assign(
+  function HintCard({
+    title,
+    children,
+  }: {
+    title?: string;
+    children: React.ReactNode;
+  }) {
+    const { palette, isDark } = useAppTheme();
+    return (
+      <View
+        className="rounded-card border p-4"
+        style={{
+          backgroundColor: isDark ? palette.surface : '#FFFDFB',
+          borderColor: isDark ? palette.primaryLight : '#FFE0D2',
+        }}
+      >
+        <View className="flex-row items-start gap-3">
+          <Ionicons name="bulb-outline" size={25} color={palette.primary} style={{ marginTop: 1 }} />
+          <View className="flex-1">
+            {title ? (
+              <Text className="text-base font-extrabold text-ink">{title}</Text>
+            ) : null}
+            {children}
+          </View>
+        </View>
+      </View>
+    );
+  },
+  {
+    Title({ children }: { children: React.ReactNode }) {
+      return <Text className="text-base font-extrabold text-ink">{children}</Text>;
+    },
+    Text({ children }: { children: React.ReactNode }) {
+      return (
+        <Text className="mt-2 text-sm leading-6 text-ink-secondary">
+          {children}
+        </Text>
+      );
+    },
+  },
+);
+
+function PhotoTipsCard() {
+  const { palette } = useAppTheme();
+  const tips: Array<{
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    text: string;
+  }> = [
+    {
+      icon: 'sunny-outline',
+      title: 'Хорошее освещение',
+      text: 'Используйте дневной свет и включите дополнительное освещение.',
+    },
+    {
+      icon: 'sparkles-outline',
+      title: 'Порядок и чистота',
+      text: 'Уберите лишние вещи, наведите порядок и проверьте чистоту перед съёмкой.',
+    },
+    {
+      icon: 'camera-outline',
+      title: 'Обложка объявления',
+      text: 'Выберите самое удачное фото — оно будет первым, что увидят гости в поиске.',
+    },
+    {
+      icon: 'list-outline',
+      title: 'Рекомендуемый порядок',
+      text: 'Начните с основных комнат, затем кухня и санузел, в конце — детали и вид из окна.',
+    },
+  ];
+
+  return (
+    <View className="overflow-hidden rounded-card border border-line bg-surface">
+      {tips.map((tip, index) => (
+        <View key={tip.title}>
+          <View className="flex-row items-start gap-3 p-4">
+            <Ionicons name={tip.icon} size={24} color={palette.inkSecondary} style={{ marginTop: 1 }} />
+            <View className="flex-1">
+              <Text className="text-sm font-extrabold text-ink">{tip.title}</Text>
+              <Text className="mt-1 text-sm leading-5 text-ink-secondary">{tip.text}</Text>
+            </View>
+          </View>
+          {index < tips.length - 1 ? <View className="ml-14 h-px bg-line" /> : null}
+        </View>
+      ))}
     </View>
   );
 }
