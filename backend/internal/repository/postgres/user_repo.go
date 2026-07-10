@@ -25,7 +25,7 @@ func NewUserRepo(q *sqlc.Queries) *UserRepo {
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (domain.User, error) {
-	row, err := r.q.GetUserByEmail(ctx, email)
+	row, err := r.q.GetUserByEmail(ctx, &email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, domain.ErrNotFound
@@ -33,18 +33,20 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (domain.User, e
 		return domain.User{}, err
 	}
 	return domain.User{
-		ID:            row.ID,
-		Email:         row.Email,
-		Name:          deref(row.Name),
-		Surname:       deref(row.Surname),
-		Patronymic:    deref(row.Patronymic),
-		Phone:         deref(row.Phone),
-		City:          deref(row.City),
-		AvatarURL:     deref(row.AvatarUrl),
-		IsVerified:    row.IsVerified,
-		Birthday:      toTimePtr(row.Birthday),
-		ListingsCount: 0,
-		Rating:        0.0,
+		ID:              row.ID,
+		Email:           deref(row.Email),
+		Name:            deref(row.Name),
+		Surname:         deref(row.Surname),
+		Patronymic:      deref(row.Patronymic),
+		Phone:           deref(row.Phone),
+		PhoneNormalized: deref(row.PhoneNormalized),
+		PhoneVerifiedAt: toTimePtrFromTimestamp(row.PhoneVerifiedAt),
+		City:            deref(row.City),
+		AvatarURL:       deref(row.AvatarUrl),
+		IsVerified:      row.IsVerified,
+		Birthday:        toTimePtr(row.Birthday),
+		ListingsCount:   0,
+		Rating:          0.0,
 	}, nil
 }
 
@@ -57,39 +59,43 @@ func (r *UserRepo) GetByID(ctx context.Context, id int32) (domain.User, error) {
 		return domain.User{}, err
 	}
 	return domain.User{
-		ID:            row.ID,
-		Email:         row.Email,
-		Name:          deref(row.Name),
-		Surname:       deref(row.Surname),
-		Patronymic:    deref(row.Patronymic),
-		Phone:         deref(row.Phone),
-		City:          deref(row.City),
-		AvatarURL:     deref(row.AvatarUrl),
-		IsVerified:    row.IsVerified,
-		Birthday:      toTimePtr(row.Birthday),
-		ListingsCount: row.ListingsCount,
-		Rating:        row.Rating,
+		ID:              row.ID,
+		Email:           deref(row.Email),
+		Name:            deref(row.Name),
+		Surname:         deref(row.Surname),
+		Patronymic:      deref(row.Patronymic),
+		Phone:           deref(row.Phone),
+		PhoneNormalized: deref(row.PhoneNormalized),
+		PhoneVerifiedAt: toTimePtrFromTimestamp(row.PhoneVerifiedAt),
+		City:            deref(row.City),
+		AvatarURL:       deref(row.AvatarUrl),
+		IsVerified:      row.IsVerified,
+		Birthday:        toTimePtr(row.Birthday),
+		ListingsCount:   row.ListingsCount,
+		Rating:          row.Rating,
 	}, nil
 }
 
 func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error) {
-	row, err := r.q.CreateUser(ctx, sqlc.CreateUserParams{Email: email, Roles: defaultRoles})
+	row, err := r.q.CreateUser(ctx, sqlc.CreateUserParams{Email: &email, Roles: defaultRoles})
 	if err != nil {
 		return domain.User{}, err
 	}
 	return domain.User{
-		ID:            row.ID,
-		Email:         row.Email,
-		Name:          deref(row.Name),
-		Surname:       deref(row.Surname),
-		Patronymic:    deref(row.Patronymic),
-		Phone:         deref(row.Phone),
-		City:          deref(row.City),
-		AvatarURL:     deref(row.AvatarUrl),
-		IsVerified:    row.IsVerified,
-		Birthday:      toTimePtr(row.Birthday),
-		ListingsCount: 0,
-		Rating:        0.0,
+		ID:              row.ID,
+		Email:           deref(row.Email),
+		Name:            deref(row.Name),
+		Surname:         deref(row.Surname),
+		Patronymic:      deref(row.Patronymic),
+		Phone:           deref(row.Phone),
+		PhoneNormalized: deref(row.PhoneNormalized),
+		PhoneVerifiedAt: toTimePtrFromTimestamp(row.PhoneVerifiedAt),
+		City:            deref(row.City),
+		AvatarURL:       deref(row.AvatarUrl),
+		IsVerified:      row.IsVerified,
+		Birthday:        toTimePtr(row.Birthday),
+		ListingsCount:   0,
+		Rating:          0.0,
 	}, nil
 }
 
@@ -122,7 +128,7 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id int32, name, surname, p
 func (r *UserRepo) UpdateEmail(ctx context.Context, id int32, email string) (domain.User, error) {
 	_, err := r.q.UpdateUserEmail(ctx, sqlc.UpdateUserEmailParams{
 		ID:    id,
-		Email: email,
+		Email: &email,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -294,4 +300,162 @@ func toTimePtr(d pgtype.Date) *time.Time {
 	}
 	t := d.Time
 	return &t
+}
+
+func (r *UserRepo) GetByPhone(ctx context.Context, phone string) (domain.User, error) {
+	row, err := r.q.GetUserByPhone(ctx, &phone)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, domain.ErrNotFound
+		}
+		return domain.User{}, err
+	}
+	return domain.User{
+		ID:              row.ID,
+		Email:           deref(row.Email),
+		Name:            deref(row.Name),
+		Surname:         deref(row.Surname),
+		Patronymic:      deref(row.Patronymic),
+		Phone:           deref(row.Phone),
+		PhoneNormalized: deref(row.PhoneNormalized),
+		PhoneVerifiedAt: toTimePtrFromTimestamp(row.PhoneVerifiedAt),
+		City:            deref(row.City),
+		AvatarURL:       deref(row.AvatarUrl),
+		IsVerified:      row.IsVerified,
+		Birthday:        toTimePtr(row.Birthday),
+		ListingsCount:   0,
+		Rating:          0.0,
+	}, nil
+}
+
+func (r *UserRepo) CreateWithPhone(ctx context.Context, phone string) (domain.User, error) {
+	row, err := r.q.CreateUser(ctx, sqlc.CreateUserParams{
+		Phone:           &phone,
+		PhoneNormalized: &phone,
+		PhoneVerifiedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		Roles:           defaultRoles,
+	})
+	if err != nil {
+		return domain.User{}, err
+	}
+	return domain.User{
+		ID:              row.ID,
+		Email:           deref(row.Email),
+		Name:            deref(row.Name),
+		Surname:         deref(row.Surname),
+		Patronymic:      deref(row.Patronymic),
+		Phone:           deref(row.Phone),
+		PhoneNormalized: deref(row.PhoneNormalized),
+		PhoneVerifiedAt: toTimePtrFromTimestamp(row.PhoneVerifiedAt),
+		City:            deref(row.City),
+		AvatarURL:       deref(row.AvatarUrl),
+		IsVerified:      row.IsVerified,
+		Birthday:        toTimePtr(row.Birthday),
+		ListingsCount:   0,
+		Rating:          0.0,
+	}, nil
+}
+
+func (r *UserRepo) UpdatePhone(ctx context.Context, id int32, phone, phoneNormalized string, verifiedAt time.Time) (domain.User, error) {
+	_, err := r.q.UpdateUserPhone(ctx, sqlc.UpdateUserPhoneParams{
+		ID:              id,
+		Phone:           &phone,
+		PhoneNormalized: &phoneNormalized,
+		PhoneVerifiedAt: pgtype.Timestamptz{Time: verifiedAt, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, domain.ErrNotFound
+		}
+		return domain.User{}, err
+	}
+	return r.GetByID(ctx, id)
+}
+
+func (r *UserRepo) LinkGuestRequestsByPhone(ctx context.Context, userID int32, phoneNormalized string) ([]int32, error) {
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	db := r.q.DB()
+	txb, ok := db.(TxBeginner)
+	if !ok {
+		return nil, errors.New("underlying database connection does not support transactions")
+	}
+
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Drop guest requests the user made on their own listings.
+	const deleteOwn = `
+DELETE FROM request
+USING house
+WHERE request.house_id = house.id
+  AND request.phone_normalized = $1
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id = $2::int`
+	if _, err := tx.Exec(ctx, deleteOwn, phoneNormalized, userID); err != nil {
+		return nil, err
+	}
+
+	// 2. Link the remaining guest requests to the verified user and move
+	// them to in_progress so owners finally see them as pending.
+	const linkRequests = `
+UPDATE request
+SET user_id = $2::int, status = 'in_progress', updated_at = now()
+FROM house
+WHERE request.house_id = house.id
+  AND request.phone_normalized = $1
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND house.owner_id != $2::int
+RETURNING request.id`
+	rows, err := tx.Query(ctx, linkRequests, phoneNormalized, userID)
+	if err != nil {
+		return nil, err
+	}
+	var linkedIDs []int32
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		linkedIDs = append(linkedIDs, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 3. Backfill the empty profile from the freshest guest request data.
+	const backfillProfile = `
+UPDATE "user"
+SET
+  name = COALESCE(NULLIF(name, ''), (SELECT name FROM request WHERE phone_normalized = $1 AND name IS NOT NULL AND name != '' ORDER BY created_at DESC LIMIT 1)),
+  surname = COALESCE(NULLIF(surname, ''), (SELECT surname FROM request WHERE phone_normalized = $1 AND surname IS NOT NULL AND surname != '' ORDER BY created_at DESC LIMIT 1)),
+  patronymic = COALESCE(NULLIF(patronymic, ''), (SELECT lastname FROM request WHERE phone_normalized = $1 AND lastname IS NOT NULL AND lastname != '' ORDER BY created_at DESC LIMIT 1)),
+  phone = COALESCE(NULLIF(phone, ''), (SELECT phone FROM request WHERE phone_normalized = $1 AND phone IS NOT NULL AND phone != '' ORDER BY created_at DESC LIMIT 1))
+WHERE id = $2::int
+  AND (name IS NULL OR name = '' OR phone IS NULL OR phone = '')`
+	if _, err := tx.Exec(ctx, backfillProfile, phoneNormalized, userID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return linkedIDs, nil
+}
+
+func toTimePtrFromTimestamp(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
 }

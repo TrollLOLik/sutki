@@ -6,26 +6,26 @@ WHERE h.id = @id AND h.deleted = false AND u.deleted = false;
 
 -- name: CreateRequest :one
 INSERT INTO request (
-  house_id, user_id, guest_id, email, name, surname, lastname, count, message, phone,
+  house_id, user_id, guest_id, email, name, surname, lastname, count, message, phone, phone_normalized,
   start_date, end_date, status, created_at, updated_at
 )
 VALUES (
   @house_id::int, sqlc.narg('user_id'), sqlc.narg('guest_id'), LOWER(TRIM(sqlc.narg('email'))),
   @name, @surname, @lastname, @count::int,
-  sqlc.narg('message'), @phone, @start_date, sqlc.narg('end_date'),
+  sqlc.narg('message'), @phone, sqlc.narg('phone_normalized'), @start_date, sqlc.narg('end_date'),
   @status::text, now(), now()
 )
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason;
 
 -- name: GetRequestByID :one
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -80,7 +80,7 @@ WHERE r.id = @id;
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -124,7 +124,7 @@ WHERE r.user_id = @user_id::int
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -172,7 +172,7 @@ WHERE id = @id AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason;
 
 -- name: RejectRequest :one
@@ -182,7 +182,7 @@ WHERE id = @id AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason;
 
 -- name: CancelRequest :one
@@ -192,7 +192,7 @@ WHERE id = @id
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason;
 
 -- name: HouseHasConfirmedOverlap :one
@@ -224,7 +224,7 @@ ORDER BY start_date;
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,

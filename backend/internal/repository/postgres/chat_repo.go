@@ -520,7 +520,7 @@ func (r *ChatRepo) GetChatEmailInfo(ctx context.Context, convID int64, senderID 
 	const q = `
 SELECT
   ru.id,
-  CASE WHEN ru.deleted OR NOT ru.enable THEN '' ELSE ru.email END,
+  CASE WHEN ru.deleted OR NOT ru.enable THEN '' ELSE COALESCE(ru.email, '') END,
   COALESCE(NULLIF(TRIM(COALESCE(su.name, '') || ' ' || COALESCE(su.surname, '')), ''), 'Пользователь')
 FROM conversation_participant cp
 JOIN "user" ru ON ru.id = cp.user_id

@@ -26,6 +26,7 @@ type Booking struct {
 	Count           int32
 	Message         string
 	Phone           string
+	PhoneNormalized string
 	StartDate       time.Time
 	EndDate         *time.Time
 	Status          string
@@ -80,16 +81,17 @@ type BookingGuest struct {
 
 // NewBooking carries the validated fields needed to create a booking.
 type NewBooking struct {
-	HouseID   int32
-	UserID    int32
-	GuestID   string
-	Email     string
-	Name      string
-	Surname   string
-	Lastname  string
-	Count     int32
-	Message   string
-	Phone     string
-	StartDate time.Time
-	EndDate   *time.Time
+	HouseID         int32
+	UserID          int32
+	GuestID         string
+	Email           string
+	Name            string
+	Surname         string
+	Lastname        string
+	Count           int32
+	Message         string
+	Phone           string
+	PhoneNormalized string
+	StartDate       time.Time
+	EndDate         *time.Time
 }

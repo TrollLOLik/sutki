@@ -40,6 +40,13 @@ type Config struct {
 	SMTPPassword string
 	SMTPFrom     string
 
+	// uCaller handles both primary Flash Call and voice fallback.
+	UCallerAPIURL    string
+	UCallerAPIKey    string
+	UCallerServiceID string
+	UCallerEnabled   bool
+	UCallerTimeout   time.Duration
+
 	// PublicAPIBaseURL is the public origin of this API, used to build
 	// unsubscribe links in emails (e.g. "https://api.example.com").
 	// Empty disables unsubscribe links (transactional mail still works).
@@ -98,6 +105,12 @@ func Load() (Config, error) {
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
 
+		UCallerAPIURL:    getEnv("UCALLER_API_URL", "https://api.ucaller.ru"),
+		UCallerAPIKey:    getEnv("UCALLER_API_KEY", ""),
+		UCallerServiceID: getEnv("UCALLER_SERVICE_ID", ""),
+		UCallerEnabled:   getBool("UCALLER_ENABLED", false),
+		UCallerTimeout:   getDuration("UCALLER_TIMEOUT", 10*time.Second),
+
 		PublicAPIBaseURL:       getEnv("PUBLIC_API_BASE_URL", ""),
 		EmailUnsubscribeSecret: getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
 		EmailDailyLimit:        getInt("EMAIL_DAILY_LIMIT", 500),
@@ -125,6 +138,9 @@ func Load() (Config, error) {
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+	if cfg.UCallerEnabled && (cfg.UCallerAPIKey == "" || cfg.UCallerServiceID == "") {
+		return Config{}, fmt.Errorf("UCALLER_API_KEY and UCALLER_SERVICE_ID are required when UCALLER_ENABLED=true")
 	}
 	if cfg.S3Endpoint == "" {
 		return Config{}, fmt.Errorf("S3_ENDPOINT is required")

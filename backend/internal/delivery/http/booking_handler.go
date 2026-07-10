@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 )
 
@@ -74,6 +75,7 @@ type bookingDTO struct {
 	Count           int32              `json:"count"`
 	Message         string             `json:"message"`
 	Phone           string             `json:"phone"`
+	PhoneNormalized string             `json:"phone_normalized"`
 	StartDate       string             `json:"start_date"`
 	EndDate         *string            `json:"end_date"`
 	Status          string             `json:"status"`
@@ -219,6 +221,13 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid phone")
 		return
 	}
+
+	phoneNorm, err := auth.NormalizePhone(nb.Phone)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
+		return
+	}
+	nb.PhoneNormalized = phoneNorm
 
 	start, ok := parseDate(body.StartDate)
 	// Allow dates starting from yesterday (UTC) to handle timezone offsets on client devices.
@@ -389,6 +398,7 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 		Count:           b.Count,
 		Message:         b.Message,
 		Phone:           b.Phone,
+		PhoneNormalized: b.PhoneNormalized,
 		StartDate:       b.StartDate.Format(dateLayout),
 		Status:          b.Status,
 		RejectionReason: b.RejectionReason,

@@ -21,37 +21,58 @@ func NewAuthCodeRepo(q *sqlc.Queries) *AuthCodeRepo {
 	return &AuthCodeRepo{q: q}
 }
 
-func (r *AuthCodeRepo) Upsert(ctx context.Context, email, codeHash string, expiresAt time.Time) error {
-	return r.q.UpsertEmailLoginCode(ctx, sqlc.UpsertEmailLoginCodeParams{
-		Email:     email,
-		CodeHash:  codeHash,
-		ExpiresAt: ts(expiresAt),
+func (r *AuthCodeRepo) Upsert(ctx context.Context, code domain.AuthCode) error {
+	return r.q.UpsertAuthCode(ctx, sqlc.UpsertAuthCodeParams{
+		Channel:          code.Channel,
+		Target:           code.Target,
+		CodeHash:         code.CodeHash,
+		ExpiresAt:        tstz(code.ExpiresAt),
+		DeliveryProvider: code.DeliveryProvider,
+		DeliveryID:       code.DeliveryID,
+		DeliveryCost:     code.DeliveryCost,
 	})
 }
 
-func (r *AuthCodeRepo) Get(ctx context.Context, email string) (domain.EmailLoginCode, error) {
-	row, err := r.q.GetEmailLoginCode(ctx, email)
+func (r *AuthCodeRepo) Get(ctx context.Context, channel, target string) (domain.AuthCode, error) {
+	row, err := r.q.GetAuthCode(ctx, sqlc.GetAuthCodeParams{
+		Channel: channel,
+		Target:  target,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.EmailLoginCode{}, domain.ErrNotFound
+			return domain.AuthCode{}, domain.ErrNotFound
 		}
-		return domain.EmailLoginCode{}, err
+		return domain.AuthCode{}, err
 	}
-	return domain.EmailLoginCode{
-		Email:     row.Email,
-		CodeHash:  row.CodeHash,
-		ExpiresAt: row.ExpiresAt.Time,
-		Attempts:  row.Attempts,
-		CreatedAt: row.CreatedAt.Time,
+	return domain.AuthCode{
+		Channel:          row.Channel,
+		Target:           row.Target,
+		CodeHash:         row.CodeHash,
+		ExpiresAt:        row.ExpiresAt.Time,
+		Attempts:         row.Attempts,
+		CreatedAt:        row.CreatedAt.Time,
+		DeliveryProvider: row.DeliveryProvider,
+		DeliveryID:       row.DeliveryID,
+		DeliveryCost:     row.DeliveryCost,
 	}, nil
 }
 
-func (r *AuthCodeRepo) IncrementAttempts(ctx context.Context, email string) error {
-	return r.q.IncrementEmailLoginCodeAttempts(ctx, email)
+func (r *AuthCodeRepo) IncrementAttempts(ctx context.Context, channel, target string) error {
+	return r.q.IncrementAuthCodeAttempts(ctx, sqlc.IncrementAuthCodeAttemptsParams{
+		Channel: channel,
+		Target:  target,
+	})
 }
 
-func (r *AuthCodeRepo) Delete(ctx context.Context, email string) error {
-	return r.q.DeleteEmailLoginCode(ctx, email)
+func (r *AuthCodeRepo) Delete(ctx context.Context, channel, target string) error {
+	return r.q.DeleteAuthCode(ctx, sqlc.DeleteAuthCodeParams{
+		Channel: channel,
+		Target:  target,
+	})
+}
+
+func tstz(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // RefreshTokenRepo implements domain.RefreshTokenRepository.

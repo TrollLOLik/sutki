@@ -71,7 +71,11 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   const user = useSessionStore((s) => s.user);
   const setUser = useSessionStore((s) => s.setUser);
 
-  const [step, setStep] = useState<Step>('verify_old');
+  const hasCurrentEmail = !!user?.email;
+
+  const [step, setStep] = useState<Step>(() => {
+    return user?.email ? 'verify_old' : 'input_new';
+  });
   
   // Forms & values
   const [codeOld, setCodeOld] = useState('');
@@ -122,22 +126,19 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   // Open/Reset animations and values
   useEffect(() => {
     if (visible) {
-      // Only reset the session if the previous email change was completed successfully.
-      // If it was closed in the middle of a step, we save/preserve the session state.
-      if (step === 'success') {
-        setStep('verify_old');
-        setCodeOld('');
-        setCodeNew('');
-        setNewEmail('');
-        setTempToken('');
-        setDevCodeOld(null);
-        setDevCodeNew(null);
-        setSecondsOld(0);
-        setSecondsNew(0);
-        setCodeSentOld(false);
-        setError(null);
-        setLocalEmailError(null);
-      }
+      // Always reset the session state when opening the sheet to start fresh
+      setStep(hasCurrentEmail ? 'verify_old' : 'input_new');
+      setCodeOld('');
+      setCodeNew('');
+      setNewEmail('');
+      setTempToken('');
+      setDevCodeOld(null);
+      setDevCodeNew(null);
+      setSecondsOld(0);
+      setSecondsNew(0);
+      setCodeSentOld(false);
+      setError(null);
+      setLocalEmailError(null);
 
       fade.setValue(0);
       slide.setValue(600);
@@ -255,7 +256,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   };
 
   const handleReset = () => {
-    setStep('verify_old');
+    setStep(hasCurrentEmail ? 'verify_old' : 'input_new');
     setCodeOld('');
     setCodeNew('');
     setNewEmail('');
@@ -271,7 +272,15 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
 
   if (!visible) return null;
 
-  const stepIndex = step === 'verify_old' ? 1 : step === 'input_new' ? 2 : 3;
+  const stepIndex = step === 'verify_old' ? 1 : step === 'input_new' ? (hasCurrentEmail ? 2 : 1) : (hasCurrentEmail ? 3 : 2);
+
+  const leftButtonLabel = ((step === 'verify_old' && !codeSentOld) || (step === 'input_new' && !hasCurrentEmail))
+    ? 'Закрыть'
+    : 'Сбросить';
+
+  const handleLeftButtonPress = ((step === 'verify_old' && !codeSentOld) || (step === 'input_new' && !hasCurrentEmail))
+    ? handleClose
+    : handleReset;
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={handleClose}>
@@ -311,9 +320,18 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
           {/* Stepper bar */}
           {step !== 'success' ? (
             <View className="flex-row gap-2 mb-4 px-4">
-              <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
-              <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
-              <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 3 ? 'bg-primary' : 'bg-line')} />
+              {hasCurrentEmail ? (
+                <>
+                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
+                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
+                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 3 ? 'bg-primary' : 'bg-line')} />
+                </>
+              ) : (
+                <>
+                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
+                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
+                </>
+              )}
             </View>
           ) : null}
 
@@ -553,11 +571,11 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                 ) : (
                   <>
                     <Button
-                      label="Сбросить"
+                      label={leftButtonLabel}
                       variant="secondary"
                       size="md"
                       className="flex-1"
-                      onPress={handleReset}
+                      onPress={handleLeftButtonPress}
                     />
                     {step === 'verify_old' ? (
                       <Button

@@ -87,6 +87,7 @@ func (l *SlidingWindowLimiter) Cleanup() {
 var (
 	// OTP Rate Limiters (1 hour window)
 	OTPEmailLimiter   = NewSlidingWindowLimiter(time.Hour)
+	OTPPhoneLimiter   = NewSlidingWindowLimiter(time.Hour)
 	OTPGuestIDLimiter = NewSlidingWindowLimiter(time.Hour)
 	OTPIPLimiter      = NewSlidingWindowLimiter(time.Hour)
 

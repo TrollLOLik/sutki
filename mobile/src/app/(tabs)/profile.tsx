@@ -10,6 +10,7 @@ const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { EmailChangeSheet } from '@/components/EmailChangeSheet';
+import { PhoneChangeSheet } from '@/components/PhoneChangeSheet';
 import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
 import { Button, MetricTile, PastelIcon } from '@/components/ui';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
@@ -276,6 +277,7 @@ export default function ProfileScreen() {
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [birthdayPickerVisible, setBirthdayPickerVisible] = useState(false);
   const [emailChangeVisible, setEmailChangeVisible] = useState(false);
+  const [phoneChangeVisible, setPhoneChangeVisible] = useState(false);
   const [deleteSheetVisible, setDeleteSheetVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -1037,13 +1039,12 @@ export default function ProfileScreen() {
                     icon="person-outline"
                     placeholder="Ваше отчество (необязательно)"
                   />
-                  <EditableField
+                  <PickerField
                     label="Телефон"
-                    value={formPhone}
-                    onChangeText={setFormPhone}
+                    value={user?.phone_verified_at ? user.phone : user?.phone ? `${user.phone} (Не подтвержден)` : ''}
+                    placeholder="Укажите телефон"
                     icon="call-outline"
-                    placeholder="+7 900 000-00-00"
-                    keyboardType="phone-pad"
+                    onPress={() => setPhoneChangeVisible(true)}
                   />
                   <PickerField
                     label="Город"
@@ -1267,6 +1268,10 @@ export default function ProfileScreen() {
             <EmailChangeSheet
               visible={emailChangeVisible}
               onClose={() => setEmailChangeVisible(false)}
+            />
+            <PhoneChangeSheet
+              visible={phoneChangeVisible}
+              onClose={() => setPhoneChangeVisible(false)}
             />
             <AccountDeleteSheet
               visible={deleteSheetVisible}

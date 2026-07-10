@@ -18,6 +18,18 @@ type AdminStory struct {
 	UserID     *int32
 }
 
+type AuthCode struct {
+	Channel          string
+	Target           string
+	CodeHash         string
+	ExpiresAt        pgtype.Timestamptz
+	Attempts         int32
+	CreatedAt        pgtype.Timestamptz
+	DeliveryProvider *string
+	DeliveryID       *string
+	DeliveryCost     *string
+}
+
 type Code struct {
 	ID    int32
 	Email string
@@ -64,14 +76,6 @@ type DoctrineMigrationVersion struct {
 	Version       string
 	ExecutedAt    pgtype.Timestamp
 	ExecutionTime *int32
-}
-
-type EmailLoginCode struct {
-	Email     string
-	CodeHash  string
-	ExpiresAt pgtype.Timestamp
-	Attempts  int32
-	CreatedAt pgtype.Timestamp
 }
 
 type EmailOutbox struct {
@@ -283,6 +287,7 @@ type Request struct {
 	RejectionReason *string
 	GuestID         *string
 	Email           *string
+	PhoneNormalized *string
 }
 
 type RequestViewer struct {
@@ -322,7 +327,7 @@ type User struct {
 	Name            *string
 	Surname         *string
 	Patronymic      *string
-	Email           string
+	Email           *string
 	Password        *string
 	Roles           []byte
 	Deleted         bool
@@ -340,6 +345,8 @@ type User struct {
 	VkID            *string
 	AvatarUrl       *string
 	Birthday        pgtype.Date
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
 }
 
 type View struct {

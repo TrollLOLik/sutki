@@ -16,5 +16,7 @@ export interface User {
   birthday?: string;
   listings_count?: number;
   rating?: number;
+  phone_normalized?: string;
+  phone_verified_at?: string;
   vk_id?: string;
 }

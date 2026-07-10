@@ -20,6 +20,7 @@ export default function AuthLayout() {
       }}>
       <Stack.Screen name="welcome" />
       <Stack.Screen name="email" options={{ headerShown: true, title: '' }} />
+      <Stack.Screen name="phone" options={{ headerShown: true, title: '' }} />
       <Stack.Screen name="code" options={{ headerShown: true, title: '' }} />
     </Stack>
   );

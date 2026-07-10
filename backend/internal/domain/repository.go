@@ -89,25 +89,45 @@ type FavoriteRepository interface {
 // UserRepository abstracts persistence for application accounts.
 type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (User, error)
+	GetByPhone(ctx context.Context, phone string) (User, error)
 	GetByID(ctx context.Context, id int32) (User, error)
 	Create(ctx context.Context, email string) (User, error)
+	CreateWithPhone(ctx context.Context, phone string) (User, error)
 	UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (User, error)
+	UpdatePhone(ctx context.Context, id int32, phone, phoneNormalized string, verifiedAt time.Time) (User, error)
 	UpdateEmail(ctx context.Context, id int32, email string) (User, error)
 	// LinkGuestRequests attaches pending_verification guest requests matching
 	// email to userID (moving them to in_progress) and returns the linked
 	// request IDs so callers can fire owner notifications for each.
 	LinkGuestRequests(ctx context.Context, userID int32, email string) ([]int32, error)
+	LinkGuestRequestsByPhone(ctx context.Context, userID int32, phone string) ([]int32, error)
 	Delete(ctx context.Context, id int32) error
 	CheckActiveBookings(ctx context.Context, id int32) (int64, error)
 	AnonymizeAndRevoke(ctx context.Context, id int32, emailHash string) error
 }
 
-// AuthCodeRepository persists short-lived email login codes.
+// AuthCodeRepository persists short-lived email/phone login codes.
 type AuthCodeRepository interface {
-	Upsert(ctx context.Context, email, codeHash string, expiresAt time.Time) error
-	Get(ctx context.Context, email string) (EmailLoginCode, error)
-	IncrementAttempts(ctx context.Context, email string) error
-	Delete(ctx context.Context, email string) error
+	Upsert(ctx context.Context, code AuthCode) error
+	Get(ctx context.Context, channel, target string) (AuthCode, error)
+	IncrementAttempts(ctx context.Context, channel, target string) error
+	Delete(ctx context.Context, channel, target string) error
+}
+
+// PhoneChallengeRepository stores phone verification state separately from
+// email auth codes and keeps delivery idempotency durable across HTTP retries.
+type PhoneChallengeRepository interface {
+	ReapStale(ctx context.Context, now time.Time) error
+	GetActive(ctx context.Context, phone, purpose string) (PhoneChallenge, error)
+	GetByID(ctx context.Context, id string) (PhoneChallenge, error)
+	CreatePending(ctx context.Context, challenge PhoneChallenge, delivery PhoneChallengeDelivery) error
+	GetPendingDelivery(ctx context.Context, challengeID string) (PhoneChallengeDelivery, error)
+	BeginDelivery(ctx context.Context, challengeID, provider, mode, idempotencyID string, pendingUntil time.Time) (PhoneChallengeDelivery, error)
+	MarkReady(ctx context.Context, challengeID, codeHash string, codeLength int32, mode, providerDeliveryID string, expiresAt time.Time) error
+	MarkDeliveryFailed(ctx context.Context, challengeID string, errorCode, errorMessage *string) error
+	IncrementAttempts(ctx context.Context, challengeID string) error
+	MarkVerified(ctx context.Context, challengeID string) error
+	MarkExpired(ctx context.Context, challengeID string) error
 }
 
 // RefreshTokenRepository persists hashed refresh tokens for JWT rotation.

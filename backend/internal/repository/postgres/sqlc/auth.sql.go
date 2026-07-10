@@ -21,6 +21,8 @@ UPDATE "user" SET
     google_id = NULL,
     vk_id = NULL,
     phone = '',
+    phone_normalized = NULL,
+    phone_verified_at = NULL,
     avatar_url = '',
     birthday = NULL,
     deleted = true,
@@ -103,33 +105,44 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO "user" (email, roles, deleted, is_verified, enable, created_at, updated_at)
-VALUES ($1, $2, false, true, true, now(), now())
-RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+INSERT INTO "user" (email, phone, phone_normalized, phone_verified_at, roles, deleted, is_verified, enable, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, false, true, true, now(), now())
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
 `
 
 type CreateUserParams struct {
-	Email string
-	Roles []byte
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	Roles           []byte
 }
 
 type CreateUserRow struct {
-	ID         int32
-	Name       *string
-	Surname    *string
-	Patronymic *string
-	Email      string
-	Phone      *string
-	City       *string
-	AvatarUrl  *string
-	IsVerified bool
-	Roles      []byte
-	Birthday   pgtype.Date
-	VkID       *string
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Roles)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.Phone,
+		arg.PhoneNormalized,
+		arg.PhoneVerifiedAt,
+		arg.Roles,
+	)
 	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
@@ -138,6 +151,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
 		&i.City,
 		&i.AvatarUrl,
 		&i.IsVerified,
@@ -148,12 +163,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	return i, err
 }
 
-const deleteEmailLoginCode = `-- name: DeleteEmailLoginCode :exec
-DELETE FROM email_login_code WHERE email = $1
+const deleteAuthCode = `-- name: DeleteAuthCode :exec
+DELETE FROM auth_code WHERE channel = $1 AND target = $2
 `
 
-func (q *Queries) DeleteEmailLoginCode(ctx context.Context, email string) error {
-	_, err := q.db.Exec(ctx, deleteEmailLoginCode, email)
+type DeleteAuthCodeParams struct {
+	Channel string
+	Target  string
+}
+
+func (q *Queries) DeleteAuthCode(ctx context.Context, arg DeleteAuthCodeParams) error {
+	_, err := q.db.Exec(ctx, deleteAuthCode, arg.Channel, arg.Target)
 	return err
 }
 
@@ -193,21 +213,30 @@ func (q *Queries) DeleteUserRefreshTokens(ctx context.Context, userID int32) err
 	return err
 }
 
-const getEmailLoginCode = `-- name: GetEmailLoginCode :one
-SELECT email, code_hash, expires_at, attempts, created_at
-FROM email_login_code
-WHERE email = $1
+const getAuthCode = `-- name: GetAuthCode :one
+SELECT channel, target, code_hash, expires_at, attempts, created_at, delivery_provider, delivery_id, delivery_cost
+FROM auth_code
+WHERE channel = $1 AND target = $2
 `
 
-func (q *Queries) GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error) {
-	row := q.db.QueryRow(ctx, getEmailLoginCode, email)
-	var i EmailLoginCode
+type GetAuthCodeParams struct {
+	Channel string
+	Target  string
+}
+
+func (q *Queries) GetAuthCode(ctx context.Context, arg GetAuthCodeParams) (AuthCode, error) {
+	row := q.db.QueryRow(ctx, getAuthCode, arg.Channel, arg.Target)
+	var i AuthCode
 	err := row.Scan(
-		&i.Email,
+		&i.Channel,
+		&i.Target,
 		&i.CodeHash,
 		&i.ExpiresAt,
 		&i.Attempts,
 		&i.CreatedAt,
+		&i.DeliveryProvider,
+		&i.DeliveryID,
+		&i.DeliveryCost,
 	)
 	return i, err
 }
@@ -265,27 +294,29 @@ func (q *Queries) GetRefreshTokenByID(ctx context.Context, id int64) (RefreshTok
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
 FROM "user"
 WHERE email = $1 AND deleted = false
 `
 
 type GetUserByEmailRow struct {
-	ID         int32
-	Name       *string
-	Surname    *string
-	Patronymic *string
-	Email      string
-	Phone      *string
-	City       *string
-	AvatarUrl  *string
-	IsVerified bool
-	Roles      []byte
-	Birthday   pgtype.Date
-	VkID       *string
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
 }
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
+func (q *Queries) GetUserByEmail(ctx context.Context, email *string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
 	var i GetUserByEmailRow
 	err := row.Scan(
@@ -295,6 +326,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
 		&i.City,
 		&i.AvatarUrl,
 		&i.IsVerified,
@@ -307,7 +340,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT 
-  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
+  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.phone_normalized, u.phone_verified_at, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
   (
     SELECT count(*)::int
     FROM house h
@@ -324,20 +357,22 @@ WHERE u.id = $1 AND u.deleted = false
 `
 
 type GetUserByIDRow struct {
-	ID            int32
-	Name          *string
-	Surname       *string
-	Patronymic    *string
-	Email         string
-	Phone         *string
-	City          *string
-	AvatarUrl     *string
-	IsVerified    bool
-	Roles         []byte
-	Birthday      pgtype.Date
-	VkID          *string
-	ListingsCount int32
-	Rating        float64
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
+	ListingsCount   int32
+	Rating          float64
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error) {
@@ -350,6 +385,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, er
 		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
 		&i.City,
 		&i.AvatarUrl,
 		&i.IsVerified,
@@ -362,12 +399,62 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, er
 	return i, err
 }
 
-const incrementEmailLoginCodeAttempts = `-- name: IncrementEmailLoginCodeAttempts :exec
-UPDATE email_login_code SET attempts = attempts + 1 WHERE email = $1
+const getUserByPhone = `-- name: GetUserByPhone :one
+SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+FROM "user"
+WHERE phone_normalized = $1 AND deleted = false
 `
 
-func (q *Queries) IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error {
-	_, err := q.db.Exec(ctx, incrementEmailLoginCodeAttempts, email)
+type GetUserByPhoneRow struct {
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
+}
+
+func (q *Queries) GetUserByPhone(ctx context.Context, phoneNormalized *string) (GetUserByPhoneRow, error) {
+	row := q.db.QueryRow(ctx, getUserByPhone, phoneNormalized)
+	var i GetUserByPhoneRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Surname,
+		&i.Patronymic,
+		&i.Email,
+		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
+		&i.City,
+		&i.AvatarUrl,
+		&i.IsVerified,
+		&i.Roles,
+		&i.Birthday,
+		&i.VkID,
+	)
+	return i, err
+}
+
+const incrementAuthCodeAttempts = `-- name: IncrementAuthCodeAttempts :exec
+UPDATE auth_code SET attempts = attempts + 1 WHERE channel = $1 AND target = $2
+`
+
+type IncrementAuthCodeAttemptsParams struct {
+	Channel string
+	Target  string
+}
+
+func (q *Queries) IncrementAuthCodeAttempts(ctx context.Context, arg IncrementAuthCodeAttemptsParams) error {
+	_, err := q.db.Exec(ctx, incrementAuthCodeAttempts, arg.Channel, arg.Target)
 	return err
 }
 
@@ -495,27 +582,29 @@ UPDATE "user"
 SET email = $2,
     updated_at = now()
 WHERE id = $1 AND deleted = false
-RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
 `
 
 type UpdateUserEmailParams struct {
 	ID    int32
-	Email string
+	Email *string
 }
 
 type UpdateUserEmailRow struct {
-	ID         int32
-	Name       *string
-	Surname    *string
-	Patronymic *string
-	Email      string
-	Phone      *string
-	City       *string
-	AvatarUrl  *string
-	IsVerified bool
-	Roles      []byte
-	Birthday   pgtype.Date
-	VkID       *string
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
 }
 
 func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error) {
@@ -528,6 +617,69 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
+		&i.City,
+		&i.AvatarUrl,
+		&i.IsVerified,
+		&i.Roles,
+		&i.Birthday,
+		&i.VkID,
+	)
+	return i, err
+}
+
+const updateUserPhone = `-- name: UpdateUserPhone :one
+UPDATE "user"
+SET phone = $2,
+    phone_normalized = $3,
+    phone_verified_at = $4,
+    updated_at = now()
+WHERE id = $1 AND deleted = false
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+`
+
+type UpdateUserPhoneParams struct {
+	ID              int32
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+}
+
+type UpdateUserPhoneRow struct {
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
+}
+
+func (q *Queries) UpdateUserPhone(ctx context.Context, arg UpdateUserPhoneParams) (UpdateUserPhoneRow, error) {
+	row := q.db.QueryRow(ctx, updateUserPhone,
+		arg.ID,
+		arg.Phone,
+		arg.PhoneNormalized,
+		arg.PhoneVerifiedAt,
+	)
+	var i UpdateUserPhoneRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Surname,
+		&i.Patronymic,
+		&i.Email,
+		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
 		&i.City,
 		&i.AvatarUrl,
 		&i.IsVerified,
@@ -548,37 +700,43 @@ SET name = COALESCE($1, name),
     birthday = COALESCE($6, birthday),
     avatar_url = COALESCE($7, avatar_url),
     vk_id = CASE WHEN $8::boolean = true THEN NULL ELSE COALESCE($9, vk_id) END,
+    phone_normalized = COALESCE($10, phone_normalized),
+    phone_verified_at = COALESCE($11, phone_verified_at),
     updated_at = now()
-WHERE id = $10 AND deleted = false
-RETURNING id, name, surname, patronymic, email, phone, city, avatar_url, is_verified, roles, birthday, vk_id
+WHERE id = $12 AND deleted = false
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
 `
 
 type UpdateUserProfileParams struct {
-	Name       *string
-	Surname    *string
-	Patronymic *string
-	Phone      *string
-	City       *string
-	Birthday   pgtype.Date
-	AvatarUrl  *string
-	VkIDDoNull *bool
-	VkID       *string
-	ID         int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Phone           *string
+	City            *string
+	Birthday        pgtype.Date
+	AvatarUrl       *string
+	VkIDDoNull      *bool
+	VkID            *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	ID              int32
 }
 
 type UpdateUserProfileRow struct {
-	ID         int32
-	Name       *string
-	Surname    *string
-	Patronymic *string
-	Email      string
-	Phone      *string
-	City       *string
-	AvatarUrl  *string
-	IsVerified bool
-	Roles      []byte
-	Birthday   pgtype.Date
-	VkID       *string
+	ID              int32
+	Name            *string
+	Surname         *string
+	Patronymic      *string
+	Email           *string
+	Phone           *string
+	PhoneNormalized *string
+	PhoneVerifiedAt pgtype.Timestamptz
+	City            *string
+	AvatarUrl       *string
+	IsVerified      bool
+	Roles           []byte
+	Birthday        pgtype.Date
+	VkID            *string
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
@@ -592,6 +750,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		arg.AvatarUrl,
 		arg.VkIDDoNull,
 		arg.VkID,
+		arg.PhoneNormalized,
+		arg.PhoneVerifiedAt,
 		arg.ID,
 	)
 	var i UpdateUserProfileRow
@@ -602,6 +762,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.Patronymic,
 		&i.Email,
 		&i.Phone,
+		&i.PhoneNormalized,
+		&i.PhoneVerifiedAt,
 		&i.City,
 		&i.AvatarUrl,
 		&i.IsVerified,
@@ -612,23 +774,40 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 	return i, err
 }
 
-const upsertEmailLoginCode = `-- name: UpsertEmailLoginCode :exec
-INSERT INTO email_login_code (email, code_hash, expires_at, attempts, created_at)
-VALUES ($1, $2, $3, 0, now())
-ON CONFLICT (email) DO UPDATE
+const upsertAuthCode = `-- name: UpsertAuthCode :exec
+INSERT INTO auth_code (
+  channel, target, code_hash, expires_at, attempts, created_at, delivery_provider, delivery_id, delivery_cost
+)
+VALUES ($1, $2, $3, $4, 0, now(), $5, $6, $7)
+ON CONFLICT (channel, target) DO UPDATE
 SET code_hash = EXCLUDED.code_hash,
     expires_at = EXCLUDED.expires_at,
     attempts = 0,
-    created_at = now()
+    created_at = now(),
+    delivery_provider = EXCLUDED.delivery_provider,
+    delivery_id = EXCLUDED.delivery_id,
+    delivery_cost = EXCLUDED.delivery_cost
 `
 
-type UpsertEmailLoginCodeParams struct {
-	Email     string
-	CodeHash  string
-	ExpiresAt pgtype.Timestamp
+type UpsertAuthCodeParams struct {
+	Channel          string
+	Target           string
+	CodeHash         string
+	ExpiresAt        pgtype.Timestamptz
+	DeliveryProvider *string
+	DeliveryID       *string
+	DeliveryCost     *string
 }
 
-func (q *Queries) UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error {
-	_, err := q.db.Exec(ctx, upsertEmailLoginCode, arg.Email, arg.CodeHash, arg.ExpiresAt)
+func (q *Queries) UpsertAuthCode(ctx context.Context, arg UpsertAuthCodeParams) error {
+	_, err := q.db.Exec(ctx, upsertAuthCode,
+		arg.Channel,
+		arg.Target,
+		arg.CodeHash,
+		arg.ExpiresAt,
+		arg.DeliveryProvider,
+		arg.DeliveryID,
+		arg.DeliveryCost,
+	)
 	return err
 }

@@ -131,6 +131,14 @@ func (s *S3Storage) PresignUpload(ctx context.Context, key string, maxBytes int6
 		return domain.UploadTarget{}, err
 	}
 
+	// AWS SDK v2 PresignPostObject leaves req.URL empty for custom S3-compatible
+	// endpoints (e.g. Timeweb) when path-style addressing is enabled.
+	// Build the upload URL manually: {endpoint}/{bucket}/
+	uploadURL := req.URL
+	if uploadURL == "" {
+		uploadURL = strings.TrimRight(s.endpoint, "/") + "/" + s.bucket + "/"
+	}
+
 	// The SDK does not include Content-Type in the returned form fields even
 	// though the policy requires it — add it so the client can submit the
 	// exact value the policy was signed against.
@@ -138,7 +146,7 @@ func (s *S3Storage) PresignUpload(ctx context.Context, key string, maxBytes int6
 	fields["Content-Type"] = contentType
 
 	return domain.UploadTarget{
-		URL:      req.URL,
+		URL:      uploadURL,
 		FormData: fields,
 		Key:      key,
 	}, nil

@@ -53,7 +53,7 @@ export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps)
   const handleSignIn = () => {
     handleClose();
     setTimeout(() => {
-      router.push('/email');
+      router.push('/welcome');
     }, 200);
   };
 
@@ -124,7 +124,7 @@ export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps)
           {/* Action buttons */}
           <View className="gap-3">
             <Button
-              label="Войти по email"
+              label="Войти или зарегистрироваться"
               size="md"
               className="w-full"
               onPress={handleSignIn}

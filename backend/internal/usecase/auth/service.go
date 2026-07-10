@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -27,8 +28,9 @@ import (
 const (
 	codeTTL = 10 * time.Minute
 	// resendCooldown throttles how often a new code may be requested per email.
-	resendCooldown = 60 * time.Second
-	maxAttempts    = 5
+	resendCooldown  = 60 * time.Second
+	maxAttempts     = 5
+	phonePendingTTL = 30 * time.Second
 )
 
 // Config tunes the auth service.
@@ -37,27 +39,31 @@ type Config struct {
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
 	// ExposeCode returns the generated login code in the API response and is
-	// intended for development only (no email/SMS provider wired yet).
+	// intended for development only.
 	ExposeCode bool
 
 	// Notifier queues outgoing email (login codes). May be nil in tests or
 	// when SMTP is not configured; sends are then skipped.
-	Notifier     domain.EmailNotifier
-	DadataAPIKey string
-	Storage      domain.FileStorage
+	Notifier        domain.EmailNotifier
+	PhoneCaller     domain.PhoneCallProvider
+	PhoneChallenges domain.PhoneChallengeRepository
+	DadataAPIKey    string
+	Storage         domain.FileStorage
 }
 
-// Service implements passwordless email-code auth with JWT access/refresh.
+// Service implements passwordless email/phone auth with JWT access/refresh.
 type Service struct {
-	users      domain.UserRepository
-	codes      domain.AuthCodeRepository
-	refresh    domain.RefreshTokenRepository
-	tm         *TokenManager
-	accessTTL  time.Duration
-	refreshTTL time.Duration
-	exposeCode bool
-	now        func() time.Time
-	storage    domain.FileStorage
+	users           domain.UserRepository
+	codes           domain.AuthCodeRepository
+	refresh         domain.RefreshTokenRepository
+	phoneCaller     domain.PhoneCallProvider
+	phoneChallenges domain.PhoneChallengeRepository
+	tm              *TokenManager
+	accessTTL       time.Duration
+	refreshTTL      time.Duration
+	exposeCode      bool
+	now             func() time.Time
+	storage         domain.FileStorage
 
 	notifier     domain.EmailNotifier
 	dadataAPIKey string
@@ -114,15 +120,17 @@ func New(
 	cfg Config,
 ) *Service {
 	return &Service{
-		users:      users,
-		codes:      codes,
-		refresh:    refresh,
-		tm:         NewTokenManager(cfg.Secret, cfg.AccessTTL),
-		accessTTL:  cfg.AccessTTL,
-		refreshTTL: cfg.RefreshTTL,
-		exposeCode: cfg.ExposeCode,
-		now:        time.Now,
-		storage:    cfg.Storage,
+		users:           users,
+		codes:           codes,
+		refresh:         refresh,
+		phoneCaller:     cfg.PhoneCaller,
+		phoneChallenges: cfg.PhoneChallenges,
+		tm:              NewTokenManager(cfg.Secret, cfg.AccessTTL),
+		accessTTL:       cfg.AccessTTL,
+		refreshTTL:      cfg.RefreshTTL,
+		exposeCode:      cfg.ExposeCode,
+		now:             time.Now,
+		storage:         cfg.Storage,
 
 		notifier:     cfg.Notifier,
 		dadataAPIKey: cfg.DadataAPIKey,
@@ -142,9 +150,15 @@ func (s *Service) ExposeCode() bool            { return s.exposeCode }
 
 // RequestCodeResult reports the outcome of requesting an email login code.
 type RequestCodeResult struct {
-	ExpiresIn int64  // seconds until the code expires
-	Code      string // populated only when ExposeCode is enabled (dev)
-	Exposed   bool
+	ExpiresIn         int64  // seconds until the code expires
+	Code              string // populated only when ExposeCode is enabled (dev)
+	Exposed           bool
+	ChallengeID       string
+	DeliveryMode      string
+	CodeLength        int32
+	RetryAfter        int64
+	FallbackAvailable bool
+	Reused            bool
 }
 
 // AuthResult is a freshly issued token pair plus the authenticated user.
@@ -166,7 +180,7 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	// This prevents invalidating a victim's pending code and flooding their inbox.
 	// Bypassed in dev (exposeCode=true) so developers can test quickly.
 	if !s.exposeCode {
-		switch existing, err := s.codes.Get(ctx, email); {
+		switch existing, err := s.codes.Get(ctx, "email", email); {
 		case err == nil:
 			if s.now().Before(existing.CreatedAt.Add(resendCooldown)) {
 				return RequestCodeResult{}, domain.ErrCodeRequestTooSoon
@@ -187,7 +201,14 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 		return RequestCodeResult{}, err
 	}
 	expiresAt := s.now().Add(codeTTL)
-	if err := s.codes.Upsert(ctx, email, string(hash), expiresAt); err != nil {
+	authCode := domain.AuthCode{
+		Channel:   "email",
+		Target:    email,
+		CodeHash:  string(hash),
+		ExpiresAt: expiresAt,
+		CreatedAt: s.now(),
+	}
+	if err := s.codes.Upsert(ctx, authCode); err != nil {
 		return RequestCodeResult{}, err
 	}
 
@@ -201,7 +222,7 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 		}
 	}
 
-	// No email/SMS provider yet: log the code so it can be retrieved in dev.
+	// Log the email code only in dev so it can be retrieved locally.
 	// Gated by exposeCode so the plaintext code never reaches production logs.
 	if s.exposeCode {
 		log.Printf("auth: login code for %s is %s (expires %s)", email, code, expiresAt.Format(time.RFC3339))
@@ -223,7 +244,7 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 	}
 	code = strings.TrimSpace(code)
 
-	rec, err := s.codes.Get(ctx, email)
+	rec, err := s.codes.Get(ctx, "email", email)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return AuthResult{}, domain.ErrCodeInvalid
@@ -234,16 +255,16 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 		return AuthResult{}, domain.ErrTooManyAttempts
 	}
 	if s.now().After(rec.ExpiresAt) {
-		_ = s.codes.Delete(ctx, email)
+		_ = s.codes.Delete(ctx, "email", email)
 		return AuthResult{}, domain.ErrCodeExpired
 	}
 	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
-		_ = s.codes.IncrementAttempts(ctx, email)
+		_ = s.codes.IncrementAttempts(ctx, "email", email)
 		return AuthResult{}, domain.ErrCodeInvalid
 	}
 
 	// Code is valid: consume it, then find or create the account.
-	_ = s.codes.Delete(ctx, email)
+	_ = s.codes.Delete(ctx, "email", email)
 
 	user, err := s.users.GetByEmail(ctx, email)
 	isNewUser := errors.Is(err, domain.ErrNotFound)
@@ -391,7 +412,7 @@ func (s *Service) ConfirmDeleteAccount(ctx context.Context, userID int32, code s
 	}
 	code = strings.TrimSpace(code)
 
-	rec, err := s.codes.Get(ctx, email)
+	rec, err := s.codes.Get(ctx, "email", email)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return domain.ErrCodeInvalid
@@ -402,15 +423,15 @@ func (s *Service) ConfirmDeleteAccount(ctx context.Context, userID int32, code s
 		return domain.ErrTooManyAttempts
 	}
 	if s.now().After(rec.ExpiresAt) {
-		_ = s.codes.Delete(ctx, email)
+		_ = s.codes.Delete(ctx, "email", email)
 		return domain.ErrCodeExpired
 	}
 	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
-		_ = s.codes.IncrementAttempts(ctx, email)
+		_ = s.codes.IncrementAttempts(ctx, "email", email)
 		return domain.ErrCodeInvalid
 	}
 
-	_ = s.codes.Delete(ctx, email)
+	_ = s.codes.Delete(ctx, "email", email)
 
 	h := sha256.New()
 	h.Write([]byte(email))
@@ -526,7 +547,7 @@ func (s *Service) VerifyOldEmailCode(ctx context.Context, userID int32, code str
 	}
 	code = strings.TrimSpace(code)
 
-	rec, err := s.codes.Get(ctx, email)
+	rec, err := s.codes.Get(ctx, "email", email)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return "", domain.ErrCodeInvalid
@@ -537,15 +558,15 @@ func (s *Service) VerifyOldEmailCode(ctx context.Context, userID int32, code str
 		return "", domain.ErrTooManyAttempts
 	}
 	if s.now().After(rec.ExpiresAt) {
-		_ = s.codes.Delete(ctx, email)
+		_ = s.codes.Delete(ctx, "email", email)
 		return "", domain.ErrCodeExpired
 	}
 	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
-		_ = s.codes.IncrementAttempts(ctx, email)
+		_ = s.codes.IncrementAttempts(ctx, "email", email)
 		return "", domain.ErrCodeInvalid
 	}
 
-	_ = s.codes.Delete(ctx, email)
+	_ = s.codes.Delete(ctx, "email", email)
 
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -561,9 +582,16 @@ func (s *Service) VerifyOldEmailCode(ctx context.Context, userID int32, code str
 }
 
 func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToken, newEmailRaw string) (RequestCodeResult, error) {
-	stored, ok := s.loadEmailChangeToken(userID)
-	if !ok || subtle.ConstantTimeCompare([]byte(stored.token), []byte(oldToken)) != 1 {
-		return RequestCodeResult{}, domain.ErrTokenInvalid
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+
+	if user.Email != "" {
+		stored, ok := s.loadEmailChangeToken(userID)
+		if !ok || subtle.ConstantTimeCompare([]byte(stored.token), []byte(oldToken)) != 1 {
+			return RequestCodeResult{}, domain.ErrTokenInvalid
+		}
 	}
 
 	newEmail, err := normalizeEmail(newEmailRaw)
@@ -582,9 +610,16 @@ func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToke
 }
 
 func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmailRaw, code string) (domain.User, error) {
-	_, ok := s.loadEmailChangeToken(userID)
-	if !ok {
-		return domain.User{}, domain.ErrTokenInvalid
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	if user.Email != "" {
+		_, ok := s.loadEmailChangeToken(userID)
+		if !ok {
+			return domain.User{}, domain.ErrTokenInvalid
+		}
 	}
 
 	newEmail, err := normalizeEmail(newEmailRaw)
@@ -593,7 +628,7 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmail
 	}
 	code = strings.TrimSpace(code)
 
-	rec, err := s.codes.Get(ctx, newEmail)
+	rec, err := s.codes.Get(ctx, "email", newEmail)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return domain.User{}, domain.ErrCodeInvalid
@@ -604,15 +639,15 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, newEmail
 		return domain.User{}, domain.ErrTooManyAttempts
 	}
 	if s.now().After(rec.ExpiresAt) {
-		_ = s.codes.Delete(ctx, newEmail)
+		_ = s.codes.Delete(ctx, "email", newEmail)
 		return domain.User{}, domain.ErrCodeExpired
 	}
 	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
-		_ = s.codes.IncrementAttempts(ctx, newEmail)
+		_ = s.codes.IncrementAttempts(ctx, "email", newEmail)
 		return domain.User{}, domain.ErrCodeInvalid
 	}
 
-	_ = s.codes.Delete(ctx, newEmail)
+	_ = s.codes.Delete(ctx, "email", newEmail)
 	s.emailChangeTokens.Delete(userID)
 
 	u, err := s.users.UpdateEmail(ctx, userID, newEmail)
@@ -869,4 +904,312 @@ func (s *Service) resolveAndSaveLocation(sessionID int64, ip string) {
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer dbCancel()
 	_ = s.refresh.UpdateLocation(dbCtx, sessionID, city)
+}
+
+func generateUUID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+func generateNumericCode(length int) (string, error) {
+	limit := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(length)), nil)
+	n, err := rand.Int(rand.Reader, limit)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%0*d", length, n.Int64()), nil
+}
+
+func phoneChallengeResult(c domain.PhoneChallenge, reused bool) RequestCodeResult {
+	retry := int64(time.Until(c.UpdatedAt.Add(resendCooldown)).Seconds())
+	if retry < 0 {
+		retry = 0
+	}
+	return RequestCodeResult{ExpiresIn: int64(time.Until(c.ExpiresAt).Seconds()), ChallengeID: c.ID,
+		DeliveryMode: c.DeliveryMode, CodeLength: c.CodeLength, RetryAfter: retry,
+		FallbackAvailable: c.DeliveryMode == domain.PhoneDeliveryModeFlashCall, Reused: reused}
+}
+
+// StartPhoneChallengeReaper releases provider calls that never produced a
+// response. ReapStale is also called synchronously before every request.
+func (s *Service) StartPhoneChallengeReaper(ctx context.Context, interval time.Duration) {
+	if s.phoneChallenges == nil {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				if err := s.phoneChallenges.ReapStale(context.Background(), now); err != nil {
+					log.Printf("phone challenge reaper: %v", err)
+				}
+			}
+		}
+	}()
+}
+
+// RequestPhoneCode starts Flash Call by default. Legacy voice channel values
+// are accepted but mapped to Flash Call.
+func (s *Service) RequestPhoneCode(ctx context.Context, rawPhone, channel string) (RequestCodeResult, error) {
+	phone, err := NormalizePhone(rawPhone)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	return s.requestPhoneChallenge(ctx, phone, domain.PhoneChallengePurposeLogin, nil)
+}
+
+func (s *Service) requestPhoneChallenge(ctx context.Context, phone, purpose string, userID *int32) (RequestCodeResult, error) {
+	if s.phoneChallenges == nil || s.phoneCaller == nil {
+		return RequestCodeResult{}, errors.New("phone verification is not configured")
+	}
+	now := s.now()
+	if err := s.phoneChallenges.ReapStale(ctx, now); err != nil {
+		return RequestCodeResult{}, err
+	}
+
+	active, err := s.phoneChallenges.GetActive(ctx, phone, purpose)
+	if err == nil {
+		if active.Status == domain.PhoneChallengeStatusReady {
+			if now.Before(active.UpdatedAt.Add(resendCooldown)) {
+				return phoneChallengeResult(active, true), nil
+			}
+			idempotencyID, err := generateUUID()
+			if err != nil {
+				return RequestCodeResult{}, err
+			}
+			pendingUntil := now.Add(phonePendingTTL)
+			delivery, err := s.phoneChallenges.BeginDelivery(ctx, active.ID, "ucaller", domain.PhoneDeliveryModeFlashCall, idempotencyID, pendingUntil)
+			if err != nil {
+				return RequestCodeResult{}, err
+			}
+			return s.completePhoneCall(ctx, active, delivery, false)
+		}
+		delivery, err := s.phoneChallenges.GetPendingDelivery(ctx, active.ID)
+		if err != nil {
+			return RequestCodeResult{}, err
+		}
+		return s.completePhoneCall(ctx, active, delivery, true)
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return RequestCodeResult{}, err
+	}
+
+	challengeID, err := generateUUID()
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	idempotencyID, err := generateUUID()
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	pendingUntil := now.Add(phonePendingTTL)
+	c := domain.PhoneChallenge{ID: challengeID, PhoneNormalized: phone, Purpose: purpose, UserID: userID,
+		CodeLength: 4, Status: domain.PhoneChallengeStatusDeliveryPending, DeliveryMode: domain.PhoneDeliveryModeFlashCall,
+		PendingUntil: &pendingUntil, ExpiresAt: now.Add(codeTTL), CreatedAt: now, UpdatedAt: now}
+	d := domain.PhoneChallengeDelivery{ChallengeID: challengeID, Provider: "ucaller", Mode: domain.PhoneDeliveryModeFlashCall, IdempotencyID: idempotencyID, Status: "pending"}
+	if err := s.phoneChallenges.CreatePending(ctx, c, d); err != nil {
+		if errors.Is(err, domain.ErrPhoneChallengeActive) {
+			active, getErr := s.phoneChallenges.GetActive(ctx, phone, purpose)
+			if getErr != nil {
+				return RequestCodeResult{}, getErr
+			}
+			return phoneChallengeResult(active, true), nil
+		}
+		return RequestCodeResult{}, err
+	}
+	return s.completePhoneCall(ctx, c, d, false)
+}
+
+func (s *Service) completePhoneCall(ctx context.Context, c domain.PhoneChallenge, d domain.PhoneChallengeDelivery, reused bool) (RequestCodeResult, error) {
+	requestedCode, err := generateNumericCode(4)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	delivery, err := s.phoneCaller.StartCall(ctx, domain.PhoneCallRequest{Phone: c.PhoneNormalized, Code: requestedCode,
+		Mode: d.Mode, IdempotencyID: d.IdempotencyID, Client: "sutkiru-auth"})
+	if err != nil {
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() {
+			message := err.Error()
+			_ = s.phoneChallenges.MarkDeliveryFailed(ctx, c.ID, nil, &message)
+		}
+		return RequestCodeResult{}, fmt.Errorf("start phone call: %w", err)
+	}
+	// Hash the effective code returned by uCaller, never the requested value.
+	hash, err := bcrypt.GenerateFromPassword([]byte(delivery.Code), bcrypt.DefaultCost)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	if err := s.phoneChallenges.MarkReady(ctx, c.ID, string(hash), int32(len(delivery.Code)), delivery.Mode, delivery.ProviderDeliveryID, s.now().Add(codeTTL)); err != nil {
+		return RequestCodeResult{}, err
+	}
+	c.CodeHash = nil
+	c.CodeLength = int32(len(delivery.Code))
+	c.Status = domain.PhoneChallengeStatusReady
+	c.DeliveryMode = delivery.Mode
+	c.ExpiresAt = s.now().Add(codeTTL)
+	res := phoneChallengeResult(c, reused || delivery.Reused)
+	if s.exposeCode {
+		res.Code, res.Exposed = delivery.Code, true
+	}
+	return res, nil
+}
+
+func (s *Service) RequestPhoneVoiceFallback(ctx context.Context, rawPhone, challengeID, purpose string, userID *int32) (RequestCodeResult, error) {
+	phone, err := NormalizePhone(rawPhone)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	if s.phoneCaller == nil {
+		return RequestCodeResult{}, errors.New("phone verification is not configured")
+	}
+	if err := s.phoneChallenges.ReapStale(ctx, s.now()); err != nil {
+		return RequestCodeResult{}, err
+	}
+	c, err := s.phoneChallenges.GetByID(ctx, challengeID)
+	if err != nil || c.PhoneNormalized != phone || c.Purpose != purpose || c.Status != domain.PhoneChallengeStatusReady {
+		return RequestCodeResult{}, domain.ErrCodeInvalid
+	}
+	if userID != nil && (c.UserID == nil || *c.UserID != *userID) {
+		return RequestCodeResult{}, domain.ErrCodeInvalid
+	}
+	if s.now().Before(c.UpdatedAt.Add(resendCooldown)) && !s.exposeCode {
+		return RequestCodeResult{}, domain.ErrCodeRequestTooSoon
+	}
+	idempotencyID, err := generateUUID()
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	pendingUntil := s.now().Add(phonePendingTTL)
+	d, err := s.phoneChallenges.BeginDelivery(ctx, c.ID, "ucaller", domain.PhoneDeliveryModeVoice, idempotencyID, pendingUntil)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	return s.completePhoneCall(ctx, c, d, false)
+}
+
+func (s *Service) resolvePhoneChallenge(ctx context.Context, phone, purpose, challengeID string) (domain.PhoneChallenge, error) {
+	var c domain.PhoneChallenge
+	var err error
+	if challengeID == "" || strings.HasPrefix(challengeID, "phone_") {
+		c, err = s.phoneChallenges.GetActive(ctx, phone, purpose)
+	} else {
+		c, err = s.phoneChallenges.GetByID(ctx, challengeID)
+	}
+	if err != nil || c.PhoneNormalized != phone || c.Purpose != purpose {
+		return domain.PhoneChallenge{}, domain.ErrCodeInvalid
+	}
+	return c, nil
+}
+
+func (s *Service) verifyPhoneChallenge(ctx context.Context, phone, code, purpose, challengeID string, userID *int32) (domain.PhoneChallenge, error) {
+	c, err := s.resolvePhoneChallenge(ctx, phone, purpose, challengeID)
+	if err != nil {
+		return domain.PhoneChallenge{}, err
+	}
+	if userID != nil && (c.UserID == nil || *c.UserID != *userID) {
+		return domain.PhoneChallenge{}, domain.ErrCodeInvalid
+	}
+	if c.Status != domain.PhoneChallengeStatusReady || c.CodeHash == nil {
+		return domain.PhoneChallenge{}, domain.ErrCodeInvalid
+	}
+	if c.Attempts >= maxAttempts {
+		return domain.PhoneChallenge{}, domain.ErrTooManyAttempts
+	}
+	if s.now().After(c.ExpiresAt) {
+		_ = s.phoneChallenges.MarkExpired(ctx, c.ID)
+		return domain.PhoneChallenge{}, domain.ErrCodeExpired
+	}
+	code = strings.TrimSpace(code)
+	if len(code) != int(c.CodeLength) || bcrypt.CompareHashAndPassword([]byte(*c.CodeHash), []byte(code)) != nil {
+		_ = s.phoneChallenges.IncrementAttempts(ctx, c.ID)
+		if c.Attempts+1 >= maxAttempts {
+			_ = s.phoneChallenges.MarkExpired(ctx, c.ID)
+		}
+		return domain.PhoneChallenge{}, domain.ErrCodeInvalid
+	}
+	return c, nil
+}
+
+func (s *Service) VerifyPhoneCode(ctx context.Context, rawPhone, code, challengeID string, info domain.DeviceInfo) (AuthResult, error) {
+	phone, err := NormalizePhone(rawPhone)
+	if err != nil {
+		return AuthResult{}, err
+	}
+	c, err := s.verifyPhoneChallenge(ctx, phone, code, domain.PhoneChallengePurposeLogin, challengeID, nil)
+	if err != nil {
+		return AuthResult{}, err
+	}
+	user, err := s.users.GetByPhone(ctx, phone)
+	if errors.Is(err, domain.ErrNotFound) {
+		user, err = s.users.CreateWithPhone(ctx, phone)
+	}
+	if err != nil {
+		return AuthResult{}, err
+	}
+	if err = s.phoneChallenges.MarkVerified(ctx, c.ID); err != nil {
+		return AuthResult{}, err
+	}
+	linkedIDs, linkErr := s.users.LinkGuestRequestsByPhone(ctx, user.ID, phone)
+	if linkErr == nil && len(linkedIDs) > 0 && s.onGuestRequestsLinked != nil {
+		go s.onGuestRequestsLinked(context.Background(), linkedIDs)
+	}
+	return s.issueTokens(ctx, user, info)
+}
+
+func (s *Service) RequestChangePhoneCode(ctx context.Context, userID int32, rawPhone, channel string) (RequestCodeResult, error) {
+	if _, err := s.users.GetByID(ctx, userID); err != nil {
+		return RequestCodeResult{}, err
+	}
+	phone, err := NormalizePhone(rawPhone)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	existing, err := s.users.GetByPhone(ctx, phone)
+	if err == nil && existing.ID != userID {
+		return RequestCodeResult{}, domain.ErrPhoneTaken
+	}
+	if err == nil && existing.PhoneVerifiedAt != nil {
+		return RequestCodeResult{}, domain.ErrPhoneAlreadyLinked
+	}
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return RequestCodeResult{}, err
+	}
+	return s.requestPhoneChallenge(ctx, phone, domain.PhoneChallengePurposeChangePhone, &userID)
+}
+
+func (s *Service) ConfirmPhoneChange(ctx context.Context, userID int32, rawPhone, code, challengeID string) (domain.User, error) {
+	phone, err := NormalizePhone(rawPhone)
+	if err != nil {
+		return domain.User{}, err
+	}
+	c, err := s.verifyPhoneChallenge(ctx, phone, code, domain.PhoneChallengePurposeChangePhone, challengeID, &userID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	existing, err := s.users.GetByPhone(ctx, phone)
+	if err == nil && existing.ID != userID {
+		return domain.User{}, domain.ErrPhoneTaken
+	}
+	updatedUser, err := s.users.UpdatePhone(ctx, userID, rawPhone, phone, s.now())
+	if err != nil {
+		return domain.User{}, err
+	}
+	if err = s.phoneChallenges.MarkVerified(ctx, c.ID); err != nil {
+		return domain.User{}, err
+	}
+	linkedIDs, linkErr := s.users.LinkGuestRequestsByPhone(ctx, userID, phone)
+	if linkErr == nil && len(linkedIDs) > 0 && s.onGuestRequestsLinked != nil {
+		go s.onGuestRequestsLinked(context.Background(), linkedIDs)
+	}
+	return updatedUser, nil
 }

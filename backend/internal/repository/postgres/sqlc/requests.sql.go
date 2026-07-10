@@ -18,7 +18,7 @@ WHERE id = $1
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
 
@@ -34,6 +34,7 @@ type CancelRequestRow struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -58,6 +59,7 @@ func (q *Queries) CancelRequest(ctx context.Context, id int32) (CancelRequestRow
 		&i.Count,
 		&i.Message,
 		&i.Phone,
+		&i.PhoneNormalized,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Status,
@@ -76,7 +78,7 @@ WHERE id = $1 AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
 
@@ -92,6 +94,7 @@ type ConfirmRequestRow struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -116,6 +119,7 @@ func (q *Queries) ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestR
 		&i.Count,
 		&i.Message,
 		&i.Phone,
+		&i.PhoneNormalized,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Status,
@@ -201,36 +205,37 @@ func (q *Queries) CountRequestsForOwner(ctx context.Context, ownerID int32) (int
 
 const createRequest = `-- name: CreateRequest :one
 INSERT INTO request (
-  house_id, user_id, guest_id, email, name, surname, lastname, count, message, phone,
+  house_id, user_id, guest_id, email, name, surname, lastname, count, message, phone, phone_normalized,
   start_date, end_date, status, created_at, updated_at
 )
 VALUES (
   $1::int, $2, $3, LOWER(TRIM($4)),
   $5, $6, $7, $8::int,
-  $9, $10, $11, $12,
-  $13::text, now(), now()
+  $9, $10, $11, $12, $13,
+  $14::text, now(), now()
 )
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
 
 type CreateRequestParams struct {
-	HouseID   int32
-	UserID    *int32
-	GuestID   *string
-	Email     *string
-	Name      string
-	Surname   string
-	Lastname  string
-	Count     int32
-	Message   *string
-	Phone     string
-	StartDate pgtype.Date
-	EndDate   pgtype.Date
-	Status    string
+	HouseID         int32
+	UserID          *int32
+	GuestID         *string
+	Email           *string
+	Name            string
+	Surname         string
+	Lastname        string
+	Count           int32
+	Message         *string
+	Phone           string
+	PhoneNormalized *string
+	StartDate       pgtype.Date
+	EndDate         pgtype.Date
+	Status          string
 }
 
 type CreateRequestRow struct {
@@ -245,6 +250,7 @@ type CreateRequestRow struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -266,6 +272,7 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (C
 		arg.Count,
 		arg.Message,
 		arg.Phone,
+		arg.PhoneNormalized,
 		arg.StartDate,
 		arg.EndDate,
 		arg.Status,
@@ -283,6 +290,7 @@ func (q *Queries) CreateRequest(ctx context.Context, arg CreateRequestParams) (C
 		&i.Count,
 		&i.Message,
 		&i.Phone,
+		&i.PhoneNormalized,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Status,
@@ -315,7 +323,7 @@ WHERE h.id = $1 AND h.deleted = false AND u.deleted = false
 type GetHouseForBookingRow struct {
 	OwnerID    int32
 	Status     string
-	OwnerEmail string
+	OwnerEmail *string
 }
 
 func (q *Queries) GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error) {
@@ -329,7 +337,7 @@ const getRequestByID = `-- name: GetRequestByID :one
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -393,6 +401,7 @@ type GetRequestByIDRow struct {
 	Count             int32
 	Message           *string
 	Phone             string
+	PhoneNormalized   string
 	StartDate         pgtype.Date
 	EndDate           pgtype.Date
 	Status            string
@@ -440,6 +449,7 @@ func (q *Queries) GetRequestByID(ctx context.Context, id int32) (GetRequestByIDR
 		&i.Count,
 		&i.Message,
 		&i.Phone,
+		&i.PhoneNormalized,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Status,
@@ -564,7 +574,7 @@ const listRequestsByGuest = `-- name: ListRequestsByGuest :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -609,6 +619,7 @@ type ListRequestsByGuestRow struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -651,6 +662,7 @@ func (q *Queries) ListRequestsByGuest(ctx context.Context, arg ListRequestsByGue
 			&i.Count,
 			&i.Message,
 			&i.Phone,
+			&i.PhoneNormalized,
 			&i.StartDate,
 			&i.EndDate,
 			&i.Status,
@@ -680,7 +692,7 @@ const listRequestsByUser = `-- name: ListRequestsByUser :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -724,6 +736,7 @@ type ListRequestsByUserRow struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -766,6 +779,7 @@ func (q *Queries) ListRequestsByUser(ctx context.Context, arg ListRequestsByUser
 			&i.Count,
 			&i.Message,
 			&i.Phone,
+			&i.PhoneNormalized,
 			&i.StartDate,
 			&i.EndDate,
 			&i.Status,
@@ -795,7 +809,7 @@ const listRequestsForOwner = `-- name: ListRequestsForOwner :many
 SELECT
   r.id, COALESCE(r.house_id, 0)::int AS house_id, COALESCE(r.user_id, 0)::int AS user_id,
   COALESCE(r.guest_id, '')::text AS guest_id, COALESCE(r.email, '')::text AS email,
-  r.name, r.surname, r.lastname, r.count, r.message, r.phone,
+  r.name, r.surname, r.lastname, r.count, r.message, r.phone, COALESCE(r.phone_normalized, '')::text AS phone_normalized,
   r.start_date, r.end_date, r.status, r.created_at, r.updated_at,
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
@@ -848,6 +862,7 @@ type ListRequestsForOwnerRow struct {
 	Count             int32
 	Message           *string
 	Phone             string
+	PhoneNormalized   string
 	StartDate         pgtype.Date
 	EndDate           pgtype.Date
 	Status            string
@@ -893,6 +908,7 @@ func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForO
 			&i.Count,
 			&i.Message,
 			&i.Phone,
+			&i.PhoneNormalized,
 			&i.StartDate,
 			&i.EndDate,
 			&i.Status,
@@ -933,7 +949,7 @@ WHERE id = $2 AND status = 'in_progress'
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
-  name, surname, lastname, count, message, phone, start_date, end_date, status,
+  name, surname, lastname, count, message, phone, COALESCE(phone_normalized, '')::text AS phone_normalized, start_date, end_date, status,
   created_at, updated_at, confirmed_at, rejection_reason
 `
 
@@ -954,6 +970,7 @@ type RejectRequestRow struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -978,6 +995,7 @@ func (q *Queries) RejectRequest(ctx context.Context, arg RejectRequestParams) (R
 		&i.Count,
 		&i.Message,
 		&i.Phone,
+		&i.PhoneNormalized,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Status,

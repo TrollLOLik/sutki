@@ -41,6 +41,14 @@ export default function MyBookingsScreen() {
   const { status: authStatus } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/profile');
+    }
+  };
+
   const activeQuery = useMyBookings({ limit: 50, scope: 'active' }, { enabled: isAuthenticated });
   const historyQuery = useMyBookings({ limit: 50, scope: 'history' }, { enabled: isAuthenticated });
 
@@ -107,7 +115,7 @@ export default function MyBookingsScreen() {
         <SafeAreaView edges={['top']} className="flex-1">
           <View className="flex-row items-center px-4 py-2">
             <Pressable
-              onPress={() => router.back()}
+              onPress={handleBack}
               accessibilityLabel="Назад"
               className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
               <Ionicons name="chevron-back" size={22} color={palette.ink} />
@@ -125,12 +133,12 @@ export default function MyBookingsScreen() {
               <EmptyState
                 icon="lock-closed-outline"
                 title="Войдите, чтобы видеть заявки"
-                subtitle="Заявки привязываются к email-аккаунту. Локально у гостя остается только избранное."
+                subtitle="Заявки привязываются к вашему аккаунту. Локально у гостя остается только избранное."
               />
               <View className="px-8">
                 <Button
-                  label="Войти по email"
-                  onPress={() => router.push({ pathname: '/email', params: { fromBooking: 'true' } } as any)}
+                  label="Войти или зарегистрироваться"
+                  onPress={() => router.push({ pathname: '/welcome', params: { fromBooking: 'true' } } as any)}
                 />
               </View>
             </View>
@@ -145,7 +153,7 @@ export default function MyBookingsScreen() {
       <SafeAreaView edges={['top']} className="flex-1">
         <View className="flex-row items-center px-4 py-2">
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleBack}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />

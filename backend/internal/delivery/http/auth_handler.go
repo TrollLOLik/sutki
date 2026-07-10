@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,23 +27,28 @@ func NewAuthHandler(svc *auth.Service) *AuthHandler {
 func (h *AuthHandler) Routes(r chi.Router) {
 	r.Post("/email/request", h.requestCode)
 	r.Post("/email/verify", h.verifyCode)
+	r.Post("/phone/request", h.requestCodePhone)
+	r.Post("/phone/fallback", h.fallbackCodePhone)
+	r.Post("/phone/verify", h.verifyCodePhone)
 	r.Post("/refresh", h.refresh)
 	r.Post("/logout", h.logout)
 }
 
 type userDTO struct {
-	ID            int32   `json:"id"`
-	Email         string  `json:"email"`
-	Name          string  `json:"name"`
-	Surname       string  `json:"surname"`
-	Patronymic    string  `json:"patronymic"`
-	Phone         string  `json:"phone"`
-	City          string  `json:"city"`
-	AvatarURL     string  `json:"avatar_url"`
-	IsVerified    bool    `json:"is_verified"`
-	Birthday      *string `json:"birthday"`
-	ListingsCount int32   `json:"listings_count"`
-	Rating        float64 `json:"rating"`
+	ID              int32   `json:"id"`
+	Email           string  `json:"email"`
+	Name            string  `json:"name"`
+	Surname         string  `json:"surname"`
+	Patronymic      string  `json:"patronymic"`
+	Phone           string  `json:"phone"`
+	PhoneNormalized string  `json:"phone_normalized"`
+	PhoneVerifiedAt *string `json:"phone_verified_at"`
+	City            string  `json:"city"`
+	AvatarURL       string  `json:"avatar_url"`
+	IsVerified      bool    `json:"is_verified"`
+	Birthday        *string `json:"birthday"`
+	ListingsCount   int32   `json:"listings_count"`
+	Rating          float64 `json:"rating"`
 }
 
 func toUserDTO(u domain.User) userDTO {
@@ -51,19 +57,26 @@ func toUserDTO(u domain.User) userDTO {
 		s := u.Birthday.Format("2006-01-02")
 		bdayStr = &s
 	}
+	var phoneVerifiedStr *string
+	if u.PhoneVerifiedAt != nil {
+		s := u.PhoneVerifiedAt.Format(time.RFC3339)
+		phoneVerifiedStr = &s
+	}
 	return userDTO{
-		ID:            u.ID,
-		Email:         u.Email,
-		Name:          u.Name,
-		Surname:       u.Surname,
-		Patronymic:    u.Patronymic,
-		Phone:         u.Phone,
-		City:          u.City,
-		AvatarURL:     resolveMediaURL(u.AvatarURL),
-		IsVerified:    u.IsVerified,
-		Birthday:      bdayStr,
-		ListingsCount: u.ListingsCount,
-		Rating:        u.Rating,
+		ID:              u.ID,
+		Email:           u.Email,
+		Name:            u.Name,
+		Surname:         u.Surname,
+		Patronymic:      u.Patronymic,
+		Phone:           u.Phone,
+		PhoneNormalized: u.PhoneNormalized,
+		PhoneVerifiedAt: phoneVerifiedStr,
+		City:            u.City,
+		AvatarURL:       resolveMediaURL(u.AvatarURL),
+		IsVerified:      u.IsVerified,
+		Birthday:        bdayStr,
+		ListingsCount:   u.ListingsCount,
+		Rating:          u.Rating,
 	}
 }
 
@@ -211,6 +224,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
+	body.Phone = nil
 	var bday *time.Time
 	if body.Birthday != nil && *body.Birthday != "" {
 		t, err := time.Parse("2006-01-02", *body.Birthday)
@@ -252,6 +266,12 @@ func (h *AuthHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 
 func writeAuthError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, auth.ErrInvalidPhone):
+		writeError(w, http.StatusBadRequest, "invalid phone number")
+	case errors.Is(err, domain.ErrPhoneTaken):
+		writeError(w, http.StatusConflict, "phone already taken")
+	case errors.Is(err, domain.ErrPhoneAlreadyLinked):
+		writeError(w, http.StatusConflict, "phone already linked")
 	case errors.Is(err, domain.ErrInvalidEmail):
 		writeError(w, http.StatusBadRequest, "invalid email")
 	case errors.Is(err, domain.ErrCodeInvalid):
@@ -419,6 +439,12 @@ func (h *AuthHandler) ConfirmDeleteMe(w http.ResponseWriter, r *http.Request) {
 
 func writeAuthErrorRussian(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, auth.ErrInvalidPhone):
+		writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
+	case errors.Is(err, domain.ErrPhoneTaken):
+		writeError(w, http.StatusConflict, "Этот номер телефона уже занят другим пользователем")
+	case errors.Is(err, domain.ErrPhoneAlreadyLinked):
+		writeError(w, http.StatusConflict, "Этот номер телефона уже привязан к вашему аккаунту")
 	case errors.Is(err, domain.ErrInvalidEmail):
 		writeError(w, http.StatusBadRequest, "Некорректный email адрес")
 	case errors.Is(err, domain.ErrCodeInvalid):
@@ -558,4 +584,191 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) requestCodePhone(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Phone   string `json:"phone"`
+		Channel string `json:"channel"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+
+	phoneClean, err := auth.NormalizePhone(body.Phone)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
+		return
+	}
+
+	if !h.svc.ExposeCode() {
+		guestID := r.Header.Get("X-Guest-Id")
+		clientIP := getClientIP(r)
+
+		if !OTPPhoneLimiter.Allow("otp_phone:"+phoneClean, 5) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов кода для этого номера. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if guestID != "" && !OTPGuestIDLimiter.Allow("otp_guest:"+guestID, 10) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с этого устройства. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if !OTPIPLimiter.Allow("otp_ip:"+clientIP, 15) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
+			return
+		}
+	}
+
+	res, err := h.svc.RequestPhoneCode(r.Context(), body.Phone, body.Channel)
+	if err != nil {
+		log.Printf("requestCodePhone error: %v", err)
+		writeAuthError(w, err)
+		return
+	}
+	writePhoneChallengeResponse(w, res)
+}
+
+func writePhoneChallengeResponse(w http.ResponseWriter, res auth.RequestCodeResult) {
+	resp := map[string]any{
+		"sent": true, "expires_in": res.ExpiresIn, "challenge_id": res.ChallengeID,
+		"delivery_mode": res.DeliveryMode, "code_length": res.CodeLength,
+		"retry_after": res.RetryAfter, "fallback_available": res.FallbackAvailable,
+		"reused": res.Reused,
+	}
+	if res.Exposed {
+		resp["dev_code"] = res.Code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) fallbackCodePhone(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Phone       string `json:"phone"`
+		ChallengeID string `json:"challenge_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	res, err := h.svc.RequestPhoneVoiceFallback(r.Context(), body.Phone, body.ChallengeID, domain.PhoneChallengePurposeLogin, nil)
+	if err != nil {
+		log.Printf("fallbackCodePhone error: %v", err)
+		writeAuthError(w, err)
+		return
+	}
+	writePhoneChallengeResponse(w, res)
+}
+
+func (h *AuthHandler) verifyCodePhone(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Phone       string `json:"phone"`
+		Code        string `json:"code"`
+		Channel     string `json:"channel"`
+		ChallengeID string `json:"challenge_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	challengeID := body.ChallengeID
+	if challengeID == "" {
+		challengeID = body.Channel
+	}
+	res, err := h.svc.VerifyPhoneCode(r.Context(), body.Phone, body.Code, challengeID, extractDeviceInfo(r))
+	if err != nil {
+		log.Printf("verifyCodePhone error: %v", err)
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAuthResponse(res))
+}
+
+func (h *AuthHandler) changePhoneRequest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Phone   string `json:"phone"`
+		Channel string `json:"channel"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+
+	phoneClean, err := auth.NormalizePhone(body.Phone)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
+		return
+	}
+
+	if !h.svc.ExposeCode() {
+		clientIP := getClientIP(r)
+
+		if !OTPPhoneLimiter.Allow("otp_phone:"+phoneClean, 5) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов кода для этого номера. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if !OTPIPLimiter.Allow("otp_ip:"+clientIP, 15) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
+			return
+		}
+	}
+
+	res, err := h.svc.RequestChangePhoneCode(r.Context(), userID, body.Phone, body.Channel)
+	if err != nil {
+		log.Printf("changePhoneRequest error: %v", err)
+		writeAuthError(w, err)
+		return
+	}
+	writePhoneChallengeResponse(w, res)
+}
+
+func (h *AuthHandler) changePhoneFallback(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Phone       string `json:"phone"`
+		ChallengeID string `json:"challenge_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	res, err := h.svc.RequestPhoneVoiceFallback(r.Context(), body.Phone, body.ChallengeID, domain.PhoneChallengePurposeChangePhone, &userID)
+	if err != nil {
+		log.Printf("changePhoneFallback error: %v", err)
+		writeAuthError(w, err)
+		return
+	}
+	writePhoneChallengeResponse(w, res)
+}
+
+func (h *AuthHandler) changePhoneConfirm(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Phone       string `json:"phone"`
+		Code        string `json:"code"`
+		Channel     string `json:"channel"`
+		ChallengeID string `json:"challenge_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	challengeID := body.ChallengeID
+	if challengeID == "" {
+		challengeID = body.Channel
+	}
+	user, err := h.svc.ConfirmPhoneChange(r.Context(), userID, body.Phone, body.Code, challengeID)
+	if err != nil {
+		log.Printf("changePhoneConfirm error: %v", err)
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toUserDTO(user))
 }

@@ -126,6 +126,7 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[Media] PresignUpload OK (type=%s) key=%q", uploadType, target.Key)
 	writeJSON(w, http.StatusOK, target)
 }
 

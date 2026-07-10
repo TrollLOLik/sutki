@@ -182,4 +182,66 @@ export function useRevokeSession() {
   });
 }
 
+/** Start the primary Flash Call challenge for a phone number. */
+export function requestPhoneCode(phone: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/auth/phone/request', { phone }, { auth: false });
+}
+
+export function requestPhoneVoiceFallback(phone: string, challengeId: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/auth/phone/fallback', { phone, challenge_id: challengeId }, { auth: false });
+}
+
+/** Verify a login code against a concrete phone challenge. */
+export function verifyPhoneCode(phone: string, code: string, challengeId: string): Promise<AuthResponse> {
+  return api.post<AuthResponse>('/api/v1/auth/phone/verify', { phone, code, challenge_id: challengeId }, { auth: false });
+}
+
+/** Request a verification code to change/link a new phone number. */
+export function requestChangePhoneCode(phone: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/change-phone/request', { phone });
+}
+
+export function requestChangePhoneVoiceFallback(phone: string, challengeId: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/change-phone/fallback', { phone, challenge_id: challengeId });
+}
+
+/** Confirm phone number change/linking with verification code. */
+export function confirmPhoneChange(phone: string, code: string, challengeId: string): Promise<User> {
+  return api.post<User>('/api/v1/me/change-phone/confirm', { phone, code, challenge_id: challengeId });
+}
+
+export function useRequestPhoneCode() {
+  return useMutation({
+    mutationFn: ({ phone }: { phone: string }) => requestPhoneCode(phone),
+  });
+}
+
+export function useVerifyPhoneCode() {
+  return useMutation({
+    mutationFn: ({ phone, code, challengeId }: { phone: string; code: string; challengeId: string }) =>
+      verifyPhoneCode(phone, code, challengeId),
+  });
+}
+
+export function useRequestChangePhoneCode() {
+  return useMutation({
+    mutationFn: ({ phone }: { phone: string }) => requestChangePhoneCode(phone),
+  });
+}
+
+export function useConfirmPhoneChange() {
+  return useMutation({
+    mutationFn: ({ phone, code, challengeId }: { phone: string; code: string; challengeId: string }) =>
+      confirmPhoneChange(phone, code, challengeId),
+  });
+}
+
+export function useRequestPhoneVoiceFallback() {
+  return useMutation({ mutationFn: ({ phone, challengeId }: { phone: string; challengeId: string }) => requestPhoneVoiceFallback(phone, challengeId) });
+}
+
+export function useRequestChangePhoneVoiceFallback() {
+  return useMutation({ mutationFn: ({ phone, challengeId }: { phone: string; challengeId: string }) => requestChangePhoneVoiceFallback(phone, challengeId) });
+}
+
 

@@ -43,7 +43,7 @@ type Querier interface {
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
-	DeleteEmailLoginCode(ctx context.Context, email string) error
+	DeleteAuthCode(ctx context.Context, arg DeleteAuthCodeParams) error
 	DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
 	DeleteHouseServices(ctx context.Context, houseID int32) error
@@ -51,12 +51,12 @@ type Querier interface {
 	DeleteUserDeviceTokens(ctx context.Context, userID int32) error
 	DeleteUserFavorites(ctx context.Context, userID int32) error
 	DeleteUserRefreshTokens(ctx context.Context, userID int32) error
+	GetAuthCode(ctx context.Context, arg GetAuthCodeParams) (AuthCode, error)
 	// 1. Поиск диалога привязанного к объекту (house_id IS NOT NULL)
 	GetConversationByParticipantsAndHouse(ctx context.Context, arg GetConversationByParticipantsAndHouseParams) (int64, error)
 	// 2. Поиск общего диалога между пользователями (house_id IS NULL)
 	GetConversationByParticipantsGeneral(ctx context.Context, arg GetConversationByParticipantsGeneralParams) (int64, error)
 	GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]GetConversationMessagesRow, error)
-	GetEmailLoginCode(ctx context.Context, email string) (EmailLoginCode, error)
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
 	GetMessageAttachments(ctx context.Context, dollar_1 []int64) ([]GetMessageAttachmentsRow, error)
@@ -65,14 +65,15 @@ type Querier interface {
 	GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error)
 	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
 	GetReviewByID(ctx context.Context, id int32) (GetReviewByIDRow, error)
-	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
+	GetUserByEmail(ctx context.Context, email *string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
+	GetUserByPhone(ctx context.Context, phoneNormalized *string) (GetUserByPhoneRow, error)
 	HouseExists(ctx context.Context, id int32) (bool, error)
 	// Reports whether the house already has a confirmed or active request overlapping
 	// the requested [range_start, range_end) date range (half-open: end_date = checkout,
 	// free for next guest). The caller passes the exclusive end (start+1 for single night).
 	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
-	IncrementEmailLoginCodeAttempts(ctx context.Context, email string) error
+	IncrementAuthCodeAttempts(ctx context.Context, arg IncrementAuthCodeAttemptsParams) error
 	IsOtherParticipantDeleted(ctx context.Context, arg IsOtherParticipantDeletedParams) (bool, error)
 	LinkGuestRequests(ctx context.Context, arg LinkGuestRequestsParams) error
 	ListActiveRefreshTokens(ctx context.Context, userID int32) ([]RefreshToken, error)
@@ -117,8 +118,9 @@ type Querier interface {
 	UpdateRefreshTokenActiveTime(ctx context.Context, arg UpdateRefreshTokenActiveTimeParams) error
 	UpdateRefreshTokenLocation(ctx context.Context, arg UpdateRefreshTokenLocationParams) error
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
+	UpdateUserPhone(ctx context.Context, arg UpdateUserPhoneParams) (UpdateUserPhoneRow, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
-	UpsertEmailLoginCode(ctx context.Context, arg UpsertEmailLoginCodeParams) error
+	UpsertAuthCode(ctx context.Context, arg UpsertAuthCodeParams) error
 	// Returns true if the given user has a confirmed or active booking for the house.
 	// Used by the detail endpoint to decide whether to reveal exact coordinates.
 	UserHasConfirmedBookingForHouse(ctx context.Context, arg UserHasConfirmedBookingForHouseParams) (bool, error)

@@ -29,7 +29,7 @@ func (r *BookingRepo) GetHouseForBooking(ctx context.Context, houseID int32) (ow
 		}
 		return 0, "", "", err
 	}
-	return row.OwnerID, row.Status, row.OwnerEmail, nil
+	return row.OwnerID, row.Status, derefStr(row.OwnerEmail), nil
 }
 
 func (r *BookingRepo) HasConfirmedOverlap(ctx context.Context, houseID int32, start time.Time, end *time.Time) (bool, error) {
@@ -81,7 +81,8 @@ func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.B
 		Lastname:  b.Lastname,
 		Count:     b.Count,
 		Message:   strToPtr(b.Message),
-		Phone:     b.Phone,
+		Phone:           b.Phone,
+		PhoneNormalized: strToPtr(b.PhoneNormalized),
 		StartDate: dateParam(b.StartDate),
 		EndDate:   dateParamPtr(b.EndDate),
 		Status:    status,
@@ -93,7 +94,7 @@ func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.B
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-		Count: row.Count, Message: row.Message, Phone: row.Phone,
+		Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -112,7 +113,7 @@ func (r *BookingRepo) GetByID(ctx context.Context, id int32) (domain.Booking, er
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-		Count: row.Count, Message: row.Message, Phone: row.Phone,
+		Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -153,7 +154,7 @@ func (r *BookingRepo) ListByUser(ctx context.Context, userID, limit, offset int3
 			ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 			GuestID: row.GuestID, Email: row.Email,
 			Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-			Count: row.Count, Message: row.Message, Phone: row.Phone,
+			Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 			StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -186,7 +187,7 @@ func (r *BookingRepo) ListForOwner(ctx context.Context, ownerID, limit, offset i
 			ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 			GuestID: row.GuestID, Email: row.Email,
 			Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-			Count: row.Count, Message: row.Message, Phone: row.Phone,
+			Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 			StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -228,7 +229,7 @@ func (r *BookingRepo) Confirm(ctx context.Context, id int32) (domain.Booking, er
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-		Count: row.Count, Message: row.Message, Phone: row.Phone,
+		Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -247,7 +248,7 @@ func (r *BookingRepo) Reject(ctx context.Context, id int32, reason string) (doma
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-		Count: row.Count, Message: row.Message, Phone: row.Phone,
+		Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -263,7 +264,7 @@ func (r *BookingRepo) Cancel(ctx context.Context, id int32) (domain.Booking, err
 		ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 		GuestID: row.GuestID, Email: row.Email,
 		Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-		Count: row.Count, Message: row.Message, Phone: row.Phone,
+		Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 		StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -286,7 +287,7 @@ func (r *BookingRepo) ListByGuest(ctx context.Context, guestID string, limit, of
 			ID: row.ID, HouseID: row.HouseID, UserID: row.UserID,
 			GuestID: row.GuestID, Email: row.Email,
 			Name: row.Name, Surname: row.Surname, Lastname: row.Lastname,
-			Count: row.Count, Message: row.Message, Phone: row.Phone,
+			Count: row.Count, Message: row.Message, Phone: row.Phone, PhoneNormalized: row.PhoneNormalized,
 			StartDate: row.StartDate, EndDate: row.EndDate, Status: row.Status,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			ConfirmedAt: row.ConfirmedAt, RejectionReason: row.RejectionReason,
@@ -330,6 +331,7 @@ type bookingFields struct {
 	Count           int32
 	Message         *string
 	Phone           string
+	PhoneNormalized string
 	StartDate       pgtype.Date
 	EndDate         pgtype.Date
 	Status          string
@@ -352,6 +354,7 @@ func buildBooking(f bookingFields) domain.Booking {
 		Count:           f.Count,
 		Message:         derefStr(f.Message),
 		Phone:           f.Phone,
+		PhoneNormalized: f.PhoneNormalized,
 		StartDate:       f.StartDate.Time,
 		EndDate:         dateToPtr(f.EndDate),
 		Status:          f.Status,

@@ -20,6 +20,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/email"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/ucaller"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
@@ -125,18 +126,27 @@ func main() {
 	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer, moderationSvc)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
+	ucallerClient := ucaller.NewClient(ucaller.Config{
+		APIURL: cfg.UCallerAPIURL, APIKey: cfg.UCallerAPIKey, ServiceID: cfg.UCallerServiceID,
+		Enabled: cfg.UCallerEnabled, Timeout: cfg.UCallerTimeout,
+	})
+
 	userRepo := postgres.NewUserRepo(queries)
 	codeRepo := postgres.NewAuthCodeRepo(queries)
 	refreshRepo := postgres.NewRefreshTokenRepo(queries)
+	phoneChallengeRepo := postgres.NewPhoneChallengeRepo(pool)
 	authSvc := auth.New(userRepo, codeRepo, refreshRepo, auth.Config{
-		Secret:       cfg.JWTSecret,
-		AccessTTL:    cfg.AccessTTL,
-		RefreshTTL:   cfg.RefreshTTL,
-		ExposeCode:   cfg.AuthExposeCode,
-		Notifier:     notifier,
-		DadataAPIKey: cfg.DadataAPIKey,
-		Storage:      publicStorage,
+		Secret:          cfg.JWTSecret,
+		AccessTTL:       cfg.AccessTTL,
+		RefreshTTL:      cfg.RefreshTTL,
+		ExposeCode:      cfg.AuthExposeCode,
+		Notifier:        notifier,
+		PhoneCaller:     ucallerClient,
+		PhoneChallenges: phoneChallengeRepo,
+		DadataAPIKey:    cfg.DadataAPIKey,
+		Storage:         publicStorage,
 	})
+	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
 
 	// Chat is constructed before booking: booking posts system status cards

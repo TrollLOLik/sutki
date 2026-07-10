@@ -24,6 +24,12 @@ export interface RequestCodeResponse {
   /** Code lifetime, in seconds. */
   expires_in: number;
   dev_code?: string;
+	challenge_id?: string;
+	delivery_mode?: 'flash_call' | 'voice';
+	code_length?: number;
+	retry_after?: number;
+	fallback_available?: boolean;
+	reused?: boolean;
 }
 
 /** Partial profile update body for PATCH /api/v1/me. */

@@ -96,7 +96,7 @@ export function GuestProfile({
             Войдите, чтобы бронировать жилье и общаться с хозяевами. Избранное пока хранится на этом устройстве
           </Text>
           <Pressable
-            onPress={() => router.push('/email')}
+            onPress={() => router.push('/welcome')}
             className="mt-4 bg-primary px-5 py-2.5 rounded-field active:opacity-90"
           >
             <Text className="text-sm font-bold text-white">Войти или зарегистрироваться</Text>

@@ -15,12 +15,17 @@ var (
 	ErrTooManyAttempts = errors.New("too many attempts")
 	// ErrCodeRequestTooSoon is returned when a code is re-requested within the cooldown.
 	ErrCodeRequestTooSoon = errors.New("code requested too soon")
+	ErrPhoneChallengeActive = errors.New("phone challenge already active")
 	// ErrTokenInvalid is returned for an invalid/expired/revoked refresh token.
 	ErrTokenInvalid = errors.New("invalid token")
 	// ErrInvalidEmail is returned when an email fails validation.
 	ErrInvalidEmail = errors.New("invalid email")
 	// ErrEmailTaken is returned when trying to change the email to an already registered address.
 	ErrEmailTaken = errors.New("email already taken")
+	// ErrPhoneTaken is returned when trying to verify a phone that belongs to another user.
+	ErrPhoneTaken = errors.New("phone already taken")
+	// ErrPhoneAlreadyLinked is returned when the user already has a phone linked.
+	ErrPhoneAlreadyLinked = errors.New("phone already linked")
 )
 
 // Booking-related errors.
