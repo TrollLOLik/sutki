@@ -71,6 +71,7 @@ export default function MyListingsScreen() {
                 onPress={() =>
                   router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
                 }
+                onPromote={() => router.push({pathname:'/listing/[id]/promote' as any,params:{id:String(item.id)}})}
               />
             )}
           />

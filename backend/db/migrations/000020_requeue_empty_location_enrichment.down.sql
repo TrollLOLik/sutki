@@ -1,0 +1,1 @@
+-- Requeue only schedules work and deliberately has no destructive rollback.

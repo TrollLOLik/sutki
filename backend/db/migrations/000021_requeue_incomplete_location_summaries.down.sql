@@ -1,0 +1,1 @@
+-- This recovery migration only changes queued job state and is not reversible.

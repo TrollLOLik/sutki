@@ -3,6 +3,7 @@ package listing
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -32,14 +33,25 @@ type Moderator interface {
 
 // Service implements listing read use cases over a ListingRepository.
 type Service struct {
-	repo         domain.ListingRepository
-	storage      domain.FileStorage
-	aiSummarizer domain.AISummarizer
-	moderator    Moderator
+	repo                domain.ListingRepository
+	storage             domain.FileStorage
+	aiSummarizer        domain.AISummarizer
+	moderator           Moderator
+	locationSummaryRepo domain.LocationSummaryRepository
+	nearbyPOIs          domain.NearbyPOIProvider
+	wake                chan struct{}
 }
 
-func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer, moderator Moderator) *Service {
-	return &Service{repo: repo, storage: storage, aiSummarizer: aiSummarizer, moderator: moderator}
+func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer, moderator Moderator, locationSummaryRepo domain.LocationSummaryRepository, nearbyPOIs domain.NearbyPOIProvider) *Service {
+	return &Service{
+		repo:                repo,
+		storage:             storage,
+		aiSummarizer:        aiSummarizer,
+		moderator:           moderator,
+		locationSummaryRepo: locationSummaryRepo,
+		nearbyPOIs:          nearbyPOIs,
+		wake:                make(chan struct{}, 1),
+	}
 }
 
 // ListResult is a page of active listings plus pagination metadata.
@@ -48,6 +60,18 @@ type ListResult struct {
 	Total  int64
 	Limit  int32
 	Offset int32
+}
+
+type mapClusterRepository interface {
+	ListMapClusters(context.Context) ([]domain.MapCluster, error)
+}
+
+func (s *Service) MapClusters(ctx context.Context) ([]domain.MapCluster, error) {
+	repo, ok := s.repo.(mapClusterRepository)
+	if !ok {
+		return nil, errors.New("map clusters are not supported")
+	}
+	return repo.ListMapClusters(ctx)
 }
 
 // List returns a filtered page of active listings. Limit is clamped to
@@ -131,23 +155,15 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 		}
 	}
 
-	// Trigger background location summary generation
-	if s.aiSummarizer != nil {
-		go func() {
-			bgCtx := context.Background()
-			_ = s.regenerateLocationSummary(bgCtx, id, in.City, in.Street)
-		}()
+	// Enqueue durable location summary job
+	if s.locationSummaryRepo != nil {
+		if err := s.locationSummaryRepo.Enqueue(ctx, id, in.City, in.Street, in.Lat, in.Lng, nil); err != nil {
+			log.Printf("listing create: enqueue location enrichment for house %d: %v", id, err)
+		}
+		s.Wake()
 	}
 
 	return s.Get(ctx, id)
-}
-
-func (s *Service) regenerateLocationSummary(ctx context.Context, id int32, city, street string) error {
-	summary, err := s.aiSummarizer.GenerateLocationSummary(ctx, city, street, "")
-	if err != nil {
-		return err
-	}
-	return s.repo.UpdateLocationSummary(ctx, id, &summary)
 }
 
 // ListMine returns a page of listings owned by ownerID (any status), newest
@@ -245,12 +261,29 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		return domain.House{}, err
 	}
 
-	// Rate limit shared with Create: edits also re-enter moderation.
-	if s.moderator != nil {
-		ok, rlErr := s.moderator.AllowSubmission(ctx, in.OwnerID)
-		if rlErr == nil && !ok {
-			return domain.House{}, ErrTooManySubmissions
-		}
+	// Note: AllowSubmission (daily rate-limit) is intentionally NOT checked
+	// here. The rate-limit exists to prevent bulk-spam creation of new
+	// listings, not to block owners from fixing a rejected listing. Applying
+	// it to edits means a rejected owner may hit the cap and be unable to
+	// resubmit — a broken UX loop where the app says "edit to resubmit" but
+	// the edit itself is rejected by the rate limiter.
+
+	addressChanged := oldHouse.Street != in.Street ||
+		oldHouse.HouseNumber != in.HouseNumber ||
+		oldHouse.City != in.City ||
+		(oldHouse.Lat == nil && in.Lat != nil) ||
+		(oldHouse.Lat != nil && in.Lat == nil) ||
+		(oldHouse.Lat != nil && in.Lat != nil && *oldHouse.Lat != *in.Lat) ||
+		(oldHouse.Lng == nil && in.Lng != nil) ||
+		(oldHouse.Lng != nil && in.Lng == nil) ||
+		(oldHouse.Lng != nil && in.Lng != nil && *oldHouse.Lng != *in.Lng)
+
+	// POIs are backend enrichment data. Preserve them on ordinary edits; an
+	// address change intentionally clears them and schedules a fresh lookup.
+	if !addressChanged {
+		in.POIs = oldHouse.POIs
+	} else {
+		in.POIs = nil
 	}
 
 	err = s.repo.Update(ctx, id, in)
@@ -263,25 +296,21 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	// the pipeline, which also handles the rejected -> resubmit appeal flow.
 	if s.moderator != nil {
 		if _, mErr := s.moderator.Submit(ctx, id); mErr != nil {
-			_ = mErr
+			log.Printf("listing update: submit house %d for moderation: %v", id, mErr)
 		}
 	}
 
-	addressChanged := oldHouse.Street != in.Street || 
-		oldHouse.HouseNumber != in.HouseNumber || 
-		oldHouse.City != in.City || 
-		(oldHouse.Lat == nil && in.Lat != nil) || 
-		(oldHouse.Lat != nil && in.Lat == nil) || 
-		(oldHouse.Lat != nil && in.Lat != nil && *oldHouse.Lat != *in.Lat) || 
-		(oldHouse.Lng == nil && in.Lng != nil) || 
-		(oldHouse.Lng != nil && in.Lng == nil) || 
-		(oldHouse.Lng != nil && in.Lng != nil && *oldHouse.Lng != *in.Lng)
-
-	if addressChanged && s.aiSummarizer != nil {
-		go func() {
-			bgCtx := context.Background()
-			_ = s.regenerateLocationSummary(bgCtx, id, in.City, in.Street)
-		}()
+	if addressChanged {
+		if err := s.repo.UpdateLocationSummary(ctx, id, nil); err != nil {
+			log.Printf("listing update: clear stale location summary for house %d: %v", id, err)
+		}
+	}
+	needsLocationRefresh := addressChanged || len(oldHouse.POIs) == 0 || oldHouse.LocationSummary == nil || strings.TrimSpace(*oldHouse.LocationSummary) == ""
+	if needsLocationRefresh && s.locationSummaryRepo != nil {
+		if err := s.locationSummaryRepo.Enqueue(ctx, id, in.City, in.Street, in.Lat, in.Lng, nil); err != nil {
+			log.Printf("listing update: enqueue location enrichment for house %d: %v", id, err)
+		}
+		s.Wake()
 	}
 
 	return s.Get(ctx, id)

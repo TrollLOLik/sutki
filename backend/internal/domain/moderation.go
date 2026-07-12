@@ -96,15 +96,24 @@ type ModerationRepository interface {
 
 // ModerationHouse is the slice of a listing the moderation pipeline reads.
 type ModerationHouse struct {
-	ID          int32
-	OwnerID     int32
-	OwnerEmail  string
-	Status      string
-	City        string
-	Street      string
-	HouseNumber string
-	Description string
-	Price       int64
+	ID              int32
+	OwnerID         int32
+	OwnerEmail      string
+	Status          string
+	City            string
+	Street          string
+	HouseNumber     string
+	Description     string
+	Price           int64
+	CountRoom       string
+	Area            int32
+	MaxGuests       *int32
+	SmokingAllowed  string
+	PetsAllowed     string
+	ChildrenAllowed string
+	EventsAllowed   string
+	ServicesList    string
+	POIs            []HousePOI
 }
 
 // ListingModerator accepts freshly created/updated listings into the

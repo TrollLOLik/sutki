@@ -17,8 +17,11 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/config"
 	httpdelivery "github.com/TrollLOLik/sutki/backend/internal/delivery/http"
+	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/email"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
+	paymentinfra "github.com/TrollLOLik/sutki/backend/internal/infrastructure/payment"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/poi"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/ucaller"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
@@ -29,6 +32,8 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/moderation"
+	paymentuc "github.com/TrollLOLik/sutki/backend/internal/usecase/payment"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/promotion"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
 )
 
@@ -92,8 +97,9 @@ func main() {
 		return publicStorage.PublicURL(key)
 	})
 
-	llmClient := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel, cfg.LLMTimeout)
-	aiSummarizer := llm.NewSummarizer(llmClient)
+	llmClientGen := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMGenerationModel, cfg.LLMTimeout)
+	llmClientMod := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModerationModel, cfg.LLMTimeout)
+	aiSummarizer := llm.NewSummarizer(llmClientGen)
 
 	// Durable email pipeline: DB-backed outbox + single worker draining it
 	// over SMTP. Usecases only enqueue; delivery, retries and dedup live here.
@@ -118,12 +124,15 @@ func main() {
 	if a := email.NewAdminNotifier(notifier, cfg.AdminEmail); a != nil {
 		adminAlerter = a
 	}
-	moderationSvc := moderation.New(moderationRepo, llmClient, adminAlerter, notifier)
+	moderationSvc := moderation.New(moderationRepo, llmClientMod, adminAlerter, notifier)
 	moderationSvc.StartWorker(ctx)
 
 	listingRepo := postgres.NewListingRepo(queries)
 	moderationSvc.SetPhotoPipeline(listingRepo, publicStorage)
-	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer, moderationSvc)
+	locationSummaryJobRepo := postgres.NewLocationSummaryJobRepo(pool)
+	nearbyPOIs := poi.NewOverpass(cfg.OverpassURL, cfg.OverpassTimeout)
+	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer, moderationSvc, locationSummaryJobRepo, nearbyPOIs)
+	listingSvc.StartLocationSummaryWorker(ctx)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
 	ucallerClient := ucaller.NewClient(ucaller.Config{
@@ -132,6 +141,30 @@ func main() {
 	})
 
 	userRepo := postgres.NewUserRepo(queries)
+	var paymentProvider domain.PaymentProvider
+	if cfg.PaymentProvider == "yookassa" {
+		paymentProvider, err = paymentinfra.NewYookassaProvider(paymentinfra.YookassaConfig{
+			APIURL: cfg.PaymentAPIURL, ShopID: cfg.PaymentShopID, Secret: cfg.PaymentSecret,
+			Timeout: cfg.PaymentProviderTimeout,
+		})
+		if err != nil {
+			log.Fatalf("payment provider: %v", err)
+		}
+	} else {
+		paymentProvider = paymentinfra.NewMockProvider()
+		log.Println("payment provider: MOCK mode; no real money is charged")
+	}
+	paymentRepo := postgres.NewPaymentRepo(pool)
+	paymentSvc := paymentuc.New(paymentRepo, userRepo, paymentProvider, nil, paymentuc.Config{
+		ReturnURL: cfg.PaymentReturnURL, AdminToken: cfg.PaymentAdminToken,
+		AdminTokenPrevious: cfg.PaymentAdminTokenPrevious, Capture: cfg.PaymentCapture,
+	})
+	promotionSvc := promotion.New(postgres.NewPromotionRepo(pool), paymentSvc)
+	paymentSvc.SetActivationHandler(promotionSvc)
+	promotionSvc.StartExpiryWorker(ctx)
+	paymentSvc.StartWebhookWorker(ctx)
+	paymentHandler := httpdelivery.NewPaymentHandler(paymentSvc)
+	promotionHandler := httpdelivery.NewPromotionHandler(promotionSvc)
 	codeRepo := postgres.NewAuthCodeRepo(queries)
 	refreshRepo := postgres.NewRefreshTokenRepo(queries)
 	phoneChallengeRepo := postgres.NewPhoneChallengeRepo(pool)
@@ -181,7 +214,7 @@ func main() {
 	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 
-	aiHandler := httpdelivery.NewAIHandler(llmClient, listingSvc, true)
+	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, true)
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
@@ -189,7 +222,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler),
+		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler),
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		// Slow-client hardening: bound idle keep-alive connections and header

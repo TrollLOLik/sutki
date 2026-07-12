@@ -111,6 +111,7 @@ export default function CreateListingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [published, setPublished] = useState(false);
+  const [publishedListingId, setPublishedListingId] = useState<number | null>(null);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [previousDescription, setPreviousDescription] = useState('');
 
@@ -163,26 +164,46 @@ export default function CreateListingScreen() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${env.apiUrl}/api/v1/ai/listing-description`, {
+      const payload = {
+        city: draft.city,
+        street: draft.street,
+        rooms: draft.countRoom,
+        area: parseInt(draft.area) || 0,
+        price: parseInt(draft.price) || 0,
+        amenities: selectedAmenities,
+        house_rules: rulesList,
+        draft_description: currentText,
+        action,
+        stream: true,
+        category: (categories ?? []).find((c) => draft.categoryIds.includes(c.id))?.name || 'Жилье',
+        max_guests: parseInt(draft.maxGuests) || 0,
+        check_in_after: draft.checkInAfter,
+        check_out_before: draft.checkOutBefore,
+      };
+
+      let response = await fetch(`${env.apiUrl}/api/v1/ai/listing-description`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          city: draft.city,
-          street: draft.street,
-          rooms: draft.countRoom,
-          area: parseInt(draft.area) || 0,
-          price: parseInt(draft.price) || 0,
-          amenities: selectedAmenities,
-          house_rules: rulesList,
-          draft_description: currentText,
-          action,
-          stream: true,
-          category: (categories ?? []).find((c) => draft.categoryIds.includes(c.id))?.name || 'Жилье',
-          max_guests: parseInt(draft.maxGuests) || 0,
-          check_in_after: draft.checkInAfter,
-          check_out_before: draft.checkOutBefore,
-        }),
+        body: JSON.stringify(payload),
       });
+
+      if (response.status === 401) {
+        // Access token might be expired. Force a refresh by calling a lightweight authenticated endpoint
+        try {
+          await api.get('/api/v1/me');
+          const newToken = storeRef.getState?.()?.accessToken;
+          if (newToken) {
+            headers['Authorization'] = `Bearer ${newToken}`;
+            response = await fetch(`${env.apiUrl}/api/v1/ai/listing-description`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(payload),
+            });
+          }
+        } catch (refreshErr) {
+          console.error('Failed to auto-refresh token for AI streaming:', refreshErr);
+        }
+      }
 
       if (!response.ok) {
         throw new Error(`Ошибка API: ${response.status}`);
@@ -725,7 +746,8 @@ export default function CreateListingScreen() {
     // 199 ₽ charge, then create the listing.
     await new Promise((r) => setTimeout(r, 900));
     try {
-      await createListing.mutateAsync(payload);
+      const created = await createListing.mutateAsync(payload);
+      setPublishedListingId(created.id);
       setPaying(false);
       setPublished(true);
     } catch (e) {
@@ -756,8 +778,19 @@ export default function CreateListingScreen() {
               : 'Объявление проходит проверку и появится в поиске после её завершения — обычно это занимает пару минут. Статус виден в разделе «Мои объявления».'}
           </Text>
           <View style={{ width: '100%', maxWidth: 320, gap: 12, marginTop: 32 }}>
+            {!isEditing && publishedListingId != null ? (
+              <Button
+                label="Продвинуть объявление"
+                onPress={() => {
+                  const id = publishedListingId;
+                  draft.reset();
+                  router.replace(`/listing/${id}/promote` as any);
+                }}
+              />
+            ) : null}
             <Button
               label="Мои объявления"
+              variant={!isEditing && publishedListingId != null ? 'secondary' : undefined}
               onPress={() => {
                 draft.reset();
                 router.replace('/my-listings' as any);

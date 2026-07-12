@@ -91,6 +91,7 @@ type Querier interface {
 	ListHouseServices(ctx context.Context, houseID int32) ([]ListHouseServicesRow, error)
 	ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerParams) ([]ListHousesByOwnerRow, error)
 	ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error)
+	ListMapClusters(ctx context.Context) ([]ListMapClustersRow, error)
 	ListRequestsByGuest(ctx context.Context, arg ListRequestsByGuestParams) ([]ListRequestsByGuestRow, error)
 	ListRequestsByUser(ctx context.Context, arg ListRequestsByUserParams) ([]ListRequestsByUserRow, error)
 	ListRequestsForOwner(ctx context.Context, arg ListRequestsForOwnerParams) ([]ListRequestsForOwnerRow, error)

@@ -15,6 +15,12 @@ export interface ListingPhoto {
   position: number;
 }
 
+export interface ListingPOI {
+  name: string;
+  type: string;
+  distance: number;
+}
+
 export interface ListingCard {
   id: number;
   owner_id: number;
@@ -41,6 +47,8 @@ export interface ListingCard {
   rating: number;
   /** Number of published reviews. */
   reviews_count: number;
+  promotion_types: Array<'boost' | 'highlight'>;
+  promotion_expires_at?: string | null;
   /**
    * Moderation status — owner-only, populated exclusively by /listings/mine.
    * 'active' | 'pending_moderation' | 'moderation_review' | 'rejected'.
@@ -76,6 +84,7 @@ export interface ListingDetail extends ListingCard {
   events_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
   reviews_summary?: string | null;
   location_summary?: string | null;
+  pois?: ListingPOI[];
 }
 
 export interface ListingsPage {

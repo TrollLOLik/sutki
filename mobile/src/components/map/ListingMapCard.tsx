@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { AnimatePresence, MotiView } from 'moti';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatRating, formatRub } from '@/lib/format';
+import { formatRating, formatRooms, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
 import type { ListingCard } from '@/types/listing';
@@ -17,9 +16,8 @@ interface ListingMapCardProps {
 }
 
 /**
- * Bottom mini-card shown when a price bubble is tapped on the map. Slides up
- * via Moti (AnimatePresence handles the enter/exit animation). Tapping the card
- * navigates to the listing detail; the close button dismisses it.
+ * Bottom mini-card shown when a price bubble is tapped on the map. Tapping the
+ * card navigates to the listing detail; the close button dismisses it.
  *
  * Positioned above the tab bar and bottom "search here" pill so it never
  * overlaps them.
@@ -29,35 +27,44 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [imageFailed, setImageFailed] = useState(false);
+  const promoted = (listing?.promotion_types ?? []).length > 0;
+  const highlighted = (listing?.promotion_types ?? []).includes('highlight');
+
+  if (!listing) return null;
 
   return (
-    <AnimatePresence>
-      {listing ? (
-        <MotiView
-          from={{ opacity: 0, translateY: 150 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          exit={{ opacity: 0, translateY: 150 }}
-          transition={{
-            type: 'spring',
-            damping: 20,
-            stiffness: 140,
-            mass: 0.8,
-          }}
-          pointerEvents="box-none"
-          style={[styles.container, { marginBottom: insets.bottom + 96 }]}
-        >
+    <View
+      key={listing.id}
+      collapsable={false}
+      pointerEvents="box-none"
+      style={[styles.container, { marginBottom: insets.bottom + 96 }]}
+    >
           <Pressable
+            collapsable={false}
             onPress={() => router.push(`/listing/${listing.id}`)}
-            style={styles.card}
+            style={[styles.card, highlighted && styles.cardHighlighted]}
           >
-            <Image
-              source={listing.cover_url}
-              style={styles.image}
-              contentFit="cover"
-              transition={200}
-            />
+            {listing.cover_url && !imageFailed ? (
+              <Image
+                source={{ uri: listing.cover_url }}
+                style={styles.image}
+                contentFit="cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <View style={[styles.image, styles.imagePlaceholder]}>
+                <Ionicons name="image-outline" size={30} color={palette.inkMuted} />
+              </View>
+            )}
 
             <View style={styles.details}>
+              {promoted ? (
+                <View style={styles.promotionBadge}>
+                  <Ionicons name="sparkles" size={12} color={palette.primary} />
+                  <Text style={styles.promotionText}>Продвигается</Text>
+                </View>
+              ) : null}
               <View style={styles.header}>
                 <Text style={styles.price}>{formatRub(listing.price)} ₽</Text>
                 {listing.rating > 0 ? (
@@ -71,7 +78,7 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
               </View>
 
               <Text numberOfLines={1} style={styles.title}>
-                {listing.rooms}-комн. · {listing.area} м²
+                {formatRooms(listing.rooms)} · {listing.area} м²
               </Text>
 
               <Text numberOfLines={1} style={styles.address}>
@@ -83,9 +90,7 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
               <Ionicons name="close-circle" size={24} color={palette.inkMuted} />
             </Pressable>
           </Pressable>
-        </MotiView>
-      ) : null}
-    </AnimatePresence>
+    </View>
   );
 }
 
@@ -109,6 +114,14 @@ const makeStyles = (palette: Palette) =>
     shadowRadius: 16,
     elevation: 10,
   },
+  cardHighlighted: {
+    borderWidth: 3,
+    borderColor: palette.primary,
+    shadowColor: palette.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 14,
+  },
   image: {
     width: 116,
     height: '100%',
@@ -117,6 +130,23 @@ const makeStyles = (palette: Palette) =>
     flex: 1,
     padding: 12,
     justifyContent: 'center',
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.surfaceMuted,
+  },
+  promotionBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  promotionText: {
+    color: palette.primary,
+    fontSize: 11,
+    fontWeight: '700',
   },
   header: {
     flexDirection: 'row',

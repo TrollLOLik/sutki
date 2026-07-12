@@ -47,6 +47,18 @@ type Config struct {
 	UCallerEnabled   bool
 	UCallerTimeout   time.Duration
 
+	// Payment provider. Mock and YooKassa implement the same server-side
+	// contract; switching sandbox/prod only changes credentials and endpoint.
+	PaymentProvider           string
+	PaymentAPIURL             string
+	PaymentShopID             string
+	PaymentSecret             string
+	PaymentReturnURL          string
+	PaymentAdminToken         string
+	PaymentAdminTokenPrevious string
+	PaymentCapture            bool
+	PaymentProviderTimeout    time.Duration
+
 	// PublicAPIBaseURL is the public origin of this API, used to build
 	// unsubscribe links in emails (e.g. "https://api.example.com").
 	// Empty disables unsubscribe links (transactional mail still works).
@@ -62,13 +74,16 @@ type Config struct {
 	// review queue growth). Empty disables admin alerts.
 	AdminEmail string
 
-	DadataAPIKey string
+	DadataAPIKey    string
+	OverpassURL     string
+	OverpassTimeout time.Duration
 
 	// LLM (OpenAI-compatible) config
-	LLMBaseURL string
-	LLMAPIKey  string
-	LLMModel   string
-	LLMTimeout time.Duration
+	LLMBaseURL         string
+	LLMAPIKey          string
+	LLMGenerationModel string
+	LLMModerationModel string
+	LLMTimeout         time.Duration
 
 	// Centrifugo config
 	CentrifugoURL        string
@@ -111,17 +126,30 @@ func Load() (Config, error) {
 		UCallerEnabled:   getBool("UCALLER_ENABLED", false),
 		UCallerTimeout:   getDuration("UCALLER_TIMEOUT", 10*time.Second),
 
+		PaymentProvider:           getEnv("PAYMENT_PROVIDER", "mock"),
+		PaymentAPIURL:             getEnv("PAYMENT_API_URL", "https://api.yookassa.ru/v3"),
+		PaymentShopID:             getEnv("PAYMENT_SHOP_ID", ""),
+		PaymentSecret:             getEnv("PAYMENT_SECRET", ""),
+		PaymentReturnURL:          getEnv("PAYMENT_RETURN_URL", "sutki://payments/return"),
+		PaymentAdminToken:         getEnv("PAYMENT_ADMIN_TOKEN", ""),
+		PaymentAdminTokenPrevious: getEnv("PAYMENT_ADMIN_TOKEN_PREVIOUS", ""),
+		PaymentCapture:            getBool("PAYMENT_CAPTURE", true),
+		PaymentProviderTimeout:    getDuration("PAYMENT_PROVIDER_TIMEOUT", 15*time.Second),
+
 		PublicAPIBaseURL:       getEnv("PUBLIC_API_BASE_URL", ""),
 		EmailUnsubscribeSecret: getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
 		EmailDailyLimit:        getInt("EMAIL_DAILY_LIMIT", 500),
 		AdminEmail:             getEnv("ADMIN_EMAIL", ""),
 
-		DadataAPIKey: os.Getenv("DADATA_API_KEY"),
+		DadataAPIKey:    os.Getenv("DADATA_API_KEY"),
+		OverpassURL:     getEnv("OVERPASS_URL", "https://overpass-api.de/api/interpreter"),
+		OverpassTimeout: getDuration("OVERPASS_TIMEOUT", 12*time.Second),
 
-		LLMBaseURL: getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
-		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
-		LLMModel:   getEnv("LLM_MODEL", "gpt-3.5-turbo"),
-		LLMTimeout: getDuration("LLM_TIMEOUT", 15*time.Second),
+		LLMBaseURL:         getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
+		LLMAPIKey:          os.Getenv("LLM_API_KEY"),
+		LLMGenerationModel: getEnv("LLM_GENERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
+		LLMModerationModel: getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
+		LLMTimeout:         getDuration("LLM_TIMEOUT", 15*time.Second),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
 		CentrifugoKey:        os.Getenv("CENTRIFUGO_API_KEY"),
@@ -141,6 +169,15 @@ func Load() (Config, error) {
 	}
 	if cfg.UCallerEnabled && (cfg.UCallerAPIKey == "" || cfg.UCallerServiceID == "") {
 		return Config{}, fmt.Errorf("UCALLER_API_KEY and UCALLER_SERVICE_ID are required when UCALLER_ENABLED=true")
+	}
+	if cfg.PaymentProvider != "mock" && cfg.PaymentProvider != "yookassa" {
+		return Config{}, fmt.Errorf("PAYMENT_PROVIDER must be mock or yookassa")
+	}
+	if cfg.PaymentProvider == "yookassa" && (cfg.PaymentShopID == "" || cfg.PaymentSecret == "") {
+		return Config{}, fmt.Errorf("PAYMENT_SHOP_ID and PAYMENT_SECRET are required for yookassa")
+	}
+	if cfg.PaymentAdminTokenPrevious != "" && cfg.PaymentAdminToken == "" {
+		return Config{}, fmt.Errorf("PAYMENT_ADMIN_TOKEN must be set while PAYMENT_ADMIN_TOKEN_PREVIOUS is configured")
 	}
 	if cfg.S3Endpoint == "" {
 		return Config{}, fmt.Errorf("S3_ENDPOINT is required")

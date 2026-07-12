@@ -12,6 +12,7 @@ interface ListingCardProps {
   /** When set, a heart toggle is shown. */
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  onPromote?: () => void;
 }
 
 /**
@@ -24,7 +25,7 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
   rejected: { label: 'Отклонено', bg: '#FDEBEC', fg: '#C0362C' },
 };
 
-export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: ListingCardProps) {
+export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote }: ListingCardProps) {
   const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -35,6 +36,9 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
   const imgHeight = imgWidth * (3 / 4);
 
   const showSuccessBadge = listing.id % 2 === 0;
+  const promotionTypes = listing.promotion_types ?? [];
+  const isPromoted = promotionTypes.length > 0;
+  const isHighlighted = promotionTypes.includes('highlight');
 
   const getCardTitle = () => {
     const roomsNum = parseInt(listing.rooms, 10);
@@ -61,7 +65,11 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      className="mb-3 rounded-card border border-line bg-surface p-3 active:opacity-95"
+      className="mb-3 rounded-card border bg-surface p-3 active:opacity-95"
+      style={{
+        borderColor: isHighlighted ? palette.primary : palette.line,
+        borderWidth: isHighlighted ? 2 : 1,
+      }}
     >
       {/* Top Part: Image on Left, Details on Right */}
       <View className="flex-row gap-3">
@@ -75,7 +83,11 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
             backgroundColor: palette.surfaceSkeleton,
           }}
         >
-          {showSuccessBadge ? (
+          {isPromoted ? (
+            <View style={{ position:'absolute',left:8,top:8,borderRadius:999,backgroundColor:palette.primary,paddingHorizontal:10,paddingVertical:4,zIndex:10 }}>
+              <Text style={{fontSize:9,fontWeight:'700',color:'#fff',lineHeight:12}}>Продвигается</Text>
+            </View>
+          ) : showSuccessBadge ? (
             <View
               style={{
                 position: 'absolute',
@@ -232,6 +244,11 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite }: 
           <Text className="text-sm font-bold text-primary">Открыть</Text>
         </Pressable>
       </View>
+      {onPromote ? (
+        <Pressable onPress={(event)=>{event.stopPropagation();onPromote();}} className="mt-3 h-10 flex-row items-center justify-center gap-2 rounded-field bg-primary-light active:opacity-85">
+          <Ionicons name="rocket-outline" size={17} color={palette.primary}/><Text className="text-sm font-bold text-primary">Продвигать</Text>
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }

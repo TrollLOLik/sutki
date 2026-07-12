@@ -63,6 +63,7 @@ export default function RootLayout() {
             <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
+              <Stack.Screen name="listing/[id]/promote" />
               <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
               <Stack.Screen name="booking/[id]" />
               <Stack.Screen name="bookings/index" />
@@ -71,6 +72,8 @@ export default function RootLayout() {
               <Stack.Screen name="incoming/[id]" />
               <Stack.Screen name="create" options={{ presentation: 'modal' }} />
               <Stack.Screen name="my-listings/index" />
+              <Stack.Screen name="payments/checkout" />
+              <Stack.Screen name="payments/return" />
             </Stack.Protected>
             {/* Tokens are set but the profile is incomplete: the (auth) stack is
                 unmounted and only profile-setup is reachable until onboarding

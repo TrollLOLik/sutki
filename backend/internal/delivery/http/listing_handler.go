@@ -79,8 +79,10 @@ type listingCardDTO struct {
 	CoverURL    string   `json:"cover_url"`
 	// Rating is the average review score (0 when there are no reviews);
 	// ReviewsCount is the published review count.
-	Rating       float64 `json:"rating"`
-	ReviewsCount int32   `json:"reviews_count"`
+	Rating             float64    `json:"rating"`
+	ReviewsCount       int32      `json:"reviews_count"`
+	PromotionTypes     []string   `json:"promotion_types"`
+	PromotionExpiresAt *time.Time `json:"promotion_expires_at,omitempty"`
 	// Status and RejectionReason are owner-only moderation fields, populated
 	// exclusively by listMine (public list endpoints never set them).
 	Status          string  `json:"status,omitempty"`
@@ -113,6 +115,7 @@ type listingDetailDTO struct {
 	EventsAllowed      *string    `json:"events_allowed"`
 	ReviewsSummary     *string    `json:"reviews_summary"`
 	LocationSummary    *string    `json:"location_summary"`
+	POIs               []poiDTO   `json:"pois"`
 }
 
 type listResponse struct {
@@ -151,6 +154,21 @@ func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *ListingHandler) mapClusters(w http.ResponseWriter, r *http.Request) {
+	items, err := h.svc.MapClusters(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+type poiDTO struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Distance int32  `json:"distance"`
+}
+
 type createListingRequest struct {
 	Street          string   `json:"street"`
 	HouseNumber     string   `json:"house_number"`
@@ -173,6 +191,7 @@ type createListingRequest struct {
 	ChildrenAllowed *string  `json:"children_allowed"`
 	EventsAllowed   *string  `json:"events_allowed"`
 	Photos          []string `json:"photos"`
+	POIs            []poiDTO `json:"pois"`
 }
 
 // create handles POST /api/v1/listings: the authenticated user publishes a new
@@ -187,6 +206,15 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
+	pois := make([]domain.HousePOI, 0, len(body.POIs))
+	for _, p := range body.POIs {
+		pois = append(pois, domain.HousePOI{
+			Name:     p.Name,
+			Type:     p.Type,
+			Distance: p.Distance,
+		})
+	}
+
 	in := domain.NewHouse{
 		OwnerID:         userID,
 		Street:          body.Street,
@@ -210,6 +238,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		ChildrenAllowed: body.ChildrenAllowed,
 		EventsAllowed:   body.EventsAllowed,
 		Photos:          body.Photos,
+		POIs:            pois,
 	}
 	hs, err := h.svc.Create(r.Context(), in)
 	if err != nil {
@@ -243,6 +272,15 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) {
 		return
 	}
+	pois := make([]domain.HousePOI, 0, len(body.POIs))
+	for _, p := range body.POIs {
+		pois = append(pois, domain.HousePOI{
+			Name:     p.Name,
+			Type:     p.Type,
+			Distance: p.Distance,
+		})
+	}
+
 	in := domain.NewHouse{
 		OwnerID:         userID,
 		Street:          body.Street,
@@ -266,6 +304,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		ChildrenAllowed: body.ChildrenAllowed,
 		EventsAllowed:   body.EventsAllowed,
 		Photos:          body.Photos,
+		POIs:            pois,
 	}
 	hs, err := h.svc.Update(r.Context(), int32(id), in)
 	if err != nil {
@@ -374,23 +413,25 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 	// Lists and map tab always get fuzzed coordinates — no per-row DB check.
 	lat, lng, radius := fuzzedCoords(hs)
 	return listingCardDTO{
-		ID:           hs.ID,
-		OwnerID:      hs.OwnerID,
-		Address:      address(hs),
-		City:         hs.City,
-		Description:  hs.Description,
-		Price:        hs.Price,
-		Rooms:        hs.CountRoom,
-		Area:         hs.Area,
-		Lat:          lat,
-		Lng:          lng,
-		Radius:       radius,
-		QcGeo:        hs.QcGeo,
-		MaxGuests:    hs.MaxGuests,
-		Views:        hs.Views,
-		CoverURL:     resolveMediaURL(hs.CoverPath),
-		Rating:       hs.Rating,
-		ReviewsCount: hs.ReviewsCount,
+		ID:                 hs.ID,
+		OwnerID:            hs.OwnerID,
+		Address:            address(hs),
+		City:               hs.City,
+		Description:        hs.Description,
+		Price:              hs.Price,
+		Rooms:              hs.CountRoom,
+		Area:               hs.Area,
+		Lat:                lat,
+		Lng:                lng,
+		Radius:             radius,
+		QcGeo:              hs.QcGeo,
+		MaxGuests:          hs.MaxGuests,
+		Views:              hs.Views,
+		CoverURL:           resolveMediaURL(hs.CoverPath),
+		Rating:             hs.Rating,
+		ReviewsCount:       hs.ReviewsCount,
+		PromotionTypes:     hs.PromotionTypes,
+		PromotionExpiresAt: hs.PromotionExpiresAt,
 	}
 }
 
@@ -433,21 +474,30 @@ func (h *ListingHandler) detailDTO(hs domain.House, exactCoords bool) listingDet
 		OwnerReviewsCount:  hs.OwnerReviewsCount,
 		OwnerListingsCount: hs.OwnerListingsCount,
 		OwnerIsVerified:    hs.OwnerIsVerified,
-		Street:          hs.Street,
-		HouseNumber:     hs.HouseNumber,
-		NumberRoom:      hs.NumberRoom,
-		Photos:          photos,
-		Services:        toRefDTOs(hs.Services),
-		Categories:      toRefDTOs(hs.Categories),
-		CheckInAfter:    hs.CheckInAfter,
-		CheckOutBefore:  hs.CheckOutBefore,
-		SmokingAllowed:  hs.SmokingAllowed,
-		PetsAllowed:     hs.PetsAllowed,
-		ChildrenAllowed: hs.ChildrenAllowed,
-		EventsAllowed:   hs.EventsAllowed,
-		ReviewsSummary:  hs.ReviewsSummary,
-		LocationSummary: hs.LocationSummary,
+		Street:             hs.Street,
+		HouseNumber:        hs.HouseNumber,
+		NumberRoom:         hs.NumberRoom,
+		Photos:             photos,
+		Services:           toRefDTOs(hs.Services),
+		Categories:         toRefDTOs(hs.Categories),
+		CheckInAfter:       hs.CheckInAfter,
+		CheckOutBefore:     hs.CheckOutBefore,
+		SmokingAllowed:     hs.SmokingAllowed,
+		PetsAllowed:        hs.PetsAllowed,
+		ChildrenAllowed:    hs.ChildrenAllowed,
+		EventsAllowed:      hs.EventsAllowed,
+		ReviewsSummary:     hs.ReviewsSummary,
+		LocationSummary:    hs.LocationSummary,
+		POIs:               toPOIDTOs(hs.POIs),
 	}
+}
+
+func toPOIDTOs(pois []domain.HousePOI) []poiDTO {
+	out := make([]poiDTO, 0, len(pois))
+	for _, poi := range pois {
+		out = append(out, poiDTO{Name: poi.Name, Type: poi.Type, Distance: poi.Distance})
+	}
+	return out
 }
 
 func toRefDTOs(refs []domain.Ref) []refDTO {

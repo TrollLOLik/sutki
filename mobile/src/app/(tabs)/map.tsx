@@ -18,7 +18,8 @@ import { ListingMapCard } from '@/components/map/ListingMapCard';
 import { TAB_BAR_HEIGHT } from '@/components/CustomTabBar';
 import { MapSearchOverlay } from '@/components/map/MapSearchOverlay';
 import { PriceBubble } from '@/components/map/PriceBubble';
-import { useListings, filtersToListParams } from '@/lib/api/listings';
+import { CityClusterBubble } from '@/components/map/CityClusterBubble';
+import { useListings, useMapClusters, filtersToListParams, type MapCluster } from '@/lib/api/listings';
 import { useBboxAutoReload } from '@/hooks/useBboxAutoReload';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
@@ -137,6 +138,13 @@ export default function MapScreen() {
     enabled: isQueryEnabled,
   });
   const listings = data?.items ?? [];
+  const showCityClusters = currentZoom < 10;
+  const mapClusters = useMapClusters(showCityClusters);
+  const cityClusters = mapClusters.data?.items ?? [];
+  const cityClusterTotal = useMemo(
+    () => cityClusters.reduce((total, cluster) => total + cluster.count, 0),
+    [cityClusters],
+  );
 
 
 
@@ -228,15 +236,35 @@ export default function MapScreen() {
   }, [listings, mapReady]);
 
   // ── Selection (mini-card) ──────────────────────────────────────────────────
-  const [selectedListing, setSelectedListing] = useState<ListingCard | null>(null);
+  const [selectedListingId, setSelectedListingId] = useState<number | null>(null);
+  const selectionRevision = useRef(0);
+  const selectedListing = useMemo(
+    () => listings.find((item) => item.id === selectedListingId) ?? null,
+    [listings, selectedListingId],
+  );
+
+  const selectListing = useCallback((id: number) => {
+    const revision = ++selectionRevision.current;
+    setSelectedListingId(null);
+    requestAnimationFrame(() => {
+      if (selectionRevision.current === revision) {
+        setSelectedListingId(id);
+      }
+    });
+  }, []);
+
+  const closeSelectedListing = useCallback(() => {
+    selectionRevision.current += 1;
+    setSelectedListingId(null);
+  }, []);
 
   // ── Auto-reload by visible region ──────────────────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
 
   const handleReload = useCallback((newBbox: string) => {
-    setSelectedListing(null);
+    closeSelectedListing();
     setBbox(newBbox);
-  }, []);
+  }, [closeSelectedListing]);
 
   const { triggerReload } = useBboxAutoReload({
     onReload: handleReload,
@@ -277,18 +305,23 @@ export default function MapScreen() {
 
   const renderMarker = useCallback(
     ({ point, data }: { point: Point; data: ListingCard }) => {
-      const isSelected = selectedListing?.id === data.id;
+      const isSelected = selectedListingId === data.id;
       return (
         <Marker
           key={data.id}
           point={point}
-          onPress={() => setSelectedListing(data)}
+          onPress={() => selectListing(data.id)}
         >
-          <PriceBubble price={data.price} selected={isSelected} />
+          <PriceBubble
+            price={data.price}
+            selected={isSelected}
+            promoted={(data.promotion_types ?? []).length > 0}
+            highlighted={(data.promotion_types ?? []).includes('highlight')}
+          />
         </Marker>
       );
     },
-    [selectedListing],
+    [selectListing, selectedListingId],
   );
 
   const clusteredMarkers = useMemo(
@@ -382,6 +415,13 @@ export default function MapScreen() {
     }
   }, [moveCamera]);
 
+  const handleCityClusterPress = useCallback((cluster: MapCluster) => {
+    filters.setFilters({ city: cluster.city });
+    setBbox(undefined);
+    closeSelectedListing();
+    moveCamera({ lat: cluster.lat, lon: cluster.lng }, 11, 0.7);
+  }, [closeSelectedListing, filters, moveCamera]);
+
   /** Label shown inside the search bar (current city or placeholder). */
   const searchLabel = filters.city ?? 'Город или адрес';
 
@@ -427,14 +467,24 @@ export default function MapScreen() {
         initialRegion={initialRegion}
         nightMode={isDark}
         showUserPosition
-        clusteredMarkers={clusteredMarkers}
+        clusteredMarkers={showCityClusters ? [] : clusteredMarkers}
         renderMarker={renderMarker}
         clusterColor={palette.primary}
         clusterTextColor="#FFFFFF"
         onCameraPositionChange={handleCameraPositionChange}
         onCameraPositionChangeEnd={onCameraPositionChangeEnd}
         style={[styles.map, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT }]}
-      />
+      >
+        {showCityClusters ? cityClusters.map((cluster) => (
+          <Marker
+            key={`city-${cluster.city}`}
+            point={{ lat: cluster.lat, lon: cluster.lng }}
+            onPress={() => handleCityClusterPress(cluster)}
+          >
+            <CityClusterBubble count={cluster.count} />
+          </Marker>
+        )) : null}
+      </ClusteredYamap>
 
       {/* Top bar: search row + count chip */}
       <View pointerEvents="box-none" style={[styles.topContainer, { paddingTop: insets.top + 10 }]}>
@@ -491,7 +541,7 @@ export default function MapScreen() {
           <Text style={styles.countChipText}>
             {isLoading || isFetching
               ? 'Загрузка…'
-              : `Найдено: ${listings.length}`}
+              : `Найдено: ${showCityClusters ? cityClusterTotal : listings.length}`}
           </Text>
         </View>
       </View>
@@ -573,8 +623,9 @@ export default function MapScreen() {
 
       {/* Bottom mini-card on pin tap */}
       <ListingMapCard
+        key={selectedListing?.id ?? 'no-listing'}
         listing={selectedListing}
-        onClose={() => setSelectedListing(null)}
+        onClose={closeSelectedListing}
       />
 
       {/* City/address search overlay */}

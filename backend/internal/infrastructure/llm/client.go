@@ -46,7 +46,8 @@ type ChatCompletionsRequest struct {
 }
 
 type Choice struct {
-	Message Message `json:"message"`
+	Message      Message `json:"message"`
+	FinishReason string  `json:"finish_reason"`
 }
 
 type ChatCompletionsResponse struct {
@@ -102,7 +103,15 @@ func (c *Client) Generate(ctx context.Context, systemPrompt, userPrompt string, 
 		return "", fmt.Errorf("llm client: empty choices in response")
 	}
 
-	return respBody.Choices[0].Message.Content, nil
+	content := strings.TrimSpace(respBody.Choices[0].Message.Content)
+	if content == "" {
+		finishReason := strings.TrimSpace(respBody.Choices[0].FinishReason)
+		if finishReason != "" {
+			return "", fmt.Errorf("llm client: empty message content (finish_reason=%s)", finishReason)
+		}
+		return "", fmt.Errorf("llm client: empty message content in response")
+	}
+	return content, nil
 }
 
 type Delta struct {

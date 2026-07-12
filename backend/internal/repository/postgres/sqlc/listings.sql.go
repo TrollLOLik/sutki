@@ -203,14 +203,14 @@ INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
   area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
   check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
-  created_at, updated_at
+  created_at, updated_at, pois
 ) VALUES (
   $1, $2, $3, $4, $5, $6,
   $7, $8, $9, 'pending_moderation', false, false, 0,
   $10, $11, $12, $13,
   $14, $15, $16,
   $17, $18, $19,
-  now(), now()
+  now(), now(), $20
 )
 RETURNING id
 `
@@ -235,6 +235,7 @@ type CreateHouseParams struct {
 	PetsAllowed     *string
 	ChildrenAllowed *string
 	EventsAllowed   *string
+	Pois            []byte
 }
 
 // Creates a new listing owned by the given user. New listings start in
@@ -262,6 +263,7 @@ func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32
 		arg.PetsAllowed,
 		arg.ChildrenAllowed,
 		arg.EventsAllowed,
+		arg.Pois,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -313,8 +315,11 @@ SELECT
   h.events_allowed,
   h.created_at,
   h.updated_at,
+  COALESCE((SELECT array_agg(lp.type ORDER BY lp.type)::text[] FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),ARRAY[]::text[])::text[] AS promotion_types,
+  COALESCE((SELECT max(lp.expires_at)::text FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),'')::text AS promotion_expires_at,
   h.reviews_summary,
   h.location_summary,
+  COALESCE(h.pois, '[]'::jsonb) AS pois,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -379,8 +384,11 @@ type GetHouseByIDRow struct {
 	EventsAllowed      *string
 	CreatedAt          pgtype.Timestamp
 	UpdatedAt          pgtype.Timestamp
+	PromotionTypes     []string
+	PromotionExpiresAt string
 	ReviewsSummary     *string
 	LocationSummary    *string
+	Pois               []byte
 	Rating             float64
 	ReviewsCount       int32
 	OwnerName          *string
@@ -423,8 +431,11 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.EventsAllowed,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PromotionTypes,
+		&i.PromotionExpiresAt,
 		&i.ReviewsSummary,
 		&i.LocationSummary,
+		&i.Pois,
 		&i.Rating,
 		&i.ReviewsCount,
 		&i.OwnerName,
@@ -633,6 +644,8 @@ SELECT
   h.children_allowed,
   h.events_allowed,
   h.created_at,
+  COALESCE((SELECT array_agg(lp.type ORDER BY lp.type)::text[] FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),ARRAY[]::text[])::text[] AS promotion_types,
+  COALESCE((SELECT max(lp.expires_at)::text FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),'')::text AS promotion_expires_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -663,31 +676,33 @@ type ListHousesByOwnerParams struct {
 }
 
 type ListHousesByOwnerRow struct {
-	ID              int32
-	Street          string
-	HouseNumber     string
-	Description     string
-	Price           int32
-	CountRoom       string
-	Area            int32
-	Country         string
-	Status          string
-	RejectionReason *string
-	MaxGuests       *int32
-	Lat             *float64
-	Lng             *float64
-	QcGeo           *int32
-	Views           int32
-	CheckInAfter    pgtype.Time
-	CheckOutBefore  pgtype.Time
-	SmokingAllowed  *string
-	PetsAllowed     *string
-	ChildrenAllowed *string
-	EventsAllowed   *string
-	CreatedAt       pgtype.Timestamp
-	Rating          float64
-	ReviewsCount    int32
-	CoverPath       string
+	ID                 int32
+	Street             string
+	HouseNumber        string
+	Description        string
+	Price              int32
+	CountRoom          string
+	Area               int32
+	Country            string
+	Status             string
+	RejectionReason    *string
+	MaxGuests          *int32
+	Lat                *float64
+	Lng                *float64
+	QcGeo              *int32
+	Views              int32
+	CheckInAfter       pgtype.Time
+	CheckOutBefore     pgtype.Time
+	SmokingAllowed     *string
+	PetsAllowed        *string
+	ChildrenAllowed    *string
+	EventsAllowed      *string
+	CreatedAt          pgtype.Timestamp
+	PromotionTypes     []string
+	PromotionExpiresAt string
+	Rating             float64
+	ReviewsCount       int32
+	CoverPath          string
 }
 
 func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerParams) ([]ListHousesByOwnerRow, error) {
@@ -722,6 +737,8 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.ChildrenAllowed,
 			&i.EventsAllowed,
 			&i.CreatedAt,
+			&i.PromotionTypes,
+			&i.PromotionExpiresAt,
 			&i.Rating,
 			&i.ReviewsCount,
 			&i.CoverPath,
@@ -737,6 +754,34 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 }
 
 const listHousesFiltered = `-- name: ListHousesFiltered :many
+WITH filtered AS MATERIALIZED (
+  SELECT h.id, h.owner_id, h.street, h.description, h.price, h.deleted, h.count_room, h.status, h.country, h.created_at, h.updated_at, h.views, h.last_date_view, h.views_current_day, h.date_top, h.pay, h.house_number, h.area, h.number_room, h.rejection_reason, h.lat, h.lng, h.qc_geo, h.max_guests, h.check_in_after, h.check_out_before, h.smoking_allowed, h.pets_allowed, h.children_allowed, h.events_allowed, h.reviews_summary, h.location_summary, h.pois FROM house h
+  WHERE h.deleted = false
+    AND h.status = 'active'
+    AND (cardinality($4::int[]) = 0 OR h.id = ANY($4::int[]))
+    AND ($5::text IS NULL OR h.street ILIKE '%' || $5 || '%' OR h.house_number ILIKE '%' || $5 || '%' OR h.description ILIKE '%' || $5 || '%' OR h.country ILIKE '%' || $5 || '%')
+    AND ($6::text IS NULL OR h.country = $6)
+    AND ($7::int IS NULL OR h.price >= $7)
+    AND ($8::int IS NULL OR h.price <= $8)
+    AND ((cardinality($9::int[]) = 0 AND $10::int IS NULL) OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($9::int[]) OR ($10::int IS NOT NULL AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $10))
+    AND (cardinality($11::int[]) = 0 OR (SELECT count(DISTINCT hhs.service_id) FROM house_house_service hhs WHERE hhs.house_id = h.id AND hhs.service_id = ANY($11::int[])) = cardinality($11::int[]))
+    AND ($12::int IS NULL OR EXISTS (SELECT 1 FROM house_house_category hhc WHERE hhc.house_id = h.id AND hhc.house_category_id = $12))
+    AND ($13::date IS NULL OR $14::date IS NULL OR NOT EXISTS (SELECT 1 FROM request rq WHERE rq.house_id = h.id AND rq.status = 'confirmed' AND rq.start_date < $14::date AND COALESCE(rq.end_date, rq.start_date + 1) > $13::date))
+    AND ($15::int IS NULL OR h.max_guests IS NULL OR h.max_guests >= $15)
+    AND ($16::boolean IS NULL OR ($16::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+    AND ($17::boolean IS NULL OR ($17::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+    AND ($18::boolean IS NULL OR ($18::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+    AND ($19::float8 IS NULL OR h.lat >= $19::float8)
+    AND ($20::float8 IS NULL OR h.lat <= $20::float8)
+    AND ($21::float8 IS NULL OR h.lng >= $21::float8)
+    AND ($22::float8 IS NULL OR h.lng <= $22::float8)
+), promoted AS (
+  SELECT f.id AS house_id, lp.activated_at
+  FROM filtered f JOIN listing_promotion lp ON lp.house_id=f.id
+  WHERE lp.type='boost' AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()
+  ORDER BY lp.activated_at DESC,lp.id
+  LIMIT 2
+)
 SELECT
   h.id,
   h.owner_id,
@@ -760,6 +805,8 @@ SELECT
   h.children_allowed,
   h.events_allowed,
   h.created_at,
+  COALESCE(promo.promotion_types,ARRAY[]::text[])::text[] AS promotion_types,
+  COALESCE(promo.promotion_expires_at::text,'')::text AS promotion_expires_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -777,79 +824,28 @@ SELECT
     ORDER BY f.position
     LIMIT 1
   ), '')::text AS cover_path
-FROM house h
-WHERE h.deleted = false
-  AND h.status = 'active'
-  AND (
-    cardinality($1::int[]) = 0
-    OR h.id = ANY($1::int[])
-  )
-  AND (
-    $2::text IS NULL
-    OR h.street ILIKE '%' || $2 || '%'
-    OR h.house_number ILIKE '%' || $2 || '%'
-    OR h.description ILIKE '%' || $2 || '%'
-    OR h.country ILIKE '%' || $2 || '%'
-  )
-  AND ($3::text IS NULL OR h.country = $3)
-  AND ($4::int IS NULL OR h.price >= $4)
-  AND ($5::int IS NULL OR h.price <= $5)
-  AND (
-    (cardinality($6::int[]) = 0 AND $7::int IS NULL)
-    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY($6::int[])
-    OR (
-      $7::int IS NOT NULL
-      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= $7
-    )
-  )
-  AND (
-    cardinality($8::int[]) = 0
-    OR (
-      SELECT count(DISTINCT hhs.service_id)
-      FROM house_house_service hhs
-      WHERE hhs.house_id = h.id AND hhs.service_id = ANY($8::int[])
-    ) = cardinality($8::int[])
-  )
-  AND (
-    $9::int IS NULL
-    OR EXISTS (
-      SELECT 1 FROM house_house_category hhc
-      WHERE hhc.house_id = h.id AND hhc.house_category_id = $9
-    )
-  )
-  AND (
-    $10::date IS NULL
-    OR $11::date IS NULL
-    OR NOT EXISTS (
-      SELECT 1 FROM request rq
-      WHERE rq.house_id = h.id
-        AND rq.status = 'confirmed'
-        AND rq.start_date < $11::date
-        AND COALESCE(rq.end_date, rq.start_date + 1) > $10::date
-    )
-  )
-  AND (
-    $12::int IS NULL
-    OR h.max_guests IS NULL
-    OR h.max_guests >= $12
-  )
-  AND ($13::boolean IS NULL OR ($13::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
-  AND ($14::boolean IS NULL OR ($14::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
-  AND ($15::boolean IS NULL OR ($15::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
-  AND ($16::float8 IS NULL OR h.lat >= $16::float8)
-  AND ($17::float8 IS NULL OR h.lat <= $17::float8)
-  AND ($18::float8 IS NULL OR h.lng >= $18::float8)
-  AND ($19::float8 IS NULL OR h.lng <= $19::float8)
+FROM filtered h
+LEFT JOIN promoted top_promo ON top_promo.house_id=h.id
+LEFT JOIN LATERAL (
+ SELECT array_agg(lp.type ORDER BY lp.type)::text[] AS promotion_types,max(lp.expires_at) AS promotion_expires_at
+ FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()
+) promo ON true
 ORDER BY
-  CASE WHEN $20::text = 'price_asc' THEN h.price END ASC NULLS LAST,
-  CASE WHEN $20::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN $20::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN $1::text = 'price_asc' THEN h.price END ASC NULLS LAST,
+  CASE WHEN $1::text = 'price_desc' THEN h.price END DESC NULLS LAST,
+  CASE WHEN $1::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN top_promo.house_id IS NOT NULL THEN 0 ELSE 1 END,
+  top_promo.activated_at DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
-  h.created_at DESC
-LIMIT $22 OFFSET $21
+  h.created_at DESC,
+  h.id DESC
+LIMIT $3 OFFSET $2
 `
 
 type ListHousesFilteredParams struct {
+	Sort            string
+	ResultOffset    int32
+	ResultLimit     int32
 	HouseIds        []int32
 	Query           *string
 	City            *string
@@ -869,41 +865,43 @@ type ListHousesFilteredParams struct {
 	MaxLat          *float64
 	MinLng          *float64
 	MaxLng          *float64
-	Sort            string
-	ResultOffset    int32
-	ResultLimit     int32
 }
 
 type ListHousesFilteredRow struct {
-	ID              int32
-	OwnerID         int32
-	Street          string
-	HouseNumber     string
-	Description     string
-	Price           int32
-	CountRoom       string
-	Area            int32
-	Country         string
-	Status          string
-	MaxGuests       *int32
-	Lat             *float64
-	Lng             *float64
-	QcGeo           *int32
-	Views           int32
-	CheckInAfter    pgtype.Time
-	CheckOutBefore  pgtype.Time
-	SmokingAllowed  *string
-	PetsAllowed     *string
-	ChildrenAllowed *string
-	EventsAllowed   *string
-	CreatedAt       pgtype.Timestamp
-	Rating          float64
-	ReviewsCount    int32
-	CoverPath       string
+	ID                 int32
+	OwnerID            int32
+	Street             string
+	HouseNumber        string
+	Description        string
+	Price              int32
+	CountRoom          string
+	Area               int32
+	Country            string
+	Status             string
+	MaxGuests          *int32
+	Lat                *float64
+	Lng                *float64
+	QcGeo              *int32
+	Views              int32
+	CheckInAfter       pgtype.Time
+	CheckOutBefore     pgtype.Time
+	SmokingAllowed     *string
+	PetsAllowed        *string
+	ChildrenAllowed    *string
+	EventsAllowed      *string
+	CreatedAt          pgtype.Timestamp
+	PromotionTypes     []string
+	PromotionExpiresAt string
+	Rating             float64
+	ReviewsCount       int32
+	CoverPath          string
 }
 
 func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFilteredParams) ([]ListHousesFilteredRow, error) {
 	rows, err := q.db.Query(ctx, listHousesFiltered,
+		arg.Sort,
+		arg.ResultOffset,
+		arg.ResultLimit,
 		arg.HouseIds,
 		arg.Query,
 		arg.City,
@@ -923,9 +921,6 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 		arg.MaxLat,
 		arg.MinLng,
 		arg.MaxLng,
-		arg.Sort,
-		arg.ResultOffset,
-		arg.ResultLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -957,9 +952,58 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 			&i.ChildrenAllowed,
 			&i.EventsAllowed,
 			&i.CreatedAt,
+			&i.PromotionTypes,
+			&i.PromotionExpiresAt,
 			&i.Rating,
 			&i.ReviewsCount,
 			&i.CoverPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMapClusters = `-- name: ListMapClusters :many
+SELECT btrim(h.country)::text AS city,
+       avg(h.lat)::double precision AS lat,
+       avg(h.lng)::double precision AS lng,
+       count(*)::integer AS listing_count
+FROM house h
+WHERE h.status = 'active'
+  AND h.deleted = false
+  AND h.lat IS NOT NULL
+  AND h.lng IS NOT NULL
+  AND btrim(h.country) <> ''
+GROUP BY btrim(h.country)
+ORDER BY listing_count DESC, city
+`
+
+type ListMapClustersRow struct {
+	City         string
+	Lat          float64
+	Lng          float64
+	ListingCount int32
+}
+
+func (q *Queries) ListMapClusters(ctx context.Context) ([]ListMapClustersRow, error) {
+	rows, err := q.db.Query(ctx, listMapClusters)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMapClustersRow
+	for rows.Next() {
+		var i ListMapClustersRow
+		if err := rows.Scan(
+			&i.City,
+			&i.Lat,
+			&i.Lng,
+			&i.ListingCount,
 		); err != nil {
 			return nil, err
 		}
@@ -1000,8 +1044,9 @@ SET street = $1,
     pets_allowed = $16,
     children_allowed = $17,
     events_allowed = $18,
-    updated_at = now()
-WHERE id = $19 AND owner_id = $20 AND deleted = false
+    updated_at = now(),
+    pois = $19
+WHERE id = $20 AND owner_id = $21 AND deleted = false
 `
 
 type UpdateHouseParams struct {
@@ -1023,6 +1068,7 @@ type UpdateHouseParams struct {
 	PetsAllowed     *string
 	ChildrenAllowed *string
 	EventsAllowed   *string
+	Pois            []byte
 	ID              int32
 	OwnerID         int32
 }
@@ -1049,6 +1095,7 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		arg.PetsAllowed,
 		arg.ChildrenAllowed,
 		arg.EventsAllowed,
+		arg.Pois,
 		arg.ID,
 		arg.OwnerID,
 	)

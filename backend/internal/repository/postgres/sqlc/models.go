@@ -162,6 +162,7 @@ type House struct {
 	EventsAllowed   *string
 	ReviewsSummary  *string
 	LocationSummary *string
+	Pois            []byte
 }
 
 type HouseCategory struct {
@@ -180,6 +181,43 @@ type HouseHouseCategory struct {
 type HouseHouseService struct {
 	HouseID   int32
 	ServiceID int32
+}
+
+type ListingPromotion struct {
+	ID               int64
+	HouseID          int32
+	PurchasedBy      *int32
+	PaymentID        *int64
+	Type             string
+	Status           string
+	DurationSeconds  int32
+	RemainingSeconds int32
+	StartsAt         pgtype.Timestamptz
+	ExpiresAt        pgtype.Timestamptz
+	ActivatedAt      pgtype.Timestamptz
+	PausedAt         pgtype.Timestamptz
+	PauseReason      *string
+	CheckoutKey      pgtype.UUID
+	Version          int64
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+type LocationSummaryJob struct {
+	ID            int64
+	HouseID       int32
+	City          string
+	Street        string
+	Pois          []byte
+	Status        string
+	Attempts      int32
+	NextAttemptAt pgtype.Timestamptz
+	LastError     *string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	Lat           *float64
+	Lng           *float64
+	Revision      int64
 }
 
 type Message struct {
@@ -224,18 +262,89 @@ type ModerationVerdict struct {
 }
 
 type Payment struct {
-	ID                int64
-	RequestID         *int32
-	UserID            *int32
-	Provider          string
-	ProviderPaymentID *string
-	AmountKopecks     int32
-	Currency          string
-	Status            string
-	ConfirmationUrl   *string
-	CreatedAt         pgtype.Timestamp
-	UpdatedAt         pgtype.Timestamp
-	PaidAt            pgtype.Timestamp
+	ID                    int64
+	RequestID             *int32
+	UserID                *int32
+	Provider              string
+	ProviderPaymentID     *string
+	AmountKopecks         int32
+	Currency              string
+	Status                string
+	ConfirmationUrl       *string
+	CreatedAt             pgtype.Timestamp
+	UpdatedAt             pgtype.Timestamp
+	PaidAt                pgtype.Timestamp
+	Purpose               string
+	ProductCode           *string
+	IdempotencyKey        pgtype.UUID
+	Description           *string
+	Metadata              []byte
+	CanceledAt            pgtype.Timestamptz
+	RefundedAmountKopecks int32
+	BusinessRefType       *string
+	BusinessRefID         *int64
+}
+
+type PaymentProduct struct {
+	Code            string
+	Title           string
+	Purpose         string
+	AmountKopecks   int32
+	Currency        string
+	VatCode         int16
+	PaymentSubject  string
+	PaymentMode     string
+	Enabled         bool
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	ServiceType     *string
+	DurationSeconds *int32
+}
+
+type PaymentReceipt struct {
+	ID                    int64
+	PaymentID             int64
+	RefundID              *int64
+	Operation             string
+	ProviderReceiptID     *string
+	Status                string
+	CustomerContactMasked *string
+	Payload               []byte
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	RegisteredAt          pgtype.Timestamptz
+}
+
+type PaymentRefund struct {
+	ID               int64
+	PaymentID        int64
+	ProviderRefundID *string
+	IdempotencyKey   pgtype.UUID
+	AmountKopecks    int32
+	Currency         string
+	Status           string
+	Reason           string
+	InitiatedBy      *int32
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	SucceededAt      pgtype.Timestamptz
+	CanceledAt       pgtype.Timestamptz
+}
+
+type PaymentWebhookEvent struct {
+	ID               int64
+	Provider         string
+	EventType        string
+	ProviderObjectID string
+	DedupKey         string
+	Payload          []byte
+	Status           string
+	Attempts         int32
+	NextAttemptAt    pgtype.Timestamptz
+	LastError        *string
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+	ProcessedAt      pgtype.Timestamptz
 }
 
 type PersonalDataRevocation struct {
@@ -245,12 +354,52 @@ type PersonalDataRevocation struct {
 	EmailHash string
 }
 
+type PhoneAuthChallenge struct {
+	ID              pgtype.UUID
+	PhoneNormalized string
+	Purpose         string
+	UserID          *int32
+	CodeHash        *string
+	CodeLength      int32
+	Status          string
+	DeliveryMode    string
+	PendingUntil    pgtype.Timestamptz
+	ExpiresAt       pgtype.Timestamptz
+	Attempts        int32
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type PhoneAuthDelivery struct {
+	ID                 int64
+	ChallengeID        pgtype.UUID
+	Provider           string
+	Mode               string
+	IdempotencyID      pgtype.UUID
+	ProviderDeliveryID *string
+	Status             string
+	ErrorCode          *string
+	ErrorMessage       *string
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
 type PhotoHash struct {
 	ID        int64
 	HouseID   int32
 	MediaKey  string
 	Phash     int64
 	CreatedAt pgtype.Timestamptz
+}
+
+type PromotionExpiryJob struct {
+	PromotionID int64
+	Version     int64
+	DueAt       pgtype.Timestamptz
+	Status      string
+	Attempts    int32
+	LastError   *string
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type RefreshToken struct {

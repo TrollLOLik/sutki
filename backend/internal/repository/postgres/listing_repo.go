@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,6 +23,23 @@ type ListingRepo struct {
 
 func NewListingRepo(q *sqlc.Queries) *ListingRepo {
 	return &ListingRepo{q: q}
+}
+
+func (r *ListingRepo) ListMapClusters(ctx context.Context) ([]domain.MapCluster, error) {
+	rows, err := r.q.ListMapClusters(ctx)
+	if err != nil {
+		return nil, err
+	}
+	clusters := make([]domain.MapCluster, 0, len(rows))
+	for _, row := range rows {
+		clusters = append(clusters, domain.MapCluster{
+			City:  row.City,
+			Lat:   row.Lat,
+			Lng:   row.Lng,
+			Count: row.ListingCount,
+		})
+	}
+	return clusters, nil
 }
 
 // nonNil returns an empty (non-nil) slice so it encodes as a PostgreSQL
@@ -63,14 +82,14 @@ func pgTimeToStringPtr(pgTime pgtype.Time) *string {
 
 func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]domain.House, error) {
 	rows, err := r.q.ListHousesFiltered(ctx, sqlc.ListHousesFilteredParams{
-		HouseIds:     nonNil(filter.HouseIDs),
-		Query:        filter.Query,
-		City:         filter.City,
-		PriceMin:     filter.PriceMin,
-		PriceMax:     filter.PriceMax,
-		Rooms:        nonNil(filter.Rooms),
-		RoomsMin:     filter.RoomsMin,
-		Services:     nonNil(filter.Services),
+		HouseIds:        nonNil(filter.HouseIDs),
+		Query:           filter.Query,
+		City:            filter.City,
+		PriceMin:        filter.PriceMin,
+		PriceMax:        filter.PriceMax,
+		Rooms:           nonNil(filter.Rooms),
+		RoomsMin:        filter.RoomsMin,
+		Services:        nonNil(filter.Services),
 		Category:        filter.Category,
 		CheckIn:         dateParamPtr(filter.CheckIn),
 		CheckOut:        dateParamPtr(filter.CheckOut),
@@ -91,32 +110,35 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 	}
 	houses := make([]domain.House, 0, len(rows))
 	for _, row := range rows {
+		promotionExpiresAt := parseDBTimestamp(row.PromotionExpiresAt)
 		houses = append(houses, domain.House{
-			ID:           row.ID,
-			OwnerID:      row.OwnerID,
-			Street:       row.Street,
-			HouseNumber:  row.HouseNumber,
-			Description:  row.Description,
-			Price:        row.Price,
-			CountRoom:    row.CountRoom,
-			Area:         row.Area,
-			City:         row.Country,
-			Status:       row.Status,
-			MaxGuests:    row.MaxGuests,
-			Lat:            row.Lat,
-			Lng:            row.Lng,
-			QcGeo:          row.QcGeo,
-			Views:          row.Views,
-			CoverPath:      row.CoverPath,
-			CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
-			CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
-			SmokingAllowed: row.SmokingAllowed,
-			PetsAllowed:    row.PetsAllowed,
-			ChildrenAllowed: row.ChildrenAllowed,
-			EventsAllowed:   row.EventsAllowed,
-			CreatedAt:      row.CreatedAt.Time,
-			Rating:         row.Rating,
-			ReviewsCount:   row.ReviewsCount,
+			ID:                 row.ID,
+			OwnerID:            row.OwnerID,
+			Street:             row.Street,
+			HouseNumber:        row.HouseNumber,
+			Description:        row.Description,
+			Price:              row.Price,
+			CountRoom:          row.CountRoom,
+			Area:               row.Area,
+			City:               row.Country,
+			Status:             row.Status,
+			MaxGuests:          row.MaxGuests,
+			Lat:                row.Lat,
+			Lng:                row.Lng,
+			QcGeo:              row.QcGeo,
+			Views:              row.Views,
+			CoverPath:          row.CoverPath,
+			CheckInAfter:       pgTimeToStringPtr(row.CheckInAfter),
+			CheckOutBefore:     pgTimeToStringPtr(row.CheckOutBefore),
+			SmokingAllowed:     row.SmokingAllowed,
+			PetsAllowed:        row.PetsAllowed,
+			ChildrenAllowed:    row.ChildrenAllowed,
+			EventsAllowed:      row.EventsAllowed,
+			CreatedAt:          row.CreatedAt.Time,
+			Rating:             row.Rating,
+			ReviewsCount:       row.ReviewsCount,
+			PromotionTypes:     row.PromotionTypes,
+			PromotionExpiresAt: promotionExpiresAt,
 		})
 	}
 	return houses, nil
@@ -125,26 +147,32 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 // Create inserts a new listing (status='active') and links its services and
 // categories. Photos are not persisted yet (S3 media phase). Returns the new id.
 func (r *ListingRepo) Create(ctx context.Context, h domain.NewHouse) (int32, error) {
+	poisBytes, _ := json.Marshal(h.POIs)
+	if poisBytes == nil {
+		poisBytes = []byte("[]")
+	}
+
 	id, err := r.q.CreateHouse(ctx, sqlc.CreateHouseParams{
-		OwnerID:     h.OwnerID,
-		Street:      h.Street,
-		HouseNumber: h.HouseNumber,
-		Description: h.Description,
-		Price:       h.Price,
-		CountRoom:   h.CountRoom,
-		NumberRoom:  h.NumberRoom,
-		Area:        h.Area,
-		Country:     h.City,
-		Lat:            h.Lat,
-		Lng:            h.Lng,
-		QcGeo:          h.QcGeo,
-		MaxGuests:      h.MaxGuests,
-		CheckInAfter:   pgTimePtr(h.CheckInAfter),
-		CheckOutBefore: pgTimePtr(h.CheckOutBefore),
-		SmokingAllowed: h.SmokingAllowed,
-		PetsAllowed:    h.PetsAllowed,
+		OwnerID:         h.OwnerID,
+		Street:          h.Street,
+		HouseNumber:     h.HouseNumber,
+		Description:     h.Description,
+		Price:           h.Price,
+		CountRoom:       h.CountRoom,
+		NumberRoom:      h.NumberRoom,
+		Area:            h.Area,
+		Country:         h.City,
+		Lat:             h.Lat,
+		Lng:             h.Lng,
+		QcGeo:           h.QcGeo,
+		MaxGuests:       h.MaxGuests,
+		CheckInAfter:    pgTimePtr(h.CheckInAfter),
+		CheckOutBefore:  pgTimePtr(h.CheckOutBefore),
+		SmokingAllowed:  h.SmokingAllowed,
+		PetsAllowed:     h.PetsAllowed,
 		ChildrenAllowed: h.ChildrenAllowed,
 		EventsAllowed:   h.EventsAllowed,
+		Pois:            poisBytes,
 	})
 	if err != nil {
 		return 0, err
@@ -188,33 +216,36 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 	}
 	houses := make([]domain.House, 0, len(rows))
 	for _, row := range rows {
+		promotionExpiresAt := parseDBTimestamp(row.PromotionExpiresAt)
 		houses = append(houses, domain.House{
-			ID:              row.ID,
-			OwnerID:         ownerID,
-			Street:          row.Street,
-			HouseNumber:     row.HouseNumber,
-			Description:     row.Description,
-			Price:           row.Price,
-			CountRoom:       row.CountRoom,
-			Area:            row.Area,
-			City:            row.Country,
-			Status:          row.Status,
-			RejectionReason: row.RejectionReason,
-			MaxGuests:       row.MaxGuests,
-			Lat:            row.Lat,
-			Lng:            row.Lng,
-			QcGeo:          row.QcGeo,
-			Views:          row.Views,
-			CoverPath:      row.CoverPath,
-			CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
-			CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
-			SmokingAllowed: row.SmokingAllowed,
-			PetsAllowed:    row.PetsAllowed,
-			ChildrenAllowed: row.ChildrenAllowed,
-			EventsAllowed:   row.EventsAllowed,
-			CreatedAt:      row.CreatedAt.Time,
-			Rating:         row.Rating,
-			ReviewsCount:   row.ReviewsCount,
+			ID:                 row.ID,
+			OwnerID:            ownerID,
+			Street:             row.Street,
+			HouseNumber:        row.HouseNumber,
+			Description:        row.Description,
+			Price:              row.Price,
+			CountRoom:          row.CountRoom,
+			Area:               row.Area,
+			City:               row.Country,
+			Status:             row.Status,
+			RejectionReason:    row.RejectionReason,
+			MaxGuests:          row.MaxGuests,
+			Lat:                row.Lat,
+			Lng:                row.Lng,
+			QcGeo:              row.QcGeo,
+			Views:              row.Views,
+			CoverPath:          row.CoverPath,
+			CheckInAfter:       pgTimeToStringPtr(row.CheckInAfter),
+			CheckOutBefore:     pgTimeToStringPtr(row.CheckOutBefore),
+			SmokingAllowed:     row.SmokingAllowed,
+			PetsAllowed:        row.PetsAllowed,
+			ChildrenAllowed:    row.ChildrenAllowed,
+			EventsAllowed:      row.EventsAllowed,
+			CreatedAt:          row.CreatedAt.Time,
+			Rating:             row.Rating,
+			ReviewsCount:       row.ReviewsCount,
+			PromotionTypes:     row.PromotionTypes,
+			PromotionExpiresAt: promotionExpiresAt,
 		})
 	}
 	return houses, nil
@@ -226,14 +257,14 @@ func (r *ListingRepo) CountByOwner(ctx context.Context, ownerID int32) (int64, e
 
 func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int64, error) {
 	return r.q.CountHousesFiltered(ctx, sqlc.CountHousesFilteredParams{
-		HouseIds: nonNil(filter.HouseIDs),
-		Query:    filter.Query,
-		City:     filter.City,
-		PriceMin: filter.PriceMin,
-		PriceMax: filter.PriceMax,
-		Rooms:    nonNil(filter.Rooms),
-		RoomsMin: filter.RoomsMin,
-		Services: nonNil(filter.Services),
+		HouseIds:        nonNil(filter.HouseIDs),
+		Query:           filter.Query,
+		City:            filter.City,
+		PriceMin:        filter.PriceMin,
+		PriceMax:        filter.PriceMax,
+		Rooms:           nonNil(filter.Rooms),
+		RoomsMin:        filter.RoomsMin,
+		Services:        nonNil(filter.Services),
 		Category:        filter.Category,
 		CheckIn:         dateParamPtr(filter.CheckIn),
 		CheckOut:        dateParamPtr(filter.CheckOut),
@@ -268,37 +299,56 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		OwnerReviewsCount:  row.OwnerReviewsCount,
 		OwnerListingsCount: row.OwnerListingsCount,
 		OwnerIsVerified:    row.OwnerIsVerified,
-		Street:         row.Street,
-		HouseNumber:    row.HouseNumber,
-		Description:    row.Description,
-		Price:          row.Price,
-		CountRoom:      row.CountRoom,
-		Area:           row.Area,
-		City:           row.Country,
-		Status:         row.Status,
-		RejectionReason: row.RejectionReason,
-		MaxGuests:      row.MaxGuests,
-		Lat:            row.Lat,
-		Lng:            row.Lng,
-		QcGeo:          row.QcGeo,
-		Views:          row.Views,
-		CheckInAfter:   pgTimeToStringPtr(row.CheckInAfter),
-		CheckOutBefore: pgTimeToStringPtr(row.CheckOutBefore),
-		SmokingAllowed: row.SmokingAllowed,
-		PetsAllowed:    row.PetsAllowed,
-		ChildrenAllowed: row.ChildrenAllowed,
-		EventsAllowed:   row.EventsAllowed,
-		CreatedAt:      row.CreatedAt.Time,
-		UpdatedAt:      row.UpdatedAt.Time,
-		ReviewsSummary:  row.ReviewsSummary,
-		LocationSummary: row.LocationSummary,
-		Rating:         row.Rating,
-		ReviewsCount:   row.ReviewsCount,
+		Street:             row.Street,
+		HouseNumber:        row.HouseNumber,
+		Description:        row.Description,
+		Price:              row.Price,
+		CountRoom:          row.CountRoom,
+		Area:               row.Area,
+		City:               row.Country,
+		Status:             row.Status,
+		RejectionReason:    row.RejectionReason,
+		MaxGuests:          row.MaxGuests,
+		Lat:                row.Lat,
+		Lng:                row.Lng,
+		QcGeo:              row.QcGeo,
+		Views:              row.Views,
+		CheckInAfter:       pgTimeToStringPtr(row.CheckInAfter),
+		CheckOutBefore:     pgTimeToStringPtr(row.CheckOutBefore),
+		SmokingAllowed:     row.SmokingAllowed,
+		PetsAllowed:        row.PetsAllowed,
+		ChildrenAllowed:    row.ChildrenAllowed,
+		EventsAllowed:      row.EventsAllowed,
+		CreatedAt:          row.CreatedAt.Time,
+		UpdatedAt:          row.UpdatedAt.Time,
+		ReviewsSummary:     row.ReviewsSummary,
+		LocationSummary:    row.LocationSummary,
+		Rating:             row.Rating,
+		ReviewsCount:       row.ReviewsCount,
+		PromotionTypes:     row.PromotionTypes,
+		PromotionExpiresAt: parseDBTimestamp(row.PromotionExpiresAt),
+	}
+	if len(row.Pois) > 0 {
+		if err := json.Unmarshal(row.Pois, &h.POIs); err != nil {
+			return domain.House{}, fmt.Errorf("decode house POIs: %w", err)
+		}
 	}
 	if row.NumberRoom != nil {
 		h.NumberRoom = *row.NumberRoom
 	}
 	return h, nil
+}
+
+func parseDBTimestamp(value string) *time.Time {
+	if value == "" {
+		return nil
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999Z07"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return &parsed
+		}
+	}
+	return nil
 }
 
 func (r *ListingRepo) ListPhotos(ctx context.Context, houseID int32) ([]domain.Photo, error) {
@@ -365,27 +415,33 @@ func (r *ListingRepo) AllCategories(ctx context.Context) ([]domain.Ref, error) {
 // domain.ErrNotFound when no listing matches (missing or not owned), so the
 // caller can answer 404 instead of silently reporting success.
 func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) error {
+	poisBytes, _ := json.Marshal(h.POIs)
+	if poisBytes == nil {
+		poisBytes = []byte("[]")
+	}
+
 	affected, err := r.q.UpdateHouse(ctx, sqlc.UpdateHouseParams{
-		Street:      h.Street,
-		HouseNumber: h.HouseNumber,
-		Description: h.Description,
-		Price:       h.Price,
-		CountRoom:   h.CountRoom,
-		NumberRoom:  h.NumberRoom,
-		Area:        h.Area,
-		Country:     h.City,
-		Lat:            h.Lat,
-		Lng:            h.Lng,
-		QcGeo:          h.QcGeo,
-		MaxGuests:      h.MaxGuests,
-		CheckInAfter:   pgTimePtr(h.CheckInAfter),
-		CheckOutBefore: pgTimePtr(h.CheckOutBefore),
-		SmokingAllowed: h.SmokingAllowed,
-		PetsAllowed:    h.PetsAllowed,
+		Street:          h.Street,
+		HouseNumber:     h.HouseNumber,
+		Description:     h.Description,
+		Price:           h.Price,
+		CountRoom:       h.CountRoom,
+		NumberRoom:      h.NumberRoom,
+		Area:            h.Area,
+		Country:         h.City,
+		Lat:             h.Lat,
+		Lng:             h.Lng,
+		QcGeo:           h.QcGeo,
+		MaxGuests:       h.MaxGuests,
+		CheckInAfter:    pgTimePtr(h.CheckInAfter),
+		CheckOutBefore:  pgTimePtr(h.CheckOutBefore),
+		SmokingAllowed:  h.SmokingAllowed,
+		PetsAllowed:     h.PetsAllowed,
 		ChildrenAllowed: h.ChildrenAllowed,
 		EventsAllowed:   h.EventsAllowed,
-		ID:             id,
-		OwnerID:        h.OwnerID,
+		ID:              id,
+		OwnerID:         h.OwnerID,
+		Pois:            poisBytes,
 	})
 	if err != nil {
 		return err
@@ -457,7 +513,6 @@ func (r *ListingRepo) UpdateLocationSummary(ctx context.Context, id int32, summa
 		LocationSummary: summary,
 	})
 }
-
 
 func stringFromPtr(s *string) string {
 	if s == nil {

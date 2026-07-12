@@ -37,6 +37,22 @@ export const listingKeys = {
   detail: (id: number) => [...listingKeys.all, 'detail', id] as const,
 };
 
+export interface MapCluster {
+  city: string;
+  lat: number;
+  lng: number;
+  count: number;
+}
+
+export function useMapClusters(enabled = true) {
+  return useQuery({
+    queryKey: [...listingKeys.all, 'map-clusters'],
+    queryFn: () => api.get<{ items: MapCluster[] }>('/api/v1/listings/map-clusters', { auth: false }),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
 function buildQuery(params: ListListingsParams): string {
   const sp = new URLSearchParams();
   if (params.limit != null) sp.set('limit', String(params.limit));

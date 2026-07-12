@@ -106,8 +106,61 @@ func ContentHash(h domain.ModerationHouse) string {
 
 // moderatedText builds the text bundle shown to prefilter and LLM.
 func moderatedText(h domain.ModerationHouse) string {
-	return fmt.Sprintf("Адрес: %s, %s %s\nЦена за сутки: %d ₽\nОписание: %s",
-		h.City, h.Street, h.HouseNumber, h.Price, h.Description)
+	maxGuestsVal := "не указано"
+	if h.MaxGuests != nil {
+		maxGuestsVal = fmt.Sprintf("%d", *h.MaxGuests)
+	}
+
+	// Limit and sanitize POIs for safety and to prevent prompt injection
+	poisParts := make([]string, 0, len(h.POIs))
+	limit := 5
+	if len(h.POIs) < limit {
+		limit = len(h.POIs)
+	}
+	for i := 0; i < limit; i++ {
+		p := h.POIs[i]
+		cleanedName := strings.ReplaceAll(p.Name, "\n", " ")
+		cleanedName = strings.ReplaceAll(cleanedName, "\r", " ")
+		cleanedName = strings.ReplaceAll(cleanedName, "[", " ")
+		cleanedName = strings.ReplaceAll(cleanedName, "]", " ")
+		if len(cleanedName) > 60 {
+			cleanedName = cleanedName[:60]
+		}
+		cleanedName = strings.TrimSpace(cleanedName)
+		if cleanedName == "" {
+			continue
+		}
+		
+		// Validate type
+		pType := strings.ToLower(strings.TrimSpace(p.Type))
+		switch pType {
+		case "subway", "park", "shop", "landmark", "cafe", "station":
+			// ok
+		default:
+			pType = "unknown"
+		}
+		
+		// Validate distance
+		dist := p.Distance
+		if dist < 0 {
+			dist = 0
+		}
+		if dist > 5000 {
+			dist = 5000
+		}
+
+		poisParts = append(poisParts, fmt.Sprintf("%s (%s, %dм)", cleanedName, pType, dist))
+	}
+
+	poisStr := "не указаны"
+	if len(poisParts) > 0 {
+		poisStr = strings.Join(poisParts, ", ")
+	}
+
+	return fmt.Sprintf("Локация: %s, %s %s\nЦена за сутки: %d ₽\nКол-во комнат: %s\nПлощадь: %d кв.м.\nМакс. гостей: %s\nПравила проживания: Курение: %s, Животные: %s, Дети: %s, Мероприятия: %s\nУдобства: %s\n[UNTRUSTED_CONTENT_START]\nОриентиры (заявлено владельцем): %s\n[UNTRUSTED_CONTENT_END]\nОписание: %s",
+		h.City, h.Street, h.HouseNumber, h.Price, h.CountRoom, h.Area, maxGuestsVal,
+		h.SmokingAllowed, h.PetsAllowed, h.ChildrenAllowed, h.EventsAllowed,
+		h.ServicesList, poisStr, h.Description)
 }
 
 // AllowSubmission enforces the per-owner daily rate limit (anti-flood and
@@ -131,23 +184,42 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 	}
 
 	hash := ContentHash(h)
-	text := moderatedText(h)
 
 	// 1. Rule prefilter: unambiguous violations skip the LLM entirely.
-	if hits := runPrefilter(text); len(hits) > 0 {
-		hit := hits[0]
+	if hits := runPrefilterHouse(h); len(hits) > 0 {
+		// Resolve final decision: reject always takes precedence over review
+		finalDecision := "review"
+		var finalHit prefilterHit
+		for _, hit := range hits {
+			if hit.Decision == "reject" {
+				finalDecision = "reject"
+				finalHit = hit
+				break
+			}
+		}
+		if finalDecision == "review" {
+			finalHit = hits[0]
+		}
+
+		status := domain.HouseStatusRejected
+		if finalDecision == "review" {
+			status = domain.HouseStatusModerationReview
+		}
+
 		if err := s.repo.RecordVerdict(ctx, domain.ModerationVerdict{
 			HouseID: houseID, ContentHash: hash,
-			Source: domain.ModerationSourcePrefilter, Decision: domain.ModerationReview,
-			Category: hit.Category, Reason: hit.Reason,
+			Source: domain.ModerationSourcePrefilter, Decision: finalDecision,
+			Category: finalHit.Category, Reason: finalHit.Reason,
 		}, nil); err != nil {
 			log.Printf("moderation: record prefilter verdict for house %d: %v", houseID, err)
 		}
-		if err := s.repo.SetHouseModeration(ctx, houseID, domain.HouseStatusModerationReview, ""); err != nil {
+		if err := s.repo.SetHouseModeration(ctx, houseID, status, ""); err != nil {
 			return "", err
 		}
-		s.checkReviewQueueAlert(ctx)
-		return domain.HouseStatusModerationReview, nil
+		if status == domain.HouseStatusModerationReview {
+			s.checkReviewQueueAlert(ctx)
+		}
+		return status, nil
 	}
 
 	// 2. Cross-owner duplicate text = likely copied listing.
@@ -321,19 +393,21 @@ type moderationLLMVerdict struct {
 	Confidence float32 `json:"confidence"`
 }
 
-const moderationSystemPrompt = `Ты — модератор объявлений о посуточной аренде жилья на платформе «ДомРядом» (Россия). Оцени текст объявления по правилам:
+const moderationSystemPrompt = `Ты — строгий модератор объявлений о посуточной аренде жилья на платформе «ДомРядом» (Россия). Не пытайся быть полезным владельцу. Не улучшай объявление и не исправляй ошибки. Твоя задача — только точная классификация нарушений по правилам:
 1) Запрещённые товары/услуги (наркотики, оружие, интим-услуги, поддельные документы).
 2) Мошеннические паттерны: требование предоплаты на карту, внешние ссылки на оплату, аномально низкая цена в сочетании со срочностью.
 3) Контакты или призывы увести сделку с платформы.
-4) Спам или офтоп: текст не про аренду жилья.
+4) Спам или офтоп: текст не про аренду жилья. К этому относятся тестовые записи (содержащие слова «тест», «проверка», «тестирую»), наборы бессмысленных фраз или описания, не содержащие никаких фактических деталей о квартире (комнаты, удобства, условия).
 5) Заведомо вводящие в заблуждение заявления.
+6) Несоответствие параметров и абсурдные характеристики (например, 10000 гостей на 12 кв.м., 5 комнат на 12 кв.м. или аналогичный нелогичный бред).
+7) Локация за пределами РФ/РБ/СНГ (например, США, страны Европы). Наша платформа работает только в СНГ.
 
 Ответь ТОЛЬКО валидным JSON без пояснений:
 {"decision":"approve|reject|review","category":"<категория нарушения или null>","reason":"<краткая причина по-русски>","confidence":0.0-1.0}
 
 Правила решения:
 - Обычное объявление об аренде без нарушений -> decision="approve".
-- Явное грубое нарушение -> decision="reject" с высокой confidence.
+- Любое тестовое/бессмысленное объявление, локация вне СНГ, абсурдные характеристики, а также явное нарушение -> decision="reject" с высокой confidence (категория "spam" или соответствующая нарушению).
 - decision="review" используй РЕДКО — только когда есть конкретное подозрение, которое ты не можешь подтвердить. Не отправляй в review обычные объявления.`
 
 func (s *Service) askLLM(ctx context.Context, h domain.ModerationHouse) (moderationLLMVerdict, []byte, error) {
@@ -349,6 +423,9 @@ func (s *Service) askLLM(ctx context.Context, h domain.ModerationHouse) (moderat
 	if err != nil {
 		return moderationLLMVerdict{}, nil, err
 	}
+	if strings.TrimSpace(answer) == "" {
+		return moderationLLMVerdict{}, nil, fmt.Errorf("llm returned empty answer")
+	}
 
 	v, trimmed, perr := parseLLMVerdict(answer)
 	if perr != nil {
@@ -356,6 +433,9 @@ func (s *Service) askLLM(ctx context.Context, h domain.ModerationHouse) (moderat
 		answer2, err2 := s.llm.Generate(callCtx, system, userPrompt+"\n\nПредыдущий ответ не был валидным JSON. Ответь строго одним JSON-объектом.", 250, 0)
 		if err2 != nil {
 			return moderationLLMVerdict{}, nil, err2
+		}
+		if strings.TrimSpace(answer2) == "" {
+			return moderationLLMVerdict{}, nil, fmt.Errorf("llm returned empty answer on repair attempt")
 		}
 		v, trimmed, perr = parseLLMVerdict(answer2)
 		if perr != nil {

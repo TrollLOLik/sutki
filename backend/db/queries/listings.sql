@@ -1,4 +1,32 @@
 -- name: ListHousesFiltered :many
+WITH filtered AS MATERIALIZED (
+  SELECT h.* FROM house h
+  WHERE h.deleted = false
+    AND h.status = 'active'
+    AND (cardinality(@house_ids::int[]) = 0 OR h.id = ANY(@house_ids::int[]))
+    AND (sqlc.narg('query')::text IS NULL OR h.street ILIKE '%' || sqlc.narg('query') || '%' OR h.house_number ILIKE '%' || sqlc.narg('query') || '%' OR h.description ILIKE '%' || sqlc.narg('query') || '%' OR h.country ILIKE '%' || sqlc.narg('query') || '%')
+    AND (sqlc.narg('city')::text IS NULL OR h.country = sqlc.narg('city'))
+    AND (sqlc.narg('price_min')::int IS NULL OR h.price >= sqlc.narg('price_min'))
+    AND (sqlc.narg('price_max')::int IS NULL OR h.price <= sqlc.narg('price_max'))
+    AND ((cardinality(@rooms::int[]) = 0 AND sqlc.narg('rooms_min')::int IS NULL) OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY(@rooms::int[]) OR (sqlc.narg('rooms_min')::int IS NOT NULL AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= sqlc.narg('rooms_min')))
+    AND (cardinality(@services::int[]) = 0 OR (SELECT count(DISTINCT hhs.service_id) FROM house_house_service hhs WHERE hhs.house_id = h.id AND hhs.service_id = ANY(@services::int[])) = cardinality(@services::int[]))
+    AND (sqlc.narg('category')::int IS NULL OR EXISTS (SELECT 1 FROM house_house_category hhc WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')))
+    AND (sqlc.narg('check_in')::date IS NULL OR sqlc.narg('check_out')::date IS NULL OR NOT EXISTS (SELECT 1 FROM request rq WHERE rq.house_id = h.id AND rq.status = 'confirmed' AND rq.start_date < sqlc.narg('check_out')::date AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date))
+    AND (sqlc.narg('guests')::int IS NULL OR h.max_guests IS NULL OR h.max_guests >= sqlc.narg('guests'))
+    AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
+    AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
+    AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
+    AND (sqlc.narg('min_lat')::float8 IS NULL OR h.lat >= sqlc.narg('min_lat')::float8)
+    AND (sqlc.narg('max_lat')::float8 IS NULL OR h.lat <= sqlc.narg('max_lat')::float8)
+    AND (sqlc.narg('min_lng')::float8 IS NULL OR h.lng >= sqlc.narg('min_lng')::float8)
+    AND (sqlc.narg('max_lng')::float8 IS NULL OR h.lng <= sqlc.narg('max_lng')::float8)
+), promoted AS (
+  SELECT f.id AS house_id, lp.activated_at
+  FROM filtered f JOIN listing_promotion lp ON lp.house_id=f.id
+  WHERE lp.type='boost' AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()
+  ORDER BY lp.activated_at DESC,lp.id
+  LIMIT 2
+)
 SELECT
   h.id,
   h.owner_id,
@@ -22,6 +50,8 @@ SELECT
   h.children_allowed,
   h.events_allowed,
   h.created_at,
+  COALESCE(promo.promotion_types,ARRAY[]::text[])::text[] AS promotion_types,
+  COALESCE(promo.promotion_expires_at::text,'')::text AS promotion_expires_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -39,76 +69,36 @@ SELECT
     ORDER BY f.position
     LIMIT 1
   ), '')::text AS cover_path
-FROM house h
-WHERE h.deleted = false
-  AND h.status = 'active'
-  AND (
-    cardinality(@house_ids::int[]) = 0
-    OR h.id = ANY(@house_ids::int[])
-  )
-  AND (
-    sqlc.narg('query')::text IS NULL
-    OR h.street ILIKE '%' || sqlc.narg('query') || '%'
-    OR h.house_number ILIKE '%' || sqlc.narg('query') || '%'
-    OR h.description ILIKE '%' || sqlc.narg('query') || '%'
-    OR h.country ILIKE '%' || sqlc.narg('query') || '%'
-  )
-  AND (sqlc.narg('city')::text IS NULL OR h.country = sqlc.narg('city'))
-  AND (sqlc.narg('price_min')::int IS NULL OR h.price >= sqlc.narg('price_min'))
-  AND (sqlc.narg('price_max')::int IS NULL OR h.price <= sqlc.narg('price_max'))
-  AND (
-    (cardinality(@rooms::int[]) = 0 AND sqlc.narg('rooms_min')::int IS NULL)
-    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY(@rooms::int[])
-    OR (
-      sqlc.narg('rooms_min')::int IS NOT NULL
-      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= sqlc.narg('rooms_min')
-    )
-  )
-  AND (
-    cardinality(@services::int[]) = 0
-    OR (
-      SELECT count(DISTINCT hhs.service_id)
-      FROM house_house_service hhs
-      WHERE hhs.house_id = h.id AND hhs.service_id = ANY(@services::int[])
-    ) = cardinality(@services::int[])
-  )
-  AND (
-    sqlc.narg('category')::int IS NULL
-    OR EXISTS (
-      SELECT 1 FROM house_house_category hhc
-      WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')
-    )
-  )
-  AND (
-    sqlc.narg('check_in')::date IS NULL
-    OR sqlc.narg('check_out')::date IS NULL
-    OR NOT EXISTS (
-      SELECT 1 FROM request rq
-      WHERE rq.house_id = h.id
-        AND rq.status = 'confirmed'
-        AND rq.start_date < sqlc.narg('check_out')::date
-        AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date
-    )
-  )
-  AND (
-    sqlc.narg('guests')::int IS NULL
-    OR h.max_guests IS NULL
-    OR h.max_guests >= sqlc.narg('guests')
-  )
-  AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
-  AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
-  AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
-  AND (sqlc.narg('min_lat')::float8 IS NULL OR h.lat >= sqlc.narg('min_lat')::float8)
-  AND (sqlc.narg('max_lat')::float8 IS NULL OR h.lat <= sqlc.narg('max_lat')::float8)
-  AND (sqlc.narg('min_lng')::float8 IS NULL OR h.lng >= sqlc.narg('min_lng')::float8)
-  AND (sqlc.narg('max_lng')::float8 IS NULL OR h.lng <= sqlc.narg('max_lng')::float8)
+FROM filtered h
+LEFT JOIN promoted top_promo ON top_promo.house_id=h.id
+LEFT JOIN LATERAL (
+ SELECT array_agg(lp.type ORDER BY lp.type)::text[] AS promotion_types,max(lp.expires_at) AS promotion_expires_at
+ FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()
+) promo ON true
 ORDER BY
   CASE WHEN @sort::text = 'price_asc' THEN h.price END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price_desc' THEN h.price END DESC NULLS LAST,
   CASE WHEN @sort::text = 'newest' THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN top_promo.house_id IS NOT NULL THEN 0 ELSE 1 END,
+  top_promo.activated_at DESC NULLS LAST,
   h.date_top DESC NULLS LAST,
-  h.created_at DESC
+  h.created_at DESC,
+  h.id DESC
 LIMIT @result_limit OFFSET @result_offset;
+
+-- name: ListMapClusters :many
+SELECT btrim(h.country)::text AS city,
+       avg(h.lat)::double precision AS lat,
+       avg(h.lng)::double precision AS lng,
+       count(*)::integer AS listing_count
+FROM house h
+WHERE h.status = 'active'
+  AND h.deleted = false
+  AND h.lat IS NOT NULL
+  AND h.lng IS NOT NULL
+  AND btrim(h.country) <> ''
+GROUP BY btrim(h.country)
+ORDER BY listing_count DESC, city;
 
 -- name: CountHousesFiltered :one
 SELECT count(*)
@@ -203,8 +193,11 @@ SELECT
   h.events_allowed,
   h.created_at,
   h.updated_at,
+  COALESCE((SELECT array_agg(lp.type ORDER BY lp.type)::text[] FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),ARRAY[]::text[])::text[] AS promotion_types,
+  COALESCE((SELECT max(lp.expires_at)::text FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),'')::text AS promotion_expires_at,
   h.reviews_summary,
   h.location_summary,
+  COALESCE(h.pois, '[]'::jsonb) AS pois,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv
@@ -283,14 +276,14 @@ INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
   area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
   check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
-  created_at, updated_at
+  created_at, updated_at, pois
 ) VALUES (
   @owner_id, @street, @house_number, @description, @price, @count_room,
   sqlc.narg('number_room'), @area, @country, 'pending_moderation', false, false, 0,
   sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('qc_geo'), sqlc.narg('max_guests'),
   sqlc.narg('check_in_after'), sqlc.narg('check_out_before'), sqlc.narg('smoking_allowed'),
   sqlc.narg('pets_allowed'), sqlc.narg('children_allowed'), sqlc.narg('events_allowed'),
-  now(), now()
+  now(), now(), @pois
 )
 RETURNING id;
 
@@ -316,7 +309,8 @@ SET street = @street,
     pets_allowed = sqlc.narg('pets_allowed'),
     children_allowed = sqlc.narg('children_allowed'),
     events_allowed = sqlc.narg('events_allowed'),
-    updated_at = now()
+    updated_at = now(),
+    pois = @pois
 WHERE id = @id AND owner_id = @owner_id AND deleted = false;
 
 -- name: DeleteHouseServices :exec
@@ -359,6 +353,8 @@ SELECT
   h.children_allowed,
   h.events_allowed,
   h.created_at,
+  COALESCE((SELECT array_agg(lp.type ORDER BY lp.type)::text[] FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),ARRAY[]::text[])::text[] AS promotion_types,
+  COALESCE((SELECT max(lp.expires_at)::text FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),'')::text AS promotion_expires_at,
   COALESCE((
     SELECT round(avg(rv.rating)::numeric, 1)
     FROM review rv

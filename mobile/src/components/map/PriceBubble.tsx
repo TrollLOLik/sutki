@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -10,6 +11,8 @@ interface PriceBubbleProps {
   price: number;
   /** When true, renders the inverted (selected) variant. */
   selected?: boolean;
+  promoted?: boolean;
+  highlighted?: boolean;
 }
 
 /**
@@ -21,11 +24,12 @@ interface PriceBubbleProps {
  * is fine for tens of pins. When the map grows to hundreds/thousands of pins,
  * switch to server-side clustering + static-image bubbles to avoid jank.
  */
-export function PriceBubble({ price, selected }: PriceBubbleProps) {
+export function PriceBubble({ price, selected, promoted, highlighted }: PriceBubbleProps) {
   const { palette } = useAppTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   return (
-    <View style={[styles.bubble, selected && styles.bubbleSelected]}>
+    <View style={[styles.bubble, promoted && styles.bubblePromoted, highlighted && styles.bubbleHighlighted, selected && styles.bubbleSelected]}>
+      {highlighted ? <Ionicons name="sparkles" size={12} color={selected ? palette.primary : '#FFFFFF'} /> : null}
       <Text style={[styles.text, selected && styles.textSelected]}>
         {`${formatRub(price)}\u00A0₽`}
       </Text>
@@ -37,6 +41,9 @@ const makeStyles = (palette: Palette) =>
   StyleSheet.create({
     bubble: {
       alignSelf: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
       backgroundColor: palette.primary,
       paddingHorizontal: 10,
       paddingVertical: 5,
@@ -53,6 +60,20 @@ const makeStyles = (palette: Palette) =>
       backgroundColor: palette.surface,
       borderColor: palette.primary,
       shadowColor: '#1A1A1A',
+    },
+    bubblePromoted: {
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderWidth: 2.5,
+      shadowOpacity: 0.4,
+      elevation: 7,
+    },
+    bubbleHighlighted: {
+      borderWidth: 3,
+      borderColor: '#FFD5C6',
+      shadowOpacity: 0.5,
+      shadowRadius: 7,
+      elevation: 9,
     },
     text: {
       color: '#FFFFFF',

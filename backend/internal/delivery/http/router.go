@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// middleware.RealIP rewrites r.RemoteAddr from X-Forwarded-For / X-Real-IP
@@ -33,6 +33,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/listings", func(r chi.Router) {
 			r.Get("/", listingHandler.list)
+			r.Get("/map-clusters", listingHandler.mapClusters)
 			r.Get("/{id}/availability", bookingHandler.Availability)
 			r.Get("/{id}/reviews", reviewHandler.List)
 			r.Get("/{id}/reviews-summary", aiHandler.GetReviewsSummary)
@@ -47,6 +48,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 				r.Post("/{id}/reviews", reviewHandler.Create)
 				r.Post("/{id}/favorite", favoriteHandler.Add)
 				r.Delete("/{id}/favorite", favoriteHandler.Remove)
+				r.Post("/{id}/promotions/checkout", promotionHandler.Checkout)
+				r.Get("/{id}/promotions", promotionHandler.List)
 			})
 
 			// Endpoints with optional authentication under /listings
@@ -69,6 +72,10 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Get("/guest/requests", bookingHandler.ListGuest)
 		// Login-free unsubscribe link from email footers (HMAC-signed).
 		r.Get("/email/unsubscribe", emailHandler.Unsubscribe)
+		r.Get("/payment-products", paymentHandler.Products)
+		r.Post("/webhooks/yookassa", paymentHandler.Webhook)
+		r.Post("/admin/payments/{id}/refunds", paymentHandler.Refund)
+		r.Post("/admin/payments/mock/{provider_id}/status", paymentHandler.MockSetStatus)
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
@@ -114,6 +121,9 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Route("/chat", chatHandler.Routes)
 			r.Post("/media/presign", mediaHandler.PresignUpload)
 			r.Post("/ai/listing-description", aiHandler.GenerateDescription)
+			r.Post("/payments/checkout", paymentHandler.Checkout)
+			r.Get("/payments/{id}", paymentHandler.Get)
+			r.Post("/payments/{id}/mock-confirm", paymentHandler.MockConfirm)
 		})
 	})
 

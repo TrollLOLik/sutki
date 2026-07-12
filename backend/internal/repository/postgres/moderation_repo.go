@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -200,16 +201,32 @@ func (r *ModerationRepo) FindSimilarPhoto(ctx context.Context, houseID, ownerID 
 
 func (r *ModerationRepo) GetHouseForModeration(ctx context.Context, houseID int32) (domain.ModerationHouse, error) {
 	var h domain.ModerationHouse
+	var poisBytes []byte
 	err := r.pool.QueryRow(ctx, `
 		SELECT h.id, h.owner_id, COALESCE(u.email, ''), h.status,
 		       COALESCE(h.country, ''), h.street, h.house_number,
-		       COALESCE(h.description, ''), h.price
+		       COALESCE(h.description, ''), h.price,
+		       COALESCE(h.count_room, ''), h.area, h.max_guests,
+		       COALESCE(h.smoking_allowed, ''), COALESCE(h.pets_allowed, ''),
+		       COALESCE(h.children_allowed, ''), COALESCE(h.events_allowed, ''),
+		       COALESCE((
+		           SELECT string_agg(s.name, ', ')
+		           FROM house_house_service hhs
+		           JOIN service s ON s.id = hhs.service_id
+		           WHERE hhs.house_id = h.id
+		       ), ''),
+		       COALESCE(h.pois, '[]'::jsonb)
 		FROM house h
 		JOIN "user" u ON u.id = h.owner_id
 		WHERE h.id = $1 AND h.deleted = false
-	`, houseID).Scan(&h.ID, &h.OwnerID, &h.OwnerEmail, &h.Status, &h.City, &h.Street, &h.HouseNumber, &h.Description, &h.Price)
+	`, houseID).Scan(&h.ID, &h.OwnerID, &h.OwnerEmail, &h.Status, &h.City, &h.Street, &h.HouseNumber, &h.Description, &h.Price,
+		&h.CountRoom, &h.Area, &h.MaxGuests, &h.SmokingAllowed, &h.PetsAllowed, &h.ChildrenAllowed, &h.EventsAllowed, &h.ServicesList,
+		&poisBytes)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ModerationHouse{}, domain.ErrNotFound
+	}
+	if err == nil && len(poisBytes) > 0 {
+		_ = json.Unmarshal(poisBytes, &h.POIs)
 	}
 	return h, err
 }

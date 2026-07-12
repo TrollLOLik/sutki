@@ -37,7 +37,7 @@ type ListFilter struct {
 	CheckOut *time.Time
 	// Guests, when set, keeps listings whose max_guests is unknown (legacy rows)
 	// or at least this large.
-	Guests *int32
+	Guests          *int32
 	PetsAllowed     *bool
 	ChildrenAllowed *bool
 	EventsAllowed   *bool
@@ -50,4 +50,13 @@ type ListFilter struct {
 	Sort   ListSort
 	Limit  int32
 	Offset int32
+}
+
+// MapCluster is a lightweight city-level aggregate used by the map when it is
+// zoomed out too far to load individual listings.
+type MapCluster struct {
+	City  string  `json:"city"`
+	Lat   float64 `json:"lat"`
+	Lng   float64 `json:"lng"`
+	Count int32   `json:"count"`
 }
