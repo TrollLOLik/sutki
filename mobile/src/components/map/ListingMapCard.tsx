@@ -84,6 +84,10 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
               <Text numberOfLines={1} style={styles.address}>
                 {listing.address}
               </Text>
+              <View style={styles.viewsRow}>
+                <Ionicons name="eye-outline" size={13} color={palette.inkMuted} />
+                <Text style={styles.viewsText}>{listing.views}</Text>
+              </View>
             </View>
 
             <Pressable hitSlop={10} onPress={onClose} style={styles.closeButton}>
@@ -181,6 +185,16 @@ const makeStyles = (palette: Palette) =>
   address: {
     fontSize: 12,
     color: palette.inkSecondary,
+  },
+  viewsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 3,
+  },
+  viewsText: {
+    fontSize: 11,
+    color: palette.inkMuted,
   },
   closeButton: {
     position: 'absolute',

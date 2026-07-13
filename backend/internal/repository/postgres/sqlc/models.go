@@ -203,6 +203,24 @@ type ListingPromotion struct {
 	UpdatedAt        pgtype.Timestamptz
 }
 
+type ListingViewDaily struct {
+	HouseID            int32
+	ViewDate           pgtype.Date
+	AuthenticatedViews int32
+	GuestViews         int32
+	IsAnomalous        bool
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type ListingViewEvent struct {
+	EventID    pgtype.UUID
+	HouseID    int32
+	ViewerHash []byte
+	ViewerKind string
+	ViewedOn   pgtype.Date
+	CreatedAt  pgtype.Timestamptz
+}
+
 type LocationSummaryJob struct {
 	ID            int64
 	HouseID       int32
@@ -461,6 +479,7 @@ type Review struct {
 	ContentHash     *string
 	ModeratedAt     pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+	EditAttempts    int32
 }
 
 type ReviewModerationJob struct {
@@ -495,6 +514,7 @@ type ReviewReply struct {
 	ModeratedAt     pgtype.Timestamptz
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+	EditAttempts    int32
 }
 
 type ReviewSummaryJob struct {

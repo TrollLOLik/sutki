@@ -12,3 +12,4 @@ yarn-error.log*
 .idea/
 .gemini/
 .cache/
+.pnpm-store/

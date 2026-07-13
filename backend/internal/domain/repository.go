@@ -38,6 +38,13 @@ type ListingRepository interface {
 	UserHasConfirmedBooking(ctx context.Context, userID, houseID int32) (bool, error)
 }
 
+// ListingViewRepository persists idempotent listing-detail views and their
+// daily aggregates. Guest views remain analytics-only; authenticated views
+// may participate in popularity ranking.
+type ListingViewRepository interface {
+	Record(ctx context.Context, eventID string, houseID int32, viewerHash []byte, viewerKind string, viewedOn time.Time, userID *int32) (ListingViewResult, error)
+}
+
 // BookingRepository abstracts persistence for rental requests (bookings).
 type BookingRepository interface {
 	GetHouseForBooking(ctx context.Context, houseID int32) (ownerID int32, status string, ownerEmail string, err error)

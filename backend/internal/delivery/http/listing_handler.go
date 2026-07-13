@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 )
+
+var viewEventIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
 // ListingHandler serves the public listings read API.
 type ListingHandler struct {
@@ -76,6 +79,7 @@ type listingCardDTO struct {
 	QcGeo       *int32   `json:"qc_geo"`
 	MaxGuests   *int32   `json:"max_guests"`
 	Views       int32    `json:"views"`
+	Views30d    *int32   `json:"views_30d,omitempty"`
 	CoverURL    string   `json:"cover_url"`
 	// Rating is the average review score (0 when there are no reviews);
 	// ReviewsCount is the published review count.
@@ -344,6 +348,7 @@ func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 	items := make([]listingCardDTO, 0, len(res.Items))
 	for _, hs := range res.Items {
 		card := h.cardDTO(hs)
+		card.Views30d = hs.Views30d
 		// Owner-only: expose moderation state so the app can render badges
 		// ("На проверке", "Отклонено: причина") in "My listings".
 		card.Status = hs.Status
@@ -405,8 +410,61 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 	if isAuthed && callerID == hs.OwnerID {
 		dto.Status = hs.Status
 		dto.RejectionReason = hs.RejectionReason
+		dto.Views30d = hs.Views30d
 	}
 	writeJSON(w, http.StatusOK, dto)
+}
+
+type recordListingViewRequest struct {
+	EventID string `json:"event_id"`
+}
+
+func (h *ListingHandler) recordView(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var body recordListingViewRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	body.EventID = strings.TrimSpace(body.EventID)
+	if !viewEventIDPattern.MatchString(body.EventID) {
+		writeError(w, http.StatusBadRequest, "invalid event_id")
+		return
+	}
+
+	guestID := strings.TrimSpace(r.Header.Get("X-Guest-Id"))
+	userID, authenticated := userIDFromContext(r.Context())
+	identityKey := guestID
+	var userIDPtr *int32
+	if authenticated {
+		identityKey = "user:" + strconv.FormatInt(int64(userID), 10)
+		userIDPtr = &userID
+	}
+	if identityKey == "" || len(identityKey) > 128 {
+		writeError(w, http.StatusBadRequest, "viewer identity is required")
+		return
+	}
+	if !ViewIdentityLimiter.Allow("listing_view:"+identityKey, 300) || !ViewIPLimiter.Allow("listing_view_ip:"+getClientIP(r), 1000) {
+		writeError(w, http.StatusTooManyRequests, "too many view events")
+		return
+	}
+
+	result, err := h.svc.RecordView(r.Context(), body.EventID, int32(id), guestID, userIDPtr)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			writeError(w, http.StatusNotFound, "listing not found")
+		case errors.Is(err, listing.ErrMissingViewIdentity):
+			writeError(w, http.StatusBadRequest, "viewer identity is required")
+		default:
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"counted": result.Counted, "views": result.Views})
 }
 
 func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
@@ -528,6 +586,8 @@ var allowedSorts = map[string]domain.ListSort{
 	"price_asc":  domain.SortPriceAsc,
 	"price_desc": domain.SortPriceDesc,
 	"newest":     domain.SortNewest,
+	"oldest":     domain.SortOldest,
+	"popular":    domain.SortPopular,
 }
 
 // parseListFilter reads listing filter query params. It returns the built

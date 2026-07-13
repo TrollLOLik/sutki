@@ -217,6 +217,7 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 	houses := make([]domain.House, 0, len(rows))
 	for _, row := range rows {
 		promotionExpiresAt := parseDBTimestamp(row.PromotionExpiresAt)
+		views30d := row.Views30d
 		houses = append(houses, domain.House{
 			ID:                 row.ID,
 			OwnerID:            ownerID,
@@ -234,6 +235,7 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 			Lng:                row.Lng,
 			QcGeo:              row.QcGeo,
 			Views:              row.Views,
+			Views30d:           &views30d,
 			CoverPath:          row.CoverPath,
 			CheckInAfter:       pgTimeToStringPtr(row.CheckInAfter),
 			CheckOutBefore:     pgTimeToStringPtr(row.CheckOutBefore),
@@ -313,6 +315,7 @@ func (r *ListingRepo) GetByID(ctx context.Context, id int32) (domain.House, erro
 		Lng:                row.Lng,
 		QcGeo:              row.QcGeo,
 		Views:              row.Views,
+		Views30d:           func() *int32 { value := row.Views30d; return &value }(),
 		CheckInAfter:       pgTimeToStringPtr(row.CheckInAfter),
 		CheckOutBefore:     pgTimeToStringPtr(row.CheckOutBefore),
 		SmokingAllowed:     row.SmokingAllowed,

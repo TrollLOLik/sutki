@@ -98,6 +98,9 @@ var (
 
 	// Chat conversation-creation limiter (1 hour window, anti-spam)
 	ChatConversationLimiter = NewSlidingWindowLimiter(time.Hour)
+
+	ViewIdentityLimiter = NewSlidingWindowLimiter(time.Hour)
+	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)
 )
 
 // trustProxyHeaders controls whether X-Forwarded-For / X-Real-IP are honored.

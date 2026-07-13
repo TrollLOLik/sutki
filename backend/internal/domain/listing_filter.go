@@ -11,6 +11,8 @@ const (
 	SortPriceAsc  ListSort = "price_asc"
 	SortPriceDesc ListSort = "price_desc"
 	SortNewest    ListSort = "newest"
+	SortOldest    ListSort = "oldest"
+	SortPopular   ListSort = "popular"
 )
 
 // ListFilter holds the optional search/filter criteria for active listings.

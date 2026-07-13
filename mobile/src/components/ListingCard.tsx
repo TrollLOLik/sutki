@@ -13,6 +13,7 @@ interface ListingCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   onPromote?: () => void;
+  showOwnerStats?: boolean;
 }
 
 /**
@@ -25,7 +26,7 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
   rejected: { label: 'Отклонено', bg: '#FDEBEC', fg: '#C0362C' },
 };
 
-export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote }: ListingCardProps) {
+export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote, showOwnerStats = false }: ListingCardProps) {
   const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -197,6 +198,10 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
                 </Text>
               </View>
               <View className="flex-row items-center gap-0.5">
+                <Ionicons name="eye-outline" size={12} color={palette.inkMuted} />
+                <Text className="text-[10px] text-ink-secondary">{listing.views}</Text>
+              </View>
+              <View className="flex-row items-center gap-0.5">
                 <Ionicons name="layers-outline" size={12} color={palette.inkMuted} />
                 <Text className="text-[10px] text-ink-secondary">{(listing.id % 9) + 1} этаж</Text>
               </View>
@@ -227,6 +232,15 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
               повторную проверку.
             </Text>
           ) : null}
+        </View>
+      ) : null}
+
+      {showOwnerStats && listing.views_30d != null ? (
+        <View className="mt-3 flex-row items-center gap-1.5 border-t border-line pt-3">
+          <Ionicons name="analytics-outline" size={15} color={palette.primary} />
+          <Text className="text-xs font-semibold text-ink-secondary">
+            {listing.views_30d} просмотров за 30 дней
+          </Text>
         </View>
       ) : null}
 

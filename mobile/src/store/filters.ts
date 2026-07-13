@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 
 export type RoomFilter = 'studio' | '1' | '2' | '3plus';
+export type ListingSort = 'newest' | 'oldest' | 'popular';
 
 export interface SearchFilters {
+  sort: ListingSort;
   /** City name (matches house.country on the backend). */
   city: string | null;
   checkIn: string | null;
@@ -21,6 +23,7 @@ export interface SearchFilters {
 }
 
 export const defaultFilters: SearchFilters = {
+  sort: 'newest',
   city: null,
   checkIn: null,
   checkOut: null,

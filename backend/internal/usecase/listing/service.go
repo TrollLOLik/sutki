@@ -2,9 +2,12 @@ package listing
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
@@ -21,6 +24,8 @@ var ErrInvalidListing = errors.New("invalid listing")
 // create/update moderation rate limit.
 var ErrTooManySubmissions = errors.New("too many listing submissions today")
 
+var ErrMissingViewIdentity = errors.New("missing listing view identity")
+
 // Moderator runs the moderation pipeline for created/updated listings.
 // Implemented by the moderation service; nil disables moderation (tests).
 type Moderator interface {
@@ -34,6 +39,7 @@ type Moderator interface {
 // Service implements listing read use cases over a ListingRepository.
 type Service struct {
 	repo                domain.ListingRepository
+	viewRepo            domain.ListingViewRepository
 	storage             domain.FileStorage
 	aiSummarizer        domain.AISummarizer
 	moderator           Moderator
@@ -42,9 +48,10 @@ type Service struct {
 	wake                chan struct{}
 }
 
-func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer, moderator Moderator, locationSummaryRepo domain.LocationSummaryRepository, nearbyPOIs domain.NearbyPOIProvider) *Service {
+func New(repo domain.ListingRepository, viewRepo domain.ListingViewRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer, moderator Moderator, locationSummaryRepo domain.LocationSummaryRepository, nearbyPOIs domain.NearbyPOIProvider) *Service {
 	return &Service{
 		repo:                repo,
+		viewRepo:            viewRepo,
 		storage:             storage,
 		aiSummarizer:        aiSummarizer,
 		moderator:           moderator,
@@ -52,6 +59,25 @@ func New(repo domain.ListingRepository, storage domain.FileStorage, aiSummarizer
 		nearbyPOIs:          nearbyPOIs,
 		wake:                make(chan struct{}, 1),
 	}
+}
+
+func (s *Service) RecordView(ctx context.Context, eventID string, houseID int32, guestID string, userID *int32) (domain.ListingViewResult, error) {
+	if s.viewRepo == nil {
+		return domain.ListingViewResult{}, errors.New("listing views are not supported")
+	}
+	viewerKind := "guest"
+	identity := strings.TrimSpace(guestID)
+	if userID != nil {
+		viewerKind = "authenticated"
+		identity = fmt.Sprintf("user:%d", *userID)
+	}
+	if identity == "" {
+		return domain.ListingViewResult{}, ErrMissingViewIdentity
+	}
+	hash := sha256.Sum256([]byte(viewerKind + ":" + identity))
+	now := time.Now().UTC()
+	viewedOn := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return s.viewRepo.Record(ctx, eventID, houseID, hash[:], viewerKind, viewedOn, userID)
 }
 
 // ListResult is a page of active listings plus pagination metadata.

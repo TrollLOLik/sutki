@@ -68,6 +68,7 @@ export default function MyListingsScreen() {
             renderItem={({ item }) => (
               <ListingCard
                 listing={item}
+                showOwnerStats
                 onPress={() =>
                   router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
                 }

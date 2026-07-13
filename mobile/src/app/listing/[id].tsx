@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -24,7 +25,8 @@ import { ListingCard } from '@/components/ListingCard';
 import { Button } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
-import { useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
+import { listingKeys, recordListingView, useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
+import { generateSecureUUID } from '@/lib/guestId';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -35,10 +37,13 @@ export default function ListingDetailScreen() {
   const numericId = Number(id);
   const { width } = useWindowDimensions();
   const { data, isLoading, isError, refetch } = useListing(numericId);
+  const queryClient = useQueryClient();
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
   const isFavorite = favoriteIds?.has(numericId) ?? false;
   const insets = useSafeAreaInsets();
+  const viewEventIDRef = useRef(generateSecureUUID());
+  const viewRequestStartedRef = useRef(false);
 
   const { user } = useSessionStore();
 
@@ -53,7 +58,21 @@ export default function ListingDetailScreen() {
   useEffect(() => {
     setActivePhotoIndex(0);
     setIsExpanded(false);
+    viewEventIDRef.current = generateSecureUUID();
+    viewRequestStartedRef.current = false;
   }, [numericId]);
+
+  useEffect(() => {
+    if (!data || viewRequestStartedRef.current) return;
+    viewRequestStartedRef.current = true;
+    recordListingView(numericId, viewEventIDRef.current)
+      .then((result) => {
+        queryClient.setQueryData(listingKeys.detail(numericId), { ...data, views: result.views });
+      })
+      .catch(() => {
+        // View analytics must never block or visibly disturb listing details.
+      });
+  }, [data, numericId, queryClient]);
 
   const isOwnListing = useMemo(() => {
     if (!data || !user) return false;
@@ -441,6 +460,7 @@ export default function ListingDetailScreen() {
                 />
                 <Ionicons name="share-outline" size={20} color={palette.ink} style={{ zIndex: 1 }} />
               </Pressable>
+
             </View>
           </View>
 
@@ -559,6 +579,14 @@ export default function ListingDetailScreen() {
                 <Text className="text-sm font-bold text-ink">{formatRating(data.rating)}</Text>
                 <Text className="text-sm text-ink-secondary">({formatReviewsCount(data.reviews_count)})</Text>
               </Pressable>
+
+              <View className="flex-row items-center gap-1.5">
+                <Ionicons name="eye-outline" size={16} color={palette.inkMuted} />
+                <Text className="text-sm text-ink-secondary">{data.views} просмотров</Text>
+                {isOwnListing && data.views_30d != null ? (
+                  <Text className="text-sm text-ink-muted">· {data.views_30d} за 30 дней</Text>
+                ) : null}
+              </View>
 
               <View className="flex-row items-baseline gap-1">
                 <Text className="text-2xl font-extrabold text-ink">{formatRub(data.price)} ₽</Text>

@@ -129,10 +129,11 @@ func main() {
 	moderationSvc.StartWorker(ctx)
 
 	listingRepo := postgres.NewListingRepo(queries)
+	listingViewRepo := postgres.NewListingViewRepo(pool)
 	moderationSvc.SetPhotoPipeline(listingRepo, publicStorage)
 	locationSummaryJobRepo := postgres.NewLocationSummaryJobRepo(pool)
 	nearbyPOIs := poi.NewOverpass(cfg.OverpassURL, cfg.OverpassTimeout)
-	listingSvc := listing.New(listingRepo, publicStorage, aiSummarizer, moderationSvc, locationSummaryJobRepo, nearbyPOIs)
+	listingSvc := listing.New(listingRepo, listingViewRepo, publicStorage, aiSummarizer, moderationSvc, locationSummaryJobRepo, nearbyPOIs)
 	listingSvc.StartLocationSummaryWorker(ctx)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 

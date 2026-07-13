@@ -131,7 +131,17 @@ export function filtersToListParams(
     petsAllowed: filters.petsAllowed || undefined,
     childrenAllowed: filters.childrenAllowed || undefined,
     eventsAllowed: filters.eventsAllowed || undefined,
+    sort: filters.sort,
   };
+}
+
+export interface RecordListingViewResult {
+  counted: boolean;
+  views: number;
+}
+
+export function recordListingView(id: number, eventId: string): Promise<RecordListingViewResult> {
+  return api.post<RecordListingViewResult>(`/api/v1/listings/${id}/views`, { event_id: eventId });
 }
 
 /** Listings are public, so no Authorization header is attached. */

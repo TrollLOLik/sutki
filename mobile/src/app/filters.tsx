@@ -18,7 +18,7 @@ import { Button, Chip, RangeSlider } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useServices } from '@/lib/api/create-listing';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
-import { useFiltersStore, type RoomFilter, type SearchFilters } from '@/store/filters';
+import { useFiltersStore, type ListingSort, type RoomFilter, type SearchFilters } from '@/store/filters';
 import { formatGuests } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -35,6 +35,12 @@ const PRICE_PRESETS: { label: string; min: number | null; max: number | null }[]
   { label: '2 000 – 4 000', min: 2000, max: 4000 },
   { label: '4 000 – 7 000', min: 4000, max: 7000 },
   { label: 'от 7 000', min: 7000, max: null },
+];
+
+const SORT_OPTIONS: { label: string; value: ListingSort }[] = [
+  { label: 'Сначала новые', value: 'newest' },
+  { label: 'Сначала старые', value: 'oldest' },
+  { label: 'Популярные', value: 'popular' },
 ];
 
 function toggle<T>(list: T[], value: T): T[] {
@@ -79,6 +85,7 @@ export default function FiltersScreen() {
   const [petsAllowed, setPetsAllowed] = useState(store.petsAllowed);
   const [childrenAllowed, setChildrenAllowed] = useState(store.childrenAllowed);
   const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
+  const [sort, setSort] = useState<ListingSort>(store.sort);
 
   // Price formatting helper
   const formatPriceString = (val: string) => {
@@ -106,6 +113,7 @@ export default function FiltersScreen() {
 
   const draftFilters: SearchFilters = useMemo(
     () => ({
+      sort,
       city,
       checkIn,
       checkOut,
@@ -119,7 +127,7 @@ export default function FiltersScreen() {
       childrenAllowed,
       eventsAllowed,
     }),
-    [city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
+    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
   // Live result count for the CTA.
@@ -176,6 +184,7 @@ export default function FiltersScreen() {
 
   const apply = () => {
     store.setFilters({
+      sort,
       city,
       checkIn,
       checkOut,
@@ -207,6 +216,7 @@ export default function FiltersScreen() {
     setPetsAllowed(false);
     setChildrenAllowed(false);
     setEventsAllowed(false);
+    setSort('newest');
   };
 
 
@@ -254,6 +264,36 @@ export default function FiltersScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingVertical: 16 }}>
+        <View style={{ gap: 10 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Сортировка</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {SORT_OPTIONS.map((option) => {
+              const selected = sort === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setSort(option.value)}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: selected ? palette.primary : palette.line,
+                    backgroundColor: selected ? palette.primaryLight : palette.surface,
+                    paddingHorizontal: 8,
+                  }}
+                >
+                  <Text numberOfLines={2} style={{ textAlign: 'center', fontSize: 12, fontWeight: '700', color: selected ? palette.primary : palette.inkSecondary }}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         {/* City Card */}
         <Pressable
           onPress={() => setCitySheet(true)}

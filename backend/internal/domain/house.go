@@ -32,11 +32,13 @@ type House struct {
 	// only exposed to the owner.
 	RejectionReason *string
 	// MaxGuests is the sleeping capacity; nil means unknown (legacy listings).
-	MaxGuests          *int32
-	Lat                *float64
-	Lng                *float64
-	QcGeo              *int32
-	Views              int32
+	MaxGuests *int32
+	Lat       *float64
+	Lng       *float64
+	QcGeo     *int32
+	Views     int32
+	// Views30d is populated only for owner-facing listing pages.
+	Views30d           *int32
 	CoverPath          string
 	CheckInAfter       *string
 	CheckOutBefore     *string
@@ -61,6 +63,11 @@ type House struct {
 	Photos     []Photo
 	Services   []Ref
 	Categories []Ref
+}
+
+type ListingViewResult struct {
+	Counted bool
+	Views   int32
 }
 
 // Photo is an image attached to a house (legacy `file` table).

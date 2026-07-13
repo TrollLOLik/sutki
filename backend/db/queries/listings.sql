@@ -26,6 +26,15 @@ WITH filtered AS MATERIALIZED (
   WHERE lp.type='boost' AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()
   ORDER BY lp.activated_at DESC,lp.id
   LIMIT 2
+), popularity AS (
+  SELECT d.house_id,
+         sum(CASE WHEN d.is_anomalous THEN LEAST(d.authenticated_views, 10) ELSE d.authenticated_views END)::bigint AS score
+  FROM listing_view_daily d
+  JOIN filtered f ON f.id=d.house_id
+  WHERE @sort::text='popular'
+    AND d.view_date >= ((now() AT TIME ZONE 'UTC')::date - 30)
+    AND d.view_date < (now() AT TIME ZONE 'UTC')::date
+  GROUP BY d.house_id
 )
 SELECT
   h.id,
@@ -71,18 +80,19 @@ SELECT
   ), '')::text AS cover_path
 FROM filtered h
 LEFT JOIN promoted top_promo ON top_promo.house_id=h.id
+LEFT JOIN popularity pop ON pop.house_id=h.id
 LEFT JOIN LATERAL (
  SELECT array_agg(lp.type ORDER BY lp.type)::text[] AS promotion_types,max(lp.expires_at) AS promotion_expires_at
  FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()
 ) promo ON true
 ORDER BY
+  CASE WHEN @sort::text IN ('', 'newest', 'oldest', 'popular') THEN CASE WHEN top_promo.house_id IS NOT NULL THEN 0 ELSE 1 END ELSE 0 END,
   CASE WHEN @sort::text = 'price_asc' THEN h.price END ASC NULLS LAST,
   CASE WHEN @sort::text = 'price_desc' THEN h.price END DESC NULLS LAST,
-  CASE WHEN @sort::text = 'newest' THEN h.created_at END DESC NULLS LAST,
-  CASE WHEN top_promo.house_id IS NOT NULL THEN 0 ELSE 1 END,
-  top_promo.activated_at DESC NULLS LAST,
-  h.date_top DESC NULLS LAST,
-  h.created_at DESC,
+  CASE WHEN @sort::text = 'oldest' THEN h.created_at END ASC NULLS LAST,
+  CASE WHEN @sort::text = 'popular' THEN COALESCE(pop.score, 0) END DESC NULLS LAST,
+  CASE WHEN @sort::text IN ('', 'newest', 'popular', 'price_asc', 'price_desc') THEN h.created_at END DESC NULLS LAST,
+  CASE WHEN @sort::text = 'oldest' THEN h.id END ASC NULLS LAST,
   h.id DESC
 LIMIT @result_limit OFFSET @result_offset;
 
@@ -185,6 +195,12 @@ SELECT
   h.lng,
   h.qc_geo,
   h.views,
+  COALESCE((
+    SELECT sum(d.authenticated_views + d.guest_views)
+    FROM listing_view_daily d
+    WHERE d.house_id=h.id
+      AND d.view_date >= ((now() AT TIME ZONE 'UTC')::date - 29)
+  ), 0)::int AS views_30d,
   h.check_in_after,
   h.check_out_before,
   h.smoking_allowed,
@@ -345,6 +361,12 @@ SELECT
   h.lng,
   h.qc_geo,
   h.views,
+  COALESCE((
+    SELECT sum(d.authenticated_views + d.guest_views)
+    FROM listing_view_daily d
+    WHERE d.house_id=h.id
+      AND d.view_date >= ((now() AT TIME ZONE 'UTC')::date - 29)
+  ), 0)::int AS views_30d,
   h.check_in_after,
   h.check_out_before,
   h.smoking_allowed,

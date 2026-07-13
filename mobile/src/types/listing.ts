@@ -42,6 +42,8 @@ export interface ListingCard {
   /** Sleeping capacity; null when unknown (legacy listings). */
   max_guests: number | null;
   views: number;
+  /** Owner-only rolling total returned by /listings/mine and own detail. */
+  views_30d?: number;
   cover_url: string;
   /** Average review score (0 when there are no reviews). */
   rating: number;
