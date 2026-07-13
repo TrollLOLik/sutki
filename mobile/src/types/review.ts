@@ -13,7 +13,13 @@ export interface Review {
   author_avatar_url: string;
   /** RFC3339 timestamp. */
   created_at: string;
+  status?: 'pending_moderation' | 'active' | 'rejected' | 'moderation_review';
+  rejection_reason?: string;
+  reply?: ReviewReply;
 }
+
+export interface ReviewReply { id:number; body:string; status?:string; rejection_reason?:string; created_at:string }
+export interface ReviewEligibility { request_id:number; house_id:number; can_review:boolean; review_deadline:string; review_id?:number; review_status?:string; review_rating?:number; review_body?:string; rejection_reason?:string; edit_attempts?:number; max_attempts?:number }
 
 export interface ReviewSummary {
   /** Average score rounded to one decimal (0 when there are no reviews). */
@@ -31,7 +37,7 @@ export interface ReviewsPage {
   offset: number;
 }
 
-/** Body of POST /api/v1/listings/{id}/reviews. */
+/** Body of POST /api/v1/requests/{id}/review. */
 export interface CreateReviewBody {
   rating: number;
   body: string;
@@ -49,6 +55,10 @@ export interface UserReview {
   house_number: string;
   house_city: string;
   house_cover_url: string;
+  status?: string;
+  rejection_reason?: string;
+  reply?: ReviewReply;
+  request_id?: number;
 }
 
 export interface UserReviewsPage {

@@ -18,6 +18,10 @@ interface Props {
 	rejecting?: boolean;
 	onConfirm?: (requestID: number) => void;
 	onReject?: (requestID: number) => void;
+	reviewAvailable?: boolean;
+	reviewLabel?: string;
+	reviewStatus?: string;
+	onReview?: (requestID: number) => void;
 }
 
 const EVENT_META: Record<
@@ -62,6 +66,10 @@ export function BookingStatusCard({
 	rejecting,
 	onConfirm,
 	onReject,
+	reviewAvailable,
+	reviewLabel,
+	reviewStatus,
+	onReview,
 }: Props) {
 	const { palette } = useAppTheme();
 	const meta = EVENT_META[payload.event] ?? EVENT_META.new;
@@ -123,6 +131,15 @@ export function BookingStatusCard({
 					</View>
 				) : null}
 
+				{!isOwner && payload.event === 'confirmed' && (reviewStatus === 'rejected' || reviewStatus === 'moderation_review') ? (
+					<View className="mt-3 bg-danger/5 border border-danger/10 p-3 rounded-xl gap-0.5">
+						<Text className="text-[12px] font-bold text-danger">Отзыв отклонён модерацией</Text>
+						<Text className="text-[11px] text-danger leading-relaxed">
+							Пожалуйста, измените текст отзыва, чтобы он соответствовал правилам.
+						</Text>
+					</View>
+				) : null}
+
 				{showActions ? (
 					<View className="flex-row gap-2 mt-3">
 						<TouchableOpacity
@@ -154,6 +171,12 @@ export function BookingStatusCard({
 							)}
 						</TouchableOpacity>
 					</View>
+				) : null}
+
+				{!isOwner && payload.event === 'confirmed' && reviewAvailable ? (
+					<TouchableOpacity onPress={() => onReview?.(payload.request_id)} activeOpacity={0.8} style={{ backgroundColor: palette.primary }} className="mt-3 items-center rounded-xl py-2.5 w-full">
+						<Text className="text-[13px] font-bold text-white">{reviewLabel || 'Оставить отзыв'}</Text>
+					</TouchableOpacity>
 				) : null}
 
 				{time ? (

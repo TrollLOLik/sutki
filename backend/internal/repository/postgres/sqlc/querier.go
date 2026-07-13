@@ -34,8 +34,7 @@ type Querier interface {
 	CreateConversation(ctx context.Context, houseID *int32) (Conversation, error)
 	// Creates a new listing owned by the given user. New listings start in
 	// 'pending_moderation': the moderation pipeline (prefilter + LLM verdict)
-	// flips them to 'active' / 'moderation_review' / 'rejected'. The one-time
-	// publication fee is a front-end stub until YooKassa is wired.
+	// flips them to 'active' / 'moderation_review' / 'rejected'.
 	CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error)
 	CreatePersonalDataRevocation(ctx context.Context, arg CreatePersonalDataRevocationParams) error

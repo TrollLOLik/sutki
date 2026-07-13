@@ -38,7 +38,6 @@ import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yama
 import * as Location from 'expo-location';
 
 const TOTAL_STEPS = 6;
-const LISTING_PRICE_RUB = 199;
 const ROOM_OPTIONS = ['1', '2', '3', '4', '5+'];
 
 const formatTimeInput = (text: string) => {
@@ -109,7 +108,6 @@ export default function CreateListingScreen() {
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [paying, setPaying] = useState(false);
   const [published, setPublished] = useState(false);
   const [publishedListingId, setPublishedListingId] = useState<number | null>(null);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
@@ -741,17 +739,11 @@ export default function CreateListingScreen() {
       return;
     }
 
-    setPaying(true);
-    // Payment is a front-end stub for the MVP (no YooKassa yet): simulate the
-    // 199 ₽ charge, then create the listing.
-    await new Promise((r) => setTimeout(r, 900));
     try {
       const created = await createListing.mutateAsync(payload);
       setPublishedListingId(created.id);
-      setPaying(false);
       setPublished(true);
     } catch (e) {
-      setPaying(false);
       setError('Не удалось опубликовать объявление. Попробуйте ещё раз.');
     }
   };
@@ -1464,21 +1456,10 @@ export default function CreateListingScreen() {
 
               {!isEditing && (
                 <View className="rounded-card border border-line bg-surface p-4">
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="text-base font-extrabold text-ink">Разовая плата за публикацию</Text>
-                      <Text className="mt-1 text-sm leading-5 text-ink-secondary">
-                        Объявление отправится на публикацию сразу после оплаты.
-                      </Text>
-                    </View>
-                    <View className="rounded-pill bg-primary-light px-3 py-1.5">
-                      <Text className="text-lg font-extrabold text-primary">{LISTING_PRICE_RUB} ₽</Text>
-                    </View>
-                  </View>
-                  <View className="mt-4 flex-row items-center gap-2 rounded-field bg-surface-muted px-3 py-2">
+                  <View className="flex-row items-center gap-2">
                     <Ionicons name="shield-checkmark-outline" size={17} color={palette.primary} />
                     <Text className="flex-1 text-xs leading-4 text-ink-secondary">
-                      Перед публикацией проверьте адрес, цену и фотографии. Изменить объявление можно будет позже в профиле.
+                      Размещение бесплатное. Перед публикацией проверьте адрес, цену и фотографии.
                     </Text>
                   </View>
                 </View>
@@ -1498,10 +1479,10 @@ export default function CreateListingScreen() {
               label={
                 isEditing
                   ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
-                  : (paying ? 'Оплата…' : `Оплатить ${LISTING_PRICE_RUB} ₽ и опубликовать`)
+                  : 'Опубликовать'
               }
               variant={isEditing ? 'primary' : 'success'}
-              loading={isEditing ? updateListing.isPending : (paying || createListing.isPending)}
+              loading={isEditing ? updateListing.isPending : createListing.isPending}
               onPress={handlePublish}
             />
           )}

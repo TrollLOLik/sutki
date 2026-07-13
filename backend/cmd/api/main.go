@@ -99,6 +99,7 @@ func main() {
 
 	llmClientGen := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMGenerationModel, cfg.LLMTimeout)
 	llmClientMod := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModerationModel, cfg.LLMTimeout)
+	llmClientReviewMod := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMReviewModerationModel, cfg.LLMTimeout)
 	aiSummarizer := llm.NewSummarizer(llmClientGen)
 
 	// Durable email pipeline: DB-backed outbox + single worker draining it
@@ -210,8 +211,9 @@ func main() {
 	favoriteSvc := favorite.New(favoriteRepo)
 	favoriteHandler := httpdelivery.NewFavoriteHandler(favoriteSvc, cfg.MediaBaseURL)
 
-	reviewRepo := postgres.NewReviewRepo(queries)
-	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier)
+	reviewRepo := postgres.NewReviewRepo(pool, queries)
+	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier, llmClientReviewMod)
+	reviewSvc.StartWorker(ctx)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 
 	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, true)

@@ -14,13 +14,41 @@ type Review struct {
 	AuthorAvatarURL string
 	Rating          int32
 	Body            string
+	Status          string
+	RejectionReason string
+	RequestID       *int32
 	CreatedAt       time.Time
+	Reply           *ReviewReply
 
 	// Optional house metadata, populated for my reviews pages
 	HouseStreet    string
 	HouseNumber    string
 	HouseCity      string
 	HouseCoverPath string
+}
+
+type ReviewReply struct {
+	ID              int64
+	ReviewID        int32
+	OwnerID         int32
+	Body            string
+	Status          string
+	RejectionReason string
+	CreatedAt       time.Time
+}
+
+type ReviewEligibility struct {
+	RequestID       int32     `json:"request_id"`
+	HouseID         int32     `json:"house_id"`
+	CanReview       bool      `json:"can_review"`
+	ReviewDeadline  time.Time `json:"review_deadline"`
+	ReviewID        *int32    `json:"review_id,omitempty"`
+	ReviewStatus    string    `json:"review_status,omitempty"`
+	ReviewRating    *int32    `json:"review_rating,omitempty"`
+	ReviewBody      string    `json:"review_body,omitempty"`
+	RejectionReason string    `json:"rejection_reason,omitempty"`
+	EditAttempts    int32     `json:"edit_attempts,omitempty"`
+	MaxAttempts     int32     `json:"max_attempts,omitempty"`
 }
 
 // RatingSummary aggregates a listing's published reviews. Distribution is
@@ -34,8 +62,28 @@ type RatingSummary struct {
 
 // NewReview carries the validated fields needed to create a review.
 type NewReview struct {
-	HouseID  int32
-	AuthorID int32
-	Rating   int32
-	Body     string
+	RequestID int32
+	HouseID   int32
+	AuthorID  int32
+	Rating    int32
+	Body      string
+}
+
+type ReviewModerationJob struct {
+	ID         int64
+	TargetType string
+	TargetID   int64
+	Attempts   int32
+}
+
+type ReviewModerationTarget struct {
+	TargetType string
+	TargetID   int64
+	ReviewID   int32
+	HouseID    int32
+	AuthorID   int32
+	Rating     int32
+	Body       string
+	MaskedBody string
+	Categories []string
 }

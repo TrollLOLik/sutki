@@ -240,8 +240,7 @@ type CreateHouseParams struct {
 
 // Creates a new listing owned by the given user. New listings start in
 // 'pending_moderation': the moderation pipeline (prefilter + LLM verdict)
-// flips them to 'active' / 'moderation_review' / 'rejected'. The one-time
-// publication fee is a front-end stub until YooKassa is wired.
+// flips them to 'active' / 'moderation_review' / 'rejected'.
 func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32, error) {
 	row := q.db.QueryRow(ctx, createHouse,
 		arg.OwnerID,

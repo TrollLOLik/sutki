@@ -270,8 +270,7 @@ ORDER BY name;
 -- name: CreateHouse :one
 -- Creates a new listing owned by the given user. New listings start in
 -- 'pending_moderation': the moderation pipeline (prefilter + LLM verdict)
--- flips them to 'active' / 'moderation_review' / 'rejected'. The one-time
--- publication fee is a front-end stub until YooKassa is wired.
+-- flips them to 'active' / 'moderation_review' / 'rejected'.
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
   area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,

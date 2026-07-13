@@ -69,6 +69,17 @@ type ReviewRepository interface {
 	CountByHouse(ctx context.Context, houseID int32) (int64, error)
 	Summary(ctx context.Context, houseID int32) (RatingSummary, error)
 	Create(ctx context.Context, r NewReview) (Review, error)
+	CreatePending(ctx context.Context, r NewReview, contentHash, maskedBody string, categories []string) (Review, error)
+	Eligibility(ctx context.Context, requestID, userID int32) (ReviewEligibility, error)
+	ListEligibility(ctx context.Context, userID int32) ([]ReviewEligibility, error)
+	CreateReply(ctx context.Context, reviewID, ownerID int32, body, contentHash, maskedBody string, categories []string) (ReviewReply, error)
+	DueModerationJobs(ctx context.Context, limit int32) ([]ReviewModerationJob, error)
+	LoadModerationTarget(ctx context.Context, job ReviewModerationJob) (ReviewModerationTarget, error)
+	CompleteModeration(ctx context.Context, job ReviewModerationJob, decision, category, reason string, confidence float32, raw []byte) error
+	RetryModeration(ctx context.Context, job ReviewModerationJob, lastError string, next time.Time) error
+	DueSummaryHouses(ctx context.Context, limit int32) ([]int32, error)
+	CompleteSummary(ctx context.Context, houseID int32) error
+	RetrySummary(ctx context.Context, houseID int32, lastError string, next time.Time) error
 	ListByAuthor(ctx context.Context, userID, limit, offset int32) ([]Review, error)
 	CountByAuthor(ctx context.Context, userID int32) (int64, error)
 	ListForHost(ctx context.Context, userID, limit, offset int32) ([]Review, error)

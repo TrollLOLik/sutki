@@ -455,6 +455,56 @@ type Review struct {
 	Status          string
 	RejectionReason *string
 	CreatedAt       pgtype.Timestamp
+	RequestID       *int32
+	OriginalBody    *string
+	PublishedBody   *string
+	ContentHash     *string
+	ModeratedAt     pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type ReviewModerationJob struct {
+	ID                 int64
+	TargetType         string
+	TargetID           int64
+	ContentHash        string
+	DetectedCategories []byte
+	MaskedBody         *string
+	Status             string
+	Attempts           int32
+	NextAttemptAt      pgtype.Timestamptz
+	Decision           *string
+	Category           *string
+	Reason             *string
+	Confidence         *float32
+	RawResponse        []byte
+	LastError          *string
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type ReviewReply struct {
+	ID              int64
+	ReviewID        int32
+	OwnerID         int32
+	OriginalBody    string
+	PublishedBody   *string
+	Status          string
+	ContentHash     string
+	RejectionReason *string
+	ModeratedAt     pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type ReviewSummaryJob struct {
+	HouseID    int32
+	DirtySince pgtype.Timestamptz
+	RunAfter   pgtype.Timestamptz
+	Status     string
+	Attempts   int32
+	LastError  *string
+	UpdatedAt  pgtype.Timestamptz
 }
 
 type Service struct {

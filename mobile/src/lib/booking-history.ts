@@ -32,7 +32,3 @@ export function historyMeta(kind: HistoryKind): HistoryMeta {
   return META[kind];
 }
 
-/** Only completed stays can be reviewed. */
-export function canReview(kind: HistoryKind): boolean {
-  return kind === 'completed';
-}

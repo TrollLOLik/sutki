@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -23,11 +24,22 @@ func NewReviewHandler(svc *review.Service, mediaBaseURL string) *ReviewHandler {
 }
 
 type reviewDTO struct {
-	ID              int32  `json:"id"`
-	Rating          int32  `json:"rating"`
+	ID              int32           `json:"id"`
+	Rating          int32           `json:"rating"`
+	Body            string          `json:"body"`
+	AuthorName      string          `json:"author_name"`
+	AuthorAvatarURL string          `json:"author_avatar_url"`
+	CreatedAt       string          `json:"created_at"`
+	Status          string          `json:"status,omitempty"`
+	RejectionReason string          `json:"rejection_reason,omitempty"`
+	Reply           *reviewReplyDTO `json:"reply,omitempty"`
+}
+
+type reviewReplyDTO struct {
+	ID              int64  `json:"id"`
 	Body            string `json:"body"`
-	AuthorName      string `json:"author_name"`
-	AuthorAvatarURL string `json:"author_avatar_url"`
+	Status          string `json:"status,omitempty"`
+	RejectionReason string `json:"rejection_reason,omitempty"`
 	CreatedAt       string `json:"created_at"`
 }
 
@@ -79,16 +91,16 @@ func (h *ReviewHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Create stores a review authored by the current user for the listing.
-// POST /api/v1/listings/{id}/reviews (authenticated).
+// Create stores a pending review for a completed booking owned by the caller.
+// POST /api/v1/requests/{id}/review (authenticated).
 func (h *ReviewHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	houseID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
-	if err != nil || houseID <= 0 {
+	requestID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || requestID <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
@@ -102,20 +114,25 @@ func (h *ReviewHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rv, err := h.svc.Create(r.Context(), domain.NewReview{
-		HouseID:  int32(houseID),
-		AuthorID: userID,
-		Rating:   body.Rating,
-		Body:     body.Body,
+		RequestID: int32(requestID),
+		AuthorID:  userID,
+		Rating:    body.Rating,
+		Body:      body.Body,
 	})
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidReview):
 			writeError(w, http.StatusBadRequest, "invalid review")
 		case errors.Is(err, domain.ErrReviewNotAllowed):
-			writeError(w, http.StatusForbidden, "you can only review listings you have stayed at")
+			writeError(w, http.StatusForbidden, "review not allowed in current status")
+		case errors.Is(err, domain.ErrReviewAttemptsExceeded):
+			writeError(w, http.StatusForbidden, "review attempts exceeded")
+		case errors.Is(err, domain.ErrReviewUnchanged):
+			writeError(w, http.StatusBadRequest, "review unchanged")
 		case errors.Is(err, domain.ErrNotFound):
 			writeError(w, http.StatusNotFound, "listing not found")
 		default:
+			log.Printf("review handler: create review: %v", err)
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
@@ -128,14 +145,89 @@ func (h *ReviewHandler) reviewDTO(rv domain.Review) reviewDTO {
 	if !rv.CreatedAt.IsZero() {
 		createdAt = rv.CreatedAt.UTC().Format(time.RFC3339)
 	}
-	return reviewDTO{
+	out := reviewDTO{
 		ID:              rv.ID,
 		Rating:          rv.Rating,
 		Body:            rv.Body,
 		AuthorName:      rv.AuthorName,
 		AuthorAvatarURL: resolveMediaURL(rv.AuthorAvatarURL),
 		CreatedAt:       createdAt,
+		Status:          rv.Status,
+		RejectionReason: rv.RejectionReason,
 	}
+	if rv.Reply != nil {
+		dto := reviewReplyDTO{ID: rv.Reply.ID, Body: rv.Reply.Body, Status: rv.Reply.Status, RejectionReason: rv.Reply.RejectionReason, CreatedAt: rv.Reply.CreatedAt.UTC().Format(time.RFC3339)}
+		out.Reply = &dto
+	}
+	return out
+}
+
+func (h *ReviewHandler) Eligibility(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	item, err := h.svc.Eligibility(r.Context(), int32(id), userID)
+	if err != nil {
+		writeError(w, http.StatusForbidden, "review not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+func (h *ReviewHandler) ListEligibility(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	items, err := h.svc.ListEligibility(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+func (h *ReviewHandler) CreateReply(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var body struct {
+		Body string `json:"body"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	reply, err := h.svc.CreateReply(r.Context(), int32(id), userID, body.Body)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrReviewNotAllowed):
+			writeError(w, http.StatusForbidden, "reply not allowed in current status")
+		case errors.Is(err, domain.ErrInvalidReview):
+			writeError(w, http.StatusBadRequest, "invalid reply")
+		case errors.Is(err, domain.ErrReviewAttemptsExceeded):
+			writeError(w, http.StatusForbidden, "reply attempts exceeded")
+		case errors.Is(err, domain.ErrReviewUnchanged):
+			writeError(w, http.StatusBadRequest, "reply unchanged")
+		default:
+			log.Printf("review handler: create reply: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, reviewReplyDTO{ID: reply.ID, Body: reply.Body, Status: reply.Status, CreatedAt: reply.CreatedAt.UTC().Format(time.RFC3339)})
 }
 
 func summaryDTO(s domain.RatingSummary) reviewSummaryDTO {
@@ -153,17 +245,21 @@ func summaryDTO(s domain.RatingSummary) reviewSummaryDTO {
 }
 
 type userReviewDTO struct {
-	ID              int32  `json:"id"`
-	Rating          int32  `json:"rating"`
-	Body            string `json:"body"`
-	AuthorName      string `json:"author_name,omitempty"`
-	AuthorAvatarURL string `json:"author_avatar_url,omitempty"`
-	CreatedAt       string `json:"created_at"`
-	HouseID         int32  `json:"house_id"`
-	HouseStreet     string `json:"house_street"`
-	HouseNumber     string `json:"house_number"`
-	HouseCity       string `json:"house_city"`
-	HouseCoverURL   string `json:"house_cover_url"`
+	ID              int32           `json:"id"`
+	Rating          int32           `json:"rating"`
+	Body            string          `json:"body"`
+	AuthorName      string          `json:"author_name,omitempty"`
+	AuthorAvatarURL string          `json:"author_avatar_url,omitempty"`
+	CreatedAt       string          `json:"created_at"`
+	HouseID         int32           `json:"house_id"`
+	HouseStreet     string          `json:"house_street"`
+	HouseNumber     string          `json:"house_number"`
+	HouseCity       string          `json:"house_city"`
+	HouseCoverURL   string          `json:"house_cover_url"`
+	Status          string          `json:"status,omitempty"`
+	RejectionReason string          `json:"rejection_reason,omitempty"`
+	Reply           *reviewReplyDTO `json:"reply,omitempty"`
+	RequestID       *int32          `json:"request_id,omitempty"`
 }
 
 type userReviewsListResponse struct {
@@ -232,7 +328,7 @@ func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
 	if !rv.CreatedAt.IsZero() {
 		createdAt = rv.CreatedAt.UTC().Format(time.RFC3339)
 	}
-	return userReviewDTO{
+	out := userReviewDTO{
 		ID:              rv.ID,
 		Rating:          rv.Rating,
 		Body:            rv.Body,
@@ -244,7 +340,15 @@ func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
 		HouseNumber:     rv.HouseNumber,
 		HouseCity:       rv.HouseCity,
 		HouseCoverURL:   resolveMediaURL(rv.HouseCoverPath),
+		Status:          rv.Status,
+		RejectionReason: rv.RejectionReason,
+		RequestID:       rv.RequestID,
 	}
+	if rv.Reply != nil {
+		dto := reviewReplyDTO{ID: rv.Reply.ID, Body: rv.Reply.Body, Status: rv.Reply.Status, CreatedAt: rv.Reply.CreatedAt.UTC().Format(time.RFC3339)}
+		out.Reply = &dto
+	}
+	return out
 }
 
 // ListForUser returns reviews left on the specified host's listings (public).

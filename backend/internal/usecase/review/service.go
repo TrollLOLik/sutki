@@ -2,8 +2,12 @@ package review
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -23,12 +27,18 @@ type Service struct {
 	aiSummarizer domain.AISummarizer
 	users        domain.UserRepository
 	notifier     domain.EmailNotifier
+	llm          reviewLLM
+	wake         chan struct{}
+}
+
+type reviewLLM interface {
+	Generate(context.Context, string, string, int, float64) (string, error)
 }
 
 // New wires the review service. users and notifier may be nil (tests, or
 // email disabled): the "new review" owner email is then skipped.
-func New(repo domain.ReviewRepository, listingRepo domain.ListingRepository, aiSummarizer domain.AISummarizer, users domain.UserRepository, notifier domain.EmailNotifier) *Service {
-	return &Service{repo: repo, listingRepo: listingRepo, aiSummarizer: aiSummarizer, users: users, notifier: notifier}
+func New(repo domain.ReviewRepository, listingRepo domain.ListingRepository, aiSummarizer domain.AISummarizer, users domain.UserRepository, notifier domain.EmailNotifier, llm reviewLLM) *Service {
+	return &Service{repo: repo, listingRepo: listingRepo, aiSummarizer: aiSummarizer, users: users, notifier: notifier, llm: llm, wake: make(chan struct{}, 1)}
 }
 
 // ListResult is a page of a listing's reviews plus the rating summary.
@@ -86,52 +96,42 @@ func (s *Service) Create(ctx context.Context, r domain.NewReview) (domain.Review
 	if r.Rating < 1 || r.Rating > 5 || r.Body == "" || utf8.RuneCountInString(r.Body) > maxBodyLen {
 		return domain.Review{}, domain.ErrInvalidReview
 	}
-	exists, err := s.repo.HouseExists(ctx, r.HouseID)
-	if err != nil {
-		return domain.Review{}, err
-	}
-	if !exists {
-		return domain.Review{}, domain.ErrNotFound
-	}
-	// Reviews are gated on a real stay: the author must have a confirmed or
-	// active booking for the listing and must not be the listing's owner.
-	// Otherwise any account could astroturf ratings or defame competitors.
-	house, err := s.listingRepo.GetByID(ctx, r.HouseID)
-	if err != nil {
-		return domain.Review{}, err
-	}
-	if house.OwnerID == r.AuthorID {
+	if r.RequestID <= 0 {
 		return domain.Review{}, domain.ErrReviewNotAllowed
 	}
-	hasBooking, err := s.listingRepo.UserHasConfirmedBooking(ctx, r.AuthorID, r.HouseID)
+	inspection := inspectText(r.Body)
+	created, err := s.repo.CreatePending(ctx, r, reviewContentHash("review", r.Body), inspection.MaskedBody, inspection.Categories)
 	if err != nil {
 		return domain.Review{}, err
 	}
-	if !hasBooking {
-		return domain.Review{}, domain.ErrReviewNotAllowed
+	select {
+	case s.wake <- struct{}{}:
+	default:
 	}
-	created, err := s.repo.Create(ctx, r)
-	if err != nil {
-		return domain.Review{}, err
-	}
-
-	// Trigger background reviews summary regeneration
-	if s.aiSummarizer != nil && s.listingRepo != nil {
-		go func() {
-			bgCtx := context.Background()
-			_ = s.regenerateReviewsSummary(bgCtx, r.HouseID)
-		}()
-	}
-
-	// Notify the owner about the new review in background: the owner email
-	// lookup is an extra query that must not delay the author's response.
-	// Opt-outable via the "reviews" preference inside the notifier; dedup
-	// per review id makes retries safe.
-	if s.notifier != nil && s.users != nil {
-		go s.notifyOwner(context.Background(), house, created)
-	}
-
 	return created, nil
+}
+
+func (s *Service) Eligibility(ctx context.Context, requestID, userID int32) (domain.ReviewEligibility, error) {
+	return s.repo.Eligibility(ctx, requestID, userID)
+}
+func (s *Service) ListEligibility(ctx context.Context, userID int32) ([]domain.ReviewEligibility, error) {
+	return s.repo.ListEligibility(ctx, userID)
+}
+
+func (s *Service) CreateReply(ctx context.Context, reviewID, ownerID int32, body string) (domain.ReviewReply, error) {
+	body = strings.TrimSpace(body)
+	if body == "" || utf8.RuneCountInString(body) > maxBodyLen {
+		return domain.ReviewReply{}, domain.ErrInvalidReview
+	}
+	inspection := inspectText(body)
+	reply, err := s.repo.CreateReply(ctx, reviewID, ownerID, body, reviewContentHash("reply", body), inspection.MaskedBody, inspection.Categories)
+	if err == nil {
+		select {
+		case s.wake <- struct{}{}:
+		default:
+		}
+	}
+	return reply, err
 }
 
 // notifyOwner queues the "new review" email for the listing owner. Errors
@@ -195,6 +195,143 @@ func (s *Service) regenerateReviewsSummary(ctx context.Context, houseID int32) e
 	}
 
 	return s.listingRepo.UpdateReviewsSummary(ctx, houseID, &summary)
+}
+
+type reviewVerdict struct {
+	Decision   string  `json:"decision"`
+	Category   string  `json:"category"`
+	Reason     string  `json:"reason"`
+	Confidence float32 `json:"confidence"`
+}
+
+const reviewModerationPrompt = `Ты модерируешь отзывы и ответы владельцев на российской платформе аренды жилья. Верни только JSON: {"decision":"approve|approve_masked|reject|review","category":"clean|profanity|abuse|privacy|spam|off_topic","reason":"краткая причина","confidence":0.0}.
+approve — безопасный содержательный текст. approve_masked — содержательный текст с легкой ненормативной лексикой, если система сообщила, что детерминированная маска доступна. reject — угрозы, травля, дискриминация, публикация контактов, спам либо текст, состоящий из оскорблений без полезного опыта. review используй только при реальной неоднозначности. Никогда не переписывай и не возвращай пользовательский текст.`
+
+func (s *Service) StartWorker(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		s.processModeration(ctx)
+		s.processSummaries(ctx)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.processModeration(ctx)
+				s.processSummaries(ctx)
+			case <-s.wake:
+				s.processModeration(ctx)
+			}
+		}
+	}()
+	log.Println("review moderation worker: started (fail-closed)")
+}
+
+func (s *Service) processModeration(ctx context.Context) {
+	if s.llm == nil {
+		return
+	}
+	for {
+		jobs, err := s.repo.DueModerationJobs(ctx, 10)
+		if err != nil {
+			log.Printf("review moderation: claim: %v", err)
+			return
+		}
+		if len(jobs) == 0 {
+			return
+		}
+		for _, job := range jobs {
+			if err := s.processModerationJob(ctx, job); err != nil {
+				delay := time.Duration(job.Attempts+1) * time.Minute
+				if delay > 15*time.Minute {
+					delay = 15 * time.Minute
+				}
+				_ = s.repo.RetryModeration(ctx, job, err.Error(), time.Now().Add(delay))
+				log.Printf("review moderation: job %d: %v", job.ID, err)
+			}
+		}
+	}
+}
+
+func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewModerationJob) error {
+	target, err := s.repo.LoadModerationTarget(ctx, job)
+	if errors.Is(err, domain.ErrNotFound) || errors.Is(err, context.Canceled) {
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	input := fmt.Sprintf("Тип: %s\nPrefilter: %s\nДетерминированная маска доступна: %t\n<user_content>\n%s\n</user_content>", target.TargetType, strings.Join(target.Categories, ","), target.MaskedBody != "" && target.MaskedBody != target.Body, target.Body)
+	answer, err := s.llm.Generate(ctx, reviewModerationPrompt, input, 220, 0)
+	if err != nil {
+		return err
+	}
+	verdict, err := parseReviewVerdict(answer)
+	if err != nil {
+		return err
+	}
+	if verdict.Decision == "review" {
+		second, secondErr := s.llm.Generate(ctx, reviewModerationPrompt+"\nЭто повторная строгая проверка. Выбери approve/reject/approve_masked, если это безопасно; review оставь только для действительно неразрешимого случая.", input, 220, 0)
+		if secondErr == nil {
+			if parsed, parseErr := parseReviewVerdict(second); parseErr == nil {
+				verdict = parsed
+				answer = second
+			}
+		}
+	}
+	if verdict.Decision == "approve_masked" && (target.MaskedBody == "" || target.MaskedBody == target.Body) {
+		verdict.Decision = "reject"
+		verdict.Category = "unsafe_mask"
+		verdict.Reason = "Текст содержит выражения, которые не удалось безопасно скрыть"
+	}
+	raw, _ := json.Marshal(map[string]string{"answer": answer})
+	if err = s.repo.CompleteModeration(ctx, job, verdict.Decision, verdict.Category, verdict.Reason, verdict.Confidence, raw); err != nil {
+		return err
+	}
+	if target.TargetType == "review" && (verdict.Decision == "approve" || verdict.Decision == "approve_masked") && s.listingRepo != nil && s.notifier != nil && s.users != nil {
+		if house, getErr := s.listingRepo.GetByID(context.Background(), target.HouseID); getErr == nil {
+			go s.notifyOwner(context.Background(), house, domain.Review{ID: target.ReviewID, Rating: target.Rating})
+		}
+	}
+	return nil
+}
+
+func parseReviewVerdict(answer string) (reviewVerdict, error) {
+	trimmed := strings.TrimSpace(answer)
+	if start := strings.Index(trimmed, "{"); start >= 0 {
+		if end := strings.LastIndex(trimmed, "}"); end >= start {
+			trimmed = trimmed[start : end+1]
+		}
+	}
+	var verdict reviewVerdict
+	if err := json.Unmarshal([]byte(trimmed), &verdict); err != nil {
+		return verdict, fmt.Errorf("parse review verdict: %w", err)
+	}
+	switch verdict.Decision {
+	case "approve", "approve_masked", "reject", "review":
+	default:
+		return verdict, fmt.Errorf("invalid review decision %q", verdict.Decision)
+	}
+	return verdict, nil
+}
+
+func (s *Service) processSummaries(ctx context.Context) {
+	if s.aiSummarizer == nil {
+		return
+	}
+	houses, err := s.repo.DueSummaryHouses(ctx, 5)
+	if err != nil {
+		log.Printf("review summary: claim: %v", err)
+		return
+	}
+	for _, houseID := range houses {
+		if err := s.regenerateReviewsSummary(ctx, houseID); err != nil {
+			_ = s.repo.RetrySummary(ctx, houseID, err.Error(), time.Now().Add(10*time.Minute))
+			continue
+		}
+		_ = s.repo.CompleteSummary(ctx, houseID)
+	}
 }
 
 // UserReviewsResult is a page of reviews left by a user or received by a host.

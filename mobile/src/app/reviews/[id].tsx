@@ -2,24 +2,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { parseISO } from 'date-fns';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { Stars } from '@/components/Stars';
-import { Button } from '@/components/ui';
+import { BottomSheet, Button } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
-import { useReviews, useHostReviews } from '@/lib/api/reviews';
+import { useReviews, useHostReviews, useCreateReviewReply } from '@/lib/api/reviews';
 import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Review, ReviewSummary } from '@/types/review';
 
+const REVIEW_EMOJI_OPTIONS = [
+  '\u{1F600}', '\u{1F60A}', '\u{1F642}', '\u{1F60D}',
+  '\u{1F602}', '\u{1F44D}', '\u{1F64F}', '\u{1F44C}',
+  '\u{1F525}', '\u{2764}\u{FE0F}', '\u{1F389}', '\u{1F3E0}',
+  '\u{1F4CD}', '\u{2705}', '\u{1F64C}', '\u{2600}\u{FE0F}',
+];
+
 export default function ReviewsScreen() {
   const { palette } = useAppTheme();
   const { id, isHost } = useLocalSearchParams<{ id: string; isHost?: string }>();
   const numericId = Number(id);
+  const reviewsListRef = useRef<FlatList<Review>>(null);
   const { data, isLoading, isError, refetch, isRefetching } = isHost === 'true'
     ? useHostReviews(numericId, { limit: 50 })
     : useReviews(numericId, { limit: 50 });
@@ -36,10 +44,23 @@ export default function ReviewsScreen() {
   const summary = data?.summary;
   const items = data?.items ?? [];
 
+  const scrollReplyAboveKeyboard = (inputHandle: number) => {
+    setTimeout(() => {
+      reviewsListRef.current
+        ?.getScrollResponder()
+        ?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
+    }, 300);
+  };
+
 
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top', 'bottom']} className="flex-1">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="flex-1"
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        >
         {/* Header with centered title */}
         <View className="flex-row items-center justify-between px-4 py-2 relative h-14 bg-surface border-b border-line">
           <Pressable
@@ -72,6 +93,7 @@ export default function ReviewsScreen() {
         ) : (
           <>
             <FlatList
+              ref={reviewsListRef}
               data={items}
               keyExtractor={(item) => String(item.id)}
               contentContainerClassName="px-4 pb-6"
@@ -86,7 +108,14 @@ export default function ReviewsScreen() {
                   subtitle="Будьте первым, кто оставит отзыв об этом объекте."
                 />
               }
-              renderItem={({ item }) => <ReviewRow review={item} />}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <ReviewRow
+                  review={item}
+                  canReply={isOwnListing}
+                  onReplyFocus={scrollReplyAboveKeyboard}
+                />
+              )}
             />
 
             {isHost !== 'true' ? (
@@ -107,6 +136,7 @@ export default function ReviewsScreen() {
 
           </>
         )}
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
@@ -151,8 +181,12 @@ function SummaryHeader({ summary }: { summary: ReviewSummary }) {
   );
 }
 
-function ReviewRow({ review }: { review: Review }) {
+function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canReply: boolean; onReplyFocus: (inputHandle: number) => void }) {
   const { palette } = useAppTheme();
+  const [replying,setReplying]=useState(false);
+  const [replyBody,setReplyBody]=useState('');
+  const [submitted,setSubmitted]=useState(false);
+  const createReply=useCreateReviewReply(review.id);
   const date = review.created_at ? parseISO(review.created_at) : null;
   return (
     <View className="mb-3 rounded-2xl border border-line bg-surface p-4">
@@ -180,6 +214,99 @@ function ReviewRow({ review }: { review: Review }) {
       {review.body ? (
         <Text className="mt-3 text-[14px] leading-5 text-ink-secondary">{review.body}</Text>
       ) : null}
+      {review.reply?.status === 'active' ? (
+        <View className="ml-5 mt-3 border-l-2 border-primary pl-3">
+          <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
+          <Text className="mt-1 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
+        </View>
+      ) : submitted || (canReply && review.reply?.status === 'pending_moderation') ? (
+        <Text className="mt-3 text-xs font-semibold text-primary">Ответ отправлен на проверку</Text>
+      ) : canReply && review.reply?.status === 'moderation_review' ? (
+        <Text className="mt-3 text-xs font-semibold text-primary">Ответ проходит дополнительную проверку</Text>
+      ) : canReply && review.reply?.status === 'rejected' ? (
+        <Text className="mt-3 text-xs font-semibold text-danger">Ответ отклонён</Text>
+      ) : canReply && !replying ? (
+        <Pressable onPress={()=>setReplying(true)} className="mt-3 self-start"><Text className="text-sm font-bold text-primary">Ответить</Text></Pressable>
+      ) : null}
+      {canReply && replying && !review.reply && !submitted ? (
+        <ListingReviewReplyEditor
+          value={replyBody}
+          onChange={setReplyBody}
+          onFocus={onReplyFocus}
+          onCancel={() => { setReplying(false); setReplyBody(''); }}
+          onSubmit={() => createReply.mutate(replyBody.trim(), { onSuccess: () => { setReplying(false); setReplyBody(''); setSubmitted(true); } })}
+          isSubmitting={createReply.isPending}
+          disabled={!replyBody.trim()}
+        />
+      ) : null}
+      {false && canReply && replying && !review.reply && !submitted ? (
+        <View className="mt-3 gap-2">
+          <TextInput value={replyBody} onChangeText={setReplyBody} multiline maxLength={1500} placeholder="Ответ гостю" placeholderTextColor={palette.inkMuted} className="min-h-20 rounded-field border border-line bg-surface-muted p-3 text-sm text-ink" />
+          <View className="flex-row gap-2"><View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={()=>{setReplying(false);setReplyBody('')}} /></View><View className="flex-1"><Button label="Отправить" size="md" loading={createReply.isPending} disabled={!replyBody.trim()} onPress={()=>createReply.mutate(replyBody.trim(),{onSuccess:()=>{setReplying(false);setReplyBody('');setSubmitted(true)}})} /></View></View>
+          <Text className="text-xs text-ink-muted">Ответ появится после проверки.</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ListingReviewReplyEditor({
+  value,
+  onChange,
+  onFocus,
+  onCancel,
+  onSubmit,
+  isSubmitting,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onFocus: (inputHandle: number) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+  disabled: boolean;
+}) {
+  const { palette } = useAppTheme();
+  const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+
+  return (
+    <View className="mt-3 gap-2">
+      <View className="flex-row items-end gap-2 rounded-field border border-line bg-surface-muted px-3 py-2">
+        <TextInput
+          autoFocus
+          value={value}
+          onChangeText={onChange}
+          onFocus={(event) => onFocus(event.nativeEvent.target)}
+          multiline
+          maxLength={1500}
+          placeholder="Ответ гостю"
+          placeholderTextColor={palette.inkMuted}
+          className="min-h-16 flex-1 text-sm text-ink"
+          textAlignVertical="top"
+        />
+        <Pressable onPress={() => setEmojiPickerVisible(true)} className="h-9 w-9 items-center justify-center rounded-full" accessibilityLabel="Выбрать смайлик">
+          <Ionicons name="happy-outline" size={22} color={palette.inkSecondary} />
+        </Pressable>
+      </View>
+      <View className="flex-row gap-2">
+        <View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={onCancel} /></View>
+        <View className="flex-1"><Button label="Отправить" size="md" loading={isSubmitting} disabled={disabled} onPress={onSubmit} /></View>
+      </View>
+      <Text className="text-xs text-ink-muted">Ответ появится после проверки.</Text>
+
+      <BottomSheet visible={emojiPickerVisible} onClose={() => setEmojiPickerVisible(false)}>
+        <View className="py-2">
+          <Text className="mb-5 text-center text-lg font-bold text-ink">Смайлик</Text>
+          <View className="flex-row flex-wrap justify-center gap-3 px-2 pb-2">
+            {REVIEW_EMOJI_OPTIONS.map((emoji) => (
+              <Pressable key={emoji} onPress={() => { onChange(`${value}${emoji}`); setEmojiPickerVisible(false); }} className="h-12 w-12 items-center justify-center rounded-2xl bg-surface-muted" accessibilityLabel={`Добавить ${emoji}`}>
+                <Text className="text-2xl">{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </BottomSheet>
     </View>
   );
 }

@@ -1,0 +1,2 @@
+ALTER TABLE review ADD COLUMN edit_attempts INT NOT NULL DEFAULT 0;
+ALTER TABLE review_reply ADD COLUMN edit_attempts INT NOT NULL DEFAULT 0;

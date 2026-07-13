@@ -45,7 +45,6 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 				r.Post("/", listingHandler.create)
 				r.Put("/{id}", listingHandler.update)
 				r.Get("/mine", listingHandler.listMine)
-				r.Post("/{id}/reviews", reviewHandler.Create)
 				r.Post("/{id}/favorite", favoriteHandler.Add)
 				r.Delete("/{id}/favorite", favoriteHandler.Remove)
 				r.Post("/{id}/promotions/checkout", promotionHandler.Checkout)
@@ -98,6 +97,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Post("/me/delete/confirm", authHandler.ConfirmDeleteMe)
 			r.Get("/me/reviews/written", reviewHandler.ListMineWritten)
 			r.Get("/me/reviews/received", reviewHandler.ListMineReceived)
+			r.Get("/me/review-eligibility", reviewHandler.ListEligibility)
+			r.Post("/reviews/{id}/reply", reviewHandler.CreateReply)
 			r.Get("/me/email-preferences", emailHandler.GetPreferences)
 			r.Put("/me/email-preferences", emailHandler.UpdatePreferences)
 			r.Route("/requests", func(r chi.Router) {
@@ -108,6 +109,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 					r.Get("/incoming", bookingHandler.listIncoming)
 					r.Post("/{id}/confirm", bookingHandler.confirm)
 					r.Post("/{id}/reject", bookingHandler.reject)
+					r.Post("/{id}/review", reviewHandler.Create)
+					r.Get("/{id}/review-eligibility", reviewHandler.Eligibility)
 				})
 
 				// Optional auth wildcard sub-routes (declared AFTER static sub-routes)

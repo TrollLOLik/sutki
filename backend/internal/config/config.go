@@ -79,11 +79,12 @@ type Config struct {
 	OverpassTimeout time.Duration
 
 	// LLM (OpenAI-compatible) config
-	LLMBaseURL         string
-	LLMAPIKey          string
-	LLMGenerationModel string
-	LLMModerationModel string
-	LLMTimeout         time.Duration
+	LLMBaseURL               string
+	LLMAPIKey                string
+	LLMGenerationModel       string
+	LLMModerationModel       string
+	LLMReviewModerationModel string
+	LLMTimeout               time.Duration
 
 	// Centrifugo config
 	CentrifugoURL        string
@@ -145,11 +146,12 @@ func Load() (Config, error) {
 		OverpassURL:     getEnv("OVERPASS_URL", "https://overpass-api.de/api/interpreter"),
 		OverpassTimeout: getDuration("OVERPASS_TIMEOUT", 12*time.Second),
 
-		LLMBaseURL:         getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
-		LLMAPIKey:          os.Getenv("LLM_API_KEY"),
-		LLMGenerationModel: getEnv("LLM_GENERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
-		LLMModerationModel: getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
-		LLMTimeout:         getDuration("LLM_TIMEOUT", 15*time.Second),
+		LLMBaseURL:               getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
+		LLMAPIKey:                os.Getenv("LLM_API_KEY"),
+		LLMGenerationModel:       getEnv("LLM_GENERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
+		LLMModerationModel:       getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
+		LLMReviewModerationModel: getEnv("LLM_REVIEW_MODERATION_MODEL", getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b"))),
+		LLMTimeout:               getDuration("LLM_TIMEOUT", 15*time.Second),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
 		CentrifugoKey:        os.Getenv("CENTRIFUGO_API_KEY"),

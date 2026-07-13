@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api } from '@/lib/api/client';
 import { listingKeys } from '@/lib/api/listings';
-import type { CreateReviewBody, Review, ReviewsPage, UserReviewsPage } from '@/types/review';
+import type { CreateReviewBody, Review, ReviewEligibility, ReviewReply, ReviewsPage, UserReviewsPage } from '@/types/review';
 
 export interface ListReviewsParams {
   limit?: number;
@@ -30,8 +30,8 @@ export function fetchReviews(houseId: number, params: ListReviewsParams = {}): P
   });
 }
 
-export function createReview(houseId: number, body: CreateReviewBody): Promise<Review> {
-  return api.post<Review>(`/api/v1/listings/${houseId}/reviews`, body);
+export function createReview(requestId: number, body: CreateReviewBody): Promise<Review> {
+  return api.post<Review>(`/api/v1/requests/${requestId}/review`, body);
 }
 
 export function useReviews(houseId: number | undefined, params: ListReviewsParams = {}) {
@@ -66,10 +66,10 @@ export function useHostReviews(hostId: number | undefined, params: ListReviewsPa
 }
 
 
-export function useCreateReview(houseId: number) {
+export function useCreateReview(requestId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateReviewBody) => createReview(houseId, body),
+    mutationFn: (body: CreateReviewBody) => createReview(requestId, body),
     onSuccess: () => {
       // Refresh the reviews list/summary and any listing card that shows the
       // (now changed) aggregate rating.
@@ -78,6 +78,18 @@ export function useCreateReview(houseId: number) {
     },
   });
 }
+
+export function useMyReviewEligibility(enabled = true) {
+  return useQuery({
+    queryKey: ['review-eligibility'],
+    queryFn: () => api.get<{items:ReviewEligibility[]}>('/api/v1/me/review-eligibility'),
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: enabled ? 5 * 60_000 : false,
+  });
+}
+
+export function useCreateReviewReply(reviewId:number){const qc=useQueryClient();return useMutation({mutationFn:(body:string)=>api.post<ReviewReply>(`/api/v1/reviews/${reviewId}/reply`,{body}),onSuccess:()=>{qc.invalidateQueries({queryKey:reviewKeys.all});qc.invalidateQueries({queryKey:myReviewKeys.all})}})}
 
 export const myReviewKeys = {
   all: ['my-reviews'] as const,

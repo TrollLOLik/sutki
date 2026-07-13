@@ -4,6 +4,9 @@
 # Build output
 /bin/
 *.exe
+api
+tmp_build
+.cache/
 
 # Local data dumps (never commit production data / PII)
 *.dump

@@ -23,6 +23,7 @@ import { Button } from '@/components/ui';
 import { useMyBookings } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
+import { useMyReviewEligibility } from '@/lib/api/reviews';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
@@ -40,6 +41,8 @@ export default function MyBookingsScreen() {
 
   const { status: authStatus } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
+  const eligibility = useMyReviewEligibility(isAuthenticated);
+  const eligibilityByRequest = new Map((eligibility.data?.items ?? []).map((item) => [item.request_id, item]));
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -304,14 +307,22 @@ export default function MyBookingsScreen() {
                       tintColor={palette.primary}
                     />
                   }
-                  renderItem={({ item }) => (
-                    <HistoryBookingCard
-                      booking={item}
-                      onPress={() => open(item)}
-                      onRepeat={() => repeat(item)}
-                      onReview={() => review(item)}
-                    />
-                  )}
+                  renderItem={({ item }) => {
+                    const elig = eligibilityByRequest.get(item.id);
+                    const label = elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
+                      ? 'Изменить отзыв'
+                      : 'Оставить отзыв';
+                    return (
+                      <HistoryBookingCard
+                        booking={item}
+                        onPress={() => open(item)}
+                        onRepeat={() => repeat(item)}
+                        onReview={() => review(item)}
+                        reviewAvailable={elig?.can_review === true}
+                        reviewLabel={label}
+                      />
+                    );
+                  }}
                   ListFooterComponent={
                     historyItems.length > 0 ? (
                       <View className="py-6 items-center">

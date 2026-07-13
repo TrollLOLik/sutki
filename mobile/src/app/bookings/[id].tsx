@@ -11,6 +11,7 @@ import { Button } from '@/components/ui';
 import { useBooking, useCancelBooking } from '@/lib/api/bookings';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
+import { useMyReviewEligibility } from '@/lib/api/reviews';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -58,6 +59,12 @@ export default function BookingDetailScreen() {
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
   const cancel = useCancelBooking();
   const insets = useSafeAreaInsets();
+  const eligibility = useMyReviewEligibility();
+  const elig = eligibility.data?.items?.find((item) => item.request_id === bookingId);
+  const canReview = elig?.can_review === true;
+  const reviewLabel = elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
+    ? 'Изменить отзыв'
+    : 'Оставить отзыв';
   const { mutateAsync: findOrCreateConv, isPending: isCreatingChat } = useFindOrCreateConversation();
 
   const handleOpenChat = async () => {
@@ -545,6 +552,25 @@ export default function BookingDetailScreen() {
                 gap: 10,
               }}
             >
+              {/* Оставить отзыв */}
+              {canReview ? (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: 999,
+                    paddingVertical: 13,
+                    backgroundColor: palette.primary,
+                  }}
+                  onPress={() => router.push({ pathname: '/review/[id]', params: { id: String(bookingId) } })}
+                >
+                  <Ionicons name="star-outline" size={18} color="#fff" />
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>{reviewLabel}</Text>
+                </TouchableOpacity>
+              ) : null}
+
               {/* Открыть чат */}
               <TouchableOpacity
                 disabled={isCreatingChat}

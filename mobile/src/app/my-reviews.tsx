@@ -8,20 +8,30 @@ import {
   Dimensions,
   Easing,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
-import { Button } from '@/components/ui';
-import { useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
+import { BottomSheet, Button } from '@/components/ui';
+import { useCreateReviewReply, useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { UserReview } from '@/types/review';
 
 type ReviewTab = 'written' | 'received';
+
+const REVIEW_EMOJI_OPTIONS = [
+  '\u{1F600}', '\u{1F60A}', '\u{1F642}', '\u{1F60D}',
+  '\u{1F602}', '\u{1F44D}', '\u{1F64F}', '\u{1F44C}',
+  '\u{1F525}', '\u{2764}\u{FE0F}', '\u{1F389}', '\u{1F3E0}',
+  '\u{1F4CD}', '\u{2705}', '\u{1F64C}', '\u{2600}\u{FE0F}',
+];
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '';
@@ -55,6 +65,7 @@ export default function MyReviewsScreen() {
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
+  const receivedListRef = useRef<FlatList<UserReview>>(null);
 
   const writtenQuery = useMyWrittenReviews({});
   const receivedQuery = useMyReceivedReviews({});
@@ -87,7 +98,23 @@ export default function MyReviewsScreen() {
     });
   };
 
+  const scrollReplyAboveKeyboard = (inputHandle: number) => {
+    setTimeout(() => {
+      receivedListRef.current
+        ?.getScrollResponder()
+        ?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
+    }, 300);
+  };
+
   const renderItem = ({ item, isWritten }: { item: UserReview; isWritten: boolean }) => {
+    if (!isWritten) {
+      return (
+        <ReceivedReviewCard
+          review={item}
+          onReplyFocus={scrollReplyAboveKeyboard}
+        />
+      );
+    }
     if (isWritten) {
       return (
         <View className="mb-3 rounded-card border border-line bg-surface p-3 gap-3">
@@ -132,6 +159,23 @@ export default function MyReviewsScreen() {
           <Text className="text-base text-ink leading-5 font-normal">
             {item.body}
           </Text>
+          {item.status && item.status !== 'active' ? (
+            <View className="self-start rounded-pill bg-primary-light px-3 py-1.5">
+              <Text className="text-xs font-bold text-primary">
+                {item.status === 'rejected' ? 'Отклонён' : item.status === 'moderation_review' ? 'Дополнительная проверка' : 'На проверке'}
+              </Text>
+            </View>
+          ) : null}
+          {item.status === 'rejected' && item.rejection_reason ? <Text className="text-xs leading-4 text-danger">{item.rejection_reason}</Text> : null}
+          {item.request_id && (item.status === 'rejected' || item.status === 'moderation_review') ? (
+            <View className="mt-2 self-end" style={{ width: 140 }}>
+              <Button
+                label="Изменить"
+                size="sm"
+                onPress={() => router.push({ pathname: '/review/[id]', params: { id: String(item.request_id) } })}
+              />
+            </View>
+          ) : null}
         </View>
       );
     }
@@ -190,6 +234,11 @@ export default function MyReviewsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="flex-1"
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+        >
         {/* Header */}
         <View className="flex-row items-center px-4 py-2">
           <Pressable
@@ -321,11 +370,13 @@ export default function MyReviewsScreen() {
                 />
               ) : (
                 <FlatList
+                  ref={receivedListRef}
                   data={receivedItems}
                   renderItem={({ item }) => renderItem({ item, isWritten: false })}
                   keyExtractor={(item) => String(item.id)}
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                   ListFooterComponent={
                     receivedItems.length > 0 ? (
                       <View className="py-6 items-center">
@@ -338,7 +389,118 @@ export default function MyReviewsScreen() {
             </View>
           </ScrollView>
         )}
+        </KeyboardAvoidingView>
       </SafeAreaView>
+    </View>
+  );
+}
+
+function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onReplyFocus: (inputHandle: number) => void }) {
+  const { palette } = useAppTheme();
+  const [replying, setReplying] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
+  const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const animation = useRef(new Animated.Value(0)).current;
+  const createReply = useCreateReviewReply(review.id);
+
+  const openReply = () => {
+    setReplying(true);
+    Animated.spring(animation, { toValue: 1, useNativeDriver: true, tension: 110, friction: 12 }).start();
+  };
+  const closeReply = () => {
+    Animated.timing(animation, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+      setReplying(false);
+      setReplyBody('');
+    });
+  };
+  const addEmoji = (emoji: string) => {
+    setReplyBody((body) => `${body}${emoji}`);
+    setEmojiPickerVisible(false);
+  };
+
+  return (
+    <View className="mb-3 rounded-card border border-line bg-surface p-3 gap-3">
+      <View className="flex-row items-center gap-3">
+        {review.author_avatar_url ? (
+          <Image source={{ uri: review.author_avatar_url }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+        ) : (
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
+            <Text className="text-sm font-bold text-primary">{review.author_name ? review.author_name[0].toUpperCase() : 'Г'}</Text>
+          </View>
+        )}
+        <View className="flex-1 gap-0.5">
+          <Text className="text-sm font-bold text-ink">{review.author_name || 'Гость'}</Text>
+          <Text className="text-xs text-ink-secondary">{formatDate(review.created_at)}</Text>
+        </View>
+      </View>
+
+      <View className="h-px bg-line" />
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row gap-0.5">
+          {Array.from({ length: 5 }).map((_, i) => <Ionicons key={i} name={i < review.rating ? 'star' : 'star-outline'} size={16} color={i < review.rating ? palette.star : palette.inkMuted} />)}
+        </View>
+        <View className="bg-surface-muted px-2.5 py-1 rounded-pill border border-line" style={{ maxWidth: '60%' }}>
+          <Text className="text-xs text-ink-secondary font-medium" numberOfLines={1}>{review.house_street}, {review.house_number}</Text>
+        </View>
+      </View>
+      <Text className="text-base text-ink leading-5 font-normal">{review.body}</Text>
+
+      {review.reply?.status === 'active' ? (
+        <View className="ml-3 border-l-2 border-primary pl-3">
+          <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
+          <Text className="mt-1 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
+        </View>
+      ) : submitted || review.reply?.status === 'pending_moderation' ? (
+        <Text className="text-xs font-semibold text-primary">Ответ отправлен на проверку</Text>
+      ) : review.reply?.status === 'moderation_review' ? (
+        <Text className="text-xs font-semibold text-primary">Ответ проходит дополнительную проверку</Text>
+      ) : review.reply?.status === 'rejected' ? (
+        <Text className="text-xs font-semibold text-danger">Ответ отклонён</Text>
+      ) : !replying ? (
+        <Pressable onPress={openReply} className="self-start py-1" accessibilityRole="button">
+          <Text className="text-sm font-bold text-primary">Ответить</Text>
+        </Pressable>
+      ) : null}
+
+      {replying ? (
+        <Animated.View style={{ opacity: animation, transform: [{ translateY: animation.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] }} className="gap-2 overflow-hidden">
+          <View className="flex-row items-end gap-2 rounded-field border border-line bg-surface-muted px-3 py-2">
+            <TextInput
+              value={replyBody}
+              onChangeText={setReplyBody}
+              onFocus={(event) => onReplyFocus(event.nativeEvent.target)}
+              multiline
+              maxLength={1500}
+              placeholder="Ответ гостю"
+              placeholderTextColor={palette.inkMuted}
+              className="min-h-16 flex-1 text-sm text-ink"
+              textAlignVertical="top"
+            />
+            <Pressable onPress={() => setEmojiPickerVisible(true)} className="h-9 w-9 items-center justify-center rounded-full" accessibilityLabel="Выбрать смайлик">
+              <Ionicons name="happy-outline" size={22} color={palette.inkSecondary} />
+            </Pressable>
+          </View>
+          <View className="flex-row gap-2">
+            <View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={closeReply} /></View>
+            <View className="flex-1"><Button label="Отправить" size="md" loading={createReply.isPending} disabled={!replyBody.trim()} onPress={() => createReply.mutate(replyBody.trim(), { onSuccess: () => { setSubmitted(true); setReplying(false); setReplyBody(''); } })} /></View>
+          </View>
+          <Text className="text-xs text-ink-muted">Ответ появится после проверки.</Text>
+        </Animated.View>
+      ) : null}
+
+      <BottomSheet visible={emojiPickerVisible} onClose={() => setEmojiPickerVisible(false)}>
+        <View className="py-2">
+          <Text className="mb-5 text-center text-lg font-bold text-ink">Смайлик</Text>
+          <View className="flex-row flex-wrap justify-center gap-3 px-2 pb-2">
+            {REVIEW_EMOJI_OPTIONS.map((emoji) => (
+              <Pressable key={emoji} onPress={() => addEmoji(emoji)} className="h-12 w-12 items-center justify-center rounded-2xl bg-surface-muted" accessibilityLabel={`Добавить ${emoji}`}>
+                <Text className="text-2xl">{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </BottomSheet>
     </View>
   );
 }

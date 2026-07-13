@@ -16,9 +16,11 @@ interface HistoryBookingCardProps {
   onRepeat: () => void;
   /** "Оставить отзыв" — only offered for completed stays. */
   onReview: () => void;
+  reviewAvailable?: boolean;
+  reviewLabel?: string;
 }
 
-export function HistoryBookingCard({ booking, onPress, onRepeat, onReview }: HistoryBookingCardProps) {
+export function HistoryBookingCard({ booking, onPress, onRepeat, onReview, reviewAvailable, reviewLabel }: HistoryBookingCardProps) {
   const { palette } = useAppTheme();
   const kind = historyKind(booking);
   const meta = historyMeta(kind);
@@ -61,9 +63,9 @@ export function HistoryBookingCard({ booking, onPress, onRepeat, onReview }: His
         <View className="flex-1">
           <Button label="Повторить" variant="secondary" size="md" onPress={onRepeat} />
         </View>
-        {canReview(kind) ? (
+        {reviewAvailable ? (
           <View className="flex-1">
-            <Button label="Оставить отзыв" size="md" onPress={onReview} />
+            <Button label={reviewLabel || "Оставить отзыв"} size="md" onPress={onReview} />
           </View>
         ) : null}
       </View>

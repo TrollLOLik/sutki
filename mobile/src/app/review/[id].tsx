@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui';
-import { useCreateReview } from '@/lib/api/reviews';
+import { useCreateReview, useMyReviewEligibility } from '@/lib/api/reviews';
+import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -32,11 +33,20 @@ export default function LeaveReviewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const createReview = useCreateReview(numericId);
+  const eligibility = useMyReviewEligibility();
+  const elig = eligibility.data?.items?.find((item) => item.request_id === numericId);
 
   const [rating, setRating] = useState(0);
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (elig && elig.review_body && body === '' && rating === 0) {
+      setRating(elig.review_rating ?? 0);
+      setBody(elig.review_body);
+    }
+  }, [elig]);
 
   const canSubmit = rating >= 1 && body.trim().length > 0 && !createReview.isPending;
 
@@ -57,7 +67,18 @@ export default function LeaveReviewScreen() {
           if (router.canGoBack()) router.back();
           router.replace({ pathname: '/reviews/[id]', params: { id } });
         },
-        onError: () => setError('Не удалось отправить отзыв. Пожалуйста, попробуйте еще раз.'),
+        onError: (err) => {
+          const msg = err instanceof ApiError ? err.message : '';
+          if (msg === 'review unchanged') {
+            setError('Текст отзыва не изменился.');
+          } else if (msg === 'review attempts exceeded') {
+            setError('Вы исчерпали лимит редактирования (максимум 3 раза).');
+          } else if (msg === 'review not allowed in current status') {
+            setError('Отзыв в текущем статусе нельзя редактировать.');
+          } else {
+            setError('Не удалось отправить отзыв. Пожалуйста, попробуйте еще раз.');
+          }
+        },
       },
     );
   };
@@ -73,7 +94,11 @@ export default function LeaveReviewScreen() {
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted active:opacity-70">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />
           </Pressable>
-          <Text className="text-lg font-extrabold text-ink">Оставить отзыв</Text>
+          <Text className="text-lg font-extrabold text-ink">
+            {elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
+              ? 'Изменить отзыв'
+              : 'Оставить отзыв'}
+          </Text>
           <View className="h-10 w-10" />
         </View>
 
@@ -84,6 +109,21 @@ export default function LeaveReviewScreen() {
             contentContainerClassName="gap-4 px-4 pt-5 pb-8"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
+
+            {elig?.rejection_reason ? (
+              <View className="bg-danger/5 border border-danger/10 p-4 rounded-card gap-1">
+                <Text className="text-sm font-extrabold text-danger">Причина отклонения предыдущего отзыва:</Text>
+                <Text className="text-xs text-danger/90 leading-relaxed">{elig.rejection_reason}</Text>
+              </View>
+            ) : null}
+
+            {elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review' ? (
+              <View className="bg-primary/5 border border-primary/10 p-3 rounded-card items-center">
+                <Text className="text-xs text-primary font-semibold">
+                  Осталось попыток редактирования: {3 - (elig.edit_attempts ?? 0)} из 3
+                </Text>
+              </View>
+            ) : null}
             
             {/* Rating Card */}
             <View className="bg-surface p-5 rounded-card border border-line gap-4" style={{ shadowColor: palette.ink, shadowOpacity: 0.02, shadowRadius: 10 }}>
@@ -163,7 +203,11 @@ export default function LeaveReviewScreen() {
           {/* Footer */}
           <View className="bg-surface border-t border-line px-4 py-4">
             <Button
-              label="Отправить отзыв"
+              label={
+                elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
+                  ? 'Сохранить изменения'
+                  : 'Отправить отзыв'
+              }
               loading={createReview.isPending}
               disabled={!canSubmit}
               onPress={onSubmit}

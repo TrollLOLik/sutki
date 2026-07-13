@@ -14,7 +14,7 @@ import (
 const countReviewsByAuthor = `-- name: CountReviewsByAuthor :one
 SELECT count(*)
 FROM review
-WHERE owner_id = $1 AND status = 'active'
+WHERE owner_id = $1
 `
 
 func (q *Queries) CountReviewsByAuthor(ctx context.Context, ownerID int32) (int64, error) {
@@ -54,7 +54,7 @@ func (q *Queries) CountReviewsForHost(ctx context.Context, ownerID int32) (int64
 
 const createReview = `-- name: CreateReview :one
 INSERT INTO review (owner_id, house_id, body, rating, status, created_at)
-VALUES ($1::int, $2::int, $3, $4::int, 'active', now())
+VALUES ($1::int, $2::int, $3, $4::int, 'pending_moderation', now())
 RETURNING id
 `
 
@@ -83,7 +83,10 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.original_body, rv.body)::text AS body,
+  rv.status,
+  COALESCE(rv.rejection_reason, '')::text AS rejection_reason,
+  rv.request_id,
   rv.created_at,
   COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url
@@ -98,6 +101,9 @@ type GetReviewByIDRow struct {
 	AuthorID        int32
 	Rating          int32
 	Body            string
+	Status          string
+	RejectionReason string
+	RequestID       *int32
 	CreatedAt       pgtype.Timestamp
 	AuthorName      string
 	AuthorAvatarUrl string
@@ -112,6 +118,9 @@ func (q *Queries) GetReviewByID(ctx context.Context, id int32) (GetReviewByIDRow
 		&i.AuthorID,
 		&i.Rating,
 		&i.Body,
+		&i.Status,
+		&i.RejectionReason,
+		&i.RequestID,
 		&i.CreatedAt,
 		&i.AuthorName,
 		&i.AuthorAvatarUrl,
@@ -125,7 +134,10 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.original_body, rv.body)::text AS body,
+  rv.status,
+  COALESCE(rv.rejection_reason, '')::text AS rejection_reason,
+  rv.request_id,
   rv.created_at,
   h.street AS house_street,
   h.house_number AS house_number,
@@ -133,7 +145,7 @@ SELECT
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM review rv
 JOIN house h ON h.id = rv.house_id
-WHERE rv.owner_id = $1 AND rv.status = 'active'
+WHERE rv.owner_id = $1
 ORDER BY rv.created_at DESC, rv.id DESC
 LIMIT $3 OFFSET $2
 `
@@ -145,16 +157,19 @@ type ListReviewsByAuthorParams struct {
 }
 
 type ListReviewsByAuthorRow struct {
-	ID             int32
-	HouseID        int32
-	AuthorID       int32
-	Rating         int32
-	Body           string
-	CreatedAt      pgtype.Timestamp
-	HouseStreet    string
-	HouseNumber    string
-	HouseCity      string
-	HouseCoverPath string
+	ID              int32
+	HouseID         int32
+	AuthorID        int32
+	Rating          int32
+	Body            string
+	Status          string
+	RejectionReason string
+	RequestID       *int32
+	CreatedAt       pgtype.Timestamp
+	HouseStreet     string
+	HouseNumber     string
+	HouseCity       string
+	HouseCoverPath  string
 }
 
 func (q *Queries) ListReviewsByAuthor(ctx context.Context, arg ListReviewsByAuthorParams) ([]ListReviewsByAuthorRow, error) {
@@ -172,6 +187,9 @@ func (q *Queries) ListReviewsByAuthor(ctx context.Context, arg ListReviewsByAuth
 			&i.AuthorID,
 			&i.Rating,
 			&i.Body,
+			&i.Status,
+			&i.RejectionReason,
+			&i.RequestID,
 			&i.CreatedAt,
 			&i.HouseStreet,
 			&i.HouseNumber,
@@ -194,7 +212,7 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.published_body, rv.body)::text AS body,
   rv.created_at,
   COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url
@@ -258,7 +276,7 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.published_body, rv.body)::text AS body,
   rv.created_at,
   h.street AS house_street,
   h.house_number AS house_number,

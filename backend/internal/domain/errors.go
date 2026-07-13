@@ -52,6 +52,10 @@ var (
 	// ErrReviewNotAllowed is returned when the author has no confirmed/active
 	// booking for the listing, or attempts to review their own listing.
 	ErrReviewNotAllowed = errors.New("review not allowed")
+	// ErrReviewAttemptsExceeded is returned when the edit attempts count exceeds limit.
+	ErrReviewAttemptsExceeded = errors.New("review attempts exceeded")
+	// ErrReviewUnchanged is returned when the edited review content matches the existing review content.
+	ErrReviewUnchanged = errors.New("review unchanged")
 )
 
 // Account deletion errors.

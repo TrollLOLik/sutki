@@ -4,7 +4,7 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.published_body, rv.body)::text AS body,
   rv.created_at,
   COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url
@@ -40,7 +40,10 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.original_body, rv.body)::text AS body,
+  rv.status,
+  COALESCE(rv.rejection_reason, '')::text AS rejection_reason,
+  rv.request_id,
   rv.created_at,
   COALESCE(NULLIF(TRIM(concat_ws(' ', NULLIF(u.name, ''), NULLIF(u.patronymic, ''), NULLIF(u.surname, ''))), ''), 'Гость')::text AS author_name,
   COALESCE(u.avatar_url, '')::text AS author_avatar_url
@@ -50,7 +53,7 @@ WHERE rv.id = @id::int;
 
 -- name: CreateReview :one
 INSERT INTO review (owner_id, house_id, body, rating, status, created_at)
-VALUES (@owner_id::int, @house_id::int, @body, @rating::int, 'active', now())
+VALUES (@owner_id::int, @house_id::int, @body, @rating::int, 'pending_moderation', now())
 RETURNING id;
 
 -- name: ListReviewsByAuthor :many
@@ -59,7 +62,10 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.original_body, rv.body)::text AS body,
+  rv.status,
+  COALESCE(rv.rejection_reason, '')::text AS rejection_reason,
+  rv.request_id,
   rv.created_at,
   h.street AS house_street,
   h.house_number AS house_number,
@@ -67,14 +73,14 @@ SELECT
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM review rv
 JOIN house h ON h.id = rv.house_id
-WHERE rv.owner_id = $1 AND rv.status = 'active'
+WHERE rv.owner_id = $1
 ORDER BY rv.created_at DESC, rv.id DESC
 LIMIT @result_limit OFFSET @result_offset;
 
 -- name: CountReviewsByAuthor :one
 SELECT count(*)
 FROM review
-WHERE owner_id = $1 AND status = 'active';
+WHERE owner_id = $1;
 
 -- name: ListReviewsForHost :many
 SELECT
@@ -82,7 +88,7 @@ SELECT
   rv.house_id,
   rv.owner_id AS author_id,
   rv.rating,
-  rv.body,
+  COALESCE(rv.published_body, rv.body)::text AS body,
   rv.created_at,
   h.street AS house_street,
   h.house_number AS house_number,

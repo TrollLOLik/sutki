@@ -38,6 +38,7 @@ import {
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
 import { useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
+import { useMyReviewEligibility } from '@/lib/api/reviews';
 import { api } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { formatRooms } from '@/lib/format';
@@ -59,7 +60,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function ChatDialogScreen() {
-  const { palette } = useAppTheme();
+	const { palette } = useAppTheme();
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id: string; title?: string; otherUserId?: string; houseId?: string }>();
 	const convID = parseInt(params.id ?? '0', 10);
@@ -105,6 +106,8 @@ export default function ChatDialogScreen() {
 	// Booking card actions (owner shortcuts to the same confirm/reject
 	// endpoints as the requests screen).
 	const isListingOwner = !!listing && !!sessionUser && listing.owner_id === sessionUser.id;
+	const reviewEligibility = useMyReviewEligibility(!!sessionUser && !isListingOwner);
+	const eligibilityByRequest = new Map((reviewEligibility.data?.items ?? []).map((entry) => [entry.request_id, entry]));
 	const confirmBookingMutation = useConfirmBooking();
 	const rejectBookingMutation = useRejectBooking();
 	const [actioningRequestId, setActioningRequestId] = useState<number | null>(null);
@@ -496,6 +499,15 @@ export default function ChatDialogScreen() {
 					rejecting={actioningRequestId === rid && rejectBookingMutation.isPending}
 					onConfirm={handleConfirmBooking}
 					onReject={handleRejectBooking}
+					reviewAvailable={eligibilityByRequest.get(rid)?.can_review === true}
+					reviewLabel={
+						eligibilityByRequest.get(rid)?.review_status === 'rejected' ||
+						eligibilityByRequest.get(rid)?.review_status === 'moderation_review'
+							? 'Изменить отзыв'
+							: 'Оставить отзыв'
+					}
+					reviewStatus={eligibilityByRequest.get(rid)?.review_status}
+					onReview={(requestID) => router.push({ pathname: '/review/[id]', params: { id: String(requestID) } })}
 				/>
 			);
 		}
