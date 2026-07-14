@@ -13,3 +13,4 @@ yarn-error.log*
 .gemini/
 .cache/
 .pnpm-store/
+/deploy/.env.production

@@ -7,4 +7,3 @@ CREATE INDEX IF NOT EXISTS idx_house_coords
 
 -- Track geocoding quality (DaData qc_geo: 0=exact, 1=near, 2=street, 3=city, 4=region, 5=not found)
 ALTER TABLE house ADD COLUMN IF NOT EXISTS qc_geo integer;
-

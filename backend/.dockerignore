@@ -1,0 +1,7 @@
+.env
+.cache
+bin
+*.exe
+tmp_build
+check_seed.go
+db/dump

@@ -567,15 +567,6 @@ export default function ProfileScreen() {
           setSettingsTab('basic');
         },
       },
-      {
-        id: 'vk',
-        label: 'Привязать аккаунт VK',
-        completed: !!(user.vk_id && user.vk_id.trim() !== ''),
-        onPress: () => {
-          setSettingsVisible(true);
-          setSettingsTab('security');
-        },
-      },
     ];
   }, [user]);
 
@@ -1011,13 +1002,6 @@ export default function ProfileScreen() {
                     </View>
                   </TouchableOpacity>
 
-                  <PickerField
-                    label="Email"
-                    value={valueOrPlaceholder(user?.email)}
-                    placeholder="Укажите email"
-                    icon="mail-outline"
-                    onPress={() => setEmailChangeVisible(true)}
-                  />
                   <EditableField
                     label="Имя"
                     value={formName}
@@ -1112,23 +1096,6 @@ export default function ProfileScreen() {
                         size={24}
                         color={user?.is_verified ? palette.success : palette.inkMuted}
                       />
-                    </View>
-                    <View className="h-px bg-line" />
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-1 pr-4">
-                        <Text className="text-base font-extrabold text-ink">ВКонтакте</Text>
-                        <Text className="mt-1 text-sm text-ink-secondary">
-                          {vkLinked ? 'Аккаунт VK привязан' : 'Связать профиль для быстрого входа'}
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={handleToggleVK}
-                        className={`rounded-pill px-3 py-1.5 ${vkLinked ? 'bg-surface-muted border border-line' : 'bg-primary-light'}`}
-                      >
-                        <Text className={`text-xs font-bold ${vkLinked ? 'text-ink-secondary' : 'text-primary'}`}>
-                          {vkLinked ? 'Отвязать' : 'Привязать'}
-                        </Text>
-                      </Pressable>
                     </View>
                   </View>
 
