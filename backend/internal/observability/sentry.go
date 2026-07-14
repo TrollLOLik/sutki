@@ -60,6 +60,12 @@ func CaptureMessage(ctx context.Context, message string) {
 	hub.CaptureMessage(message)
 }
 
+// Flush waits until buffered events are handed to the transport. It is used
+// by short-lived diagnostic commands that exit immediately after capture.
+func Flush(timeout time.Duration) bool {
+	return sentry.Flush(timeout)
+}
+
 // CapturePanic reports a recovered panic while allowing the caller to decide
 // whether the process should continue or repanic.
 func CapturePanic(ctx context.Context, recovered any) {
