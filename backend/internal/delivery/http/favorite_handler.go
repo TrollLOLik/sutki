@@ -45,7 +45,7 @@ func (h *FavoriteHandler) Add(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "listing not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -59,7 +59,7 @@ func (h *FavoriteHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Remove(r.Context(), userID, houseID); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -73,7 +73,7 @@ func (h *FavoriteHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.List(r.Context(), userID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	items := make([]listingCardDTO, 0, len(res.Items))
@@ -96,7 +96,7 @@ func (h *FavoriteHandler) ids(w http.ResponseWriter, r *http.Request) {
 	}
 	ids, err := h.svc.IDs(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, favoriteIDsResponse{IDs: ids})

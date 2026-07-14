@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
@@ -140,6 +141,7 @@ func (s *Service) notifyOwner(ctx context.Context, house domain.House, rev domai
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("review notify panic recovered: %v", r)
+			observability.CapturePanic(ctx, r)
 		}
 	}()
 
@@ -209,6 +211,7 @@ approve — безопасный содержательный текст. approv
 
 func (s *Service) StartWorker(ctx context.Context) {
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		s.processModeration(ctx)
@@ -236,6 +239,7 @@ func (s *Service) processModeration(ctx context.Context) {
 		jobs, err := s.repo.DueModerationJobs(ctx, 10)
 		if err != nil {
 			log.Printf("review moderation: claim: %v", err)
+			observability.CaptureException(ctx, err)
 			return
 		}
 		if len(jobs) == 0 {
@@ -249,6 +253,9 @@ func (s *Service) processModeration(ctx context.Context) {
 				}
 				_ = s.repo.RetryModeration(ctx, job, err.Error(), time.Now().Add(delay))
 				log.Printf("review moderation: job %d: %v", job.ID, err)
+				if job.Attempts >= 3 {
+					observability.CaptureException(ctx, fmt.Errorf("review moderation job %d repeatedly failed: %w", job.ID, err))
+				}
 			}
 		}
 	}
@@ -323,6 +330,7 @@ func (s *Service) processSummaries(ctx context.Context) {
 	houses, err := s.repo.DueSummaryHouses(ctx, 5)
 	if err != nil {
 		log.Printf("review summary: claim: %v", err)
+		observability.CaptureException(ctx, err)
 		return
 	}
 	for _, houseID := range houses {

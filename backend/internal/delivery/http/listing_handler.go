@@ -37,7 +37,7 @@ func (h *ListingHandler) Routes(r chi.Router) {
 func (h *ListingHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	refs, err := h.svc.Services(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, refResponse{Items: toRefDTOs(refs)})
@@ -47,7 +47,7 @@ func (h *ListingHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 func (h *ListingHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	refs, err := h.svc.Categories(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, refResponse{Items: toRefDTOs(refs)})
@@ -142,7 +142,7 @@ func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.svc.List(r.Context(), filter)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *ListingHandler) list(w http.ResponseWriter, r *http.Request) {
 func (h *ListingHandler) mapClusters(w http.ResponseWriter, r *http.Request) {
 	items, err := h.svc.MapClusters(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -252,7 +252,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, listing.ErrTooManySubmissions):
 			writeError(w, http.StatusTooManyRequests, "daily listing submission limit reached")
 		default:
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
@@ -320,7 +320,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, domain.ErrNotFound):
 			writeError(w, http.StatusNotFound, "listing not found")
 		default:
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
@@ -342,7 +342,7 @@ func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 		parseInt32(r.URL.Query().Get("offset"), 0),
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	items := make([]listingCardDTO, 0, len(res.Items))
@@ -378,7 +378,7 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "listing not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -460,7 +460,7 @@ func (h *ListingHandler) recordView(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, listing.ErrMissingViewIdentity):
 			writeError(w, http.StatusBadRequest, "viewer identity is required")
 		default:
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}

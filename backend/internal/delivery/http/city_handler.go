@@ -31,7 +31,7 @@ func (h *CityHandler) Suggest(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequestWithContext(r.Context(), "POST", "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address", bytes.NewReader(bodyBytes))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create proxy request")
+		writeInternalError(w, r, err, "failed to create proxy request")
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *CityHandler) IPLocate(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequestWithContext(r.Context(), "GET", url, nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create proxy request")
+		writeInternalError(w, r, err, "failed to create proxy request")
 		return
 	}
 

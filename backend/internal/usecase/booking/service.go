@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
@@ -263,6 +264,7 @@ func (s *Service) ListGuest(ctx context.Context, guestID string, limit, offset i
 // StartCleanupJob starts a background cleaner to delete expired pending guest requests.
 func (s *Service) StartCleanupJob(ctx context.Context, interval time.Duration) {
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -273,6 +275,7 @@ func (s *Service) StartCleanupJob(ctx context.Context, interval time.Duration) {
 				before := time.Now().Add(-24 * time.Hour)
 				if err := s.repo.DeleteExpiredPendingRequests(ctx, before); err != nil {
 					log.Printf("booking cleanup job error: %v", err)
+					observability.CaptureException(ctx, err)
 				}
 			}
 		}
@@ -422,4 +425,3 @@ func canView(b domain.Booking, actorID int32) bool {
 	}
 	return b.House != nil && b.House.OwnerID == actorID
 }
-

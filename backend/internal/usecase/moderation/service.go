@@ -23,6 +23,7 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
@@ -130,7 +131,7 @@ func moderatedText(h domain.ModerationHouse) string {
 		if cleanedName == "" {
 			continue
 		}
-		
+
 		// Validate type
 		pType := strings.ToLower(strings.TrimSpace(p.Type))
 		switch pType {
@@ -139,7 +140,7 @@ func moderatedText(h domain.ModerationHouse) string {
 		default:
 			pType = "unknown"
 		}
-		
+
 		// Validate distance
 		dist := p.Distance
 		if dist < 0 {
@@ -313,6 +314,7 @@ func (s *Service) Wake() {
 // StartWorker launches the background verdict loop. Call once from main.
 func (s *Service) StartWorker(ctx context.Context) {
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(pollInterval)
 		defer ticker.Stop()
 		for {
@@ -333,6 +335,7 @@ func (s *Service) processDue(ctx context.Context) {
 		batch, err := s.repo.DueBatch(ctx, batchSize)
 		if err != nil {
 			log.Printf("moderation worker: claim batch: %v", err)
+			observability.CaptureException(ctx, err)
 			return
 		}
 		if len(batch) == 0 {
@@ -368,6 +371,7 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 			// (provisional actives remain active, pending stays pending) and
 			// the job reschedules far out so recovery re-processes it.
 			log.Printf("moderation worker: job %d exhausted attempts: %v", job.ID, err)
+			observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d exhausted attempts: %w", job.ID, err))
 			_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(1*time.Hour), err.Error())
 			return
 		}
@@ -442,7 +446,7 @@ func (s *Service) askLLM(ctx context.Context, h domain.ModerationHouse) (moderat
 			// Unparseable model output is NEVER trusted as approve or
 			// reject — it degrades to a human review.
 			log.Printf("moderation: unparseable LLM verdict, downgrading to review: %v", perr)
-			
+
 			errPayload := map[string]string{
 				"raw_text":    answer2,
 				"parse_error": perr.Error(),

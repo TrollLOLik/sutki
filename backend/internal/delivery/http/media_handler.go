@@ -97,7 +97,7 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 	// 2. Generate secure random key path
 	uuid, err := generateMediaRandomHex(16)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate secure name")
+		writeInternalError(w, r, err, "failed to generate secure name")
 		return
 	}
 	ext := filepath.Ext(req.FileName)
@@ -122,7 +122,7 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Log the full error server-side; never leak storage internals to the client.
 		log.Printf("[Media] PresignUpload error (type=%s): %v", uploadType, err)
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 

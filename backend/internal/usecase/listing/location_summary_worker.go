@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
@@ -36,6 +37,7 @@ func (s *Service) StartLocationSummaryWorker(ctx context.Context) {
 	}
 
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(summaryPollInterval)
 		defer ticker.Stop()
 		for {
@@ -59,6 +61,7 @@ func (s *Service) processDue(ctx context.Context) {
 		batch, err := s.locationSummaryRepo.DueBatch(ctx, summaryBatchSize)
 		if err != nil {
 			log.Printf("location summary worker: claim batch: %v", err)
+			observability.CaptureException(ctx, err)
 			return
 		}
 		if len(batch) == 0 {
@@ -114,6 +117,7 @@ func (s *Service) handleJobFailure(ctx context.Context, job domain.LocationSumma
 	log.Printf("location summary worker: job %d failed: %v", job.ID, err)
 	if int(job.Attempts) >= summaryMaxAttempts {
 		log.Printf("location summary worker: job %d exhausted attempts, marking failed", job.ID)
+		observability.CaptureException(ctx, fmt.Errorf("location summary job %d exhausted attempts: %w", job.ID, err))
 		_ = s.locationSummaryRepo.MarkFailed(ctx, job.ID, job.Revision, err.Error())
 		return
 	}

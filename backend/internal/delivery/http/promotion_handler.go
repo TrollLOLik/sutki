@@ -36,7 +36,7 @@ func (h *PromotionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	result, err := h.svc.Checkout(r.Context(), userID, int32(houseID), body.ProductCode, strings.TrimSpace(r.Header.Get("Idempotency-Key")))
 	if err != nil {
 		log.Printf("promotion checkout failed: user=%d house=%d product=%q: %v", userID, houseID, body.ProductCode, err)
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, result)
@@ -54,7 +54,7 @@ func (h *PromotionHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.svc.List(r.Context(), userID, int32(houseID))
 	if err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})

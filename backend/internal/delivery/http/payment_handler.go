@@ -20,7 +20,7 @@ func NewPaymentHandler(svc *paymentuc.Service) *PaymentHandler { return &Payment
 func (h *PaymentHandler) Products(w http.ResponseWriter, r *http.Request) {
 	products, err := h.svc.Products(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	type dto struct {
@@ -53,7 +53,7 @@ func (h *PaymentHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Checkout(r.Context(), userID, body.ProductCode, strings.TrimSpace(r.Header.Get("Idempotency-Key")))
 	if err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, result)
@@ -72,7 +72,7 @@ func (h *PaymentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.svc.Get(r.Context(), id, userID)
 	if err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": p.ID, "purpose": p.Purpose, "product_code": p.ProductCode, "status": p.Status, "amount_kopecks": p.AmountKopecks, "currency": p.Currency, "confirmation_url": p.ConfirmationURL, "created_at": p.CreatedAt, "paid_at": p.PaidAt})
@@ -86,7 +86,7 @@ func (h *PaymentHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err = h.svc.AcceptWebhook(r.Context(), body); err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
@@ -111,7 +111,7 @@ func (h *PaymentHandler) Refund(w http.ResponseWriter, r *http.Request) {
 	}
 	refund, err := h.svc.Refund(r.Context(), id, body.AmountKopecks, body.Reason, strings.TrimSpace(r.Header.Get("Idempotency-Key")), 0)
 	if err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, refund)
@@ -129,7 +129,7 @@ func (h *PaymentHandler) MockSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.MockSetStatus(r.Context(), chi.URLParam(r, "provider_id"), body.Status); err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "webhook_queued"})
@@ -147,13 +147,13 @@ func (h *PaymentHandler) MockConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.MockConfirm(r.Context(), id, userID); err != nil {
-		writePaymentError(w, err)
+		writePaymentError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "webhook_queued"})
 }
 
-func writePaymentError(w http.ResponseWriter, err error) {
+func writePaymentError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrPaymentNotFound), errors.Is(err, domain.ErrNotFound):
 		writeError(w, http.StatusNotFound, "payment not found")
@@ -166,6 +166,6 @@ func writePaymentError(w http.ResponseWriter, err error) {
 	case strings.Contains(err.Error(), "idempotency"), strings.Contains(err.Error(), "receipt contact"):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
-		writeError(w, http.StatusInternalServerError, "payment operation failed")
+		writeInternalError(w, r, err, "payment operation failed")
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/email"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 // EmailHandler serves email notification preferences and the login-free
@@ -35,7 +36,7 @@ func (h *EmailHandler) GetPreferences(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.prefs.Get(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, emailPreferencesDTO{
@@ -64,7 +65,7 @@ func (h *EmailHandler) UpdatePreferences(w http.ResponseWriter, r *http.Request)
 		Reviews:    req.Reviews,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, req)
@@ -93,6 +94,7 @@ func (h *EmailHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.prefs.SetCategory(r.Context(), int32(uid64), cat, false); err != nil {
+		observability.CaptureException(r.Context(), err)
 		unsubscribePage(w, http.StatusInternalServerError, "Не удалось сохранить настройку. Попробуйте позже.")
 		return
 	}

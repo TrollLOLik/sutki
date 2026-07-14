@@ -24,9 +24,14 @@ type Config struct {
 	HTTPAddr     string
 	DatabaseURL  string
 	MediaBaseURL string
-	JWTSecret    string
-	AccessTTL    time.Duration
-	RefreshTTL   time.Duration
+	// GlitchTipBackendDSN enables Sentry-compatible error reporting when set.
+	// It is optional so local development works without an error tracker.
+	GlitchTipBackendDSN string
+	AppEnvironment      string
+	AppRelease          string
+	JWTSecret           string
+	AccessTTL           time.Duration
+	RefreshTTL          time.Duration
 	// AuthExposeCode returns login codes in the API response and logs them
 	// (dev only). Defaults to false; opt in explicitly via AUTH_EXPOSE_CODE=true.
 	AuthExposeCode bool
@@ -105,15 +110,18 @@ type Config struct {
 // Load reads configuration from the environment. DATABASE_URL is required.
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:       getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		MediaBaseURL:   getEnv("MEDIA_BASE_URL", ""),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
-		AccessTTL:      getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
-		RefreshTTL:     getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
-		AuthExposeCode: getBool("AUTH_EXPOSE_CODE", false),
-		ReadTimeout:    15 * time.Second,
-		WriteTimeout:   15 * time.Second,
+		HTTPAddr:            getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		MediaBaseURL:        getEnv("MEDIA_BASE_URL", ""),
+		GlitchTipBackendDSN: getEnv("GLITCHTIP_BACKEND_DSN", ""),
+		AppEnvironment:      getEnv("APP_ENV", "development"),
+		AppRelease:          getEnv("APP_RELEASE", ""),
+		JWTSecret:           os.Getenv("JWT_SECRET"),
+		AccessTTL:           getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
+		RefreshTTL:          getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
+		AuthExposeCode:      getBool("AUTH_EXPOSE_CODE", false),
+		ReadTimeout:         15 * time.Second,
+		WriteTimeout:        15 * time.Second,
 
 		SMTPHost:     getEnv("SMTP_HOST", "smtp.yandex.ru"),
 		SMTPPort:     getInt("SMTP_PORT", 465),

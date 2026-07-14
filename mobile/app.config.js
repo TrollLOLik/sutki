@@ -67,6 +67,13 @@ module.exports = {
           ios_useYandexMapKitLite: false,
         },
       ],
+      [
+        "@sentry/react-native/expo",
+        {
+          url: process.env.SENTRY_URL || "https://errors.titop.ru",
+          disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,

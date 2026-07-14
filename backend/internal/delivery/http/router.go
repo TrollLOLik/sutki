@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// middleware.RealIP rewrites r.RemoteAddr from X-Forwarded-For / X-Real-IP
@@ -23,6 +23,11 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	}
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	if errorTracking != nil {
+		// The tracker must be inside Recoverer: it reports the panic, repanics,
+		// then Chi turns that panic into the normal HTTP 500 response.
+		r.Use(errorTracking)
+	}
 	r.Use(securityHeaders)
 	r.Use(middleware.Timeout(30 * time.Second))
 

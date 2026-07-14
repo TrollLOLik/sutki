@@ -74,7 +74,7 @@ func (h *ReviewHandler) List(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "listing not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -133,7 +133,7 @@ func (h *ReviewHandler) Create(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "listing not found")
 		default:
 			log.Printf("review handler: create review: %v", err)
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
@@ -188,7 +188,7 @@ func (h *ReviewHandler) ListEligibility(w http.ResponseWriter, r *http.Request) 
 	}
 	items, err := h.svc.ListEligibility(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -223,7 +223,7 @@ func (h *ReviewHandler) CreateReply(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "reply unchanged")
 		default:
 			log.Printf("review handler: create reply: %v", err)
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
@@ -280,7 +280,7 @@ func (h *ReviewHandler) ListMineWritten(w http.ResponseWriter, r *http.Request) 
 	res, err := h.svc.ListByAuthor(r.Context(), userID,
 		parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -307,7 +307,7 @@ func (h *ReviewHandler) ListMineReceived(w http.ResponseWriter, r *http.Request)
 	res, err := h.svc.ListForHost(r.Context(), userID,
 		parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 
@@ -362,7 +362,7 @@ func (h *ReviewHandler) ListForUser(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.ListForHostWithSummary(r.Context(), int32(hostID),
 		parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 

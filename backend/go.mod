@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/go-chi/chi/v5 v5.3.0
+	github.com/getsentry/sentry-go v0.48.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
@@ -35,5 +36,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 )

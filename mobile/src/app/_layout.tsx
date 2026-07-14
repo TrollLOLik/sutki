@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
 
 import { queryClient } from '@/lib/query';
 import { useSessionStore } from '@/store/session';
@@ -18,6 +19,17 @@ import { useAuthGateStore } from '@/lib/requireAuth';
 import { AuthGateSheet } from '@/components/AuthGateSheet';
 import { ThemeTransitionOverlay } from '@/components/ThemeTransitionOverlay';
 import { YamapInstance } from 'react-native-yamap-plus';
+
+const glitchTipDSN = process.env.EXPO_PUBLIC_GLITCHTIP_DSN;
+
+Sentry.init({
+  dsn: glitchTipDSN,
+  enabled: Boolean(glitchTipDSN),
+  environment: __DEV__ ? 'development' : 'production',
+  sendDefaultPii: false,
+  enableAutoSessionTracking: false,
+  tracesSampleRate: 0,
+});
 
 // Initialize Yandex Maps SDK on JS startup to prevent native crashes.
 const initYamap = async () => {
@@ -35,7 +47,7 @@ SplashScreen.preventAutoHideAsync();
 
 
 
-export default function RootLayout() {
+function RootLayout() {
   const status = useSessionStore((s) => s.status);
   const hydrate = useSessionStore((s) => s.hydrate);
   const hydrateTheme = useThemeStore((s) => s.hydrate);
@@ -95,3 +107,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(RootLayout);

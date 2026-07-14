@@ -48,7 +48,7 @@ type bookingHouseDTO struct {
 	OwnerSurname      string  `json:"owner_surname"`
 	OwnerPatronymic   string  `json:"owner_patronymic"`
 	OwnerPhone        string  `json:"owner_phone"`
-	OwnerAvatarURL     string  `json:"owner_avatar_url"`
+	OwnerAvatarURL    string  `json:"owner_avatar_url"`
 	OwnerRating       float64 `json:"owner_rating"`
 	OwnerReviewsCount int32   `json:"owner_reviews_count"`
 	OwnerIsVerified   bool    `json:"owner_is_verified"`
@@ -66,25 +66,25 @@ type bookingGuestDTO struct {
 }
 
 type bookingDTO struct {
-	ID              int32              `json:"id"`
-	HouseID         int32              `json:"house_id"`
-	UserID          int32              `json:"user_id"`
-	Name            string             `json:"name"`
-	Surname         string             `json:"surname"`
-	Lastname        string             `json:"lastname"`
-	Count           int32              `json:"count"`
-	Message         string             `json:"message"`
-	Phone           string             `json:"phone"`
-	PhoneNormalized string             `json:"phone_normalized"`
-	StartDate       string             `json:"start_date"`
-	EndDate         *string            `json:"end_date"`
-	Status          string             `json:"status"`
-	RejectionReason string             `json:"rejection_reason"`
-	ConfirmedAt     *string            `json:"confirmed_at"`
-	CreatedAt       string             `json:"created_at"`
-	UpdatedAt       string             `json:"updated_at"`
-	House           *bookingHouseDTO   `json:"house,omitempty"`
-	Guest           *bookingGuestDTO   `json:"guest,omitempty"`
+	ID              int32            `json:"id"`
+	HouseID         int32            `json:"house_id"`
+	UserID          int32            `json:"user_id"`
+	Name            string           `json:"name"`
+	Surname         string           `json:"surname"`
+	Lastname        string           `json:"lastname"`
+	Count           int32            `json:"count"`
+	Message         string           `json:"message"`
+	Phone           string           `json:"phone"`
+	PhoneNormalized string           `json:"phone_normalized"`
+	StartDate       string           `json:"start_date"`
+	EndDate         *string          `json:"end_date"`
+	Status          string           `json:"status"`
+	RejectionReason string           `json:"rejection_reason"`
+	ConfirmedAt     *string          `json:"confirmed_at"`
+	CreatedAt       string           `json:"created_at"`
+	UpdatedAt       string           `json:"updated_at"`
+	House           *bookingHouseDTO `json:"house,omitempty"`
+	Guest           *bookingGuestDTO `json:"guest,omitempty"`
 }
 
 type bookingListResponse struct {
@@ -116,7 +116,7 @@ func (h *BookingHandler) Availability(w http.ResponseWriter, r *http.Request) {
 	}
 	ranges, err := h.svc.BlockingRanges(r.Context(), int32(houseID))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load availability")
+		writeInternalError(w, r, err, "failed to load availability")
 		return
 	}
 	items := make([]availabilityRangeDTO, 0, len(ranges))
@@ -248,7 +248,7 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	b, err := h.svc.Create(r.Context(), nb)
 	if err != nil {
-		h.writeBookingError(w, err, "listing not found")
+		h.writeBookingError(w, r, err, "listing not found")
 		return
 	}
 	writeJSON(w, http.StatusCreated, h.bookingDTO(b))
@@ -262,7 +262,7 @@ func (h *BookingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.ListMine(r.Context(), userID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0), r.URL.Query().Get("scope"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	h.writeList(w, res)
@@ -276,7 +276,7 @@ func (h *BookingHandler) listIncoming(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.ListIncoming(r.Context(), userID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	h.writeList(w, res)
@@ -292,7 +292,7 @@ func (h *BookingHandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := h.svc.Get(r.Context(), int32(id), userID, guestID)
 	if err != nil {
-		h.writeBookingError(w, err, "booking not found")
+		h.writeBookingError(w, r, err, "booking not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.bookingDTO(b))
@@ -305,7 +305,7 @@ func (h *BookingHandler) confirm(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := h.svc.Confirm(r.Context(), id, userID)
 	if err != nil {
-		h.writeBookingError(w, err, "booking not found")
+		h.writeBookingError(w, r, err, "booking not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.bookingDTO(b))
@@ -324,7 +324,7 @@ func (h *BookingHandler) reject(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := h.svc.Reject(r.Context(), id, userID, strings.TrimSpace(body.Reason))
 	if err != nil {
-		h.writeBookingError(w, err, "booking not found")
+		h.writeBookingError(w, r, err, "booking not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.bookingDTO(b))
@@ -340,7 +340,7 @@ func (h *BookingHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := h.svc.Cancel(r.Context(), int32(id), userID, guestID)
 	if err != nil {
-		h.writeBookingError(w, err, "booking not found")
+		h.writeBookingError(w, r, err, "booking not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.bookingDTO(b))
@@ -354,7 +354,7 @@ func (h *BookingHandler) ListGuest(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.ListGuest(r.Context(), guestID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	h.writeList(w, res)
@@ -453,7 +453,7 @@ func (h *BookingHandler) bookingDTO(b domain.Booking) bookingDTO {
 	return dto
 }
 
-func (h *BookingHandler) writeBookingError(w http.ResponseWriter, err error, notFoundMsg string) {
+func (h *BookingHandler) writeBookingError(w http.ResponseWriter, r *http.Request, err error, notFoundMsg string) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		writeError(w, http.StatusNotFound, notFoundMsg)
@@ -468,7 +468,7 @@ func (h *BookingHandler) writeBookingError(w http.ResponseWriter, err error, not
 	case errors.Is(err, domain.ErrBookingNotPending):
 		writeError(w, http.StatusConflict, "booking not pending")
 	default:
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 	}
 }
 

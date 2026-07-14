@@ -23,6 +23,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
@@ -942,6 +943,7 @@ func (s *Service) StartPhoneChallengeReaper(ctx context.Context, interval time.D
 		return
 	}
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -951,6 +953,7 @@ func (s *Service) StartPhoneChallengeReaper(ctx context.Context, interval time.D
 			case now := <-ticker.C:
 				if err := s.phoneChallenges.ReapStale(context.Background(), now); err != nil {
 					log.Printf("phone challenge reaper: %v", err)
+					observability.CaptureException(ctx, err)
 				}
 			}
 		}

@@ -3,6 +3,8 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 // maxBodyBytes caps request bodies to guard against oversized payloads.
@@ -31,4 +33,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func writeInternalError(w http.ResponseWriter, r *http.Request, err error, message string) {
+	observability.CaptureException(r.Context(), err)
+	writeError(w, http.StatusInternalServerError, message)
 }

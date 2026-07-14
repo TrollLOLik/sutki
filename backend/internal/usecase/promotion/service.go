@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 	paymentuc "github.com/TrollLOLik/sutki/backend/internal/usecase/payment"
 )
 
@@ -101,6 +102,7 @@ func (s *Service) PaymentStatusChanged(ctx context.Context, payment domain.Payme
 
 func (s *Service) StartExpiryWorker(ctx context.Context) {
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		s.processExpiry(ctx)
@@ -122,6 +124,7 @@ func (s *Service) processExpiry(ctx context.Context) {
 		jobs, err := s.repo.DueExpiry(ctx, 20)
 		if err != nil {
 			log.Printf("promotion expiry: claim: %v", err)
+			observability.CaptureException(ctx, err)
 			return
 		}
 		if len(jobs) == 0 {
@@ -129,7 +132,11 @@ func (s *Service) processExpiry(ctx context.Context) {
 		}
 		for _, job := range jobs {
 			if err := s.repo.Expire(ctx, job); err != nil {
-				_ = s.repo.RetryExpiry(ctx, job, err.Error(), time.Now().Add(time.Minute))
+				if retryErr := s.repo.RetryExpiry(ctx, job, err.Error(), time.Now().Add(time.Minute)); retryErr != nil {
+					observability.CaptureException(ctx, fmt.Errorf("promotion expiry retry job %d: %w", job.PromotionID, retryErr))
+				} else if job.Attempts >= 5 {
+					observability.CaptureException(ctx, fmt.Errorf("promotion expiry job %d exhausted attempts: %w", job.PromotionID, err))
+				}
 			}
 		}
 	}

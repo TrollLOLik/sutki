@@ -12,6 +12,7 @@ import (
 
 	"strings"
 
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/poi"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/ucaller"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
@@ -43,6 +45,17 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
+	}
+	flushErrorTracking := initErrorTracking(cfg)
+	defer flushErrorTracking()
+	if len(os.Args) == 2 && os.Args[1] == "--error-tracking-smoke-test" {
+		if cfg.GlitchTipBackendDSN == "" {
+			log.Fatal("error tracking smoke test requires GLITCHTIP_BACKEND_DSN")
+		}
+		observability.CaptureMessage(context.Background(), "titop-arenda backend smoke test")
+		flushErrorTracking()
+		log.Println("GlitchTip smoke event sent")
+		return
 	}
 
 	ctx := context.Background()
@@ -223,9 +236,12 @@ func main() {
 
 	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage)
 
+	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, errorTracking)
+
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
-		Handler:      httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler),
+		Handler:      handler,
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		// Slow-client hardening: bound idle keep-alive connections and header
@@ -251,4 +267,27 @@ func main() {
 		log.Printf("shutdown: %v", err)
 	}
 	log.Println("stopped")
+}
+
+func newErrorTrackingMiddleware(enabled bool) func(http.Handler) http.Handler {
+	if !enabled {
+		return nil
+	}
+	return sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle
+}
+
+func initErrorTracking(cfg config.Config) func() {
+	flush, err := observability.Init(observability.Config{
+		DSN:         cfg.GlitchTipBackendDSN,
+		Environment: cfg.AppEnvironment,
+		Release:     cfg.AppRelease,
+	})
+	if err != nil {
+		log.Printf("GlitchTip disabled: initialize Sentry client: %v", err)
+		return func() {}
+	}
+	if cfg.GlitchTipBackendDSN != "" {
+		log.Printf("GlitchTip error reporting enabled (environment=%s, release=%s)", cfg.AppEnvironment, cfg.AppRelease)
+	}
+	return flush
 }

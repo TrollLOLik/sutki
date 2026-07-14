@@ -81,8 +81,8 @@ services:
       GLITCHTIP_DOMAIN: https://errors.titop.ru
       ALLOWED_HOSTS: errors.titop.ru
       CSRF_TRUSTED_ORIGINS: https://errors.titop.ru
-      EMAIL_URL: consolemail://
-      DEFAULT_FROM_EMAIL: errors@titop.ru
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?set GLITCHTIP_EMAIL_URL}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL:-notifications@titop.ru}
       SERVER_ROLE: all_in_one
       VALKEY_URL: ""
       GLITCHTIP_RETENTION_DAYS: "30"

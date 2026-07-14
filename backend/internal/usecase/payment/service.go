@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
@@ -261,6 +262,7 @@ func (s *Service) MockConfirm(ctx context.Context, paymentID int64, userID int32
 
 func (s *Service) StartWebhookWorker(ctx context.Context) {
 	go func() {
+		defer observability.RecoverAndRepanic(ctx)
 		ticker := time.NewTicker(webhookPollInterval)
 		defer ticker.Stop()
 		s.processDue(ctx)
@@ -283,6 +285,7 @@ func (s *Service) processDue(ctx context.Context) {
 		events, err := s.repo.DueWebhookBatch(ctx, webhookBatchSize)
 		if err != nil {
 			log.Printf("payment webhook worker: claim: %v", err)
+			observability.CaptureException(ctx, err)
 			return
 		}
 		if len(events) == 0 {
@@ -342,6 +345,9 @@ func (s *Service) processEvent(ctx context.Context, event domain.PaymentWebhookE
 func (s *Service) failEvent(ctx context.Context, event domain.PaymentWebhookEvent, err error) {
 	if errors.Is(err, domain.ErrInvalidWebhook) || event.Attempts >= webhookMaxAttempts {
 		_ = s.repo.MarkWebhookFailed(ctx, event.ID, err.Error())
+		if !errors.Is(err, domain.ErrInvalidWebhook) {
+			observability.CaptureException(ctx, fmt.Errorf("payment webhook %d exhausted attempts: %w", event.ID, err))
+		}
 		return
 	}
 	delay := time.Duration(1<<min(int(event.Attempts), 6)) * 10 * time.Second

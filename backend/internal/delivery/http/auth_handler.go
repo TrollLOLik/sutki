@@ -127,7 +127,7 @@ func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.svc.RequestCode(r.Context(), body.Email)
 	if err != nil {
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
@@ -147,7 +147,7 @@ func (h *AuthHandler) verifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.VerifyCode(r.Context(), body.Email, body.Code, extractDeviceInfo(r))
 	if err != nil {
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toAuthResponse(res))
@@ -162,7 +162,7 @@ func (h *AuthHandler) refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.Refresh(r.Context(), body.RefreshToken, extractDeviceInfo(r))
 	if err != nil {
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toAuthResponse(res))
@@ -176,7 +176,7 @@ func (h *AuthHandler) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Logout(r.Context(), body.RefreshToken); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -195,7 +195,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))
@@ -244,7 +244,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))
@@ -258,13 +258,13 @@ func (h *AuthHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.DeleteUser(r.Context(), userID); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func writeAuthError(w http.ResponseWriter, err error) {
+func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, auth.ErrInvalidPhone):
 		writeError(w, http.StatusBadRequest, "invalid phone number")
@@ -285,7 +285,7 @@ func writeAuthError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrTokenInvalid):
 		writeError(w, http.StatusUnauthorized, "invalid token")
 	default:
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 	}
 }
 
@@ -297,7 +297,7 @@ func (h *AuthHandler) RequestOldEmailCode(w http.ResponseWriter, r *http.Request
 	}
 	res, err := h.svc.RequestOldEmailCode(r.Context(), userID)
 	if err != nil {
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
@@ -321,7 +321,7 @@ func (h *AuthHandler) VerifyOldEmailCode(w http.ResponseWriter, r *http.Request)
 	}
 	token, err := h.svc.VerifyOldEmailCode(r.Context(), userID, body.Code)
 	if err != nil {
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"temp_token": token})
@@ -346,7 +346,7 @@ func (h *AuthHandler) RequestNewEmailCode(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, "email already taken")
 			return
 		}
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
@@ -371,7 +371,7 @@ func (h *AuthHandler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request)
 	}
 	user, err := h.svc.ConfirmEmailChange(r.Context(), userID, body.NewEmail, body.Code)
 	if err != nil {
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))
@@ -385,7 +385,7 @@ func (h *AuthHandler) CheckDeleteMe(w http.ResponseWriter, r *http.Request) {
 	}
 	hasActive, err := h.svc.CheckDeleteAccount(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+		writeInternalError(w, r, err, "Внутренняя ошибка сервера")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"has_active_bookings": hasActive})
@@ -403,7 +403,7 @@ func (h *AuthHandler) RequestDeleteMeCode(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, "Невозможно удалить аккаунт: у вас есть активные бронирования.")
 			return
 		}
-		writeAuthErrorRussian(w, err)
+		writeAuthErrorRussian(w, r, err)
 		return
 	}
 	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
@@ -431,13 +431,13 @@ func (h *AuthHandler) ConfirmDeleteMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Невозможно удалить аккаунт: у вас есть активные бронирования.")
 			return
 		}
-		writeAuthErrorRussian(w, err)
+		writeAuthErrorRussian(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func writeAuthErrorRussian(w http.ResponseWriter, err error) {
+func writeAuthErrorRussian(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, auth.ErrInvalidPhone):
 		writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
@@ -458,7 +458,7 @@ func writeAuthErrorRussian(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrTokenInvalid):
 		writeError(w, http.StatusUnauthorized, "Неверный токен авторизации")
 	default:
-		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+		writeInternalError(w, r, err, "Внутренняя ошибка сервера")
 	}
 }
 
@@ -538,7 +538,7 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.svc.ListSessions(r.Context(), userID, sid)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -558,7 +558,7 @@ func (h *AuthHandler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request
 
 	err := h.svc.RevokeAllSessionsExcept(r.Context(), sid, userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -580,7 +580,7 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 
 	err = h.svc.RevokeSession(r.Context(), sessionID, userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
+		writeInternalError(w, r, err, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -622,7 +622,7 @@ func (h *AuthHandler) requestCodePhone(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.RequestPhoneCode(r.Context(), body.Phone, body.Channel)
 	if err != nil {
 		log.Printf("requestCodePhone error: %v", err)
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writePhoneChallengeResponse(w, res)
@@ -652,7 +652,7 @@ func (h *AuthHandler) fallbackCodePhone(w http.ResponseWriter, r *http.Request) 
 	res, err := h.svc.RequestPhoneVoiceFallback(r.Context(), body.Phone, body.ChallengeID, domain.PhoneChallengePurposeLogin, nil)
 	if err != nil {
 		log.Printf("fallbackCodePhone error: %v", err)
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writePhoneChallengeResponse(w, res)
@@ -675,7 +675,7 @@ func (h *AuthHandler) verifyCodePhone(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.VerifyPhoneCode(r.Context(), body.Phone, body.Code, challengeID, extractDeviceInfo(r))
 	if err != nil {
 		log.Printf("verifyCodePhone error: %v", err)
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toAuthResponse(res))
@@ -717,7 +717,7 @@ func (h *AuthHandler) changePhoneRequest(w http.ResponseWriter, r *http.Request)
 	res, err := h.svc.RequestChangePhoneCode(r.Context(), userID, body.Phone, body.Channel)
 	if err != nil {
 		log.Printf("changePhoneRequest error: %v", err)
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writePhoneChallengeResponse(w, res)
@@ -739,7 +739,7 @@ func (h *AuthHandler) changePhoneFallback(w http.ResponseWriter, r *http.Request
 	res, err := h.svc.RequestPhoneVoiceFallback(r.Context(), body.Phone, body.ChallengeID, domain.PhoneChallengePurposeChangePhone, &userID)
 	if err != nil {
 		log.Printf("changePhoneFallback error: %v", err)
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writePhoneChallengeResponse(w, res)
@@ -767,7 +767,7 @@ func (h *AuthHandler) changePhoneConfirm(w http.ResponseWriter, r *http.Request)
 	user, err := h.svc.ConfirmPhoneChange(r.Context(), userID, body.Phone, body.Code, challengeID)
 	if err != nil {
 		log.Printf("changePhoneConfirm error: %v", err)
-		writeAuthError(w, err)
+		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))

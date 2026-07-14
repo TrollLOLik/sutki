@@ -42,7 +42,7 @@ func (h *ChatHandler) HostResponseStats(w http.ResponseWriter, r *http.Request) 
 
 	stats, err := h.svc.HostResponseStats(r.Context(), int32(hostID))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get host response stats")
+		writeInternalError(w, r, err, "failed to get host response stats")
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *ChatHandler) wsTokens(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.svc.ConnectionToken(userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate token")
+		writeInternalError(w, r, err, "failed to generate token")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *ChatHandler) subscriptionToken(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusForbidden, "not a participant of this conversation")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to generate subscription token")
+		writeInternalError(w, r, err, "failed to generate subscription token")
 		return
 	}
 
@@ -135,7 +135,7 @@ func (h *ChatHandler) listConversations(w http.ResponseWriter, r *http.Request) 
 
 	convs, err := h.svc.ListUserConversations(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list conversations")
+		writeInternalError(w, r, err, "failed to list conversations")
 		return
 	}
 
@@ -207,7 +207,7 @@ func (h *ChatHandler) findOrCreateConversation(w http.ResponseWriter, r *http.Re
 		case errors.Is(err, chat.ErrContactNotAllowed):
 			writeError(w, http.StatusForbidden, "you can only message users you have a listing or booking relationship with")
 		default:
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
@@ -254,7 +254,7 @@ func (h *ChatHandler) getMessages(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "not a participant of this conversation")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to get messages")
+		writeInternalError(w, r, err, "failed to get messages")
 		return
 	}
 
@@ -299,7 +299,7 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "attachment exceeds 15MB limit")
 		default:
 			log.Printf("[Chat] SendMessage error (user=%d, conv=%d): %v", userID, convID, err)
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
@@ -340,7 +340,7 @@ func (h *ChatHandler) readMessages(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "not a participant of this conversation")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to mark as read")
+		writeInternalError(w, r, err, "failed to mark as read")
 		return
 	}
 
@@ -379,7 +379,7 @@ func (h *ChatHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "file type is not allowed")
 		default:
 			log.Printf("[Chat] PresignUpload error (user=%d): %v", userID, err)
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeInternalError(w, r, err, "internal error")
 		}
 		return
 	}
