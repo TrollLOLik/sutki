@@ -1,0 +1,108 @@
+name: titop-arenda
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: postgres
+      APP_DB_NAME: ${APP_DB_NAME:-titop_arenda}
+      APP_DB_USER: ${APP_DB_USER:-titop_arenda}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD}
+      GLITCHTIP_DB_NAME: ${GLITCHTIP_DB_NAME:-titop_glitchtip}
+      GLITCHTIP_DB_USER: ${GLITCHTIP_DB_USER:-titop_glitchtip}
+      GLITCHTIP_DB_PASSWORD: ${GLITCHTIP_DB_PASSWORD:?set GLITCHTIP_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ../backend/db/baseline/schema.sql:/bootstrap/schema.sql:ro
+      - ./postgres/catalog.sql:/bootstrap/catalog.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1g
+
+  migrate:
+    image: migrate/migrate:v4.18.3
+    restart: "no"
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable"
+      - "up"
+    volumes:
+      - ../backend/db/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable
+      CENTRIFUGO_URL: http://centrifugo:8000
+      TRUST_PROXY_HEADERS: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      centrifugo:
+        condition: service_started
+    mem_limit: 512m
+
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    restart: unless-stopped
+    environment:
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:?set CENTRIFUGO_API_KEY}
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_HMAC_SECRET:?set CENTRIFUGO_HMAC_SECRET}
+    command: centrifugo -c /centrifugo/config.json
+    volumes:
+      - ../centrifugo/config.json:/centrifugo/config.json:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: 256m
+
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.0
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${GLITCHTIP_DB_USER:-titop_glitchtip}:${GLITCHTIP_DB_PASSWORD}@postgres:5432/${GLITCHTIP_DB_NAME:-titop_glitchtip}
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?set GLITCHTIP_SECRET_KEY}
+      GLITCHTIP_DOMAIN: https://errors.titop.ru
+      ALLOWED_HOSTS: errors.titop.ru
+      CSRF_TRUSTED_ORIGINS: https://errors.titop.ru
+      EMAIL_URL: consolemail://
+      DEFAULT_FROM_EMAIL: errors@titop.ru
+      SERVER_ROLE: all_in_one
+      VALKEY_URL: ""
+      GLITCHTIP_RETENTION_DAYS: "30"
+      GLITCHTIP_EVENT_HOT_DAYS: "14"
+      GLITCHTIP_ENABLE_LOGS: "false"
+      GLITCHTIP_ENABLE_UPTIME: "false"
+      ENABLE_USER_REGISTRATION: "false"
+      ENABLE_ORGANIZATION_CREATION: "false"
+      DATABASE_POOL_MAX_SIZE: "5"
+      VTASKS_CONCURRENCY: "5"
+      GRANIAN_WORKERS: "1"
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - glitchtip_uploads:/code/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 900m
+
+volumes:
+  postgres_data:
+  glitchtip_uploads:
