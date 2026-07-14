@@ -23,12 +23,13 @@ func Init(cfg Config) (func(), error) {
 	}
 
 	err := sentry.Init(sentry.ClientOptions{
-		Dsn:              cfg.DSN,
-		Environment:      cfg.Environment,
-		Release:          cfg.Release,
-		SendDefaultPII:   false,
-		AttachStacktrace: true,
-		BeforeSend:       scrubEvent,
+		Dsn:                    cfg.DSN,
+		Environment:            cfg.Environment,
+		Release:                cfg.Release,
+		SendDefaultPII:         false,
+		AttachStacktrace:       true,
+		DisableTelemetryBuffer: true,
+		BeforeSend:             scrubEvent,
 	})
 	if err != nil {
 		return func() {}, err
