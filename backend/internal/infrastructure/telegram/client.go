@@ -40,8 +40,9 @@ func NewClient(cfg Config) *Client {
 
 func (c *Client) Send(ctx context.Context, text string) error {
 	body, err := json.Marshal(map[string]any{
-		"chat_id": c.chatID,
-		"text":    text,
+		"chat_id":    c.chatID,
+		"text":       text,
+		"parse_mode": "HTML",
 		"link_preview_options": map[string]bool{
 			"is_disabled": true,
 		},

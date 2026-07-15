@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"fmt"
+	"html"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 )
@@ -44,6 +45,10 @@ type glitchTipWebhook struct {
 		Title     string `json:"title"`
 		TitleLink string `json:"title_link"`
 		Text      string `json:"text"`
+		Fields    []struct {
+			Title string `json:"title"`
+			Value string `json:"value"`
+		} `json:"fields"`
 	} `json:"attachments"`
 }
 
@@ -99,36 +104,96 @@ func captureOpsWebhookToken(next http.Handler) http.Handler {
 }
 
 func formatGlitchTipAlert(payload glitchTipWebhook) string {
-	parts := []string{"TiTop Arenda error"}
-	appendPart := func(value string) {
-		value = strings.TrimSpace(strings.Map(func(r rune) rune {
-			if r == '\n' || r == '\t' || r >= ' ' {
-				return r
+	header := "<b>Ошибка в TiTop Arenda</b>"
+	blocks := make([]string, 0, len(payload.Attachments)+1)
+	for _, attachment := range payload.Attachments {
+		lines := make([]string, 0, len(attachment.Fields)+3)
+		if title := telegramHTMLText(attachment.Title, 300); title != "" {
+			lines = append(lines, "<b>"+title+"</b>")
+		}
+		if culprit := telegramHTMLText(attachment.Text, 800); culprit != "" {
+			lines = append(lines, "<code>"+culprit+"</code>")
+		}
+		for _, field := range attachment.Fields {
+			label := telegramFieldLabel(cleanTelegramText(field.Title, 80))
+			value := telegramHTMLText(field.Value, 300)
+			if label != "" && value != "" {
+				lines = append(lines, "<b>"+html.EscapeString(label)+":</b> "+value)
 			}
-			return -1
-		}, value))
-		if value != "" {
-			parts = append(parts, value)
+		}
+		if link := telegramLink(attachment.TitleLink); link != "" {
+			lines = append(lines, `<a href="`+link+`">Открыть в GlitchTip</a>`)
+		}
+		if len(lines) > 0 {
+			blocks = append(blocks, strings.Join(lines, "\n"))
 		}
 	}
 
-	appendPart(payload.Title)
-	appendPart(payload.Description)
-	appendPart(payload.Text)
-	appendPart(payload.TitleLink)
-	for _, attachment := range payload.Attachments {
-		appendPart(attachment.Title)
-		appendPart(attachment.Text)
-		appendPart(attachment.TitleLink)
+	if len(blocks) == 0 {
+		for _, value := range []string{payload.Title, payload.Description, payload.Text} {
+			if text := telegramHTMLText(value, 1000); text != "" {
+				blocks = append(blocks, text)
+			}
+		}
+		if link := telegramLink(payload.TitleLink); link != "" {
+			blocks = append(blocks, `<a href="`+link+`">Открыть в GlitchTip</a>`)
+		}
 	}
 
-	if len(parts) == 1 {
+	if len(blocks) == 0 {
 		return ""
 	}
-	message := strings.Join(parts, "\n\n")
-	if utf8.RuneCountInString(message) <= maxTelegramMessageRunes {
-		return message
+
+	message := header
+	for _, block := range blocks {
+		candidate := message + "\n\n" + block
+		if utf8.RuneCountInString(candidate) > maxTelegramMessageRunes-40 {
+			message += "\n\n<i>Остальные ошибки скрыты</i>"
+			break
+		}
+		message = candidate
 	}
-	runes := []rune(message)
-	return fmt.Sprintf("%s\n\n[message truncated]", string(runes[:maxTelegramMessageRunes-22]))
+	return message
+}
+
+func cleanTelegramText(value string, limit int) string {
+	value = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' || r >= ' ' {
+			return r
+		}
+		return -1
+	}, value))
+	runes := []rune(value)
+	if len(runes) > limit {
+		return string(runes[:limit-3]) + "..."
+	}
+	return value
+}
+
+func telegramHTMLText(value string, limit int) string {
+	return html.EscapeString(cleanTelegramText(value, limit))
+}
+
+func telegramFieldLabel(label string) string {
+	switch strings.ToLower(label) {
+	case "project":
+		return "Проект"
+	case "environment":
+		return "Окружение"
+	case "server name":
+		return "Сервер"
+	case "release":
+		return "Релиз"
+	default:
+		return label
+	}
+}
+
+func telegramLink(value string) string {
+	value = cleanTelegramText(value, 1000)
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return ""
+	}
+	return html.EscapeString(value)
 }

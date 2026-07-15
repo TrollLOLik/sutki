@@ -15,13 +15,14 @@ func TestClientSend(t *testing.T) {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
 		var body struct {
-			ChatID string `json:"chat_id"`
-			Text   string `json:"text"`
+			ChatID    string `json:"chat_id"`
+			Text      string `json:"text"`
+			ParseMode string `json:"parse_mode"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if body.ChatID != "-100123" || body.Text != "test alert" {
+		if body.ChatID != "-100123" || body.Text != "test alert" || body.ParseMode != "HTML" {
 			t.Fatalf("body = %#v", body)
 		}
 		w.Header().Set("Content-Type", "application/json")
