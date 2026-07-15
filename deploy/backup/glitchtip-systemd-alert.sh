@@ -14,10 +14,25 @@ if [[ ! -r "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1090
-source "${ENV_FILE}"
-set +a
+read_env_value() {
+  local key="$1"
+  local line value
+
+  line="$(grep -m 1 -E "^${key}=" "${ENV_FILE}" || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+
+  if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+
+  printf '%s' "${value}"
+}
+
+GLITCHTIP_BACKEND_DSN="$(read_env_value GLITCHTIP_BACKEND_DSN)"
+APP_RELEASE="$(read_env_value APP_RELEASE)"
 
 if [[ -z "${GLITCHTIP_BACKEND_DSN:-}" ]]; then
   echo "GLITCHTIP_BACKEND_DSN is not configured" >&2
