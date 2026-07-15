@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Titop Arenda PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+Unit=titop-arenda-backup.service
+
+[Install]
+WantedBy=timers.target

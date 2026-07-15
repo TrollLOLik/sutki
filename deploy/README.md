@@ -55,3 +55,30 @@ Review release notes before changing major image tags. For routine application
 updates, pull the repository, then run the same `docker compose up -d --build`
 command. The API migration service applies pending additive migrations before
 the API is allowed to start. GlitchTip manages its own migrations on startup.
+
+## PostgreSQL backups
+
+Install the backup script and systemd units on the VPS:
+
+```bash
+sudo install -m 0750 deploy/backup/postgres-backup.sh /usr/local/sbin/titop-arenda-postgres-backup
+sudo install -m 0644 deploy/systemd/titop-arenda-backup.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/titop-arenda-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now titop-arenda-backup.timer
+```
+
+Run and verify the first backup immediately:
+
+```bash
+sudo systemctl start titop-arenda-backup.service
+sudo systemctl status titop-arenda-backup.service --no-pager
+sudo journalctl -u titop-arenda-backup.service -n 50 --no-pager
+sudo find /var/backups/titop-arenda/postgres -maxdepth 2 -type f -printf '%M %s %p\n'
+```
+
+The timer runs daily at 00:30 UTC with a random delay of up to ten minutes.
+Each timestamped directory contains custom-format dumps for the application and
+GlitchTip databases, a password-free role snapshot, and SHA-256 checksums.
+Backups older than 14 days are removed. Local backups must also be copied to
+off-server object storage; the VPS disk is not an independent backup target.
