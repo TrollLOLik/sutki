@@ -82,3 +82,21 @@ Each timestamped directory contains custom-format dumps for the application and
 GlitchTip databases, a password-free role snapshot, and SHA-256 checksums.
 Backups older than 14 days are removed. Local backups must also be copied to
 off-server object storage; the VPS disk is not an independent backup target.
+
+To upload client-side encrypted backups to Timeweb S3, install `awscli` and
+create `/etc/titop-arenda-backup.env` owned by root with mode `0600`:
+
+```dotenv
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=...
+BACKUP_S3_ENDPOINT=https://...
+BACKUP_S3_BUCKET=titop-arenda-backups
+BACKUP_ENCRYPTION_KEY=...
+```
+
+Generate the encryption key with `openssl rand -hex 32` and store a separate
+copy in the project's password manager. The script encrypts the complete dump
+directory with AES-256 before upload, uploads a SHA-256 sidecar, and verifies
+the remote object with `HeadObject`. The plaintext dumps remain on the VPS and
+the temporary encrypted upload file is removed after verification.
