@@ -1,0 +1,8 @@
+[Unit]
+Description=Report Titop Arenda backup failure to GlitchTip
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/titop-arenda-glitchtip-alert %i

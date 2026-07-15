@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Titop Arenda PostgreSQL restore drill monthly
+
+[Timer]
+OnCalendar=*-*-01 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=1h
+Unit=titop-arenda-restore-drill.service
+
+[Install]
+WantedBy=timers.target

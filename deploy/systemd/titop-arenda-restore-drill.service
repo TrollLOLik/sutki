@@ -1,0 +1,15 @@
+[Unit]
+Description=Titop Arenda monthly PostgreSQL restore drill
+Requires=docker.service
+After=docker.service
+OnFailure=titop-arenda-backup-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock --wait 300 /run/lock/titop-arenda-postgres-maintenance.lock /usr/local/sbin/titop-arenda-postgres-restore-drill
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

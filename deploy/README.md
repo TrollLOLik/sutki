@@ -118,3 +118,20 @@ The drill downloads the latest encrypted object, verifies both checksum
 layers, decrypts it, restores both dumps into uniquely named temporary
 databases, verifies that the restored schemas are non-empty, and removes the
 temporary databases and files. It never restores over a production database.
+
+Install the monthly restore timer and GlitchTip failure reporter:
+
+```bash
+sudo install -m 0750 deploy/backup/glitchtip-systemd-alert.sh /usr/local/sbin/titop-arenda-glitchtip-alert
+sudo install -m 0644 deploy/systemd/titop-arenda-restore-drill.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/titop-arenda-restore-drill.timer /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/titop-arenda-backup-alert@.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/titop-arenda-backup.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now titop-arenda-restore-drill.timer
+```
+
+The drill runs on the first day of each month after the daily backup window.
+Backup and restore services share a maintenance lock. A failed monthly drill
+posts a metadata-only event to the backend GlitchTip project; no dump content,
+credentials, or personal data is included.
