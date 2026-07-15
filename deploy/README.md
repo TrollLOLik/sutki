@@ -100,3 +100,21 @@ copy in the project's password manager. The script encrypts the complete dump
 directory with AES-256 before upload, uploads a SHA-256 sidecar, and verifies
 the remote object with `HeadObject`. The plaintext dumps remain on the VPS and
 the temporary encrypted upload file is removed after verification.
+
+Configure a Timeweb lifecycle rule for the `postgres/` prefix to expire current
+objects after 90 days. Keep the backup S3 user at read/write access; apply the
+lifecycle rule from the Timeweb panel with an account that can manage the
+bucket.
+
+Install and run the restore drill periodically and after changing the backup
+format or encryption settings:
+
+```bash
+sudo install -m 0750 deploy/backup/postgres-restore-drill.sh /usr/local/sbin/titop-arenda-postgres-restore-drill
+sudo /usr/local/sbin/titop-arenda-postgres-restore-drill
+```
+
+The drill downloads the latest encrypted object, verifies both checksum
+layers, decrypts it, restores both dumps into uniquely named temporary
+databases, verifies that the restored schemas are non-empty, and removes the
+temporary databases and files. It never restores over a production database.
