@@ -58,12 +58,13 @@ cleanup() {
 trap cleanup EXIT
 
 latest_key="$(
-  aws --endpoint-url "${BACKUP_S3_ENDPOINT}" s3api list-objects-v2 \
-    --bucket "${BACKUP_S3_BUCKET}" \
-    --prefix "postgres/" \
-    --region "${AWS_DEFAULT_REGION}" \
-    --query 'sort_by(Contents[?ends_with(Key, `.tar.enc`)], &LastModified)[-1].Key' \
-    --output text
+  aws --endpoint-url "${BACKUP_S3_ENDPOINT}" s3 ls \
+    "s3://${BACKUP_S3_BUCKET}/postgres/" \
+    --recursive \
+    --region "${AWS_DEFAULT_REGION}" | \
+    awk '$4 ~ /\.tar\.enc$/ {print $4}' | \
+    sort | \
+    tail -n 1
 )"
 
 if [[ -z "${latest_key}" || "${latest_key}" == "None" ]]; then
