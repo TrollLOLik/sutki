@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/media"
 )
 
 type MediaHandler struct {
@@ -32,7 +33,7 @@ type presignMediaRequest struct {
 }
 
 func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
-	_, ok := userIDFromContext(r.Context())
+	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -108,10 +109,10 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 	switch uploadType {
 	case "avatar":
 		targetStorage = h.publicStorage
-		key = fmt.Sprintf("avatars/%s%s", uuid, ext)
+		key = media.OwnerPrefix("avatars", userID) + uuid + ext
 	case "listing":
 		targetStorage = h.publicStorage
-		key = fmt.Sprintf("listings/%s%s", uuid, ext)
+		key = media.OwnerPrefix("listings", userID) + uuid + ext
 	case "chat":
 		targetStorage = h.privateStorage
 		key = fmt.Sprintf("chat/uploads/%s%s", uuid, ext)

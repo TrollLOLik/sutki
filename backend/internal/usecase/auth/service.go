@@ -23,6 +23,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/media"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
@@ -353,9 +354,24 @@ func (s *Service) GetUser(ctx context.Context, id int32) (domain.User, error) {
 // UpdateProfile updates the provided profile fields for a user. nil fields are
 // left unchanged (PATCH semantics).
 func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
-	u, err := s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), trimPtr(avatarURL), birthday, vkID, vkIDDoNull)
+	cleanAvatarURL := trimPtr(avatarURL)
+	oldAvatarURL := ""
+	if cleanAvatarURL != nil {
+		oldUser, err := s.users.GetByID(ctx, id)
+		if err != nil {
+			return domain.User{}, err
+		}
+		oldAvatarURL = oldUser.AvatarURL
+	}
+
+	u, err := s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), cleanAvatarURL, birthday, vkID, vkIDDoNull)
 	if err != nil {
 		return domain.User{}, err
+	}
+	if cleanAvatarURL != nil && oldAvatarURL != *cleanAvatarURL && s.storage != nil && media.IsOwnedKey(oldAvatarURL, "avatars", id) {
+		if err := s.storage.Delete(ctx, oldAvatarURL); err != nil {
+			log.Printf("auth update profile: delete replaced avatar for user %d: %v", id, err)
+		}
 	}
 	return s.formatUserAvatar(u), nil
 }

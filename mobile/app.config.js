@@ -1,16 +1,16 @@
 // app.config.js — dynamic Expo config, replaces app.json.
 // Yandex MapKit API key is read from the environment so it is never committed.
-// Set YANDEX_MAPKIT_API_KEY in your shell or CI secrets before running
+// Set EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY in your local or EAS environment before running
 // `npx expo prebuild` / `eas build`.
 
 module.exports = {
   expo: {
     name: "Дом рядом",
-    slug: "sutki",
+    slug: "titop-arenda",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "sutki",
+    scheme: "titop-arenda",
     userInterfaceStyle: "automatic",
     ios: {
       supportsTablet: true,
@@ -29,7 +29,7 @@ module.exports = {
         foregroundImage: "./assets/images/android-icon-foreground.png",
       },
       predictiveBackGestureEnabled: false,
-      package: "com.anonymous.sutki",
+      package: "ru.titop.arenda",
       permissions: [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",

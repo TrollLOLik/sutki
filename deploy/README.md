@@ -49,6 +49,20 @@ curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS https://arenda.titop.ru/healthz
 ```
 
+The public API is also monitored externally by Timeweb Cloud Monitoring:
+
+- URL: `https://arenda.titop.ru/healthz`
+- method: `GET`
+- interval: one minute
+- timeout: ten seconds
+- redirects: disabled
+- SSL monitoring: enabled
+- regions: multiple Russian regions
+
+Timeweb Telegram notifications must include both service-unavailable and
+service-restored events. This check is intentionally outside the VPS so a
+complete host, Nginx, network, or API outage can still raise an alert.
+
 ## Updates
 
 Review release notes before changing major image tags. For routine application
@@ -147,9 +161,10 @@ Webhook recipient in each GlitchTip project alert:
 https://arenda.titop.ru/internal/webhooks/glitchtip/telegram?token=<webhook-secret>
 ```
 
-The `api.internal` hostname is reachable only on the Compose network, so GlitchTip does
-not send the secret through public Nginx. The API removes the token from the
-request URL before access logging, accepts at most 64 KiB of JSON, formats a
-plain-text Telegram message, and returns `502` on Telegram delivery failure.
-Such delivery failures are logged but deliberately not recaptured by GlitchTip
+GlitchTip rejects private webhook targets, so the callback uses the public
+HTTPS endpoint. The exact Nginx location disables access logging to keep the
+query-string secret out of proxy logs, and the API removes the token before its
+own request logger runs. The bridge accepts at most 64 KiB of JSON, safely
+formats structured Telegram HTML, and returns `502` on Telegram delivery
+failure. Such failures are logged but deliberately not recaptured by GlitchTip
 to avoid an alert recursion loop.

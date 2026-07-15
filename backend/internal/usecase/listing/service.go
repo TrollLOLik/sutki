@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/media"
 )
 
 const (
@@ -286,6 +287,10 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	if err != nil {
 		return domain.House{}, err
 	}
+	oldPhotos, err := s.repo.ListPhotos(ctx, id)
+	if err != nil {
+		return domain.House{}, err
+	}
 
 	// Note: AllowSubmission (daily rate-limit) is intentionally NOT checked
 	// here. The rate-limit exists to prevent bulk-spam creation of new
@@ -315,6 +320,17 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	err = s.repo.Update(ctx, id, in)
 	if err != nil {
 		return domain.House{}, err
+	}
+	if s.storage != nil {
+		oldPhotoKeys := make([]string, 0, len(oldPhotos))
+		for _, photo := range oldPhotos {
+			oldPhotoKeys = append(oldPhotoKeys, photo.Path)
+		}
+		for _, key := range media.RemovedOwnedKeys(oldPhotoKeys, in.Photos, "listings", in.OwnerID) {
+			if err := s.storage.Delete(ctx, key); err != nil {
+				log.Printf("listing update: delete removed photo for house %d: %v", id, err)
+			}
+		}
 	}
 
 	// Re-moderate the edited content. Unchanged text keeps the current
