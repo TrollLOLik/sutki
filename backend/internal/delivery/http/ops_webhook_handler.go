@@ -90,6 +90,9 @@ func captureOpsWebhookToken(next http.Handler) http.Handler {
 		token := query.Get("token")
 		query.Del("token")
 		r.URL.RawQuery = query.Encode()
+		// net/http keeps the original request target separately from URL.
+		// Chi's request logger uses RequestURI, so sanitize both copies.
+		r.RequestURI = r.URL.RequestURI()
 		ctx := context.WithValue(r.Context(), opsWebhookTokenContextKey{}, token)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

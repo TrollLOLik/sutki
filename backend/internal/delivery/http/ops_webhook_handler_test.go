@@ -79,6 +79,9 @@ func TestCaptureOpsWebhookTokenRedactsQueryBeforeNextHandler(t *testing.T) {
 		if r.URL.RawQuery != "keep=value" {
 			t.Fatalf("raw query = %q", r.URL.RawQuery)
 		}
+		if r.RequestURI != glitchTipTelegramPath+"?keep=value" {
+			t.Fatalf("request URI = %q", r.RequestURI)
+		}
 		if got, _ := r.Context().Value(opsWebhookTokenContextKey{}).(string); got != secret {
 			t.Fatalf("context token = %q", got)
 		}

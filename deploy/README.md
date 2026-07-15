@@ -144,7 +144,7 @@ exposes an authenticated GlitchTip-to-Telegram bridge. Configure this Generic
 Webhook recipient in each GlitchTip project alert:
 
 ```text
-http://api.internal:8080/internal/webhooks/glitchtip/telegram?token=<webhook-secret>
+https://arenda.titop.ru/internal/webhooks/glitchtip/telegram?token=<webhook-secret>
 ```
 
 The `api.internal` hostname is reachable only on the Compose network, so GlitchTip does
