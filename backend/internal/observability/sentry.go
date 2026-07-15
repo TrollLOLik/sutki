@@ -61,6 +61,21 @@ func CaptureMessage(ctx context.Context, message string) {
 	hub.CaptureMessage(message)
 }
 
+// CaptureSmokeTest reports a deliberately unique issue so GlitchTip project
+// alerts are exercised on every explicit smoke-test run. GlitchTip only sends
+// a given project alert once per grouped issue.
+func CaptureSmokeTest(ctx context.Context, runID string) {
+	hub := sentry.GetHubFromContext(ctx)
+	if hub == nil {
+		hub = sentry.CurrentHub()
+	}
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetFingerprint([]string{"titop-arenda-backend-smoke-test", runID})
+		scope.SetTag("smoke_test_id", runID)
+		hub.CaptureException(errors.New("titop-arenda backend smoke test"))
+	})
+}
+
 // Flush waits until buffered events are handed to the transport. It is used
 // by short-lived diagnostic commands that exit immediately after capture.
 func Flush(timeout time.Duration) bool {

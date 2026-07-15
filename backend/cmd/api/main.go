@@ -53,7 +53,8 @@ func main() {
 		if cfg.GlitchTipBackendDSN == "" {
 			log.Fatal("error tracking smoke test requires GLITCHTIP_BACKEND_DSN")
 		}
-		observability.CaptureException(context.Background(), errors.New("titop-arenda backend smoke test"))
+		runID := time.Now().UTC().Format("20060102T150405.000000000Z")
+		observability.CaptureSmokeTest(context.Background(), runID)
 		if !observability.Flush(10 * time.Second) {
 			log.Fatal("GlitchTip smoke event delivery timed out")
 		}
