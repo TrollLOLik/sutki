@@ -11,9 +11,11 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	// Remove the internal webhook secret before middleware.Logger sees the URL.
+	r.Use(captureOpsWebhookToken)
 	// middleware.RealIP rewrites r.RemoteAddr from X-Forwarded-For / X-Real-IP
 	// unconditionally, which would let any direct client spoof its IP (and
 	// silently bypass the TRUST_PROXY_HEADERS gate in getClientIP). Only
@@ -34,6 +36,9 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	if opsWebhookHandler != nil {
+		r.Post(glitchTipTelegramPath, opsWebhookHandler.GlitchTipTelegram)
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/listings", func(r chi.Router) {

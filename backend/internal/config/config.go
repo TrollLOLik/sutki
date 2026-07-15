@@ -27,11 +27,17 @@ type Config struct {
 	// GlitchTipBackendDSN enables Sentry-compatible error reporting when set.
 	// It is optional so local development works without an error tracker.
 	GlitchTipBackendDSN string
-	AppEnvironment      string
-	AppRelease          string
-	JWTSecret           string
-	AccessTTL           time.Duration
-	RefreshTTL          time.Duration
+	// Telegram receives formatted GlitchTip alerts through an authenticated
+	// internal webhook. All three values must be configured together.
+	TelegramBotToken               string
+	TelegramChatID                 string
+	GlitchTipTelegramWebhookSecret string
+	TelegramTimeout                time.Duration
+	AppEnvironment                 string
+	AppRelease                     string
+	JWTSecret                      string
+	AccessTTL                      time.Duration
+	RefreshTTL                     time.Duration
 	// AuthExposeCode returns login codes in the API response and logs them
 	// (dev only). Defaults to false; opt in explicitly via AUTH_EXPOSE_CODE=true.
 	AuthExposeCode bool
@@ -110,18 +116,22 @@ type Config struct {
 // Load reads configuration from the environment. DATABASE_URL is required.
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:            getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:         os.Getenv("DATABASE_URL"),
-		MediaBaseURL:        getEnv("MEDIA_BASE_URL", ""),
-		GlitchTipBackendDSN: getEnv("GLITCHTIP_BACKEND_DSN", ""),
-		AppEnvironment:      getEnv("APP_ENV", "development"),
-		AppRelease:          getEnv("APP_RELEASE", ""),
-		JWTSecret:           os.Getenv("JWT_SECRET"),
-		AccessTTL:           getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
-		RefreshTTL:          getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
-		AuthExposeCode:      getBool("AUTH_EXPOSE_CODE", false),
-		ReadTimeout:         15 * time.Second,
-		WriteTimeout:        15 * time.Second,
+		HTTPAddr:                       getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:                    os.Getenv("DATABASE_URL"),
+		MediaBaseURL:                   getEnv("MEDIA_BASE_URL", ""),
+		GlitchTipBackendDSN:            getEnv("GLITCHTIP_BACKEND_DSN", ""),
+		TelegramBotToken:               getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramChatID:                 getEnv("TELEGRAM_CHAT_ID", ""),
+		GlitchTipTelegramWebhookSecret: getEnv("GLITCHTIP_TELEGRAM_WEBHOOK_SECRET", ""),
+		TelegramTimeout:                getDuration("TELEGRAM_TIMEOUT", 10*time.Second),
+		AppEnvironment:                 getEnv("APP_ENV", "development"),
+		AppRelease:                     getEnv("APP_RELEASE", ""),
+		JWTSecret:                      os.Getenv("JWT_SECRET"),
+		AccessTTL:                      getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
+		RefreshTTL:                     getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
+		AuthExposeCode:                 getBool("AUTH_EXPOSE_CODE", false),
+		ReadTimeout:                    15 * time.Second,
+		WriteTimeout:                   15 * time.Second,
 
 		SMTPHost:     getEnv("SMTP_HOST", "smtp.yandex.ru"),
 		SMTPPort:     getInt("SMTP_PORT", 465),
@@ -188,6 +198,18 @@ func Load() (Config, error) {
 	}
 	if cfg.PaymentAdminTokenPrevious != "" && cfg.PaymentAdminToken == "" {
 		return Config{}, fmt.Errorf("PAYMENT_ADMIN_TOKEN must be set while PAYMENT_ADMIN_TOKEN_PREVIOUS is configured")
+	}
+	telegramValues := 0
+	for _, value := range []string{cfg.TelegramBotToken, cfg.TelegramChatID, cfg.GlitchTipTelegramWebhookSecret} {
+		if value != "" {
+			telegramValues++
+		}
+	}
+	if telegramValues != 0 && telegramValues != 3 {
+		return Config{}, fmt.Errorf("TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, and GLITCHTIP_TELEGRAM_WEBHOOK_SECRET must be configured together")
+	}
+	if cfg.GlitchTipTelegramWebhookSecret != "" && len(cfg.GlitchTipTelegramWebhookSecret) < 32 {
+		return Config{}, fmt.Errorf("GLITCHTIP_TELEGRAM_WEBHOOK_SECRET must be at least 32 characters")
 	}
 	if cfg.S3Endpoint == "" {
 		return Config{}, fmt.Errorf("S3_ENDPOINT is required")

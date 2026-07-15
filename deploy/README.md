@@ -135,3 +135,21 @@ The drill runs on the first day of each month after the daily backup window.
 Backup and restore services share a maintenance lock. A failed monthly drill
 posts a metadata-only event to the backend GlitchTip project; no dump content,
 credentials, or personal data is included.
+
+## Telegram alerts from GlitchTip
+
+Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and a random 32-byte
+`GLITCHTIP_TELEGRAM_WEBHOOK_SECRET` in `deploy/.env.production`. The API then
+exposes an authenticated GlitchTip-to-Telegram bridge. Configure this Generic
+Webhook recipient in each GlitchTip project alert:
+
+```text
+http://api.internal:8080/internal/webhooks/glitchtip/telegram?token=<webhook-secret>
+```
+
+The `api.internal` hostname is reachable only on the Compose network, so GlitchTip does
+not send the secret through public Nginx. The API removes the token from the
+request URL before access logging, accepts at most 64 KiB of JSON, formats a
+plain-text Telegram message, and returns `502` on Telegram delivery failure.
+Such delivery failures are logged but deliberately not recaptured by GlitchTip
+to avoid an alert recursion loop.

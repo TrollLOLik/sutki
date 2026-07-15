@@ -52,6 +52,10 @@ services:
       TRUST_PROXY_HEADERS: "true"
     ports:
       - "127.0.0.1:8080:8080"
+    networks:
+      default:
+        aliases:
+          - api.internal
     depends_on:
       migrate:
         condition: service_completed_successfully

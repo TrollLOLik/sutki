@@ -24,6 +24,7 @@ import (
 	paymentinfra "github.com/TrollLOLik/sutki/backend/internal/infrastructure/payment"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/poi"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/telegram"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/ucaller"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
@@ -237,9 +238,19 @@ func main() {
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
 	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage)
+	var opsWebhookHandler *httpdelivery.OpsWebhookHandler
+	if cfg.TelegramBotToken != "" {
+		telegramClient := telegram.NewClient(telegram.Config{
+			BotToken: cfg.TelegramBotToken,
+			ChatID:   cfg.TelegramChatID,
+			Timeout:  cfg.TelegramTimeout,
+		})
+		opsWebhookHandler = httpdelivery.NewOpsWebhookHandler(telegramClient, cfg.GlitchTipTelegramWebhookSecret)
+		log.Println("GlitchTip Telegram alert bridge enabled")
+	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, opsWebhookHandler, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,
