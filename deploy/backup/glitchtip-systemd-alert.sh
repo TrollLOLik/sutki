@@ -54,7 +54,7 @@ readonly sent_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 event_message="Monthly PostgreSQL restore drill failed"
 event_level="error"
-if [[ "${FAILED_UNIT}" == "manual-test.service" ]]; then
+if [[ "${FAILED_UNIT}" == "manual-test" || "${FAILED_UNIT}" == "manual-test.service" ]]; then
   event_message="PostgreSQL restore monitoring smoke test"
   event_level="info"
 fi
