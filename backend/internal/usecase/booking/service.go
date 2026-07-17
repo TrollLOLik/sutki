@@ -170,7 +170,7 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	}
 
 	// Notify the listing owner about the new request. Guest bookings start
-	// as pending_verification (the email is not confirmed yet), so the owner
+	// as pending_verification (the phone is not confirmed yet), so the owner
 	// is only notified once the request is genuinely pending. Queueing
 	// failures are logged, never surfaced: the booking itself succeeded.
 	if created.Status == domain.BookingPending {
@@ -178,7 +178,7 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 			s.notifyOwnerOfNewRequest(ctx, created, ownerEmail)
 		}
 		// Post the "new request" card into the owner-guest chat. Guest
-		// bookings (pending_verification) get their card later, when email
+		// bookings (pending_verification) get their card later, when phone
 		// verification links them to a user (HandleGuestRequestsLinked).
 		s.postBookingCard(created, ownerID, domain.BookingEventNew, "", false)
 		s.publishChanged(ownerID, domain.ActivityScopeIncoming, "created", created.ID, true)

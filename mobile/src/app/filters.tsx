@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
@@ -17,6 +18,7 @@ import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { Button, Chip, RangeSlider } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useCategories, useServices } from '@/lib/api/create-listing';
+import { useFavoriteIds } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { useFiltersStore, type ListingSort, type RoomFilter, type SearchFilters } from '@/store/filters';
 import { formatGuests } from '@/lib/format';
@@ -72,6 +74,7 @@ export default function FiltersScreen() {
   const store = useFiltersStore();
   const { data: services } = useServices();
   const { data: categories } = useCategories();
+  const { data: favoriteIds } = useFavoriteIds();
   const insets = useSafeAreaInsets();
 
   // Local draft state; only committed to the store on "Показать".
@@ -93,6 +96,7 @@ export default function FiltersScreen() {
   const [childrenAllowed, setChildrenAllowed] = useState(store.childrenAllowed);
   const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
   const [sort, setSort] = useState<ListingSort>(store.sort);
+  const [favoritesOnly, setFavoritesOnly] = useState(store.favoritesOnly);
 
   // Price formatting helper
   const formatPriceString = (val: string) => {
@@ -132,20 +136,22 @@ export default function FiltersScreen() {
       rooms,
       categoryId,
       serviceIds,
-      favoritesOnly: false,
+      favoritesOnly,
       smokingAllowed,
       petsAllowed,
       childrenAllowed,
       eventsAllowed,
     }),
-    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, areaMin, areaMax, rooms, categoryId, serviceIds, smokingAllowed, petsAllowed, childrenAllowed, eventsAllowed],
+    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, areaMin, areaMax, rooms, categoryId, serviceIds, favoritesOnly, smokingAllowed, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
   // Live result count for the CTA.
-  const countParams = useMemo(
-    () => filtersToListParams(draftFilters, '', { limit: 1 }),
-    [draftFilters],
-  );
+  const countParams = useMemo(() => {
+    const params = filtersToListParams(draftFilters, '', { limit: 1 });
+    if (favoritesOnly && favoriteIds) params.houseIds = Array.from(favoriteIds);
+    return params;
+  }, [draftFilters, favoriteIds, favoritesOnly]);
+  const favoritesOnlyEmpty = favoritesOnly && favoriteIds != null && favoriteIds.size === 0;
   const parsedAreaMin = areaMin !== '' ? Number(areaMin) : null;
   const parsedAreaMax = areaMax !== '' ? Number(areaMax) : null;
   const areaRangeInvalid =
@@ -155,9 +161,9 @@ export default function FiltersScreen() {
   const { data: countData, isFetching: countLoading } = useListings({
     ...countParams,
     ownerId: numericOwnerId ?? undefined,
-  }, { enabled: !areaRangeInvalid });
-  const total = countData?.total;
-  const isCtaLoading = countLoading;
+  }, { enabled: !areaRangeInvalid && !favoritesOnlyEmpty });
+  const total = favoritesOnlyEmpty ? 0 : countData?.total;
+  const isCtaLoading = countLoading || (favoritesOnly && favoriteIds == null);
   const ctaTotal = total;
 
   const apply = () => {
@@ -179,6 +185,7 @@ export default function FiltersScreen() {
       petsAllowed,
       childrenAllowed,
       eventsAllowed,
+      favoritesOnly,
     });
     router.back();
   };
@@ -203,6 +210,7 @@ export default function FiltersScreen() {
     setPetsAllowed(false);
     setChildrenAllowed(false);
     setEventsAllowed(false);
+    setFavoritesOnly(false);
     setSort('newest');
   };
 
@@ -282,6 +290,48 @@ export default function FiltersScreen() {
             })}
           </View>
         </View>
+
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: favoritesOnly }}
+          accessibilityLabel="Показывать только избранные объявления"
+          onPress={() => setFavoritesOnly((value) => !value)}
+          style={{
+            minHeight: 64,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: favoritesOnly ? palette.primary : palette.line,
+            backgroundColor: favoritesOnly ? palette.primaryLight : palette.surface,
+          }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              marginRight: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 20,
+              backgroundColor: favoritesOnly ? palette.primary : palette.surfaceMuted,
+            }}>
+            <Ionicons name={favoritesOnly ? 'heart' : 'heart-outline'} size={20} color={favoritesOnly ? 'white' : palette.inkSecondary} />
+          </View>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>Только избранные</Text>
+            <Text style={{ marginTop: 2, fontSize: 12, color: palette.inkSecondary }}>
+              Показывать объявления, отмеченные сердечком
+            </Text>
+          </View>
+          <Switch
+            pointerEvents="none"
+            value={favoritesOnly}
+            trackColor={{ false: palette.line, true: palette.primary }}
+            thumbColor="white"
+          />
+        </Pressable>
 
         {/* City Card */}
         <Pressable

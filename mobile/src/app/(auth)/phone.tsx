@@ -8,7 +8,7 @@ import { Button, ScreenContainer } from '@/components/ui';
 import { PhoneInput } from '@/components/PhoneInput';
 import { useRequestPhoneCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
-import { toFullPhone } from '@/lib/phone';
+import { formatPhoneMask, normalizePhoneDigits, toFullPhone } from '@/lib/phone';
 import type { RequestCodeResponse } from '@/types/auth';
 
 const schema = z.object({
@@ -18,10 +18,10 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function PhoneScreen() {
-  const { fromBooking } = useLocalSearchParams<{ fromBooking?: string }>();
+  const { fromBooking, phone: initialPhone } = useLocalSearchParams<{ fromBooking?: string; phone?: string }>();
   const { control, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { phone: '' },
+    defaultValues: { phone: formatPhoneMask(normalizePhoneDigits(initialPhone ?? '')) },
   });
   const requestPhoneCode = useRequestPhoneCode();
 

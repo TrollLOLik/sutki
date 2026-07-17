@@ -92,7 +92,7 @@ var (
 	OTPIPLimiter      = NewSlidingWindowLimiter(time.Hour)
 
 	// Booking Rate Limiters (1 hour window)
-	BookingEmailLimiter   = NewSlidingWindowLimiter(time.Hour)
+	BookingPhoneLimiter   = NewSlidingWindowLimiter(time.Hour)
 	BookingGuestIDLimiter = NewSlidingWindowLimiter(time.Hour)
 	BookingIPLimiter      = NewSlidingWindowLimiter(time.Hour)
 

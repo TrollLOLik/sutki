@@ -82,7 +82,5 @@ export interface CreateBookingBody {
   start_date: string;
   /** `YYYY-MM-DD`; omit for an open-ended request. */
   end_date?: string;
-  /** Guest email for OTP verification (guest-mode only). */
-  email?: string;
 }
 

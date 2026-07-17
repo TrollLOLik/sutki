@@ -26,7 +26,7 @@ import { PhoneInput } from '@/components/PhoneInput'; // Shared component
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
-import { requestEmailCode } from '@/lib/api/auth';
+import { requestPhoneCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -76,12 +76,6 @@ const baseSchema = z.object({
     'Укажите полный номер (10 цифр)',
   ),
   message: z.string().trim().optional(),
-  email: z.string().trim().optional(),
-});
-
-/** Schema with email required for guests. */
-const guestSchema = baseSchema.extend({
-  email: z.string().trim().email('Введите корректный email'),
 });
 
 type FormValues = z.infer<typeof baseSchema>;
@@ -154,8 +148,8 @@ export default function BookingScreen() {
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(isGuest ? guestSchema : baseSchema),
-    defaultValues: { name: user?.name ?? '', phone: initialPhone, message: '', email: '' },
+    resolver: zodResolver(baseSchema),
+    defaultValues: { name: user?.name ?? '', phone: initialPhone, message: '' },
   });
 
   const nights =
@@ -169,28 +163,36 @@ export default function BookingScreen() {
     }
     setDateError(null);
     try {
+      const fullPhone = toFullPhone(values.phone);
       await createBooking.mutateAsync({
         count,
         name: values.name,
         surname: user?.surname || undefined,
         lastname: user?.patronymic || undefined,
-        phone: toFullPhone(values.phone),
+        phone: fullPhone,
         message: values.message || undefined,
         start_date: format(range.start, ISO),
         end_date: format(range.end, ISO),
-        ...(isGuest && values.email ? { email: values.email.trim().toLowerCase() } : {}),
       });
 
-      if (isGuest && values.email) {
-        // Guest: trigger OTP so they can verify their account
+      if (isGuest) {
+        // The request remains hidden as pending_verification until this exact
+        // phone number is verified and linked to the newly created account.
         try {
-          const res = await requestEmailCode(values.email.trim().toLowerCase());
+          const res = await requestPhoneCode(fullPhone);
           router.replace({
             pathname: '/code',
-            params: { email: values.email.trim().toLowerCase(), devCode: res.dev_code ?? '', fromBooking: 'true' },
+            params: {
+              phone: fullPhone,
+              challengeId: res.challenge_id ?? '',
+              deliveryMode: res.delivery_mode ?? 'flash_call',
+              codeLength: String(res.code_length ?? 4),
+              devCode: res.dev_code ?? '',
+              fromBooking: 'true',
+            },
           } as any);
         } catch {
-          router.replace({ pathname: '/email', params: { fromBooking: 'true' } } as any);
+          router.replace({ pathname: '/phone', params: { phone: fullPhone, fromBooking: 'true' } } as any);
         }
         return;
       }
@@ -445,26 +447,6 @@ export default function BookingScreen() {
                   />
                 )}
               />
-
-              {/* Email — required for guests */}
-              {isGuest && (
-                <Controller
-                  control={control}
-                  name="email"
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <Input
-                      icon="mail-outline"
-                      placeholder="Email (для подтверждения)"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      error={errors.email?.message}
-                    />
-                  )}
-                />
-              )}
 
               {/* Comment */}
               <Controller

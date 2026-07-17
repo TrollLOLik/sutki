@@ -177,10 +177,10 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if userID == 0 {
-			emailClean := strings.ToLower(strings.TrimSpace(body.Email))
-			if emailClean != "" {
-				if !BookingEmailLimiter.Allow("booking_email:"+emailClean, 5) {
-					writeError(w, http.StatusTooManyRequests, "Слишком много заявок на этот email. Пожалуйста, попробуйте позже.")
+			phoneClean, phoneErr := auth.NormalizePhone(body.Phone)
+			if phoneErr == nil {
+				if !BookingPhoneLimiter.Allow("booking_phone:"+phoneClean, 5) {
+					writeError(w, http.StatusTooManyRequests, "Слишком много заявок на этот номер. Пожалуйста, попробуйте позже.")
 					return
 				}
 			}
@@ -204,10 +204,6 @@ func (h *BookingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Count:    body.Count,
 		Message:  strings.TrimSpace(body.Message),
 		Phone:    strings.TrimSpace(body.Phone),
-	}
-	if userID == 0 && nb.Email == "" {
-		writeError(w, http.StatusBadRequest, "email is required for guest booking")
-		return
 	}
 	if nb.Count < 1 {
 		writeError(w, http.StatusBadRequest, "invalid count")
