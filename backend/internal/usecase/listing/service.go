@@ -16,10 +16,15 @@ import (
 )
 
 const (
-	defaultLimit int32 = 20
-	maxLimit     int32 = 100
-	maxPhotos          = 10
-	maxPhotoSize int64 = 10 * 1024 * 1024
+	defaultLimit     int32 = 20
+	maxLimit         int32 = 100
+	maxPhotos              = 10
+	maxPhotoSize     int64 = 10 * 1024 * 1024
+	minListingArea   int32 = 5
+	maxListingArea   int32 = 10_000
+	minListingPrice  int32 = 150
+	maxListingPrice  int32 = 100_000_000
+	maxListingGuests int32 = 100
 )
 
 // ErrInvalidListing is returned when create input fails validation.
@@ -241,30 +246,7 @@ func (s *Service) List(ctx context.Context, filter domain.ListFilter) (ListResul
 // the full created listing (with services/categories). Photos are out of scope
 // until the media phase. Returns ErrInvalidListing on bad input.
 func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House, error) {
-	in.Street = strings.TrimSpace(in.Street)
-	in.HouseNumber = strings.TrimSpace(in.HouseNumber)
-	in.Description = strings.TrimSpace(in.Description)
-	in.City = strings.TrimSpace(in.City)
-	in.CountRoom = strings.TrimSpace(in.CountRoom)
-	if in.NumberRoom != nil {
-		trimmed := strings.TrimSpace(*in.NumberRoom)
-		in.NumberRoom = &trimmed
-	}
-
-	if err := validateAndCleanRules(&in); err != nil {
-		return domain.House{}, err
-	}
-
-	if in.OwnerID <= 0 {
-		return domain.House{}, ErrInvalidListing
-	}
-	if in.Street == "" || in.HouseNumber == "" || in.City == "" || in.CountRoom == "" {
-		return domain.House{}, ErrInvalidListing
-	}
-	if in.Description == "" {
-		return domain.House{}, ErrInvalidListing
-	}
-	if in.Price <= 0 || in.Area <= 0 {
+	if err := normalizeAndValidateListing(&in); err != nil {
 		return domain.House{}, ErrInvalidListing
 	}
 	if err := s.validateListingPhotos(ctx, in.OwnerID, in.Photos); err != nil {
@@ -405,30 +387,7 @@ func (s *Service) SetPublished(ctx context.Context, id, ownerID int32, published
 }
 
 func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (domain.House, error) {
-	in.Street = strings.TrimSpace(in.Street)
-	in.HouseNumber = strings.TrimSpace(in.HouseNumber)
-	in.Description = strings.TrimSpace(in.Description)
-	in.City = strings.TrimSpace(in.City)
-	in.CountRoom = strings.TrimSpace(in.CountRoom)
-	if in.NumberRoom != nil {
-		trimmed := strings.TrimSpace(*in.NumberRoom)
-		in.NumberRoom = &trimmed
-	}
-
-	if err := validateAndCleanRules(&in); err != nil {
-		return domain.House{}, err
-	}
-
-	if in.OwnerID <= 0 {
-		return domain.House{}, ErrInvalidListing
-	}
-	if in.Street == "" || in.HouseNumber == "" || in.City == "" || in.CountRoom == "" {
-		return domain.House{}, ErrInvalidListing
-	}
-	if in.Description == "" {
-		return domain.House{}, ErrInvalidListing
-	}
-	if in.Price <= 0 || in.Area <= 0 {
+	if err := normalizeAndValidateListing(&in); err != nil {
 		return domain.House{}, ErrInvalidListing
 	}
 	if err := s.validateListingPhotos(ctx, in.OwnerID, in.Photos); err != nil {
@@ -513,6 +472,76 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		s.publishChanged(in.OwnerID, id, "updated")
 	}
 	return house, err
+}
+
+func normalizeAndValidateListing(in *domain.NewHouse) error {
+	in.Street = strings.TrimSpace(in.Street)
+	in.HouseNumber = strings.TrimSpace(in.HouseNumber)
+	in.Description = strings.TrimSpace(in.Description)
+	in.City = strings.TrimSpace(in.City)
+	in.CountRoom = strings.TrimSpace(in.CountRoom)
+	// Older mobile builds stored the 5+ bucket literally. Keep edits of those
+	// listings compatible while using a numeric canonical value going forward.
+	if in.CountRoom == "5+" {
+		in.CountRoom = "5"
+	}
+	if in.NumberRoom != nil {
+		trimmed := strings.TrimSpace(*in.NumberRoom)
+		if trimmed == "" {
+			in.NumberRoom = nil
+		} else {
+			in.NumberRoom = &trimmed
+		}
+	}
+	if err := validateAndCleanRules(in); err != nil {
+		return err
+	}
+	if in.OwnerID <= 0 || in.Street == "" || len(in.Street) > 255 ||
+		in.HouseNumber == "" || len(in.HouseNumber) > 50 ||
+		in.City == "" || len(in.City) > 255 ||
+		len(in.Description) < 10 || len(in.Description) > 5005 {
+		return ErrInvalidListing
+	}
+	if in.NumberRoom != nil && len(*in.NumberRoom) > 100 {
+		return ErrInvalidListing
+	}
+	if !isValidEnum(in.CountRoom, []string{"studio", "0", "1", "2", "3", "4", "5"}) {
+		return ErrInvalidListing
+	}
+	if in.Area < minListingArea || in.Area > maxListingArea ||
+		in.Price < minListingPrice || in.Price > maxListingPrice {
+		return ErrInvalidListing
+	}
+	if in.MaxGuests != nil && (*in.MaxGuests < 1 || *in.MaxGuests > maxListingGuests) {
+		return ErrInvalidListing
+	}
+	if len(in.CategoryIDs) == 0 || !positiveUniqueIDs(in.CategoryIDs) || !positiveUniqueIDs(in.ServiceIDs) {
+		return ErrInvalidListing
+	}
+	if (in.Lat == nil) != (in.Lng == nil) {
+		return ErrInvalidListing
+	}
+	if in.Lat != nil && (*in.Lat < -90 || *in.Lat > 90 || *in.Lng < -180 || *in.Lng > 180) {
+		return ErrInvalidListing
+	}
+	if in.QcGeo != nil && (*in.QcGeo < 0 || *in.QcGeo > 5) {
+		return ErrInvalidListing
+	}
+	return nil
+}
+
+func positiveUniqueIDs(ids []int32) bool {
+	seen := make(map[int32]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return false
+		}
+		if _, exists := seen[id]; exists {
+			return false
+		}
+		seen[id] = struct{}{}
+	}
+	return true
 }
 
 func validateTimeFormat(t string) bool {

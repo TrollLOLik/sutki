@@ -38,7 +38,19 @@ import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yama
 import * as Location from 'expo-location';
 
 const TOTAL_STEPS = 6;
-const ROOM_OPTIONS = ['1', '2', '3', '4', '5+'];
+const ROOM_OPTIONS = [
+  { label: 'Студия', value: 'studio' },
+  { label: '1', value: '1' },
+  { label: '2', value: '2' },
+  { label: '3', value: '3' },
+  { label: '4', value: '4' },
+  { label: '5+', value: '5' },
+];
+const MIN_LISTING_AREA = 5;
+const MAX_LISTING_AREA = 10_000;
+const MIN_LISTING_PRICE = 150;
+const MAX_LISTING_PRICE = 100_000_000;
+const MAX_LISTING_GUESTS = 100;
 
 const formatTimeInput = (text: string) => {
   const digits = text.replace(/\D/g, '').split('');
@@ -657,8 +669,15 @@ export default function CreateListingScreen() {
         if (draft.houseNumber.trim().length < 1) return 'Укажите номер дома';
         return null;
       case 2:
-        if (!(Number(draft.area) > 0)) return 'Укажите площадь';
-        if (!(Number(draft.price) > 0)) return 'Укажите цену за ночь';
+        if (Number(draft.area) < MIN_LISTING_AREA || Number(draft.area) > MAX_LISTING_AREA) {
+          return `Площадь должна быть от ${MIN_LISTING_AREA} до ${MAX_LISTING_AREA.toLocaleString('ru-RU')} м²`;
+        }
+        if (Number(draft.price) < MIN_LISTING_PRICE || Number(draft.price) > MAX_LISTING_PRICE) {
+          return `Цена должна быть от ${MIN_LISTING_PRICE} до ${MAX_LISTING_PRICE.toLocaleString('ru-RU')} ₽ за ночь`;
+        }
+        if (draft.maxGuests !== '' && (Number(draft.maxGuests) < 1 || Number(draft.maxGuests) > MAX_LISTING_GUESTS)) {
+          return `Количество гостей должно быть от 1 до ${MAX_LISTING_GUESTS}`;
+        }
         return null;
       case 3: {
         if (draft.description.trim().length < 10) return 'Добавьте описание (минимум 10 символов)';
@@ -706,6 +725,14 @@ export default function CreateListingScreen() {
 
   const handlePublish = async () => {
     setError(null);
+    for (let candidateStep = 0; candidateStep < TOTAL_STEPS - 1; candidateStep += 1) {
+      const validationError = validateStep(candidateStep);
+      if (validationError) {
+        setStep(candidateStep);
+        setError(validationError);
+        return;
+      }
+    }
     const payload: NewListingInput = {
       city: draft.city.trim(),
       street: draft.street.trim(),
@@ -856,10 +883,10 @@ export default function CreateListingScreen() {
                 <View className="flex-row flex-wrap gap-2">
                   {ROOM_OPTIONS.map((r) => (
                     <Chip
-                      key={r}
-                      label={r}
-                      selected={draft.countRoom === r}
-                      onPress={() => draft.setField('countRoom', r)}
+                      key={r.value}
+                      label={r.label}
+                      selected={draft.countRoom === r.value}
+                      onPress={() => draft.setField('countRoom', r.value)}
                     />
                   ))}
                 </View>
@@ -1527,7 +1554,13 @@ function ListingPublishPreviewImpl({
     checkInAfter ? `заезд после ${checkInAfter}` : null,
     checkOutBefore ? `выезд до ${checkOutBefore}` : null,
   ].filter((item): item is string => Boolean(item));
-  const title = rooms === '5+' ? 'Жильё с 5+ комнатами' : rooms ? `${rooms}-комнатное жильё` : 'Ваше объявление';
+  const title = rooms === 'studio' || rooms === '0'
+    ? 'Студия'
+    : rooms === '5' || rooms === '5+'
+      ? 'Жильё с 5+ комнатами'
+      : rooms
+        ? `${rooms}-комнатное жильё`
+        : 'Ваше объявление';
 
   return (
     <View className="overflow-hidden rounded-card border border-line bg-surface">

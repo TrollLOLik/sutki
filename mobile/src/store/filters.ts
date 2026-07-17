@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type RoomFilter = 'studio' | '1' | '2' | '3plus';
+export type RoomFilter = 'studio' | '1' | '2' | '3' | '4' | '5plus';
 export type ListingSort = 'newest' | 'oldest' | 'popular';
 
 export interface SearchFilters {
@@ -12,11 +12,15 @@ export interface SearchFilters {
   guests: number;
   priceMin: number | null;
   priceMax: number | null;
+  areaMin: number | null;
+  areaMax: number | null;
   rooms: RoomFilter[];
+  categoryId: number | null;
   /** Selected amenity service IDs from the /services catalog. */
   serviceIds: number[];
   /** When true, the feed shows only listings the user has favorited. */
   favoritesOnly: boolean;
+  smokingAllowed: boolean;
   petsAllowed: boolean;
   childrenAllowed: boolean;
   eventsAllowed: boolean;
@@ -27,12 +31,16 @@ export const defaultFilters: SearchFilters = {
   city: null,
   checkIn: null,
   checkOut: null,
-  guests: 2,
+  guests: 1,
   priceMin: null,
   priceMax: null,
+  areaMin: null,
+  areaMax: null,
   rooms: [],
+  categoryId: null,
   serviceIds: [],
   favoritesOnly: false,
+  smokingAllowed: false,
   petsAllowed: false,
   childrenAllowed: false,
   eventsAllowed: false,
@@ -74,7 +82,10 @@ export function countActiveFilters(f: SearchFilters): number {
     (f.city != null ? 1 : 0) +
     (f.checkIn != null && f.checkOut != null ? 1 : 0) +
     (f.priceMin != null || f.priceMax != null ? 1 : 0) +
+    (f.areaMin != null || f.areaMax != null ? 1 : 0) +
+    (f.categoryId != null ? 1 : 0) +
     (f.guests !== defaultFilters.guests ? 1 : 0) +
+    (f.smokingAllowed ? 1 : 0) +
     (f.petsAllowed ? 1 : 0) +
     (f.childrenAllowed ? 1 : 0) +
     (f.eventsAllowed ? 1 : 0)

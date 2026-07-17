@@ -4,15 +4,19 @@ WITH filtered AS MATERIALIZED (
   WHERE h.deleted = false
     AND h.status = 'active'
     AND (cardinality(@house_ids::int[]) = 0 OR h.id = ANY(@house_ids::int[]))
+    AND (sqlc.narg('owner_id')::int IS NULL OR h.owner_id = sqlc.narg('owner_id'))
     AND (sqlc.narg('query')::text IS NULL OR h.street ILIKE '%' || sqlc.narg('query') || '%' OR h.house_number ILIKE '%' || sqlc.narg('query') || '%' OR h.description ILIKE '%' || sqlc.narg('query') || '%' OR h.country ILIKE '%' || sqlc.narg('query') || '%')
     AND (sqlc.narg('city')::text IS NULL OR h.country = sqlc.narg('city'))
     AND (sqlc.narg('price_min')::int IS NULL OR h.price >= sqlc.narg('price_min'))
     AND (sqlc.narg('price_max')::int IS NULL OR h.price <= sqlc.narg('price_max'))
-    AND ((cardinality(@rooms::int[]) = 0 AND sqlc.narg('rooms_min')::int IS NULL) OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY(@rooms::int[]) OR (sqlc.narg('rooms_min')::int IS NOT NULL AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= sqlc.narg('rooms_min')))
+    AND (sqlc.narg('area_min')::int IS NULL OR h.area >= sqlc.narg('area_min'))
+    AND (sqlc.narg('area_max')::int IS NULL OR h.area <= sqlc.narg('area_max'))
+    AND ((cardinality(@rooms::int[]) = 0 AND sqlc.narg('rooms_min')::int IS NULL) OR (CASE WHEN h.count_room IN ('studio','0') THEN 0 WHEN h.count_room = '5+' THEN 5 WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY(@rooms::int[]) OR (sqlc.narg('rooms_min')::int IS NOT NULL AND (CASE WHEN h.count_room IN ('studio','0') THEN 0 WHEN h.count_room = '5+' THEN 5 WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= sqlc.narg('rooms_min')))
     AND (cardinality(@services::int[]) = 0 OR (SELECT count(DISTINCT hhs.service_id) FROM house_house_service hhs WHERE hhs.house_id = h.id AND hhs.service_id = ANY(@services::int[])) = cardinality(@services::int[]))
     AND (sqlc.narg('category')::int IS NULL OR EXISTS (SELECT 1 FROM house_house_category hhc WHERE hhc.house_id = h.id AND hhc.house_category_id = sqlc.narg('category')))
     AND (sqlc.narg('check_in')::date IS NULL OR sqlc.narg('check_out')::date IS NULL OR NOT EXISTS (SELECT 1 FROM request rq WHERE rq.house_id = h.id AND rq.status = 'confirmed' AND rq.start_date < sqlc.narg('check_out')::date AND COALESCE(rq.end_date, rq.start_date + 1) > sqlc.narg('check_in')::date))
     AND (sqlc.narg('guests')::int IS NULL OR h.max_guests IS NULL OR h.max_guests >= sqlc.narg('guests'))
+    AND (sqlc.narg('smoking_allowed')::boolean IS NULL OR (sqlc.narg('smoking_allowed')::boolean = true AND h.smoking_allowed IN ('allowed', 'on_balcony')))
     AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
     AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))
     AND (sqlc.narg('events_allowed')::boolean IS NULL OR (sqlc.narg('events_allowed')::boolean = true AND h.events_allowed IN ('allowed', 'on_request')))
@@ -119,6 +123,7 @@ WHERE h.deleted = false
     cardinality(@house_ids::int[]) = 0
     OR h.id = ANY(@house_ids::int[])
   )
+  AND (sqlc.narg('owner_id')::int IS NULL OR h.owner_id = sqlc.narg('owner_id'))
   AND (
     sqlc.narg('query')::text IS NULL
     OR h.street ILIKE '%' || sqlc.narg('query') || '%'
@@ -129,12 +134,14 @@ WHERE h.deleted = false
   AND (sqlc.narg('city')::text IS NULL OR h.country = sqlc.narg('city'))
   AND (sqlc.narg('price_min')::int IS NULL OR h.price >= sqlc.narg('price_min'))
   AND (sqlc.narg('price_max')::int IS NULL OR h.price <= sqlc.narg('price_max'))
+  AND (sqlc.narg('area_min')::int IS NULL OR h.area >= sqlc.narg('area_min'))
+  AND (sqlc.narg('area_max')::int IS NULL OR h.area <= sqlc.narg('area_max'))
   AND (
     (cardinality(@rooms::int[]) = 0 AND sqlc.narg('rooms_min')::int IS NULL)
-    OR (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY(@rooms::int[])
+    OR (CASE WHEN h.count_room IN ('studio','0') THEN 0 WHEN h.count_room = '5+' THEN 5 WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) = ANY(@rooms::int[])
     OR (
       sqlc.narg('rooms_min')::int IS NOT NULL
-      AND (CASE WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= sqlc.narg('rooms_min')
+      AND (CASE WHEN h.count_room IN ('studio','0') THEN 0 WHEN h.count_room = '5+' THEN 5 WHEN h.count_room ~ '^[0-9]+$' THEN h.count_room::int END) >= sqlc.narg('rooms_min')
     )
   )
   AND (
@@ -167,6 +174,10 @@ WHERE h.deleted = false
     sqlc.narg('guests')::int IS NULL
     OR h.max_guests IS NULL
     OR h.max_guests >= sqlc.narg('guests')
+  )
+  AND (
+    sqlc.narg('smoking_allowed')::boolean IS NULL
+    OR (sqlc.narg('smoking_allowed')::boolean = true AND h.smoking_allowed IN ('allowed', 'on_balcony'))
   )
   AND (sqlc.narg('pets_allowed')::boolean IS NULL OR (sqlc.narg('pets_allowed')::boolean = true AND h.pets_allowed IN ('allowed', 'on_request')))
   AND (sqlc.narg('children_allowed')::boolean IS NULL OR (sqlc.narg('children_allowed')::boolean = true AND h.children_allowed IN ('allowed', 'on_request')))

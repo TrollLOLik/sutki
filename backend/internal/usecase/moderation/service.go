@@ -120,13 +120,18 @@ func New(repo domain.ModerationRepository, llmClient LLMClient, alerter AdminAle
 	}
 }
 
-// ContentHash returns the sha256 of the moderated free-text bundle. All
-// owner-controlled text participates: address, description, price. Custom
-// rule strings are validated to enum values upstream so they carry no free
-// text, but description is the main channel anyway.
+// ContentHash fingerprints every owner-editable field consumed by moderation.
+// Structured edits must never reuse a verdict for older listing content.
 func ContentHash(h domain.ModerationHouse) string {
+	maxGuests := ""
+	if h.MaxGuests != nil {
+		maxGuests = fmt.Sprintf("%d", *h.MaxGuests)
+	}
 	sum := sha256.Sum256([]byte(strings.Join([]string{
-		h.City, h.Street, h.HouseNumber, h.Description, fmt.Sprintf("%d", h.Price),
+		h.City, h.Street, h.HouseNumber, h.NumberRoom, h.Description,
+		fmt.Sprintf("%d", h.Price), h.CountRoom, fmt.Sprintf("%d", h.Area), maxGuests,
+		h.SmokingAllowed, h.PetsAllowed, h.ChildrenAllowed, h.EventsAllowed,
+		h.ServicesList, h.CategoriesList,
 	}, "\x00")))
 	return hex.EncodeToString(sum[:])
 }
@@ -389,6 +394,11 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 	// Stale job: content changed since enqueue (a newer job exists).
 	if ContentHash(h) != job.ContentHash {
 		_ = s.repo.FailLLM(ctx, job.ID, "superseded by newer content")
+		// Enqueueing is idempotent. This also protects deployments that expand
+		// ContentHash: an old queued job cannot leave the listing pending forever.
+		if _, submitErr := s.Submit(ctx, h.ID); submitErr != nil {
+			log.Printf("moderation: re-submit superseded house %d: %v", h.ID, submitErr)
+		}
 		return
 	}
 

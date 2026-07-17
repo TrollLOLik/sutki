@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { Button, Chip, RangeSlider } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
-import { useServices } from '@/lib/api/create-listing';
+import { useCategories, useServices } from '@/lib/api/create-listing';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { useFiltersStore, type ListingSort, type RoomFilter, type SearchFilters } from '@/store/filters';
 import { formatGuests } from '@/lib/format';
@@ -27,7 +27,9 @@ const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
   { label: 'Студия', value: 'studio' },
   { label: '1', value: '1' },
   { label: '2', value: '2' },
-  { label: '3+', value: '3plus' },
+  { label: '3', value: '3' },
+  { label: '4', value: '4' },
+  { label: '5+', value: '5plus' },
 ];
 
 const PRICE_PRESETS: { label: string; min: number | null; max: number | null }[] = [
@@ -69,6 +71,7 @@ export default function FiltersScreen() {
   const numericOwnerId = ownerId ? Number(ownerId) : null;
   const store = useFiltersStore();
   const { data: services } = useServices();
+  const { data: categories } = useCategories();
   const insets = useSafeAreaInsets();
 
   // Local draft state; only committed to the store on "Показать".
@@ -81,7 +84,11 @@ export default function FiltersScreen() {
   const [priceMax, setPriceMax] = useState(store.priceMax?.toString() ?? '');
   const [priceMinQuery, setPriceMinQuery] = useState(store.priceMin?.toString() ?? '');
   const [priceMaxQuery, setPriceMaxQuery] = useState(store.priceMax?.toString() ?? '');
+  const [areaMin, setAreaMin] = useState(store.areaMin?.toString() ?? '');
+  const [areaMax, setAreaMax] = useState(store.areaMax?.toString() ?? '');
   const [guests, setGuests] = useState(store.guests);
+  const [categoryId, setCategoryId] = useState<number | null>(store.categoryId);
+  const [smokingAllowed, setSmokingAllowed] = useState(store.smokingAllowed);
   const [petsAllowed, setPetsAllowed] = useState(store.petsAllowed);
   const [childrenAllowed, setChildrenAllowed] = useState(store.childrenAllowed);
   const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
@@ -120,14 +127,18 @@ export default function FiltersScreen() {
       guests,
       priceMin: priceMinQuery !== '' ? Number(priceMinQuery) : null,
       priceMax: priceMaxQuery !== '' ? Number(priceMaxQuery) : null,
+      areaMin: areaMin !== '' ? Number(areaMin) : null,
+      areaMax: areaMax !== '' ? Number(areaMax) : null,
       rooms,
+      categoryId,
       serviceIds,
       favoritesOnly: false,
+      smokingAllowed,
       petsAllowed,
       childrenAllowed,
       eventsAllowed,
     }),
-    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, rooms, serviceIds, petsAllowed, childrenAllowed, eventsAllowed],
+    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, areaMin, areaMax, rooms, categoryId, serviceIds, smokingAllowed, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
   // Live result count for the CTA.
@@ -135,54 +146,22 @@ export default function FiltersScreen() {
     () => filtersToListParams(draftFilters, '', { limit: 1 }),
     [draftFilters],
   );
-  // Global search count
-  const { data: countData, isFetching: countLoading } = useListings(countParams, { enabled: !numericOwnerId });
+  const parsedAreaMin = areaMin !== '' ? Number(areaMin) : null;
+  const parsedAreaMax = areaMax !== '' ? Number(areaMax) : null;
+  const areaRangeInvalid =
+    (parsedAreaMin != null && parsedAreaMin > 10_000) ||
+    (parsedAreaMax != null && parsedAreaMax > 10_000) ||
+    (parsedAreaMin != null && parsedAreaMax != null && parsedAreaMin > parsedAreaMax);
+  const { data: countData, isFetching: countLoading } = useListings({
+    ...countParams,
+    ownerId: numericOwnerId ?? undefined,
+  }, { enabled: !areaRangeInvalid });
   const total = countData?.total;
-
-  // Host search count (fetch up to 100 listings and filter locally)
-  const { data: allListingsData, isLoading: allListingsLoading } = useListings(
-    { limit: 100 },
-    { enabled: !!numericOwnerId }
-  );
-
-  const localFilteredTotal = useMemo(() => {
-    if (!numericOwnerId) return null;
-    const allItems = allListingsData?.items ?? [];
-    let list = allItems.filter((item) => item.owner_id === numericOwnerId);
-
-    if (city) {
-      list = list.filter((item) => item.city.toLowerCase().includes(city.toLowerCase()));
-    }
-    if (priceMinQuery !== '') {
-      list = list.filter((item) => item.price >= Number(priceMinQuery));
-    }
-    if (priceMaxQuery !== '') {
-      list = list.filter((item) => item.price <= Number(priceMaxQuery));
-    }
-    if (rooms.length > 0) {
-      list = list.filter((item) => {
-        const itemRooms = parseInt(item.rooms, 10);
-        const roomsCount = isNaN(itemRooms) ? 0 : itemRooms;
-        return rooms.some((r) => {
-          if (r === 'studio') return roomsCount === 0;
-          if (r === '1') return roomsCount === 1;
-          if (r === '2') return roomsCount === 2;
-          if (r === '3plus') return roomsCount >= 3;
-          return false;
-        });
-      });
-    }
-    if (guests) {
-      list = list.filter((item) => item.max_guests === null || item.max_guests >= guests);
-    }
-
-    return list.length;
-  }, [numericOwnerId, allListingsData, city, priceMinQuery, priceMaxQuery, rooms, guests]);
-
-  const isCtaLoading = numericOwnerId ? allListingsLoading : countLoading;
-  const ctaTotal = numericOwnerId ? localFilteredTotal : total;
+  const isCtaLoading = countLoading;
+  const ctaTotal = total;
 
   const apply = () => {
+    if (areaRangeInvalid) return;
     store.setFilters({
       sort,
       city,
@@ -193,6 +172,10 @@ export default function FiltersScreen() {
       guests,
       priceMin: priceMin !== '' ? Number(priceMin) : null,
       priceMax: priceMax !== '' ? Number(priceMax) : null,
+      areaMin: areaMin !== '' ? Number(areaMin) : null,
+      areaMax: areaMax !== '' ? Number(areaMax) : null,
+      categoryId,
+      smokingAllowed,
       petsAllowed,
       childrenAllowed,
       eventsAllowed,
@@ -212,7 +195,11 @@ export default function FiltersScreen() {
     setPriceMaxQuery('');
     setPriceMinInput('');
     setPriceMaxInput('');
-    setGuests(2);
+    setAreaMin('');
+    setAreaMax('');
+    setCategoryId(null);
+    setGuests(1);
+    setSmokingAllowed(false);
     setPetsAllowed(false);
     setChildrenAllowed(false);
     setEventsAllowed(false);
@@ -220,7 +207,9 @@ export default function FiltersScreen() {
   };
 
 
-  const ctaLabel = isCtaLoading
+  const ctaLabel = areaRangeInvalid
+    ? 'Проверьте диапазон площади'
+    : isCtaLoading
     ? 'Загрузка…'
     : ctaTotal != null
       ? `Показать ${ctaTotal} ${pluralVariants(ctaTotal)}`
@@ -454,6 +443,50 @@ export default function FiltersScreen() {
           />
         </View>
 
+        {/* Area */}
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Площадь, м²</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {[
+              { value: areaMin, setter: setAreaMin, prefix: 'от', placeholder: '5' },
+              { value: areaMax, setter: setAreaMax, prefix: 'до', placeholder: '10 000' },
+            ].map((field) => (
+              <View
+                key={field.prefix}
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
+                <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>{field.prefix}</Text>
+                <TextInput
+                  value={field.value}
+                  onChangeText={(text) => field.setter(text.replace(/\D/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder={field.placeholder}
+                  placeholderTextColor={palette.inkMuted}
+                  style={{ flex: 1, fontSize: 15, fontWeight: '700', color: palette.ink }}
+                />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Category */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Тип жилья</Text>
+          {categories == null ? (
+            <ActivityIndicator color={palette.primary} />
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {categories.map((category) => (
+                <Chip
+                  key={category.id}
+                  label={category.name}
+                  selected={categoryId === category.id}
+                  onPress={() => setCategoryId(categoryId === category.id ? null : category.id)}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Rooms */}
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Комнаты</Text>
@@ -512,16 +545,20 @@ export default function FiltersScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Больше гостей"
-                onPress={() => setGuests((g) => g + 1)}
-                style={{
-                  width: 36,
-                  height: 36,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: palette.line,
-                }}
+                disabled={guests >= 100}
+                onPress={() => setGuests((g) => Math.min(100, g + 1))}
+                style={[
+                  {
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: palette.line,
+                  },
+                  guests >= 100 ? { opacity: 0.4 } : undefined,
+                ]}
               >
                 <Ionicons name="add" size={18} color={palette.ink} />
               </Pressable>
@@ -533,6 +570,11 @@ export default function FiltersScreen() {
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Правила дома</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <Chip
+              label="Можно курить"
+              selected={smokingAllowed}
+              onPress={() => setSmokingAllowed(!smokingAllowed)}
+            />
             <Chip
               label="Можно с животными"
               selected={petsAllowed}
@@ -582,7 +624,7 @@ export default function FiltersScreen() {
           backgroundColor: palette.surface,
         }}
       >
-        <Button label={ctaLabel} loading={isCtaLoading} onPress={apply} />
+        <Button label={ctaLabel} loading={isCtaLoading} disabled={areaRangeInvalid} onPress={apply} />
       </View>
 
       {/* City picker bottom sheet */}

@@ -152,7 +152,6 @@ type House struct {
 	RejectionReason *string
 	Lat             *float64
 	Lng             *float64
-	QcGeo           *int32
 	MaxGuests       *int32
 	CheckInAfter    pgtype.Time
 	CheckOutBefore  pgtype.Time
@@ -163,6 +162,7 @@ type House struct {
 	ReviewsSummary  *string
 	LocationSummary *string
 	Pois            []byte
+	QcGeo           *int32
 }
 
 type HouseCategory struct {
@@ -566,6 +566,19 @@ type User struct {
 	Birthday        pgtype.Date
 	PhoneNormalized *string
 	PhoneVerifiedAt pgtype.Timestamptz
+}
+
+type UserActivityEvent struct {
+	ID        int64
+	EventKey  string
+	UserID    int32
+	Scope     string
+	EventType string
+	EntityID  *int64
+	Action    string
+	Payload   []byte
+	CreatedAt pgtype.Timestamptz
+	SeenAt    pgtype.Timestamptz
 }
 
 type View struct {

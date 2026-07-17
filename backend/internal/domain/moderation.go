@@ -104,6 +104,7 @@ type ModerationHouse struct {
 	City            string
 	Street          string
 	HouseNumber     string
+	NumberRoom      string
 	Description     string
 	Price           int64
 	CountRoom       string
@@ -114,6 +115,7 @@ type ModerationHouse struct {
 	ChildrenAllowed string
 	EventsAllowed   string
 	ServicesList    string
+	CategoriesList  string
 	POIs            []HousePOI
 }
 

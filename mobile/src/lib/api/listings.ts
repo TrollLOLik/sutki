@@ -12,17 +12,22 @@ export interface ListListingsParams {
   city?: string;
   priceMin?: number;
   priceMax?: number;
+  areaMin?: number;
+  areaMax?: number;
   /** Exact room counts to match (e.g. [1, 2]). */
   rooms?: number[];
   /** Minimum room count, OR-combined with `rooms` (used for the "3+" bucket). */
   roomsMin?: number;
   /** Amenity service IDs; a listing must include all of them. */
   serviceIds?: number[];
+  categoryId?: number;
+  ownerId?: number;
   guests?: number;
   /** Availability window, YYYY-MM-DD. Both must be set to take effect. */
   checkIn?: string;
   checkOut?: string;
   sort?: string;
+  smokingAllowed?: boolean;
   petsAllowed?: boolean;
   childrenAllowed?: boolean;
   eventsAllowed?: boolean;
@@ -61,11 +66,15 @@ function buildQuery(params: ListListingsParams): string {
   if (params.city) sp.set('city', params.city);
   if (params.priceMin != null) sp.set('price_min', String(params.priceMin));
   if (params.priceMax != null) sp.set('price_max', String(params.priceMax));
+  if (params.areaMin != null) sp.set('area_min', String(params.areaMin));
+  if (params.areaMax != null) sp.set('area_max', String(params.areaMax));
   if (params.rooms && params.rooms.length > 0) sp.set('rooms', params.rooms.join(','));
   if (params.roomsMin != null) sp.set('rooms_min', String(params.roomsMin));
   if (params.serviceIds && params.serviceIds.length > 0) {
     sp.set('services', params.serviceIds.join(','));
   }
+  if (params.categoryId != null) sp.set('category', String(params.categoryId));
+  if (params.ownerId != null) sp.set('owner_id', String(params.ownerId));
   if (params.houseIds && params.houseIds.length > 0) {
     sp.set('house_ids', params.houseIds.join(','));
   }
@@ -73,6 +82,7 @@ function buildQuery(params: ListListingsParams): string {
   if (params.checkIn) sp.set('check_in', params.checkIn);
   if (params.checkOut) sp.set('check_out', params.checkOut);
   if (params.sort) sp.set('sort', params.sort);
+  if (params.smokingAllowed) sp.set('smoking_allowed', 'true');
   if (params.petsAllowed) sp.set('pets_allowed', 'true');
   if (params.childrenAllowed) sp.set('children_allowed', 'true');
   if (params.eventsAllowed) sp.set('events_allowed', 'true');
@@ -90,8 +100,12 @@ function roomFilterToCount(room: RoomFilter): number | null {
       return 1;
     case '2':
       return 2;
+    case '3':
+      return 3;
+    case '4':
+      return 4;
     default:
-      return null; // "3plus" is expressed via roomsMin
+      return null; // "5plus" is expressed via roomsMin
   }
 }
 
@@ -107,8 +121,8 @@ export function filtersToListParams(
   const rooms: number[] = [];
   let roomsMin: number | undefined;
   for (const r of filters.rooms) {
-    if (r === '3plus') {
-      roomsMin = 3;
+    if (r === '5plus') {
+      roomsMin = 5;
     } else {
       const n = roomFilterToCount(r);
       if (n != null) rooms.push(n);
@@ -122,12 +136,16 @@ export function filtersToListParams(
     city: filters.city ?? undefined,
     priceMin: filters.priceMin ?? undefined,
     priceMax: filters.priceMax ?? undefined,
+    areaMin: filters.areaMin ?? undefined,
+    areaMax: filters.areaMax ?? undefined,
     rooms: rooms.length > 0 ? rooms : undefined,
     roomsMin,
     serviceIds: filters.serviceIds.length > 0 ? filters.serviceIds : undefined,
+    categoryId: filters.categoryId ?? undefined,
     guests: filters.guests,
     checkIn: filters.checkIn && filters.checkOut ? filters.checkIn : undefined,
     checkOut: filters.checkIn && filters.checkOut ? filters.checkOut : undefined,
+    smokingAllowed: filters.smokingAllowed || undefined,
     petsAllowed: filters.petsAllowed || undefined,
     childrenAllowed: filters.childrenAllowed || undefined,
     eventsAllowed: filters.eventsAllowed || undefined,

@@ -653,8 +653,11 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 	}{
 		{"price_min", &f.PriceMin},
 		{"price_max", &f.PriceMax},
+		{"area_min", &f.AreaMin},
+		{"area_max", &f.AreaMax},
 		{"rooms_min", &f.RoomsMin},
 		{"category", &f.Category},
+		{"owner_id", &f.OwnerID},
 		{"guests", &f.Guests},
 	} {
 		v, ok := parseOptNonNegInt32(q.Get(p.key))
@@ -662,6 +665,21 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 			return domain.ListFilter{}, "invalid " + p.key
 		}
 		*p.dst = v
+	}
+	if f.PriceMin != nil && f.PriceMax != nil && *f.PriceMin > *f.PriceMax {
+		return domain.ListFilter{}, "price_min must not exceed price_max"
+	}
+	if f.AreaMin != nil && f.AreaMax != nil && *f.AreaMin > *f.AreaMax {
+		return domain.ListFilter{}, "area_min must not exceed area_max"
+	}
+	if (f.AreaMin != nil && *f.AreaMin > 10_000) || (f.AreaMax != nil && *f.AreaMax > 10_000) {
+		return domain.ListFilter{}, "invalid area range"
+	}
+	if f.Guests != nil && (*f.Guests < 1 || *f.Guests > 100) {
+		return domain.ListFilter{}, "invalid guests"
+	}
+	if f.OwnerID != nil && *f.OwnerID < 1 {
+		return domain.ListFilter{}, "invalid owner_id"
 	}
 
 	rooms, ok := parseNonNegInt32CSV(q.Get("rooms"))
@@ -710,6 +728,7 @@ func parseListFilter(q url.Values) (domain.ListFilter, string) {
 		key string
 		dst **bool
 	}{
+		{"smoking_allowed", &f.SmokingAllowed},
 		{"pets_allowed", &f.PetsAllowed},
 		{"children_allowed", &f.ChildrenAllowed},
 		{"events_allowed", &f.EventsAllowed},

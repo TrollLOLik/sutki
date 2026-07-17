@@ -204,24 +204,30 @@ func (r *ModerationRepo) GetHouseForModeration(ctx context.Context, houseID int3
 	var poisBytes []byte
 	err := r.pool.QueryRow(ctx, `
 		SELECT h.id, h.owner_id, COALESCE(u.email, ''), h.status,
-		       COALESCE(h.country, ''), h.street, h.house_number,
+		       COALESCE(h.country, ''), h.street, h.house_number, COALESCE(h.number_room, ''),
 		       COALESCE(h.description, ''), h.price,
 		       COALESCE(h.count_room, ''), h.area, h.max_guests,
 		       COALESCE(h.smoking_allowed, ''), COALESCE(h.pets_allowed, ''),
 		       COALESCE(h.children_allowed, ''), COALESCE(h.events_allowed, ''),
 		       COALESCE((
-		           SELECT string_agg(s.name, ', ')
+		           SELECT string_agg(s.name, ', ' ORDER BY s.name)
 		           FROM house_house_service hhs
 		           JOIN service s ON s.id = hhs.service_id
 		           WHERE hhs.house_id = h.id
+		       ), ''),
+		       COALESCE((
+		           SELECT string_agg(c.name, ', ' ORDER BY c.name)
+		           FROM house_house_category hhc
+		           JOIN house_category c ON c.id = hhc.house_category_id
+		           WHERE hhc.house_id = h.id
 		       ), ''),
 		       COALESCE(h.pois, '[]'::jsonb)
 		FROM house h
 		JOIN "user" u ON u.id = h.owner_id
 		WHERE h.id = $1 AND h.deleted = false
-	`, houseID).Scan(&h.ID, &h.OwnerID, &h.OwnerEmail, &h.Status, &h.City, &h.Street, &h.HouseNumber, &h.Description, &h.Price,
+	`, houseID).Scan(&h.ID, &h.OwnerID, &h.OwnerEmail, &h.Status, &h.City, &h.Street, &h.HouseNumber, &h.NumberRoom, &h.Description, &h.Price,
 		&h.CountRoom, &h.Area, &h.MaxGuests, &h.SmokingAllowed, &h.PetsAllowed, &h.ChildrenAllowed, &h.EventsAllowed, &h.ServicesList,
-		&poisBytes)
+		&h.CategoriesList, &poisBytes)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ModerationHouse{}, domain.ErrNotFound
 	}

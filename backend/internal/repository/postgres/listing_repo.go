@@ -83,10 +83,13 @@ func pgTimeToStringPtr(pgTime pgtype.Time) *string {
 func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]domain.House, error) {
 	rows, err := r.q.ListHousesFiltered(ctx, sqlc.ListHousesFilteredParams{
 		HouseIds:        nonNil(filter.HouseIDs),
+		OwnerID:         filter.OwnerID,
 		Query:           filter.Query,
 		City:            filter.City,
 		PriceMin:        filter.PriceMin,
 		PriceMax:        filter.PriceMax,
+		AreaMin:         filter.AreaMin,
+		AreaMax:         filter.AreaMax,
 		Rooms:           nonNil(filter.Rooms),
 		RoomsMin:        filter.RoomsMin,
 		Services:        nonNil(filter.Services),
@@ -94,6 +97,7 @@ func (r *ListingRepo) List(ctx context.Context, filter domain.ListFilter) ([]dom
 		CheckIn:         dateParamPtr(filter.CheckIn),
 		CheckOut:        dateParamPtr(filter.CheckOut),
 		Guests:          filter.Guests,
+		SmokingAllowed:  filter.SmokingAllowed,
 		PetsAllowed:     filter.PetsAllowed,
 		ChildrenAllowed: filter.ChildrenAllowed,
 		EventsAllowed:   filter.EventsAllowed,
@@ -260,10 +264,13 @@ func (r *ListingRepo) CountByOwner(ctx context.Context, ownerID int32) (int64, e
 func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int64, error) {
 	return r.q.CountHousesFiltered(ctx, sqlc.CountHousesFilteredParams{
 		HouseIds:        nonNil(filter.HouseIDs),
+		OwnerID:         filter.OwnerID,
 		Query:           filter.Query,
 		City:            filter.City,
 		PriceMin:        filter.PriceMin,
 		PriceMax:        filter.PriceMax,
+		AreaMin:         filter.AreaMin,
+		AreaMax:         filter.AreaMax,
 		Rooms:           nonNil(filter.Rooms),
 		RoomsMin:        filter.RoomsMin,
 		Services:        nonNil(filter.Services),
@@ -271,6 +278,7 @@ func (r *ListingRepo) Count(ctx context.Context, filter domain.ListFilter) (int6
 		CheckIn:         dateParamPtr(filter.CheckIn),
 		CheckOut:        dateParamPtr(filter.CheckOut),
 		Guests:          filter.Guests,
+		SmokingAllowed:  filter.SmokingAllowed,
 		PetsAllowed:     filter.PetsAllowed,
 		ChildrenAllowed: filter.ChildrenAllowed,
 		EventsAllowed:   filter.EventsAllowed,

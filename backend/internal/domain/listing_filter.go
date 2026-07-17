@@ -19,10 +19,13 @@ const (
 // Nil pointers and empty slices mean "no constraint" for that field.
 type ListFilter struct {
 	HouseIDs []int32
+	OwnerID  *int32
 	Query    *string
 	City     *string
 	PriceMin *int32
 	PriceMax *int32
+	AreaMin  *int32
+	AreaMax  *int32
 	// Rooms matches listings whose room count equals one of these values.
 	Rooms []int32
 	// RoomsMin matches listings with at least this many rooms. It is OR-combined
@@ -40,6 +43,7 @@ type ListFilter struct {
 	// Guests, when set, keeps listings whose max_guests is unknown (legacy rows)
 	// or at least this large.
 	Guests          *int32
+	SmokingAllowed  *bool
 	PetsAllowed     *bool
 	ChildrenAllowed *bool
 	EventsAllowed   *bool

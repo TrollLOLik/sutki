@@ -29,7 +29,7 @@ import { ResilientImage } from '@/components/ResilientImage';
 import { Button, MetricTile, PastelIcon } from '@/components/ui';
 import { useShimmer } from '@/hooks/useShimmer';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
-import { useListings } from '@/lib/api/listings';
+import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { formatRub } from '@/lib/format';
 import { useFiltersStore, countActiveFilters } from '@/store/filters';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
@@ -224,17 +224,23 @@ export default function PublicProfileScreen() {
   const activeFiltersCount = countActiveFilters(filters);
   const hasFilters = activeFiltersCount > 0;
 
-  // Listings list (load up to 100 listings so local filtering doesn't break pagination)
-  const { data: listingsData, isLoading: listingsLoading } = useListings({ limit: 100 });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+  const listingParams = useMemo(() => ({
+    ...filtersToListParams(filters, searchQuery, { limit: 100 }),
+    ownerId: Number.isFinite(numericId) ? numericId : undefined,
+  }), [filters, numericId, searchQuery]);
+  const { data: listingsData, isLoading: listingsLoading } = useListings(listingParams);
+  const { data: hostListingCountData } = useListings({
+    ownerId: Number.isFinite(numericId) ? numericId : undefined,
+    limit: 1,
+  });
   const {
     data: hostResponseStats,
     isLoading: hostResponseStatsLoading,
   } = useHostResponseStats(Number.isFinite(numericId) ? numericId : undefined);
-  const allListings = listingsData?.items ?? [];
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
+  const filteredListings = listingsData?.items ?? [];
 
   const searchAnim = useRef(new Animated.Value(0)).current;
 
@@ -274,54 +280,6 @@ export default function PublicProfileScreen() {
     inputRange: [0, 0.3, 1],
     outputRange: [1, 0, 0],
   });
-
-  const filteredListings = useMemo(() => {
-    // 1. Filter by host owner_id
-    let list = allListings.filter((item) => item.owner_id === numericId);
-
-    // 2. Filter by search query (inline)
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((item) => {
-        const roomsNum = parseInt(item.rooms, 10);
-        const cardTitle = (isNaN(roomsNum) || roomsNum <= 0) ? 'Современная студия' : `Уютная ${roomsNum}-комн. квартира`;
-        return (
-          cardTitle.toLowerCase().includes(q) ||
-          item.address.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          (item.city && item.city.toLowerCase().includes(q))
-        );
-      });
-    }
-
-    // 3. Filter by global filters store
-    if (filters.priceMin !== null) {
-      list = list.filter((item) => item.price >= filters.priceMin!);
-    }
-    if (filters.priceMax !== null) {
-      list = list.filter((item) => item.price <= filters.priceMax!);
-    }
-    if (filters.rooms.length > 0) {
-      list = list.filter((item) => {
-        const itemRooms = parseInt(item.rooms, 10);
-        const roomsCount = isNaN(itemRooms) ? 0 : itemRooms;
-        return filters.rooms.some((r) => {
-          if (r === 'studio') return roomsCount === 0;
-          if (r === '1') return roomsCount === 1;
-          if (r === '2') return roomsCount === 2;
-          if (r === '3plus') return roomsCount >= 3;
-          return false;
-        });
-      });
-    }
-    if (filters.city) {
-      list = list.filter((item) =>
-        item.city.toLowerCase().includes(filters.city!.toLowerCase())
-      );
-    }
-
-    return list;
-  }, [allListings, numericId, searchQuery, filters]);
 
   const handleCall = () => {
     if (!phone) {
@@ -376,10 +334,7 @@ export default function PublicProfileScreen() {
     });
   };
 
-  // Listings count for metrics
-  const hostListingsCount = useMemo(() => {
-    return allListings.filter((item) => item.owner_id === numericId).length;
-  }, [allListings, numericId]);
+  const hostListingsCount = hostListingCountData?.total ?? 0;
 
   return (
     <View className="flex-1 bg-surface-muted">

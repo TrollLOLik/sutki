@@ -2,10 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { parseISO, format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   Animated,
-  Easing,
   FlatList,
   Modal,
   Pressable,
@@ -18,7 +17,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -35,17 +33,20 @@ import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recent-searches';
 import { requireAuth } from '@/lib/requireAuth';
-import { countActiveFilters, useFiltersStore } from '@/store/filters';
+import { countActiveFilters, useFiltersStore, type RoomFilter } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { useTabBarStore } from '@/store/tabbar';
 import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
-const QUICK_FILTERS = [
-  { label: 'Квартиры', value: 'all' },
-  { label: 'Студии', value: 'studio' },
+const QUICK_FILTERS: { label: string; value: 'all' | RoomFilter }[] = [
+  { label: 'Все', value: 'all' },
+  { label: 'Студия', value: 'studio' },
   { label: '1-комн.', value: '1' },
   { label: '2-комн.', value: '2' },
+  { label: '3-комн.', value: '3' },
+  { label: '4-комн.', value: '4' },
+  { label: '5+ комнат', value: '5plus' },
 ];
 
 export default function SearchScreen() {
@@ -55,28 +56,21 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
 
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const quickFiltersRef = useRef<ScrollView>(null);
+  const quickFilterOffsets = useRef<Record<string, number>>({});
 
-  const quickFilterAnim = useRef(new Animated.Value(0)).current;
-  const windowWidth = Dimensions.get('window').width;
-  const [quickFilterWidth, setQuickFilterWidth] = useState(windowWidth - 32);
-
-  const getQuickFilterIndex = () => {
-    if (filters.rooms.length === 0) return 0;
-    if (filters.rooms.includes('studio')) return 1;
-    if (filters.rooms.includes('1')) return 2;
-    if (filters.rooms.includes('2')) return 3;
-    return 0;
-  };
+  const scrollToActiveQuickFilter = useCallback(() => {
+    const activeValue = filters.rooms.at(-1) ?? 'all';
+    const offset = quickFilterOffsets.current[activeValue];
+    if (offset != null) {
+      quickFiltersRef.current?.scrollTo({ x: Math.max(0, offset - 12), animated: true });
+    }
+  }, [filters.rooms]);
 
   useEffect(() => {
-    const activeIndex = getQuickFilterIndex();
-    Animated.timing(quickFilterAnim, {
-      toValue: activeIndex,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: false,
-    }).start();
-  }, [filters.rooms]);
+    const timer = setTimeout(scrollToActiveQuickFilter, 0);
+    return () => clearTimeout(timer);
+  }, [scrollToActiveQuickFilter]);
 
   // The pill reflects either an exact city filter (picked from the overlay) or a
   // free-text query (typed + submitted). Clearing resets both.
@@ -338,58 +332,46 @@ export default function SearchScreen() {
             overflow: 'hidden',
           }}
         >
-          <View
-            onLayout={(e) => setQuickFilterWidth(e.nativeEvent.layout.width)}
-            className="mt-3 flex-row rounded-field bg-surface-muted p-1 relative h-11 items-center"
+          <ScrollView
+            ref={quickFiltersRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-3 h-11"
+            contentContainerStyle={{ gap: 8, alignItems: 'center', paddingRight: 4 }}
+            onContentSizeChange={scrollToActiveQuickFilter}
           >
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 4,
-                left: 4,
-                bottom: 4,
-                width: (quickFilterWidth - 8) / 4,
-                transform: [{
-                  translateX: quickFilterAnim.interpolate({
-                    inputRange: [0, 1, 2, 3],
-                    outputRange: [
-                      0,
-                      (quickFilterWidth - 8) / 4,
-                      ((quickFilterWidth - 8) / 4) * 2,
-                      ((quickFilterWidth - 8) / 4) * 3,
-                    ],
-                  })
-                }],
-                backgroundColor: palette.primary,
-                borderRadius: 12,
-              }}
-            />
             {QUICK_FILTERS.map((item) => {
-              const isAll = item.value === 'all';
-              const selected = isAll
+              const roomValue = item.value === 'all' ? null : item.value;
+              const selected = roomValue == null
                 ? filters.rooms.length === 0
-                : filters.rooms.includes(item.value as any);
+                : filters.rooms.includes(roomValue);
               return (
                 <Pressable
                   key={item.value}
+                  onLayout={(event) => {
+                    quickFilterOffsets.current[item.value] = event.nativeEvent.layout.x;
+                    if (selected) scrollToActiveQuickFilter();
+                  }}
                   accessibilityRole="tab"
                   accessibilityState={{ selected }}
                   onPress={() => {
-                    if (isAll) {
+                    if (roomValue == null) {
                       filters.setFilters({ rooms: [] });
                     } else {
-                      filters.setFilters({ rooms: [item.value as any] });
+                      filters.toggleRoom(roomValue);
                     }
                   }}
-                  className="flex-1 h-9 items-center justify-center rounded-field relative z-10"
+                  className={`h-9 items-center justify-center rounded-field border px-4 active:opacity-80 ${
+                    selected ? 'border-primary bg-primary' : 'border-line bg-surface-muted'
+                  }`}
                 >
-                  <Text className={`text-sm font-semibold transition-colors duration-200 ${selected ? 'text-white' : 'text-ink-secondary'}`}>
+                  <Text className={`text-sm font-semibold ${selected ? 'text-white' : 'text-ink-secondary'}`}>
                     {item.label}
                   </Text>
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
 
           <View style={{ marginTop: 10 }} className="flex-row items-center gap-2">
             {/* Dates Button */}
@@ -533,8 +515,9 @@ export default function SearchScreen() {
           </Text>
 
           <TouchableOpacity
-            onPress={() => setTempGuests((g) => g + 1)}
-            className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted"
+            disabled={tempGuests >= 100}
+            onPress={() => setTempGuests((g) => Math.min(100, g + 1))}
+            className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted disabled:opacity-40"
           >
             <Ionicons name="add" size={24} color={palette.ink} />
           </TouchableOpacity>
