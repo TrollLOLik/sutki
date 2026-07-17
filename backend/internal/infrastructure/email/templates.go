@@ -21,6 +21,7 @@ const (
 	EventChatDigest       = "chat_digest"
 	EventWelcome          = "welcome"
 	EventReviewReceived   = "review_received"
+	EventReviewModerated  = "review_moderated"
 	EventListingApproved  = "listing_approved"
 	EventListingRejected  = "listing_rejected"
 	EventAdminAlert       = "admin_alert"
@@ -35,6 +36,7 @@ var eventTypes = []string{
 	EventChatDigest,
 	EventWelcome,
 	EventReviewReceived,
+	EventReviewModerated,
 	EventListingApproved,
 	EventListingRejected,
 	EventAdminAlert,

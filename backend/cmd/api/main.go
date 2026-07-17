@@ -215,6 +215,7 @@ func main() {
 		CentrifugoKey: cfg.CentrifugoKey,
 		HMACSecret:    cfg.CentrifugoHMACSecret,
 		Notifier:      notifier,
+		UserEvents:    userEvents,
 	})
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 

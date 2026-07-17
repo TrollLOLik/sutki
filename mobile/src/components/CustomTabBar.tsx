@@ -303,7 +303,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
     const routeIndex = state.routes.findIndex((r) => r.name === name);
     const focused = state.index === routeIndex;
-    const badge = name === 'messages' ? activity?.messages ?? 0 : name === 'profile' ? activity?.profile ?? 0 : 0;
+    const badge = name === 'messages' ? activity?.messages ?? 0 : name === 'profile' ? activity?.notifications ?? 0 : 0;
 
     const onPress = () => {
       const event = navigation.emit({

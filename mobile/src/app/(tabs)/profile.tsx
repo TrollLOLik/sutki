@@ -784,6 +784,13 @@ export default function ProfileScreen() {
 
           <View className="mt-6 gap-3">
             <ProfileAction
+              icon="notifications-outline"
+              title="Уведомления"
+              subtitle="Сообщения о заявках, объявлениях и отзывах"
+              count={activity?.notifications}
+              onPress={() => router.push('/notifications')}
+            />
+            <ProfileAction
               icon="home-outline"
               title="Мои объявления"
               subtitle="Управляйте объектами, ценами и календарём"

@@ -54,6 +54,11 @@ type EmailNotifier interface {
 	// Gated by the owner's "reviews" preference. The review body is not
 	// included, only the rating. Deduplicated per review id.
 	NotifyReviewReceived(ctx context.Context, ownerID int32, ownerEmail string, reviewID int64, rating int32, address string) error
+
+	// NotifyReviewModerated tells an author whether their review or owner reply
+	// was published, rejected, or held for an additional check. Gated by the
+	// author's "reviews" preference and deduplicated per moderation outcome.
+	NotifyReviewModerated(ctx context.Context, authorID int32, authorEmail string, reviewID int64, status, targetType, reason string) error
 }
 
 // EmailCategory names an opt-outable group of notifications. Values are

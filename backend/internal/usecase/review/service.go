@@ -331,6 +331,9 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 		payload["reason"] = verdict.Reason
 	}
 	s.publishChanged(target.AuthorID, "moderated", int64(target.ReviewID), fmt.Sprintf("review-job:%d:author", job.ID), true, payload)
+	if s.notifier != nil && s.users != nil {
+		go s.notifyAuthorModeration(context.Background(), target, status, verdict.Reason)
+	}
 	if status == "active" && target.TargetType == "reply" && target.ReviewAuthorID != target.AuthorID {
 		s.publishChanged(target.ReviewAuthorID, "reply_published", int64(target.ReviewID), fmt.Sprintf("review-job:%d:review-author", job.ID), true, payload)
 	}
@@ -343,6 +346,29 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 		}
 	}
 	return nil
+}
+
+// notifyAuthorModeration queues the author's moderation-result email after
+// the verdict has been committed. Email failures never roll back moderation.
+func (s *Service) notifyAuthorModeration(ctx context.Context, target domain.ReviewModerationTarget, status, reason string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("review moderation notify panic recovered: %v", r)
+			observability.CapturePanic(ctx, r)
+		}
+	}()
+
+	author, err := s.users.GetByID(ctx, target.AuthorID)
+	if err != nil {
+		log.Printf("review moderation notify: author %d lookup for review %d: %v", target.AuthorID, target.ReviewID, err)
+		return
+	}
+	if author.Email == "" {
+		return
+	}
+	if err := s.notifier.NotifyReviewModerated(ctx, author.ID, author.Email, int64(target.ReviewID), status, target.TargetType, reason); err != nil {
+		log.Printf("review moderation notify: queue email for review %d: %v", target.ReviewID, err)
+	}
 }
 
 func parseReviewVerdict(answer string) (reviewVerdict, error) {

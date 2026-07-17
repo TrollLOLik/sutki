@@ -238,6 +238,55 @@ func (n *Notifier) NotifyReviewReceived(ctx context.Context, ownerID int32, owne
 	}, data)
 }
 
+func (n *Notifier) NotifyReviewModerated(ctx context.Context, authorID int32, authorEmail string, reviewID int64, status, targetType, reason string) error {
+	allowed, err := n.categoryEnabled(ctx, authorID, domain.EmailCategoryReviews)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		log.Printf("email: %s to user %d skipped (opted out)", EventReviewModerated, authorID)
+		return nil
+	}
+
+	contentName := "отзыв"
+	if targetType == "reply" {
+		contentName = "ответ на отзыв"
+	}
+	title := "Материал ожидает дополнительной проверки"
+	message := "Мы сообщим о результате после завершения проверки."
+	subject := "Материал ожидает проверки — ДомРядом"
+	switch status {
+	case "active":
+		title = "Ваш " + contentName + " опубликован"
+		message = "Теперь он доступен другим пользователям в приложении."
+		subject = title + " — ДомРядом"
+	case "rejected":
+		title = "Ваш " + contentName + " не прошёл проверку"
+		message = "Исправьте текст с учётом причины и отправьте его повторно."
+		subject = title + " — ДомРядом"
+	}
+
+	data := struct {
+		commonData
+		Title   string
+		Message string
+		Reason  string
+	}{
+		commonData: commonData{UnsubscribeURL: n.unsubscribeURL(authorID, domain.EmailCategoryReviews)},
+		Title:      title,
+		Message:    message,
+		Reason:     reason,
+	}
+
+	return n.enqueue(ctx, OutboxMessage{
+		DedupKey:  fmt.Sprintf("%s:%s:%d:%s", EventReviewModerated, targetType, reviewID, status),
+		UserID:    authorID,
+		Recipient: authorEmail,
+		EventType: EventReviewModerated,
+		Subject:   subject,
+	}, data)
+}
+
 // NotifyListingApproved tells the owner their listing passed moderation and
 // is now published. Transactional (no opt-out); deduped per house+day so a
 // re-check after LLM recovery cannot double-mail.

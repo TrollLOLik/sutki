@@ -67,6 +67,9 @@ type Config struct {
 	// Notifier queues "new message" emails for offline recipients. May be
 	// nil; email notifications are then disabled.
 	Notifier domain.EmailNotifier
+	// UserEvents persists notification-center events and publishes realtime
+	// invalidations. It is independent from email delivery.
+	UserEvents domain.UserEventPublisher
 }
 
 type Service struct {
@@ -76,6 +79,7 @@ type Service struct {
 	centrifugoKey string
 	hmacSecret    string
 	notifier      domain.EmailNotifier
+	userEvents    domain.UserEventPublisher
 }
 
 func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Service {
@@ -86,6 +90,7 @@ func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Se
 		centrifugoKey: cfg.CentrifugoKey,
 		hmacSecret:    cfg.HMACSecret,
 		notifier:      cfg.Notifier,
+		userEvents:    cfg.UserEvents,
 	}
 }
 
@@ -295,8 +300,8 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	// Runs in background: presence check + enqueue must not delay the HTTP
 	// response. The notifier dedups per conversation within a quiet window,
 	// so message bursts produce at most one email.
-	if s.notifier != nil {
-		go s.notifyRecipientByEmail(context.Background(), msg)
+	if s.notifier != nil || s.userEvents != nil {
+		go s.notifyRecipient(context.Background(), msg)
 	}
 
 	return msg, nil
@@ -375,13 +380,13 @@ func bookingCardFallback(p domain.BookingStatusPayload) string {
 	}
 }
 
-// notifyRecipientByEmail emails the other participant about a new message
-// when they have no active Centrifugo connection. Never fails the send path;
-// all errors are logged and dropped.
-func (s *Service) notifyRecipientByEmail(ctx context.Context, msg domain.Message) {
+// notifyRecipient persists the in-app event for every recipient and emails
+// them when they have no active Centrifugo connection. It never fails the
+// send path; all errors are logged and dropped.
+func (s *Service) notifyRecipient(ctx context.Context, msg domain.Message) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("chat email notify panic recovered: %v", r)
+			log.Printf("chat notification panic recovered: %v", r)
 		}
 	}()
 
@@ -393,8 +398,26 @@ func (s *Service) notifyRecipientByEmail(ctx context.Context, msg domain.Message
 		log.Printf("chat email notify: lookup for conv %d: %v", msg.ConversationID, err)
 		return
 	}
-	if recipientEmail == "" {
-		return // deleted/disabled account
+	if s.userEvents != nil {
+		preview := "Вам отправили вложение"
+		if msg.Body != nil && strings.TrimSpace(*msg.Body) != "" {
+			preview = strings.TrimSpace(*msg.Body)
+			if len([]rune(preview)) > 120 {
+				preview = string([]rune(preview)[:120]) + "…"
+			}
+		}
+		if err := s.userEvents.PublishUserEvent(ctx, recipientID, domain.UserEvent{
+			EventKey: fmt.Sprintf("message:%d", msg.ID), Type: "message.changed",
+			Scope: domain.ActivityScopeMessages, Action: "created", EntityID: msg.ConversationID,
+			Payload:    map[string]any{"message_id": msg.ID, "sender_name": senderName, "preview": preview},
+			OccurredAt: msg.CreatedAt, MarkUnread: true,
+		}); err != nil {
+			log.Printf("chat notification: persist message %d: %v", msg.ID, err)
+		}
+	}
+
+	if s.notifier == nil || recipientEmail == "" {
+		return
 	}
 
 	// Skip when the recipient is online: they will see the message in-app.
@@ -490,6 +513,15 @@ func (s *Service) ReadMessages(ctx context.Context, userID int32, convID int64, 
 			"type": "unread_update", "conversation_id": convID,
 		})
 	}()
+	if reader, ok := s.userEvents.(domain.UserNotificationReader); ok {
+		go func() {
+			markCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := reader.MarkEntityNotificationsRead(markCtx, userID, domain.ActivityScopeMessages, convID); err != nil {
+				log.Printf("chat notification: mark conversation %d read: %v", convID, err)
+			}
+		}()
+	}
 
 	return nil
 }

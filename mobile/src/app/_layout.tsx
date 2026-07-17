@@ -84,6 +84,7 @@ function RootLayout() {
               <Stack.Screen name="incoming/[id]" />
               <Stack.Screen name="create" options={{ presentation: 'modal' }} />
               <Stack.Screen name="my-listings/index" />
+              <Stack.Screen name="notifications" />
               <Stack.Screen name="payments/checkout" />
               <Stack.Screen name="payments/return" />
             </Stack.Protected>
