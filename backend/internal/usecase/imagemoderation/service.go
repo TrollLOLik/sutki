@@ -12,7 +12,10 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
 
-const maxBatchRawBytes = 8 << 20
+const (
+	maxBatchRawBytes          = 8 << 20
+	maxVisionCompletionTokens = 1024
+)
 
 type VisionClient interface {
 	GenerateWithImages(ctx context.Context, systemPrompt, userPrompt string, imageURLs []string, maxTokens int, temperature float64) (string, error)
@@ -62,7 +65,7 @@ func (s *Service) ModerateImages(ctx context.Context, imageURLs []string, usage 
 		systemPrompt,
 		fmt.Sprintf("Контекст загрузки: %s. Проверь все %d изображений. Если хотя бы одно нарушает правила, общий verdict должен быть reject.", usage, len(imageURLs)),
 		imageURLs,
-		220,
+		maxVisionCompletionTokens,
 		0,
 	)
 	if err != nil {

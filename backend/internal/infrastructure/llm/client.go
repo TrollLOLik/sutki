@@ -121,10 +121,18 @@ func (c *Client) GenerateWithImages(ctx context.Context, systemPrompt, userPromp
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return "", fmt.Errorf("llm client: decode vision response failed: %w", err)
 	}
-	if len(response.Choices) == 0 || strings.TrimSpace(response.Choices[0].Message.Content) == "" {
+	if len(response.Choices) == 0 {
+		return "", fmt.Errorf("llm client: empty choices in vision response")
+	}
+	responseContent := strings.TrimSpace(response.Choices[0].Message.Content)
+	if responseContent == "" {
+		finishReason := strings.TrimSpace(response.Choices[0].FinishReason)
+		if finishReason != "" {
+			return "", fmt.Errorf("llm client: empty vision response (finish_reason=%s)", finishReason)
+		}
 		return "", fmt.Errorf("llm client: empty vision response")
 	}
-	return strings.TrimSpace(response.Choices[0].Message.Content), nil
+	return responseContent, nil
 }
 
 func (c *Client) Generate(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {

@@ -60,6 +60,19 @@ func TestGenerateRejectsEmptyContent(t *testing.T) {
 	}
 }
 
+func TestGenerateWithImagesIncludesFinishReasonForEmptyContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"length","message":{"role":"assistant","content":null}}]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "key", "vision-model", time.Second)
+	_, err := client.GenerateWithImages(context.Background(), "system", "user", []string{"data:image/png;base64,AA=="}, 20, 0)
+	if err == nil || !strings.Contains(err.Error(), "finish_reason=length") {
+		t.Fatalf("expected finish reason error, got %v", err)
+	}
+}
+
 func TestGenerateIncludesFinishReasonForEmptyContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"length","message":{"role":"assistant","content":null}}]}`))
