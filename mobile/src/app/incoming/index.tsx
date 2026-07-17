@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,7 @@ import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 import { EmptyState } from '@/components/EmptyState';
 import { IncomingRequestCard } from '@/components/IncomingRequestCard';
+import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
 import {
   bookingKeys,
@@ -39,22 +40,47 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 type Tab = 'pending' | 'processed';
+type IncomingSort = 'newest' | 'oldest' | 'checkin_asc' | 'checkin_desc';
+const SORT_OPTIONS: SortOption<IncomingSort>[] = [
+  { value: 'newest', label: 'Сначала новые заявки', icon: 'arrow-down-outline' },
+  { value: 'oldest', label: 'Сначала старые заявки', icon: 'arrow-up-outline' },
+  { value: 'checkin_asc', label: 'Ближайшее заселение', icon: 'calendar-outline' },
+  { value: 'checkin_desc', label: 'Позднее заселение', icon: 'calendar-number-outline' },
+];
+
+function filterIncoming(items: Booking[], query: string, sort: IncomingSort): Booking[] {
+  const needle = query.trim().toLocaleLowerCase('ru');
+  return items.filter((item) => {
+    const guest = item.guest;
+    const searchable = `${guest?.name ?? item.name} ${guest?.surname ?? item.surname} ${item.phone} ${item.house?.address ?? ''} ${item.house?.city ?? ''}`.toLocaleLowerCase('ru');
+    return !needle || searchable.includes(needle);
+  }).sort((a, b) => {
+    if (sort === 'oldest') return Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id;
+    if (sort === 'checkin_asc') return Date.parse(a.start_date) - Date.parse(b.start_date) || b.id - a.id;
+    if (sort === 'checkin_desc') return Date.parse(b.start_date) - Date.parse(a.start_date) || b.id - a.id;
+    return Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id;
+  });
+}
 
 export default function IncomingBookingsScreen() {
   useActivityScopeSeen('incoming');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('pending');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<IncomingSort>('newest');
+  const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
   const { mutateAsync: findOrCreateConv } = useFindOrCreateConversation();
 
-  const { data, isLoading, isError, refetch, isRefetching } = useIncomingBookings({ limit: 50 });
-  const items = data?.items ?? [];
-
-  const pendingItems = items.filter(item => item.status === 'in_progress');
-  const processedItems = items.filter(item => item.status !== 'in_progress');
+  const { data, isLoading, isError, refetch, isRefetching } = useIncomingBookings({ limit: 100 });
+  const rawItems = data?.items ?? [];
+  const rawPendingItems = rawItems.filter(item => item.status === 'in_progress');
+  const rawProcessedItems = rawItems.filter(item => item.status !== 'in_progress');
+  const pendingItems = useMemo(() => filterIncoming(rawPendingItems, query, sort), [rawPendingItems, query, sort]);
+  const processedItems = useMemo(() => filterIncoming(rawProcessedItems, query, sort), [rawProcessedItems, query, sort]);
 
   const handleOpenChat = async (booking: Booking) => {
     try {
@@ -210,6 +236,17 @@ export default function IncomingBookingsScreen() {
           </Pressable>
         </View>
 
+        <PersonalListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Гость, телефон или адрес"
+          sort={sort}
+          sortOptions={SORT_OPTIONS}
+          sortVisible={sortVisible}
+          onSortVisibleChange={setSortVisible}
+          onSortChange={setSort}
+        />
+
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator color={palette.primary} />
@@ -246,9 +283,9 @@ export default function IncomingBookingsScreen() {
             <View style={{ width: pageWidth }}>
               {pendingItems.length === 0 ? (
                 <EmptyState
-                  icon="file-tray-outline"
-                  title="Новых заявок нет"
-                  subtitle="Здесь появятся заявки, ожидающие вашего решения."
+                  icon={rawPendingItems.length > 0 ? 'search-outline' : 'file-tray-outline'}
+                  title={rawPendingItems.length > 0 ? 'Ничего не найдено' : 'Новых заявок нет'}
+                  subtitle={rawPendingItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Здесь появятся заявки, ожидающие вашего решения.'}
                 />
               ) : (
                 <FlatList
@@ -292,9 +329,9 @@ export default function IncomingBookingsScreen() {
             <View style={{ width: pageWidth }}>
               {processedItems.length === 0 ? (
                 <EmptyState
-                  icon="archive-outline"
-                  title="История пуста"
-                  subtitle="Здесь появятся обработанные заявки."
+                  icon={rawProcessedItems.length > 0 ? 'search-outline' : 'archive-outline'}
+                  title={rawProcessedItems.length > 0 ? 'Ничего не найдено' : 'История пуста'}
+                  subtitle={rawProcessedItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Здесь появятся обработанные заявки.'}
                 />
               ) : (
                 <FlatList

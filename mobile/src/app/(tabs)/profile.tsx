@@ -30,6 +30,7 @@ import type { User } from '@/types/user';
 import { GuestProfile } from '@/components/profile/GuestProfile';
 import { ThemeSelector } from '@/components/profile/ThemeSelector';
 import { type ActivityScope, useActivityCounters, useMarkActivityRead } from '@/lib/api/activity';
+import { useFiltersStore } from '@/store/filters';
 
 type SettingsTab = 'basic' | 'security';
 
@@ -783,6 +784,15 @@ export default function ProfileScreen() {
           </View>
 
           <View className="mt-6 gap-3">
+            <ProfileAction
+              icon="heart-outline"
+              title="Избранное"
+              subtitle="Сохранённые объявления"
+              onPress={() => {
+                useFiltersStore.setState({ favoritesOnly: true });
+                router.navigate('/');
+              }}
+            />
             <ProfileAction
               icon="notifications-outline"
               title="Уведомления"

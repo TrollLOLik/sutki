@@ -286,17 +286,33 @@ export default function SearchScreen() {
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           />
         </Animated.View>
-        <View className="flex-row items-center gap-2">
+        <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Pressable
             onPress={() => {
               setSearchModalVisible(true);
             }}
-            className="h-12 flex-1 flex-row items-center rounded-field border border-line bg-surface px-3 active:bg-surface-muted"
+            style={{
+              flex: 1,
+              height: 48,
+              marginRight: 10,
+              paddingHorizontal: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              borderRadius: 24,
+              borderWidth: 1,
+              borderColor: palette.line,
+              backgroundColor: palette.surface,
+              shadowColor: '#1A1A1A',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
           >
             <Ionicons name="search" size={20} color={palette.inkMuted} />
             <Text
               numberOfLines={1}
-              className={`ml-2 flex-1 text-base ${searchLabel ? 'text-ink font-semibold' : 'text-ink-muted'}`}
+              style={{ flex: 1, marginLeft: 8, marginRight: 8, fontSize: 14, fontWeight: '500', color: searchLabel ? palette.ink : palette.inkMuted }}
             >
               {searchLabel || 'Город, адрес или название'}
             </Text>
@@ -315,11 +331,25 @@ export default function SearchScreen() {
           <Pressable
             accessibilityLabel="Фильтры"
             onPress={() => router.push('/filters')}
-            className="h-12 w-12 items-center justify-center rounded-field border border-line bg-surface active:bg-surface-muted">
+            style={{
+              width: 48,
+              height: 48,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 24,
+              borderWidth: 1,
+              borderColor: palette.line,
+              backgroundColor: palette.surface,
+              shadowColor: '#1A1A1A',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+            }}>
             <Ionicons name="options-outline" size={22} color={palette.primary} />
             {activeFilters > 0 ? (
-              <View className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-pill bg-primary px-1">
-                <Text className="text-xs font-bold text-white">{activeFilters}</Text>
+              <View style={{ position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.primary }}>
+                <Text style={{ color: 'white', fontSize: 11, fontWeight: 'bold' }}>{activeFilters}</Text>
               </View>
             ) : null}
           </Pressable>

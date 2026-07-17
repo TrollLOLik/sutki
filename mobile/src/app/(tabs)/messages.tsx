@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -12,7 +12,16 @@ import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { Button } from '@/components/ui';
+import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { formatRooms } from '@/lib/format';
+
+type ConversationSort = 'recent' | 'oldest' | 'unread';
+
+const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
+	{ value: 'recent', label: 'Сначала новые', icon: 'time-outline' },
+	{ value: 'oldest', label: 'Сначала старые', icon: 'hourglass-outline' },
+	{ value: 'unread', label: 'Сначала непрочитанные', icon: 'mail-unread-outline' },
+];
 
 export default function MessagesScreen() {
   const { palette } = useAppTheme();
@@ -21,6 +30,8 @@ export default function MessagesScreen() {
 	const sessionUser = useSessionStore((state) => state.user);
 	const { data: conversations, isLoading, refetch, isFetching } = useConversations();
 	const [searchQuery, setSearchQuery] = useState('');
+	const [sort, setSort] = useState<ConversationSort>('recent');
+	const [sortVisible, setSortVisible] = useState(false);
 
 	const handleConversationPress = (conv: ConversationSummary) => {
 		router.push({
@@ -89,12 +100,19 @@ export default function MessagesScreen() {
 	}
 
 	// Filter conversations by search query
-	const filteredConversations = conversations?.filter((c) => {
+	const filteredConversations = (conversations?.filter((c) => {
 		const fullName = `${c.other_user_name} ${c.other_user_surname}`.toLowerCase();
 		const body = c.last_message_body.toLowerCase();
 		const query = searchQuery.toLowerCase();
 		return fullName.includes(query) || body.includes(query);
-	}) ?? [];
+	}) ?? []).sort((a, b) => {
+		if (sort === 'unread') {
+			const unreadDifference = b.unread_count - a.unread_count;
+			if (unreadDifference !== 0) return unreadDifference;
+		}
+		const activityDifference = new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
+		return sort === 'oldest' ? -activityDifference : activityDifference;
+	});
 
 	const renderItem = ({ item, index }: { item: ConversationSummary; index: number }) => {
 		const initials = ((item.other_user_name?.[0] ?? '') + (item.other_user_surname?.[0] ?? '')).toUpperCase();
@@ -213,28 +231,22 @@ export default function MessagesScreen() {
 	return (
 		<SafeAreaView edges={['top']} className="flex-1 bg-surface">
 			{/* Custom Premium Header */}
-			<View className="px-5 pt-4 pb-2 bg-surface">
+			<View className="px-5 pt-4 pb-3 bg-surface">
 				<Text className="text-3xl font-extrabold text-ink tracking-tight">Сообщения</Text>
-
-				{/* Copy Main Page Search Bar Design */}
-				{conversations && conversations.length > 0 && (
-					<View className="h-12 flex-row items-center rounded-field border border-line bg-surface px-3 mt-3 mb-1">
-						<Ionicons name="search" size={20} color={palette.inkMuted} />
-						<TextInput
-							placeholder="Поиск по перепискам..."
-							placeholderTextColor={palette.inkMuted}
-							value={searchQuery}
-							onChangeText={setSearchQuery}
-							className="ml-2 flex-1 text-base text-ink p-0"
-						/>
-						{searchQuery.length > 0 && (
-							<TouchableOpacity onPress={() => setSearchQuery('')}>
-								<Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-							</TouchableOpacity>
-						)}
-					</View>
-				)}
 			</View>
+
+			{conversations && conversations.length > 0 ? (
+				<PersonalListToolbar
+					query={searchQuery}
+					onQueryChange={setSearchQuery}
+					placeholder="Поиск по перепискам..."
+					sort={sort}
+					sortOptions={CONVERSATION_SORT_OPTIONS}
+					sortVisible={sortVisible}
+					onSortVisibleChange={setSortVisible}
+					onSortChange={setSort}
+				/>
+			) : null}
 
 			<FlatList
 				data={filteredConversations}

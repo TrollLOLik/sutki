@@ -2,10 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
 import {
   type UserNotification,
@@ -21,6 +23,13 @@ type Presentation = {
   body: string;
   path?: string;
 };
+
+type NotificationSort = 'newest' | 'oldest' | 'unread';
+const SORT_OPTIONS: SortOption<NotificationSort>[] = [
+  { value: 'newest', label: 'Сначала новые', icon: 'arrow-down-outline' },
+  { value: 'oldest', label: 'Сначала старые', icon: 'arrow-up-outline' },
+  { value: 'unread', label: 'Сначала непрочитанные', icon: 'mail-unread-outline' },
+];
 
 function stringPayload(item: UserNotification, key: string): string {
   const value = item.payload?.[key];
@@ -101,8 +110,25 @@ export default function NotificationsScreen() {
   const query = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
-  const items = query.data?.items ?? [];
-  const unread = items.filter((item) => !item.read_at).length;
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<NotificationSort>('newest');
+  const [sortVisible, setSortVisible] = useState(false);
+  const allItems = query.data?.items ?? [];
+  const unread = allItems.filter((item) => !item.read_at).length;
+  const items = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase('ru');
+    return allItems
+      .filter((item) => {
+        if (!needle) return true;
+        const view = notificationPresentation(item);
+        return `${view.title} ${view.body}`.toLocaleLowerCase('ru').includes(needle);
+      })
+      .sort((a, b) => {
+        if (sort === 'oldest') return a.id - b.id;
+        if (sort === 'unread') return Number(!!a.read_at) - Number(!!b.read_at) || b.id - a.id;
+        return b.id - a.id;
+      });
+  }, [allItems, search, sort]);
 
   const openNotification = (item: UserNotification) => {
     if (!item.read_at) markRead.mutate(item.id);
@@ -120,7 +146,18 @@ export default function NotificationsScreen() {
         <View className="w-10" />
       </View>
 
-      {items.length > 0 ? (
+      <PersonalListToolbar
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="Поиск по уведомлениям"
+        sort={sort}
+        sortOptions={SORT_OPTIONS}
+        sortVisible={sortVisible}
+        onSortVisibleChange={setSortVisible}
+        onSortChange={setSort}
+      />
+
+      {allItems.length > 0 ? (
         <View className="flex-row items-center justify-between border-b border-line px-4 py-3">
           <Text className="text-sm text-ink-secondary">{unread > 0 ? `${unread} непрочитанных` : 'Всё прочитано'}</Text>
           {unread > 0 ? (
@@ -138,8 +175,10 @@ export default function NotificationsScreen() {
           <EmptyState icon="cloud-offline-outline" title="Не удалось загрузить уведомления" subtitle="Проверьте соединение и попробуйте снова." />
           <Button label="Повторить" variant="secondary" onPress={() => query.refetch()} />
         </View>
-      ) : items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <EmptyState icon="notifications-outline" title="Уведомлений пока нет" subtitle="Здесь появятся сообщения о заявках, объявлениях, чатах и отзывах." />
+      ) : items.length === 0 ? (
+        <EmptyState icon="search-outline" title="Ничего не найдено" subtitle="Попробуйте изменить поисковый запрос." />
       ) : (
         <FlatList
           data={items}

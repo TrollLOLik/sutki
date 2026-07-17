@@ -65,22 +65,27 @@ type photoDTO struct {
 }
 
 type listingCardDTO struct {
-	ID          int32    `json:"id"`
-	OwnerID     int32    `json:"owner_id"`
-	Address     string   `json:"address"`
-	City        string   `json:"city"`
-	Description string   `json:"description"`
-	Price       int32    `json:"price"`
-	Rooms       string   `json:"rooms"`
-	Area        int32    `json:"area"`
-	Lat         *float64 `json:"lat"`
-	Lng         *float64 `json:"lng"`
-	Radius      float64  `json:"radius"`
-	QcGeo       *int32   `json:"qc_geo"`
-	MaxGuests   *int32   `json:"max_guests"`
-	Views       int32    `json:"views"`
-	Views30d    *int32   `json:"views_30d,omitempty"`
-	CoverURL    string   `json:"cover_url"`
+	ID              int32     `json:"id"`
+	OwnerID         int32     `json:"owner_id"`
+	Address         string    `json:"address"`
+	City            string    `json:"city"`
+	Description     string    `json:"description"`
+	Price           int32     `json:"price"`
+	Rooms           string    `json:"rooms"`
+	Area            int32     `json:"area"`
+	Lat             *float64  `json:"lat"`
+	Lng             *float64  `json:"lng"`
+	Radius          float64   `json:"radius"`
+	QcGeo           *int32    `json:"qc_geo"`
+	MaxGuests       *int32    `json:"max_guests"`
+	Views           int32     `json:"views"`
+	Views30d        *int32    `json:"views_30d,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	SmokingAllowed  *string   `json:"smoking_allowed,omitempty"`
+	PetsAllowed     *string   `json:"pets_allowed,omitempty"`
+	ChildrenAllowed *string   `json:"children_allowed,omitempty"`
+	EventsAllowed   *string   `json:"events_allowed,omitempty"`
+	CoverURL        string    `json:"cover_url"`
 	// Rating is the average review score (0 when there are no reviews);
 	// ReviewsCount is the published review count.
 	Rating             float64    `json:"rating"`
@@ -527,6 +532,11 @@ func (h *ListingHandler) cardDTO(hs domain.House) listingCardDTO {
 		QcGeo:              hs.QcGeo,
 		MaxGuests:          hs.MaxGuests,
 		Views:              hs.Views,
+		CreatedAt:          hs.CreatedAt,
+		SmokingAllowed:     hs.SmokingAllowed,
+		PetsAllowed:        hs.PetsAllowed,
+		ChildrenAllowed:    hs.ChildrenAllowed,
+		EventsAllowed:      hs.EventsAllowed,
 		CoverURL:           resolveMediaURL(hs.CoverPath),
 		Rating:             hs.Rating,
 		ReviewsCount:       hs.ReviewsCount,

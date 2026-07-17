@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { BottomSheet, Button } from '@/components/ui';
 import { useCreateReviewReply, useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -26,6 +27,26 @@ import type { UserReview } from '@/types/review';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 type ReviewTab = 'written' | 'received';
+type ReviewSort = 'newest' | 'oldest' | 'rating_desc' | 'rating_asc';
+const SORT_OPTIONS: SortOption<ReviewSort>[] = [
+  { value: 'newest', label: 'Сначала новые', icon: 'arrow-down-outline' },
+  { value: 'oldest', label: 'Сначала старые', icon: 'arrow-up-outline' },
+  { value: 'rating_desc', label: 'Сначала с высокой оценкой', icon: 'star-outline' },
+  { value: 'rating_asc', label: 'Сначала с низкой оценкой', icon: 'star-half-outline' },
+];
+
+function filterReviews(items: UserReview[], query: string, sort: ReviewSort): UserReview[] {
+  const needle = query.trim().toLocaleLowerCase('ru');
+  return items.filter((item) => {
+    const searchable = `${item.body} ${item.author_name ?? ''} ${item.house_city} ${item.house_street} ${item.house_number}`.toLocaleLowerCase('ru');
+    return !needle || searchable.includes(needle);
+  }).sort((a, b) => {
+    if (sort === 'oldest') return Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id;
+    if (sort === 'rating_desc') return b.rating - a.rating || Date.parse(b.created_at) - Date.parse(a.created_at);
+    if (sort === 'rating_asc') return a.rating - b.rating || Date.parse(b.created_at) - Date.parse(a.created_at);
+    return Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id;
+  });
+}
 
 const REVIEW_EMOJI_OPTIONS = [
   '\u{1F600}', '\u{1F60A}', '\u{1F642}', '\u{1F60D}',
@@ -63,17 +84,22 @@ export default function MyReviewsScreen() {
   useActivityScopeSeen('reviews');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<ReviewTab>('written');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ReviewSort>('newest');
+  const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
   const receivedListRef = useRef<FlatList<UserReview>>(null);
 
-  const writtenQuery = useMyWrittenReviews({});
-  const receivedQuery = useMyReceivedReviews({});
+  const writtenQuery = useMyWrittenReviews({ limit: 100 });
+  const receivedQuery = useMyReceivedReviews({ limit: 100 });
 
-  const writtenItems = writtenQuery.data?.items ?? [];
-  const receivedItems = receivedQuery.data?.items ?? [];
+  const rawWrittenItems = writtenQuery.data?.items ?? [];
+  const rawReceivedItems = receivedQuery.data?.items ?? [];
+  const writtenItems = useMemo(() => filterReviews(rawWrittenItems, query, sort), [rawWrittenItems, query, sort]);
+  const receivedItems = useMemo(() => filterReviews(rawReceivedItems, query, sort), [rawReceivedItems, query, sort]);
 
   const isLoading = writtenQuery.isLoading || receivedQuery.isLoading;
   const isError = writtenQuery.isError || receivedQuery.isError;
@@ -304,6 +330,17 @@ export default function MyReviewsScreen() {
           </Pressable>
         </View>
 
+        <PersonalListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Текст, адрес или пользователь"
+          sort={sort}
+          sortOptions={SORT_OPTIONS}
+          sortVisible={sortVisible}
+          onSortVisibleChange={setSortVisible}
+          onSortChange={setSort}
+        />
+
         {/* Content list */}
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
@@ -341,9 +378,9 @@ export default function MyReviewsScreen() {
             <View style={{ width: pageWidth }}>
               {writtenItems.length === 0 ? (
                 <EmptyState
-                  icon="star-outline"
-                  title="Вы еще не оставляли отзывы"
-                  subtitle="Ваши отзывы помогут другим пользователям сделать правильный выбор"
+                  icon={rawWrittenItems.length > 0 ? 'search-outline' : 'star-outline'}
+                  title={rawWrittenItems.length > 0 ? 'Ничего не найдено' : 'Вы еще не оставляли отзывы'}
+                  subtitle={rawWrittenItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Ваши отзывы помогут другим пользователям сделать правильный выбор'}
                 />
               ) : (
                 <FlatList
@@ -367,9 +404,9 @@ export default function MyReviewsScreen() {
             <View style={{ width: pageWidth }}>
               {receivedItems.length === 0 ? (
                 <EmptyState
-                  icon="star-outline"
-                  title="У вас еще нет полученных отзывов"
-                  subtitle="Отзывы гостей о ваших объявлениях будут появляться здесь"
+                  icon={rawReceivedItems.length > 0 ? 'search-outline' : 'star-outline'}
+                  title={rawReceivedItems.length > 0 ? 'Ничего не найдено' : 'У вас еще нет полученных отзывов'}
+                  subtitle={rawReceivedItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Отзывы гостей о ваших объявлениях будут появляться здесь'}
                 />
               ) : (
                 <FlatList

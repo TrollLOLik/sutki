@@ -42,6 +42,12 @@ export interface ListingCard {
   /** Sleeping capacity; null when unknown (legacy listings). */
   max_guests: number | null;
   views: number;
+  /** RFC3339 creation timestamp, used for deterministic owner sorting. */
+  created_at: string;
+  smoking_allowed?: 'allowed' | 'forbidden' | 'on_balcony' | null;
+  pets_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
+  children_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
+  events_allowed?: 'allowed' | 'forbidden' | 'on_request' | null;
   /** Owner-only rolling total returned by /listings/mine and own detail. */
   views_30d?: number;
   cover_url: string;

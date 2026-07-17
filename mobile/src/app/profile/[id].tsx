@@ -274,7 +274,7 @@ export default function PublicProfileScreen() {
 
   const filtersWidth = searchAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [30, 0],
+    outputRange: [48, 0],
   });
   const filtersOpacity = searchAnim.interpolate({
     inputRange: [0, 0.3, 1],
@@ -580,8 +580,25 @@ export default function PublicProfileScreen() {
           </View>
 
           {/* Search & Filter Bar */}
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1 h-12 flex-row items-center rounded-field border border-line bg-surface px-3">
+          <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View
+              style={{
+                flex: 1,
+                height: 48,
+                marginRight: 10,
+                paddingHorizontal: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: palette.line,
+                backgroundColor: palette.surface,
+                shadowColor: '#1A1A1A',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 6,
+                elevation: 3,
+              }}>
               <Ionicons name="search" size={20} color={palette.inkMuted} />
               <TextInput
                 ref={searchInputRef}
@@ -589,7 +606,7 @@ export default function PublicProfileScreen() {
                 onChangeText={setSearchQuery}
                 placeholder="Поиск в профиле"
                 placeholderTextColor={palette.inkMuted}
-                className="ml-2 flex-1 text-base text-ink"
+                style={{ flex: 1, paddingVertical: 0, marginLeft: 8, marginRight: 8, fontSize: 14, fontWeight: '500', color: palette.ink }}
                 returnKeyType="search"
                 onFocus={() => {
                   setIsSearchFocused(true);
@@ -599,31 +616,41 @@ export default function PublicProfileScreen() {
                 <Pressable
                   onPress={() => setSearchQuery('')}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  className="p-1 mr-1"
+                  className="h-8 w-8 items-center justify-center"
                 >
                   <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
                 </Pressable>
               )}
-              <Animated.View style={{ width: filtersWidth, opacity: filtersOpacity, overflow: 'hidden' }}>
+            </View>
+            <Animated.View style={{ width: filtersWidth, opacity: filtersOpacity, overflow: 'visible' }}>
                 <Pressable
                   accessibilityLabel="Фильтры"
                   onPress={() => router.push({ pathname: '/filters', params: { ownerId: String(numericId) } })}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ width: 30 }}
-                  className="p-1 relative justify-center items-center"
+                  style={{
+                    position: 'relative',
+                    width: 48,
+                    height: 48,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 24,
+                    borderWidth: 1,
+                    borderColor: palette.line,
+                    backgroundColor: palette.surface,
+                    shadowColor: '#1A1A1A',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 6,
+                    elevation: 3,
+                  }}
                 >
                   <Ionicons name="options-outline" size={22} color={palette.primary} />
                   {activeFiltersCount > 0 && (
-                    <View
-                      style={{ height: 18, minWidth: 18 }}
-                      className="absolute -right-1 -top-1 items-center justify-center rounded-full bg-primary px-1 border border-surface"
-                    >
-                      <Text className="text-[10px] font-bold text-white">{activeFiltersCount}</Text>
+                    <View style={{ position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.primary }}>
+                      <Text style={{ color: 'white', fontSize: 11, fontWeight: 'bold' }}>{activeFiltersCount}</Text>
                     </View>
                   )}
                 </Pressable>
-              </Animated.View>
-            </View>
+            </Animated.View>
             <Animated.View style={{ width: cancelWidth, opacity: cancelOpacity, overflow: 'hidden' }}>
               <Pressable
                 onPress={() => {

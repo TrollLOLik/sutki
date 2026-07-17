@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookingCard } from '@/components/BookingCard';
 import { EmptyState } from '@/components/EmptyState';
 import { HistoryBookingCard } from '@/components/HistoryBookingCard';
+import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
 import { useMyBookings } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
@@ -30,11 +31,35 @@ import type { Booking } from '@/types/booking';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 type Tab = 'active' | 'history';
+type BookingSort = 'newest' | 'oldest' | 'checkin_asc' | 'checkin_desc';
+const SORT_OPTIONS: SortOption<BookingSort>[] = [
+  { value: 'newest', label: 'Сначала новые заявки', icon: 'arrow-down-outline' },
+  { value: 'oldest', label: 'Сначала старые заявки', icon: 'arrow-up-outline' },
+  { value: 'checkin_asc', label: 'Ближайшее заселение', icon: 'calendar-outline' },
+  { value: 'checkin_desc', label: 'Позднее заселение', icon: 'calendar-number-outline' },
+];
+
+function filterAndSortBookings(items: Booking[], query: string, sort: BookingSort): Booking[] {
+  const needle = query.trim().toLocaleLowerCase('ru');
+  return items.filter((item) => {
+    const house = item.house;
+    const searchable = `${house?.address ?? ''} ${house?.city ?? ''} ${house?.owner_name ?? ''} ${house?.owner_surname ?? ''} ${item.status}`.toLocaleLowerCase('ru');
+    return !needle || searchable.includes(needle);
+  }).sort((a, b) => {
+    if (sort === 'oldest') return Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id;
+    if (sort === 'checkin_asc') return Date.parse(a.start_date) - Date.parse(b.start_date) || b.id - a.id;
+    if (sort === 'checkin_desc') return Date.parse(b.start_date) - Date.parse(a.start_date) || b.id - a.id;
+    return Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id;
+  });
+}
 
 export default function MyBookingsScreen() {
   useActivityScopeSeen('bookings');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('active');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<BookingSort>('newest');
+  const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
   const tabAnim = useRef(new Animated.Value(0)).current;
@@ -54,8 +79,8 @@ export default function MyBookingsScreen() {
     }
   };
 
-  const activeQuery = useMyBookings({ limit: 50, scope: 'active' }, { enabled: isAuthenticated });
-  const historyQuery = useMyBookings({ limit: 50, scope: 'history' }, { enabled: isAuthenticated });
+  const activeQuery = useMyBookings({ limit: 100, scope: 'active' }, { enabled: isAuthenticated });
+  const historyQuery = useMyBookings({ limit: 100, scope: 'history' }, { enabled: isAuthenticated });
 
   const handleOpenChat = async (booking: Booking) => {
     if (!booking.house) return;
@@ -77,9 +102,10 @@ export default function MyBookingsScreen() {
     }
   };
 
-  const activeItems = activeQuery.data?.items ?? [];
-
-  const historyItems = historyQuery.data?.items ?? [];
+  const rawActiveItems = activeQuery.data?.items ?? [];
+  const rawHistoryItems = historyQuery.data?.items ?? [];
+  const activeItems = useMemo(() => filterAndSortBookings(rawActiveItems, query, sort), [rawActiveItems, query, sort]);
+  const historyItems = useMemo(() => filterAndSortBookings(rawHistoryItems, query, sort), [rawHistoryItems, query, sort]);
 
   const isLoading = activeQuery.isLoading || historyQuery.isLoading;
   const isError = activeQuery.isError || historyQuery.isError;
@@ -216,6 +242,17 @@ export default function MyBookingsScreen() {
           </Pressable>
         </View>
 
+        <PersonalListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Адрес, город или владелец"
+          sort={sort}
+          sortOptions={SORT_OPTIONS}
+          sortVisible={sortVisible}
+          onSortVisibleChange={setSortVisible}
+          onSortChange={setSort}
+        />
+
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator color={palette.primary} />
@@ -252,9 +289,9 @@ export default function MyBookingsScreen() {
             <View style={{ width: pageWidth }}>
               {activeItems.length === 0 ? (
                 <EmptyState
-                  icon="reader-outline"
-                  title="Активных заявок нет"
-                  subtitle="Выберите объявление и оставьте заявку на аренду."
+                  icon={rawActiveItems.length > 0 ? 'search-outline' : 'reader-outline'}
+                  title={rawActiveItems.length > 0 ? 'Ничего не найдено' : 'Активных заявок нет'}
+                  subtitle={rawActiveItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Выберите объявление и оставьте заявку на аренду.'}
                 />
               ) : (
                 <FlatList
@@ -292,9 +329,9 @@ export default function MyBookingsScreen() {
             <View style={{ width: pageWidth }}>
               {historyItems.length === 0 ? (
                 <EmptyState
-                  icon="time-outline"
-                  title="История пуста"
-                  subtitle="Здесь появятся завершённые и отменённые заявки."
+                  icon={rawHistoryItems.length > 0 ? 'search-outline' : 'time-outline'}
+                  title={rawHistoryItems.length > 0 ? 'Ничего не найдено' : 'История пуста'}
+                  subtitle={rawHistoryItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Здесь появятся завершённые и отменённые заявки.'}
                 />
               ) : (
                 <FlatList
