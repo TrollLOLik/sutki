@@ -19,6 +19,11 @@ import { useAuthGateStore } from '@/lib/requireAuth';
 import { AuthGateSheet } from '@/components/AuthGateSheet';
 import { ThemeTransitionOverlay } from '@/components/ThemeTransitionOverlay';
 import { YamapInstance } from 'react-native-yamap-plus';
+import { useNavigationRecovery } from '@/hooks/useNavigationRecovery';
+
+export const unstable_settings = {
+  anchor: '(tabs)',
+};
 
 const glitchTipDSN = process.env.EXPO_PUBLIC_GLITCHTIP_DSN;
 
@@ -54,6 +59,7 @@ function RootLayout() {
   const themeHydrated = useThemeStore((s) => s.hasHydrated);
   const { visible, context, closeGate } = useAuthGateStore();
   const { isDark, palette } = useAppTheme();
+  useNavigationRecovery();
 
   useEffect(() => {
     // Theme must hydrate before the splash hides, otherwise a saved dark
@@ -71,18 +77,32 @@ function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <StatusBar style={isDark ? 'light' : 'dark'} />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.surface } }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: palette.surface },
+              animation: 'slide_from_right',
+              gestureEnabled: true,
+              gestureDirection: 'horizontal',
+              fullScreenGestureEnabled: true,
+            }}>
             <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
+              <Stack.Screen name="listing/[id]/location" />
               <Stack.Screen name="listing/[id]/promote" />
-              <Stack.Screen name="filters" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="profile/[id]" />
+              <Stack.Screen name="chat/[id]" />
+              <Stack.Screen name="reviews/[id]" />
+              <Stack.Screen name="review/[id]" />
+              <Stack.Screen name="my-reviews" />
+              <Stack.Screen name="filters" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               <Stack.Screen name="booking/[id]" />
               <Stack.Screen name="bookings/index" />
               <Stack.Screen name="bookings/[id]" />
               <Stack.Screen name="incoming/index" />
               <Stack.Screen name="incoming/[id]" />
-              <Stack.Screen name="create" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               <Stack.Screen name="my-listings/index" />
               <Stack.Screen name="notifications" />
               <Stack.Screen name="payments/checkout" />

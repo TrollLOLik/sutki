@@ -16,6 +16,7 @@ import {
   useNotifications,
 } from '@/lib/api/activity';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 
 type Presentation = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -139,7 +140,7 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="h-14 flex-row items-center border-b border-line px-4">
-        <Pressable onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-full active:bg-surface-muted">
+        <Pressable onPress={() => goBackOrReplace('/(tabs)/profile')} className="h-10 w-10 items-center justify-center rounded-full active:bg-surface-muted">
           <Ionicons name="chevron-back" size={24} color={palette.ink} />
         </Pressable>
         <Text className="flex-1 text-center text-lg font-bold text-ink">Уведомления</Text>

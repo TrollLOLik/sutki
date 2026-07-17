@@ -16,6 +16,7 @@ import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
+import { goBackOrReplace } from '@/lib/navigation';
 
 /** Format date without year, e.g. "20 мая" */
 function formatDateShort(date: Date): string {
@@ -125,7 +126,7 @@ export default function BookingDetailScreen() {
           }}
         >
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrReplace('/bookings')}
             accessibilityLabel="Назад"
             style={{
               width: 40, height: 40,

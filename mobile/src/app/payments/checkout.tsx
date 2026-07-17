@@ -14,6 +14,7 @@ import {
 } from '@/lib/api/payments';
 import { formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 
 function createIdempotencyKey() {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
@@ -90,7 +91,7 @@ export default function PaymentCheckoutScreen() {
       <View className="flex-row items-center justify-between py-3">
         <Pressable
           accessibilityLabel="Назад"
-          onPress={() => router.back()}
+          onPress={() => goBackOrReplace('/(tabs)/profile')}
           className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
           <Ionicons name="chevron-back" size={26} color={palette.ink} />
         </Pressable>
@@ -152,7 +153,7 @@ export default function PaymentCheckoutScreen() {
 
       <View className="border-t border-line bg-surface py-4">
         {completed ? (
-          <Button label="Готово" onPress={() => router.back()} />
+          <Button label="Готово" onPress={() => goBackOrReplace('/(tabs)/profile')} />
         ) : paymentId == null ? (
           <Button
             label={selected ? `Оплатить ${formatRub(selected.amount_kopecks / 100)} ₽` : 'Продолжить'}

@@ -23,6 +23,7 @@ import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { useFiltersStore, type ListingSort, type RoomFilter, type SearchFilters } from '@/store/filters';
 import { formatGuests } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 
 
 const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
@@ -187,7 +188,7 @@ export default function FiltersScreen() {
       eventsAllowed,
       favoritesOnly,
     });
-    router.back();
+    goBackOrReplace('/(tabs)');
   };
 
   const reset = () => {
@@ -239,7 +240,7 @@ export default function FiltersScreen() {
       >
         <Pressable
           accessibilityLabel="Закрыть"
-          onPress={() => router.back()}
+          onPress={() => goBackOrReplace('/(tabs)')}
           style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <Ionicons name="close" size={24} color={palette.ink} />

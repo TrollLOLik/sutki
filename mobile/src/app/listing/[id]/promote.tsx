@@ -13,6 +13,7 @@ import { useListingPromotions, usePromotionCheckout } from '@/lib/api/promotions
 import { formatRub } from '@/lib/format';
 import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 
 function uuid() {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
@@ -105,7 +106,7 @@ export default function PromoteListingScreen() {
     return (
       <ScreenContainer centered>
         <View className="flex-row items-center justify-between py-3">
-          <Pressable onPress={() => router.back()} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
+          <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
             <Ionicons name="chevron-back" size={26} color={palette.ink} />
           </Pressable>
           <Text className="text-lg font-bold text-ink">Продвижение</Text>
@@ -121,7 +122,7 @@ export default function PromoteListingScreen() {
               ? 'Сначала исправьте замечания модерации и отправьте объявление на повторную проверку.'
               : 'Сначала опубликуйте объявление снова.'}
           </Text>
-          <Button label="Вернуться к объявлению" onPress={() => router.back()} className="mt-6 w-full" />
+          <Button label="Вернуться к объявлению" onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} className="mt-6 w-full" />
         </View>
       </ScreenContainer>
     );
@@ -162,7 +163,7 @@ export default function PromoteListingScreen() {
   return (
     <ScreenContainer centered>
       <View className="flex-row items-center justify-between py-3">
-        <Pressable onPress={() => router.back()} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
+        <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
           <Ionicons name="chevron-back" size={26} color={palette.ink} />
         </Pressable>
         <Text className="text-lg font-bold text-ink">Продвижение</Text>
@@ -249,7 +250,7 @@ export default function PromoteListingScreen() {
         {error ? <Text className="mt-4 text-center text-sm text-danger">{error}</Text> : null}
       </ScrollView>
       <View className="border-t border-line py-4">
-        {promotionReady ? <Button label="Готово" onPress={() => router.back()} /> : paymentId == null ? <Button label={selectedTypePending ? 'Продолжить оплату' : 'Перейти к оплате'} onPress={start} loading={checkout.isPending} disabled={!selectedCode || selectedTypeConnected} /> : null}
+        {promotionReady ? <Button label="Готово" onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} /> : paymentId == null ? <Button label={selectedTypePending ? 'Продолжить оплату' : 'Перейти к оплате'} onPress={start} loading={checkout.isPending} disabled={!selectedCode || selectedTypeConnected} /> : null}
       </View>
     </ScreenContainer>
   );

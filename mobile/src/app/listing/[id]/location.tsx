@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, Linking, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle as SvgCircle } from 'react-native-svg';
 import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
@@ -9,6 +9,7 @@ import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
+import { goBackOrReplace } from '@/lib/navigation';
 
 function OrangePin() {
   return (
@@ -36,8 +37,6 @@ export default function LocationScreen() {
   const { palette, isDark } = useAppTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
-
   const { data, isLoading, error } = useListing(id ? Number(id) : undefined);
 
   if (isLoading) {
@@ -53,7 +52,7 @@ export default function LocationScreen() {
       <SafeAreaView style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={48} color={palette.inkMuted} />
         <Text style={styles.errorText}>Не удалось загрузить координаты</Text>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} style={styles.backButton}>
           <Text style={styles.backButtonText}>Назад</Text>
         </Pressable>
       </SafeAreaView>
@@ -86,7 +85,7 @@ export default function LocationScreen() {
     <View style={styles.container}>
       {/* Map Header Overlay */}
       <SafeAreaView edges={['top']} style={styles.headerOverlay}>
-        <Pressable onPress={() => router.back()} style={styles.closeButton}>
+        <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} style={styles.closeButton}>
           <Ionicons name="close" size={24} color={palette.ink} />
         </Pressable>
       </SafeAreaView>

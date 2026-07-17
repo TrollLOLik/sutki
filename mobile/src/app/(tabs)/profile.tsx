@@ -399,7 +399,9 @@ export default function ProfileScreen() {
       setUser(updated);
       closeSettings();
     } catch (err) {
-      console.error('[Profile] Error saving profile:', err);
+      if (!(err instanceof ApiError) || err.status >= 500) {
+        console.error('[Profile] Error saving profile:', err);
+      }
       setSaveError(err instanceof ApiError ? err.message : 'Не удалось сохранить профиль.');
     } finally {
       setUploadingAvatar(false);

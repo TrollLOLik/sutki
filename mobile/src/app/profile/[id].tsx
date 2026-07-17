@@ -38,6 +38,7 @@ import { useHostResponseStats } from '@/lib/api/hostStats';
 import { formatHostResponseTime } from '@/lib/formatHostStats';
 import { shadows } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 import { requireAuth } from '@/lib/requireAuth';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -368,7 +369,7 @@ export default function PublicProfileScreen() {
 
         {/* Back Button */}
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => goBackOrReplace('/(tabs)')}
           accessibilityLabel="Назад"
           className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
         >

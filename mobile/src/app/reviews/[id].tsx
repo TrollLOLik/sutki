@@ -15,6 +15,7 @@ import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Review, ReviewSummary } from '@/types/review';
+import { goBackOrReplace } from '@/lib/navigation';
 
 const REVIEW_EMOJI_OPTIONS = [
   '\u{1F600}', '\u{1F60A}', '\u{1F642}', '\u{1F60D}',
@@ -65,7 +66,7 @@ export default function ReviewsScreen() {
         {/* Header with centered title */}
         <View className="flex-row items-center justify-between px-4 py-2 relative h-14 bg-surface border-b border-line">
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted z-10">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />

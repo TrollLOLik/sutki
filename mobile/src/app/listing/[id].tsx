@@ -30,6 +30,7 @@ import { generateSecureUUID } from '@/lib/guestId';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 
 export default function ListingDetailScreen() {
   const { palette, isDark } = useAppTheme();
@@ -376,7 +377,7 @@ export default function ListingDetailScreen() {
 
             {/* Back Button */}
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => goBackOrReplace('/(tabs)')}
               accessibilityLabel="Назад"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
             >

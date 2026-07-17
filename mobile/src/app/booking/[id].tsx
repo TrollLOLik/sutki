@@ -28,6 +28,7 @@ import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
 import { requestPhoneCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
+import { goBackOrReplace } from '@/lib/navigation';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -232,7 +233,7 @@ export default function BookingScreen() {
           }}
         >
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrReplace('/(tabs)')}
             accessibilityLabel="Назад"
             style={{
               width: 40, height: 40,

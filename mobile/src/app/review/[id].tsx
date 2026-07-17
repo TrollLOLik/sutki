@@ -17,6 +17,7 @@ import { useCreateReview, useMyReviewEligibility } from '@/lib/api/reviews';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 
 const MAX_BODY = 1500;
 
@@ -64,8 +65,7 @@ export default function LeaveReviewScreen() {
       { rating, body: body.trim() },
       {
         onSuccess: () => {
-          if (router.canGoBack()) router.back();
-          router.replace({ pathname: '/reviews/[id]', params: { id } });
+          goBackOrReplace('/bookings');
         },
         onError: (err) => {
           const msg = err instanceof ApiError ? err.message : '';
@@ -89,7 +89,7 @@ export default function LeaveReviewScreen() {
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3 bg-surface border-b border-line">
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrReplace('/bookings')}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted active:opacity-70">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />

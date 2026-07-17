@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
+import { goBackOrReplace } from '@/lib/navigation';
 
 import { EmptyState } from '@/components/EmptyState';
 import { IncomingRequestCard } from '@/components/IncomingRequestCard';
@@ -178,7 +179,7 @@ export default function IncomingBookingsScreen() {
       <SafeAreaView edges={['top']} className="flex-1">
         <View className="flex-row items-center px-4 py-2">
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrReplace('/(tabs)/profile')}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
           >

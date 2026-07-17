@@ -14,6 +14,7 @@ import { useFavoriteIds } from '@/lib/api/favorites';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 import type { ListingCard as ListingCardType } from '@/types/listing';
+import { goBackOrReplace } from '@/lib/navigation';
 
 type ListingSort = 'newest' | 'oldest' | 'popular' | 'price_asc' | 'price_desc';
 type ListingStatus = 'active' | 'unpublished' | 'pending_moderation' | 'moderation_review' | 'rejected';
@@ -147,7 +148,7 @@ export default function MyListingsScreen() {
       <SafeAreaView edges={['top']} className="flex-1">
         <View className="flex-row items-center px-4 py-2">
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => goBackOrReplace('/(tabs)/profile')}
             accessibilityLabel="Назад"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
             <Ionicons name="chevron-back" size={22} color={palette.ink} />

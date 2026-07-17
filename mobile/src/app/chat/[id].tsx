@@ -41,6 +41,7 @@ import { useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { useMyReviewEligibility } from '@/lib/api/reviews';
 import { api, ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { goBackOrReplace } from '@/lib/navigation';
 import { formatRooms } from '@/lib/format';
 import { Button, BottomSheet } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
@@ -648,7 +649,7 @@ export default function ChatDialogScreen() {
 			<View style={{ paddingTop: insets.top }} className="flex-row items-center px-4 py-3 bg-surface border-b border-line/45 justify-between">
 				<View className="flex-row items-center flex-1">
 					<Pressable
-						onPress={() => router.back()}
+						onPress={() => goBackOrReplace('/(tabs)/messages')}
 						accessibilityLabel="Назад"
 						style={{
 							width: 40,
