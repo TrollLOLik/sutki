@@ -29,7 +29,7 @@ import { Button, Chip, BottomSheet } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
-import { filtersToListParams, useListings } from '@/lib/api/listings';
+import { filtersToListParams, similarFiltersToListParams, useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recent-searches';
 import { requireAuth } from '@/lib/requireAuth';
@@ -152,6 +152,8 @@ export default function SearchScreen() {
   const isGuest = authStatus === 'guest';
 
   const isFavoritesOnlyEmpty = filters.favoritesOnly && (!favoriteIds || favoriteIds.size === 0);
+  const activeFilters = countActiveFilters(filters);
+  const hasSearchConstraints = activeFilters > 0 || query.trim().length > 0;
 
   const listParams = useMemo(() => {
     const params = filtersToListParams(filters, query, { limit: 50 });
@@ -161,7 +163,7 @@ export default function SearchScreen() {
     return params;
   }, [filters, query, filters.favoritesOnly, favoriteIds]);
 
-  const { data, isLoading, isError, refetch, isRefetching } = useListings(listParams, {
+  const { data, isLoading, isError, isFetching, refetch, isRefetching } = useListings(listParams, {
     enabled: !isFavoritesOnlyEmpty,
   });
 
@@ -186,6 +188,37 @@ export default function SearchScreen() {
     return list;
   }, [data?.items, filters.favoritesOnly, favoriteIds, isAuthenticated, myListingsIds, isFavoritesOnlyEmpty]);
 
+  const similarParams = useMemo(
+    () => similarFiltersToListParams(filters, query, { limit: 12 }),
+    [filters, query],
+  );
+  const shouldLoadSimilar =
+    !filters.favoritesOnly &&
+    !isFavoritesOnlyEmpty &&
+    !isLoading &&
+    !isFetching &&
+    !isError &&
+    visible.length === 0 &&
+    hasSearchConstraints;
+  const {
+    data: similarData,
+    isLoading: similarLoading,
+    isFetching: similarFetching,
+    isPlaceholderData: similarPlaceholder,
+    refetch: refetchSimilar,
+  } = useListings(similarParams, { enabled: shouldLoadSimilar });
+  const similarVisible = useMemo(() => {
+    if (!shouldLoadSimilar) return [];
+    let list = similarData?.items ?? [];
+    if (isAuthenticated && myListingsIds.size > 0) {
+      list = list.filter((item) => !myListingsIds.has(item.id));
+    }
+    return list;
+  }, [isAuthenticated, myListingsIds, shouldLoadSimilar, similarData?.items]);
+  const similarPending = shouldLoadSimilar && (similarLoading || similarFetching || similarPlaceholder);
+  const showingSimilar = shouldLoadSimilar && !similarPending && similarVisible.length > 0;
+  const feedItems = showingSimilar ? similarVisible : visible;
+
   const renderListHeader = () => {
     if (isGuest && filters.favoritesOnly) {
       return (
@@ -208,8 +241,6 @@ export default function SearchScreen() {
     }
     return null;
   };
-
-  const activeFilters = countActiveFilters(filters);
 
   // Picker States
   const [dateModalVisible, setDateModalVisible] = useState(false);
@@ -464,29 +495,65 @@ export default function SearchScreen() {
             <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
           </View>
         </View>
-      ) : visible.length === 0 ? (
+      ) : similarPending ? (
+        <FlatList
+          data={[0, 1, 2]}
+          keyExtractor={(i) => String(i)}
+          contentContainerClassName="px-4"
+          contentContainerStyle={{ paddingTop: listPaddingTop, paddingBottom: 112 }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View className="mb-3">
+              <Text className="text-lg font-extrabold text-ink">Ищем похожие варианты</Text>
+              <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                Точных совпадений нет — подбираем объявления с близкими параметрами.
+              </Text>
+            </View>
+          }
+          renderItem={() => <ListingCardSkeleton />}
+        />
+      ) : feedItems.length === 0 ? (
         <View style={{ paddingTop: listPaddingTop }} className="flex-1 px-4">
           {renderListHeader()}
           <EmptyState
             icon="search-outline"
             title="Ничего не найдено"
-            subtitle="Измените запрос или сбросьте фильтры."
+            subtitle={hasSearchConstraints ? 'По точным и близким параметрам объявлений пока нет.' : 'Измените запрос или сбросьте фильтры.'}
           />
         </View>
       ) : (
         <FlatList
-          data={visible}
+          data={feedItems}
           keyExtractor={(item) => String(item.id)}
           contentContainerClassName="px-4"
           contentContainerStyle={{ paddingTop: listPaddingTop, paddingBottom: 112 }}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          ListHeaderComponent={renderListHeader}
+          ListHeaderComponent={
+            showingSimilar ? (
+              <View className="mb-3 rounded-card border border-line bg-surface-muted p-4">
+                <View className="flex-row items-center">
+                  <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-primary-light">
+                    <Ionicons name="sparkles-outline" size={20} color={palette.primary} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-base font-extrabold text-ink">Похожие варианты</Text>
+                    <Text className="mt-0.5 text-xs leading-5 text-ink-secondary">
+                      Точных совпадений нет. Некоторые параметры в этих объявлениях отличаются.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : renderListHeader()
+          }
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={() => refetch()}
+              refreshing={isRefetching || (showingSimilar && similarFetching)}
+              onRefresh={async () => {
+                await refetch();
+                if (showingSimilar) await refetchSimilar();
+              }}
               tintColor={palette.primary}
             />
           }

@@ -153,6 +153,29 @@ export function filtersToListParams(
   };
 }
 
+/**
+ * Builds the fallback query shown when the exact search has no matches.
+ * Location, category, capacity and availability stay strict because relaxing
+ * them could produce an unusable booking. Presentation preferences are soft.
+ */
+export function similarFiltersToListParams(
+  filters: SearchFilters,
+  query: string,
+  extra: Pick<ListListingsParams, 'limit' | 'offset'> = {},
+): ListListingsParams {
+  const exact = filtersToListParams(filters, query, extra);
+  return {
+    ...extra,
+    q: exact.q,
+    city: exact.city,
+    categoryId: exact.categoryId,
+    guests: exact.guests,
+    checkIn: exact.checkIn,
+    checkOut: exact.checkOut,
+    sort: exact.sort,
+  };
+}
+
 export interface RecordListingViewResult {
   counted: boolean;
   views: number;
