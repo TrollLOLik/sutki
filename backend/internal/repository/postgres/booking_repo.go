@@ -67,25 +67,25 @@ func (r *BookingRepo) Create(ctx context.Context, b domain.NewBooking) (domain.B
 		status = domain.BookingPendingVerification
 	}
 	row, err := r.q.CreateRequest(ctx, sqlc.CreateRequestParams{
-		HouseID:   b.HouseID,
-		UserID:    func() *int32 {
+		HouseID: b.HouseID,
+		UserID: func() *int32 {
 			if b.UserID == 0 {
 				return nil
 			}
 			return &b.UserID
 		}(),
-		GuestID:   strToPtr(b.GuestID),
-		Email:     strToPtr(b.Email),
-		Name:      b.Name,
-		Surname:   b.Surname,
-		Lastname:  b.Lastname,
-		Count:     b.Count,
-		Message:   strToPtr(b.Message),
+		GuestID:         strToPtr(b.GuestID),
+		Email:           strToPtr(b.Email),
+		Name:            b.Name,
+		Surname:         b.Surname,
+		Lastname:        b.Lastname,
+		Count:           b.Count,
+		Message:         strToPtr(b.Message),
 		Phone:           b.Phone,
 		PhoneNormalized: strToPtr(b.PhoneNormalized),
-		StartDate: dateParam(b.StartDate),
-		EndDate:   dateParamPtr(b.EndDate),
-		Status:    status,
+		StartDate:       dateParam(b.StartDate),
+		EndDate:         dateParamPtr(b.EndDate),
+		Status:          status,
 	})
 	if err != nil {
 		return domain.Booking{}, err
@@ -258,6 +258,9 @@ func (r *BookingRepo) Reject(ctx context.Context, id int32, reason string) (doma
 func (r *BookingRepo) Cancel(ctx context.Context, id int32) (domain.Booking, error) {
 	row, err := r.q.CancelRequest(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Booking{}, domain.ErrBookingNotPending
+		}
 		return domain.Booking{}, err
 	}
 	return buildBooking(bookingFields{

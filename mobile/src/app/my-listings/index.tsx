@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { Button } from '@/components/ui';
-import { useMyListings } from '@/lib/api/create-listing';
+import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
+import { ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export default function MyListingsScreen() {
@@ -14,6 +15,28 @@ export default function MyListingsScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useMyListings({ limit: 50 });
   const items = data?.items ?? [];
   const insets = useSafeAreaInsets();
+  const publication = useListingPublication();
+
+  const changePublication = (id: number, published: boolean) => {
+    const title = published ? 'Опубликовать объявление снова?' : 'Снять объявление с публикации?';
+    const message = published
+      ? 'Объявление снова появится в поиске.'
+      : 'Объявление исчезнет из поиска. Активное продвижение будет приостановлено.';
+    Alert.alert(title, message, [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: published ? 'Опубликовать' : 'Снять',
+        style: published ? 'default' : 'destructive',
+        onPress: async () => {
+          try {
+            await publication.mutateAsync({ id, published });
+          } catch (error) {
+            Alert.alert('Не удалось изменить статус', error instanceof ApiError ? error.message : 'Попробуйте ещё раз.');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View className="flex-1 bg-surface">
@@ -72,7 +95,11 @@ export default function MyListingsScreen() {
                 onPress={() =>
                   router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
                 }
-                onPromote={() => router.push({pathname:'/listing/[id]/promote' as any,params:{id:String(item.id)}})}
+                onPromote={item.status !== 'rejected' && item.status !== 'unpublished'
+                  ? () => router.push({pathname:'/listing/[id]/promote' as any,params:{id:String(item.id)}})
+                  : undefined}
+                onUnpublish={item.status === 'active' ? () => changePublication(item.id, false) : undefined}
+                onPublish={item.status === 'unpublished' ? () => changePublication(item.id, true) : undefined}
               />
             )}
           />

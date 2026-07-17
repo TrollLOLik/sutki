@@ -6,6 +6,7 @@ import "time"
 // (no DB constraint); `confirmed` is a mobile addition to the legacy set.
 const (
 	BookingPending             = "in_progress"
+	BookingLegacyPending       = "pending"
 	BookingPendingVerification = "pending_verification"
 	BookingConfirmed           = "confirmed"
 	BookingActive              = "active"
@@ -46,10 +47,10 @@ type Booking struct {
 
 // BookingHouse is the listing summary attached to a booking.
 type BookingHouse struct {
-	ID                int32
-	OwnerID           int32
-	Street            string
-	HouseNumber       string
+	ID          int32
+	OwnerID     int32
+	Street      string
+	HouseNumber string
 	// NumberRoom is the apartment/room number (кв. N). Hidden in DTOs until
 	// the booking is confirmed or active to protect the guest's privacy pre-approval.
 	NumberRoom        string

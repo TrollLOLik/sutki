@@ -44,7 +44,7 @@ FROM request r
 JOIN house h ON h.id = r.house_id
 WHERE (r.user_id = $1 OR h.owner_id = $1)
   AND (
-    r.status = 'in_progress'
+    r.status IN ('in_progress', 'pending')
     OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
   )
 `

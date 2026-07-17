@@ -47,8 +47,10 @@ function reviewWord(count: number): string {
 }
 
 const statusColors: Record<string, string> = {
+  pending: '#FF9500',
   in_progress: '#FF9500',
   confirmed:   '#2EAD6B',
+  active:      '#2EAD6B',
   cancelled:   '#9AA0A6',
 };
 
@@ -315,7 +317,7 @@ export default function BookingDetailScreen() {
                   <>
                     <InfoRow
                       icon="card-outline"
-                      label="Сумма бронирования"
+                      label="Стоимость проживания"
                       value={(() => {
                         const start = parseISO(data.start_date);
                         const end = data.end_date ? parseISO(data.end_date) : null;
@@ -324,10 +326,8 @@ export default function BookingDetailScreen() {
                         return `${formatRub(total)} ₽`;
                       })()}
                     />
-                    <Divider />
                   </>
                 ) : null}
-                <InfoRow icon="cash-outline" label="Способ оплаты" value="Банковская карта" />
               </View>
 
               {/* Total */}
@@ -512,32 +512,6 @@ export default function BookingDetailScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Правила отмены */}
-              <View
-                style={{
-                  backgroundColor: palette.surface,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: palette.line,
-                  marginHorizontal: 16,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  gap: 6,
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
-                  Правила отмены
-                </Text>
-                <Text style={{ fontSize: 14, color: palette.inkSecondary, lineHeight: 20 }}>
-                  {(() => {
-                    const start = parseISO(data.start_date);
-                    const cancelDeadline = new Date(start);
-                    cancelDeadline.setDate(cancelDeadline.getDate() - 3);
-                    cancelDeadline.setHours(14, 0, 0, 0);
-                    return `Бесплатная отмена до ${format(cancelDeadline, 'd MMMM, HH:mm', { locale: ru })}.`;
-                  })()}
-                </Text>
-              </View>
             </ScrollView>
 
             {/* Bottom actions */}

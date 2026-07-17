@@ -531,7 +531,7 @@ export default function ListingDetailScreen() {
                   <View className="flex-row items-start gap-3">
                     <View className="h-10 w-10 items-center justify-center rounded-full bg-surface">
                       <Ionicons
-                        name={data.status === 'rejected' ? 'alert-circle-outline' : 'time-outline'}
+                        name={data.status === 'rejected' ? 'alert-circle-outline' : data.status === 'unpublished' ? 'eye-off-outline' : 'time-outline'}
                         size={22}
                         color={data.status === 'rejected' ? palette.danger : palette.primary}
                       />
@@ -540,6 +540,8 @@ export default function ListingDetailScreen() {
                       <Text className="text-base font-extrabold text-ink">
                         {data.status === 'rejected'
                           ? 'Объявление отклонено'
+                          : data.status === 'unpublished'
+                          ? 'Снято с публикации'
                           : data.status === 'moderation_review'
                           ? 'На ручной проверке'
                           : 'На проверке'}
@@ -554,6 +556,11 @@ export default function ListingDetailScreen() {
                           Объявление проходит проверку модерации и скоро появится на платформе.
                         </Text>
                       )}
+                      {data.status === 'unpublished' ? (
+                        <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                          Объявление не показывается в поиске. Опубликовать его снова можно в разделе «Мои объявления».
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 </View>

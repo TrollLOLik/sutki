@@ -21,8 +21,10 @@ interface BookingCardProps {
 }
 
 const statusColors: Record<string, string> = {
+  pending: '#FF9500',
   in_progress: '#FF9500',
   confirmed:   '#2EAD6B',
+  active:      '#2EAD6B',
   cancelled:   '#9AA0A6',
   pending_verification: '#FF2D55',
 };

@@ -1083,6 +1083,40 @@ func (q *Queries) SoftDeleteHousePhotos(ctx context.Context, houseID *int32) err
 	return err
 }
 
+const transitionHouseStatus = `-- name: TransitionHouseStatus :execrows
+UPDATE house
+SET status = $1,
+    rejection_reason = NULL,
+    updated_at = now()
+WHERE id = $2
+  AND owner_id = $3
+  AND deleted = false
+  AND status = $4
+`
+
+type TransitionHouseStatusParams struct {
+	ToStatus   string
+	ID         int32
+	OwnerID    int32
+	FromStatus string
+}
+
+// Atomic owner-facing publication transition. The expected source status in
+// the WHERE clause prevents concurrent requests from reviving/re-hiding a
+// listing after another lifecycle action has already won.
+func (q *Queries) TransitionHouseStatus(ctx context.Context, arg TransitionHouseStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, transitionHouseStatus,
+		arg.ToStatus,
+		arg.ID,
+		arg.OwnerID,
+		arg.FromStatus,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateHouse = `-- name: UpdateHouse :execrows
 UPDATE house
 SET street = $1,

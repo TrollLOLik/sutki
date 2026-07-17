@@ -4,7 +4,7 @@
  */
 
 /** Legacy `request.status` values used on mobile. */
-export type BookingStatus = 'in_progress' | 'confirmed' | 'cancelled' | 'pending_verification';
+export type BookingStatus = 'pending' | 'in_progress' | 'confirmed' | 'active' | 'cancelled' | 'pending_verification';
 
 /** Brief listing card embedded in booking list/detail responses. */
 export interface BookingHouse {

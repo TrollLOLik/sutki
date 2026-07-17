@@ -30,6 +30,7 @@ type ListingRepository interface {
 	AllServices(ctx context.Context) ([]Ref, error)
 	AllCategories(ctx context.Context) ([]Ref, error)
 	Update(ctx context.Context, id int32, h NewHouse) error
+	TransitionStatus(ctx context.Context, id, ownerID int32, fromStatus, toStatus string) (bool, error)
 	UpdateReviewsSummary(ctx context.Context, id int32, summary *string) error
 	UpdateLocationSummary(ctx context.Context, id int32, summary *string) error
 	// UserHasConfirmedBooking returns true when userID has a confirmed or

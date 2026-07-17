@@ -11,6 +11,7 @@ const (
 	HouseStatusPendingModeration = "pending_moderation"
 	HouseStatusModerationReview  = "moderation_review"
 	HouseStatusRejected          = "rejected"
+	HouseStatusUnpublished       = "unpublished"
 )
 
 // Moderation decisions.

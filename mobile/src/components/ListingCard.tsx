@@ -13,6 +13,8 @@ interface ListingCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   onPromote?: () => void;
+  onUnpublish?: () => void;
+  onPublish?: () => void;
   showOwnerStats?: boolean;
 }
 
@@ -24,9 +26,10 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
   pending_moderation: { label: 'На проверке', bg: '#FFF4E0', fg: '#B25E00' },
   moderation_review: { label: 'На ручной проверке', bg: '#FFF4E0', fg: '#B25E00' },
   rejected: { label: 'Отклонено', bg: '#FDEBEC', fg: '#C0362C' },
+  unpublished: { label: 'Снято с публикации', bg: '#EEF0F3', fg: '#606873' },
 };
 
-export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote, showOwnerStats = false }: ListingCardProps) {
+export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote, onUnpublish, onPublish, showOwnerStats = false }: ListingCardProps) {
   const { palette } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
 
@@ -212,7 +215,7 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
             style={{ backgroundColor: moderationBadge.bg }}
           >
             <Ionicons
-              name={listing.status === 'rejected' ? 'close-circle' : 'time-outline'}
+              name={listing.status === 'rejected' ? 'close-circle' : listing.status === 'unpublished' ? 'eye-off-outline' : 'time-outline'}
               size={13}
               color={moderationBadge.fg}
             />
@@ -255,6 +258,16 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
       {onPromote ? (
         <Pressable onPress={(event)=>{event.stopPropagation();onPromote();}} className="mt-3 h-10 flex-row items-center justify-center gap-2 rounded-field bg-primary-light active:opacity-85">
           <Ionicons name="rocket-outline" size={17} color={palette.primary}/><Text className="text-sm font-bold text-primary">Продвигать</Text>
+        </Pressable>
+      ) : null}
+      {onUnpublish ? (
+        <Pressable onPress={(event)=>{event.stopPropagation();onUnpublish();}} className="mt-2 h-10 flex-row items-center justify-center gap-2 rounded-field border border-line bg-surface-muted active:opacity-85">
+          <Ionicons name="eye-off-outline" size={17} color={palette.inkSecondary}/><Text className="text-sm font-bold text-ink-secondary">Снять с публикации</Text>
+        </Pressable>
+      ) : null}
+      {onPublish ? (
+        <Pressable onPress={(event)=>{event.stopPropagation();onPublish();}} className="mt-2 h-10 flex-row items-center justify-center gap-2 rounded-field bg-primary active:opacity-85">
+          <Ionicons name="cloud-upload-outline" size={17} color="#fff"/><Text className="text-sm font-bold text-white">Опубликовать снова</Text>
         </Pressable>
       ) : null}
     </Pressable>

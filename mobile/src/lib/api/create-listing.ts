@@ -86,6 +86,20 @@ export function useUpdateListing() {
   });
 }
 
+export function useListingPublication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, published }: { id: number; published: boolean }) =>
+      api.post<ListingDetail>(`/api/v1/listings/${id}/${published ? 'publish' : 'unpublish'}`),
+    onSuccess: (listing, { id }) => {
+      qc.setQueryData(listingKeys.detail(id), listing);
+      qc.invalidateQueries({ queryKey: listingKeys.all });
+      qc.invalidateQueries({ queryKey: myListingKeys.all });
+      qc.invalidateQueries({ queryKey: ['listing-promotions', id] });
+    },
+  });
+}
+
 export const myListingKeys = {
   all: ['my-listings'] as const,
   list: (params: ListListingsParams) => [...myListingKeys.all, params] as const,

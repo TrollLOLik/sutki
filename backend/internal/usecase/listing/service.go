@@ -346,6 +346,35 @@ func (s *Service) UserHasConfirmedBooking(ctx context.Context, userID, houseID i
 	return s.repo.UserHasConfirmedBooking(ctx, userID, houseID)
 }
 
+// SetPublished performs the two owner-controlled publication transitions.
+// Rejected listings are intentionally excluded: editing them is the only path
+// back into moderation, so this endpoint cannot bypass a rejection.
+func (s *Service) SetPublished(ctx context.Context, id, ownerID int32, published bool) (domain.House, error) {
+	house, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return domain.House{}, err
+	}
+	if house.OwnerID != ownerID {
+		return domain.House{}, domain.ErrNotFound
+	}
+
+	from, to := domain.HouseStatusActive, domain.HouseStatusUnpublished
+	if published {
+		from, to = domain.HouseStatusUnpublished, domain.HouseStatusActive
+	}
+	if !domain.ListingTransitionAllowed(house.Status, to, domain.ListingActorOwner) {
+		return domain.House{}, domain.ErrListingStatusTransition
+	}
+	changed, err := s.repo.TransitionStatus(ctx, id, ownerID, from, to)
+	if err != nil {
+		return domain.House{}, err
+	}
+	if !changed {
+		return domain.House{}, domain.ErrListingStatusTransition
+	}
+	return s.Get(ctx, id)
+}
+
 func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (domain.House, error) {
 	in.Street = strings.TrimSpace(in.Street)
 	in.HouseNumber = strings.TrimSpace(in.HouseNumber)

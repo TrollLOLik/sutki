@@ -14,7 +14,7 @@ import (
 const cancelRequest = `-- name: CancelRequest :one
 UPDATE request
 SET status = 'cancelled', updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND status IN ('in_progress', 'pending', 'pending_verification')
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
@@ -74,7 +74,7 @@ func (q *Queries) CancelRequest(ctx context.Context, id int32) (CancelRequestRow
 const confirmRequest = `-- name: ConfirmRequest :one
 UPDATE request
 SET status = 'confirmed', confirmed_at = now(), updated_at = now()
-WHERE id = $1 AND status = 'in_progress'
+WHERE id = $1 AND status IN ('in_progress', 'pending')
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
@@ -137,7 +137,7 @@ WHERE r.guest_id = $1::text
   AND (
     $2::text = 'all'
     OR ($2::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR r.status = 'pending_verification'
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
@@ -166,7 +166,7 @@ WHERE r.user_id = $1::int
   AND (
     $2::text = 'all'
     OR ($2::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
     OR ($2::text = 'history' AND (
@@ -587,7 +587,7 @@ WHERE r.guest_id = $1::text
   AND (
     $2::text = 'all'
     OR ($2::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR r.status = 'pending_verification'
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
@@ -705,7 +705,7 @@ WHERE r.user_id = $1::int
   AND (
     $2::text = 'all'
     OR ($2::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
     OR ($2::text = 'history' AND (
@@ -945,7 +945,7 @@ func (q *Queries) ListRequestsForOwner(ctx context.Context, arg ListRequestsForO
 const rejectRequest = `-- name: RejectRequest :one
 UPDATE request
 SET status = 'cancelled', rejection_reason = $1, updated_at = now()
-WHERE id = $2 AND status = 'in_progress'
+WHERE id = $2 AND status IN ('in_progress', 'pending')
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,

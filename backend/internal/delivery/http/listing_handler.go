@@ -335,6 +335,40 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.detailDTO(hs, true)) // owner always sees exact coords
 }
 
+func (h *ListingHandler) unpublish(w http.ResponseWriter, r *http.Request) {
+	h.setPublished(w, r, false)
+}
+
+func (h *ListingHandler) publish(w http.ResponseWriter, r *http.Request) {
+	h.setPublished(w, r, true)
+}
+
+func (h *ListingHandler) setPublished(w http.ResponseWriter, r *http.Request, published bool) {
+	ownerID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid listing id")
+		return
+	}
+	house, err := h.svc.SetPublished(r.Context(), int32(id), ownerID, published)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			writeError(w, http.StatusNotFound, "listing not found")
+		case errors.Is(err, domain.ErrListingStatusTransition):
+			writeError(w, http.StatusConflict, "listing status transition not allowed")
+		default:
+			writeInternalError(w, r, err, "failed to update listing publication status")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, h.detailDTO(house, true))
+}
+
 // listMine handles GET /api/v1/listings/mine: the authenticated user's own
 // listings (any status), newest first.
 func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {

@@ -503,6 +503,16 @@ func (r *ListingRepo) Update(ctx context.Context, id int32, h domain.NewHouse) e
 	return nil
 }
 
+func (r *ListingRepo) TransitionStatus(ctx context.Context, id, ownerID int32, fromStatus, toStatus string) (bool, error) {
+	affected, err := r.q.TransitionHouseStatus(ctx, sqlc.TransitionHouseStatusParams{
+		ToStatus:   toStatus,
+		ID:         id,
+		OwnerID:    ownerID,
+		FromStatus: fromStatus,
+	})
+	return affected > 0, err
+}
+
 // UserHasConfirmedBooking implements domain.ListingRepository.
 func (r *ListingRepo) UserHasConfirmedBooking(ctx context.Context, userID, houseID int32) (bool, error) {
 	return r.q.UserHasConfirmedBookingForHouse(ctx, sqlc.UserHasConfirmedBookingForHouseParams{

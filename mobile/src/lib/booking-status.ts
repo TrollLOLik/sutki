@@ -8,8 +8,10 @@ interface StatusMeta {
 }
 
 const META: Record<BookingStatus, StatusMeta> = {
+  pending: { label: 'На рассмотрении', tone: 'info' },
   in_progress: { label: 'На рассмотрении', tone: 'info' },
   confirmed: { label: 'Подтверждена', tone: 'success' },
+  active: { label: 'Проживание', tone: 'success' },
   cancelled: { label: 'Отклонена', tone: 'neutral' },
   pending_verification: { label: 'Ожидает OTP', tone: 'primary' },
 };
@@ -23,5 +25,5 @@ export function bookingStatusMeta(status: string): StatusMeta {
 
 /** Only pending bookings can be cancelled by the tenant. */
 export function isPending(status: string): boolean {
-  return status === 'in_progress';
+  return status === 'pending' || status === 'in_progress' || status === 'pending_verification';
 }

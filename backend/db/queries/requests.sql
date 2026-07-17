@@ -93,7 +93,7 @@ WHERE r.user_id = @user_id::int
   AND (
     @scope::text = 'all'
     OR (@scope::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
     OR (@scope::text = 'history' AND (
@@ -110,7 +110,7 @@ WHERE r.user_id = @user_id::int
   AND (
     @scope::text = 'all'
     OR (@scope::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
     OR (@scope::text = 'history' AND (
@@ -168,7 +168,7 @@ WHERE h.owner_id = @owner_id
 -- name: ConfirmRequest :one
 UPDATE request
 SET status = 'confirmed', confirmed_at = now(), updated_at = now()
-WHERE id = @id AND status = 'in_progress'
+WHERE id = @id AND status IN ('in_progress', 'pending')
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
@@ -178,7 +178,7 @@ RETURNING
 -- name: RejectRequest :one
 UPDATE request
 SET status = 'cancelled', rejection_reason = sqlc.narg('rejection_reason'), updated_at = now()
-WHERE id = @id AND status = 'in_progress'
+WHERE id = @id AND status IN ('in_progress', 'pending')
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
@@ -188,7 +188,7 @@ RETURNING
 -- name: CancelRequest :one
 UPDATE request
 SET status = 'cancelled', updated_at = now()
-WHERE id = @id
+WHERE id = @id AND status IN ('in_progress', 'pending', 'pending_verification')
 RETURNING
   id, COALESCE(house_id, 0)::int AS house_id, COALESCE(user_id, 0)::int AS user_id,
   COALESCE(guest_id, '')::text AS guest_id, COALESCE(email, '')::text AS email,
@@ -237,7 +237,7 @@ WHERE r.guest_id = @guest_id::text
   AND (
     @scope::text = 'all'
     OR (@scope::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR r.status = 'pending_verification'
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))
@@ -255,7 +255,7 @@ WHERE r.guest_id = @guest_id::text
   AND (
     @scope::text = 'all'
     OR (@scope::text = 'active' AND (
-      r.status = 'in_progress'
+      r.status IN ('in_progress', 'pending')
       OR r.status = 'pending_verification'
       OR (r.status = 'confirmed' AND (r.end_date IS NULL OR r.end_date >= CURRENT_DATE))
     ))

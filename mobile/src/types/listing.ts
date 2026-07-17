@@ -53,7 +53,7 @@ export interface ListingCard {
   promotion_expires_at?: string | null;
   /**
    * Moderation status — owner-only, populated exclusively by /listings/mine.
-   * 'active' | 'pending_moderation' | 'moderation_review' | 'rejected'.
+   * 'active' | 'unpublished' | 'pending_moderation' | 'moderation_review' | 'rejected'.
    * Absent in public list responses.
    */
   status?: string;

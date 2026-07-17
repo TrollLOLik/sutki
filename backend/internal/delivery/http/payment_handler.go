@@ -159,6 +159,8 @@ func writePaymentError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusNotFound, "payment not found")
 	case errors.Is(err, domain.ErrPaymentConflict):
 		writeError(w, http.StatusConflict, "payment conflict")
+	case errors.Is(err, domain.ErrListingNotPromotable):
+		writeError(w, http.StatusConflict, "listing is not eligible for promotion")
 	case errors.Is(err, domain.ErrPaymentNotRefundable):
 		writeError(w, http.StatusConflict, "payment is not refundable")
 	case errors.Is(err, domain.ErrInvalidWebhook):

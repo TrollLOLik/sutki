@@ -109,6 +109,10 @@ type Querier interface {
 	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
 	SoftDeleteHousePhotos(ctx context.Context, houseID *int32) error
 	SoftDeleteUserHouses(ctx context.Context, ownerID int32) error
+	// Atomic owner-facing publication transition. The expected source status in
+	// the WHERE clause prevents concurrent requests from reviving/re-hiding a
+	// listing after another lifecycle action has already won.
+	TransitionHouseStatus(ctx context.Context, arg TransitionHouseStatusParams) (int64, error)
 	UpdateConversationTimestamp(ctx context.Context, id int64) error
 	// Updates a listing owned by the given user. Returns the number of affected
 	// rows so the caller can distinguish "not found / not owner" (0) from success.

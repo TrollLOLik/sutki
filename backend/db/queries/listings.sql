@@ -328,6 +328,19 @@ SET street = @street,
     pois = @pois
 WHERE id = @id AND owner_id = @owner_id AND deleted = false;
 
+-- name: TransitionHouseStatus :execrows
+-- Atomic owner-facing publication transition. The expected source status in
+-- the WHERE clause prevents concurrent requests from reviving/re-hiding a
+-- listing after another lifecycle action has already won.
+UPDATE house
+SET status = @to_status,
+    rejection_reason = NULL,
+    updated_at = now()
+WHERE id = @id
+  AND owner_id = @owner_id
+  AND deleted = false
+  AND status = @from_status;
+
 -- name: DeleteHouseServices :exec
 DELETE FROM house_house_service WHERE house_id = $1;
 

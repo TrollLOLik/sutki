@@ -18,14 +18,25 @@ func NewPromotionRepo(pool *pgxpool.Pool) *PromotionRepo { return &PromotionRepo
 var _ promotionuc.Repository = (*PromotionRepo)(nil)
 
 func (r *PromotionRepo) Reserve(ctx context.Context, houseID, userID int32, kind string, duration int32, key string) (domain.ListingPromotion, error) {
+	var houseStatus string
+	err := r.pool.QueryRow(ctx, `SELECT status FROM house WHERE id=$1 AND owner_id=$2 AND deleted=false`, houseID, userID).Scan(&houseStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ListingPromotion{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.ListingPromotion{}, err
+	}
+	if !domain.ListingPromotable(houseStatus) {
+		return domain.ListingPromotion{}, domain.ErrListingNotPromotable
+	}
 	if existing, err := r.findOpenForOwner(ctx, houseID, userID, kind); err == nil {
 		return existing, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return domain.ListingPromotion{}, err
 	}
 	var p domain.ListingPromotion
-	err := r.pool.QueryRow(ctx, `INSERT INTO listing_promotion(house_id,purchased_by,type,status,duration_seconds,remaining_seconds,checkout_key)
- SELECT id,$2,$3,'pending_payment',$4,$4,$5::uuid FROM house WHERE id=$1 AND owner_id=$2 AND deleted=false
+	err = r.pool.QueryRow(ctx, `INSERT INTO listing_promotion(house_id,purchased_by,type,status,duration_seconds,remaining_seconds,checkout_key)
+ SELECT id,$2,$3,'pending_payment',$4,$4,$5::uuid FROM house WHERE id=$1 AND owner_id=$2 AND deleted=false AND status IN ('active','pending_moderation','moderation_review')
  ON CONFLICT(checkout_key) DO UPDATE SET checkout_key=EXCLUDED.checkout_key
  RETURNING id,house_id,COALESCE(purchased_by,0),payment_id,type,status,duration_seconds,remaining_seconds,starts_at,expires_at,activated_at,COALESCE(pause_reason,''),version,checkout_key::text`, houseID, userID, kind, duration, key).Scan(&p.ID, &p.HouseID, &p.PurchasedBy, &p.PaymentID, &p.Type, &p.Status, &p.DurationSeconds, &p.RemainingSeconds, &p.StartsAt, &p.ExpiresAt, &p.ActivatedAt, &p.PauseReason, &p.Version, &p.CheckoutKey)
 	var pgErr *pgconn.PgError
@@ -36,7 +47,7 @@ func (r *PromotionRepo) Reserve(ctx context.Context, houseID, userID int32, kind
 		return p, domain.ErrPaymentConflict
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return p, domain.ErrNotFound
+		return p, domain.ErrListingNotPromotable
 	}
 	return p, err
 }

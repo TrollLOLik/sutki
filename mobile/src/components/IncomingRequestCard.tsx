@@ -127,7 +127,14 @@ export function IncomingRequestCard({
 
   const getStatusTone = (status: string) => {
     switch (status) {
+      case 'pending':
+      case 'in_progress':
+        return {
+          bg: palette.primaryLight,
+          text: palette.primary,
+        };
       case 'confirmed':
+      case 'active':
         return { 
           bg: palette.successLight, 
           text: isDark ? '#A7F3D0' : palette.success 
@@ -146,7 +153,9 @@ export function IncomingRequestCard({
   };
 
   const getStatusLabel = (status: string, hasRejectionReason: boolean) => {
+    if (status === 'pending' || status === 'in_progress') return 'На рассмотрении';
     if (status === 'confirmed') return 'Принята';
+    if (status === 'active') return 'Проживание';
     if (status === 'cancelled') {
       return hasRejectionReason ? 'Отклонена' : 'Отменена';
     }

@@ -54,6 +54,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 				r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
 				r.Post("/", listingHandler.create)
 				r.Put("/{id}", listingHandler.update)
+				r.Post("/{id}/unpublish", listingHandler.unpublish)
+				r.Post("/{id}/publish", listingHandler.publish)
 				r.Get("/mine", listingHandler.listMine)
 				r.Post("/{id}/favorite", favoriteHandler.Add)
 				r.Delete("/{id}/favorite", favoriteHandler.Remove)

@@ -376,7 +376,7 @@ func (s *Service) Cancel(ctx context.Context, id, userID int32, guestID string) 
 		return domain.Booking{}, domain.ErrBookingForbidden
 	}
 
-	if b.Status != domain.BookingPending && b.Status != domain.BookingPendingVerification {
+	if !domain.BookingTransitionAllowed(b.Status, domain.BookingCancelled, domain.BookingActorGuest) {
 		return domain.Booking{}, domain.ErrBookingNotPending
 	}
 	updated, err := s.repo.Cancel(ctx, id)
@@ -413,7 +413,7 @@ func (s *Service) requireOwnerPending(ctx context.Context, id, ownerID int32) (d
 	if b.House == nil || b.House.OwnerID != ownerID {
 		return domain.Booking{}, domain.ErrBookingForbidden
 	}
-	if b.Status != domain.BookingPending {
+	if !domain.BookingTransitionAllowed(b.Status, domain.BookingConfirmed, domain.BookingActorHost) {
 		return domain.Booking{}, domain.ErrBookingNotPending
 	}
 	return b, nil

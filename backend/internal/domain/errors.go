@@ -14,7 +14,7 @@ var (
 	// ErrTooManyAttempts is returned when a code has been guessed too many times.
 	ErrTooManyAttempts = errors.New("too many attempts")
 	// ErrCodeRequestTooSoon is returned when a code is re-requested within the cooldown.
-	ErrCodeRequestTooSoon = errors.New("code requested too soon")
+	ErrCodeRequestTooSoon   = errors.New("code requested too soon")
 	ErrPhoneChallengeActive = errors.New("phone challenge already active")
 	// ErrTokenInvalid is returned for an invalid/expired/revoked refresh token.
 	ErrTokenInvalid = errors.New("invalid token")
@@ -42,6 +42,12 @@ var (
 	ErrDatesUnavailable = errors.New("dates unavailable")
 	// ErrBookingOwnListing is returned when a user attempts to book their own listing.
 	ErrBookingOwnListing = errors.New("cannot book own listing")
+	// ErrListingStatusTransition is returned when an owner action is not
+	// allowed from the listing's current lifecycle state.
+	ErrListingStatusTransition = errors.New("listing status transition not allowed")
+	// ErrListingNotPromotable prevents charging for listings that cannot be
+	// shown in public search (for example rejected or withdrawn listings).
+	ErrListingNotPromotable = errors.New("listing is not promotable")
 )
 
 // Review-related errors.

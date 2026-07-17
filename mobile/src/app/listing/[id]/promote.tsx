@@ -74,6 +74,8 @@ export default function PromoteListingScreen() {
   const selectedTypeConnected = connectedTypes.has(selectedType);
   const selectedTypePending = pendingTypes.has(selectedType);
   const promotionReady = selectedTypeConnected;
+  const listingStatus = listing.data?.status;
+  const promotionBlocked = listingStatus === 'rejected' || listingStatus === 'unpublished';
 
   useEffect(() => {
     if (durations.length > 0 && !durations.includes(selectedDays)) {
@@ -98,6 +100,32 @@ export default function PromoteListingScreen() {
     const timer = setInterval(() => promotions.refetch(), 1000);
     return () => clearInterval(timer);
   }, [promotionReady, promotions, succeeded]);
+
+  if (promotionBlocked) {
+    return (
+      <ScreenContainer centered>
+        <View className="flex-row items-center justify-between py-3">
+          <Pressable onPress={() => router.back()} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
+            <Ionicons name="chevron-back" size={26} color={palette.ink} />
+          </Pressable>
+          <Text className="text-lg font-bold text-ink">Продвижение</Text>
+          <View className="h-11 w-11" />
+        </View>
+        <View className="flex-1 items-center justify-center px-6">
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-surface-muted">
+            <Ionicons name="rocket-outline" size={30} color={palette.inkSecondary} />
+          </View>
+          <Text className="mt-5 text-center text-xl font-bold text-ink">Продвижение недоступно</Text>
+          <Text className="mt-2 text-center text-sm leading-5 text-ink-secondary">
+            {listingStatus === 'rejected'
+              ? 'Сначала исправьте замечания модерации и отправьте объявление на повторную проверку.'
+              : 'Сначала опубликуйте объявление снова.'}
+          </Text>
+          <Button label="Вернуться к объявлению" onPress={() => router.back()} className="mt-6 w-full" />
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   const start = async () => {
     if (!selectedCode) return;
