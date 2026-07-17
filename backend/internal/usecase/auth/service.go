@@ -408,6 +408,7 @@ func (s *Service) moderateAvatar(ctx context.Context, userID int32, key string) 
 	}
 	result, err := s.imageModerator.ModerateImages(ctx, []string{url}, "avatar")
 	if err != nil {
+		log.Printf("auth avatar moderation: check failed for user %d: %v", userID, err)
 		return err
 	}
 	if result.Decision != domain.ImageModerationApprove {

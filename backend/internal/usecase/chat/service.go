@@ -298,6 +298,7 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	if len(imageURLs) > 0 && s.imageModerator != nil {
 		result, err := s.imageModerator.ModerateImages(ctx, imageURLs, "chat")
 		if err != nil {
+			log.Printf("[Chat] Image moderation failed (user=%d, conv=%d): %v", userID, convID, err)
 			return domain.Message{}, err
 		}
 		if result.Decision != domain.ImageModerationApprove {

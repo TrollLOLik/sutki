@@ -131,8 +131,8 @@ func Load() (Config, error) {
 		AccessTTL:                      getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTTL:                     getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		AuthExposeCode:                 getBool("AUTH_EXPOSE_CODE", false),
-		ReadTimeout:                    15 * time.Second,
-		WriteTimeout:                   15 * time.Second,
+		ReadTimeout:                    getDuration("HTTP_READ_TIMEOUT", 15*time.Second),
+		WriteTimeout:                   getDuration("HTTP_WRITE_TIMEOUT", 75*time.Second),
 
 		SMTPHost:     getEnv("SMTP_HOST", "smtp.yandex.ru"),
 		SMTPPort:     getInt("SMTP_PORT", 465),
