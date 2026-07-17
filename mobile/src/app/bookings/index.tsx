@@ -27,10 +27,12 @@ import { useMyReviewEligibility } from '@/lib/api/reviews';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
+import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 type Tab = 'active' | 'history';
 
 export default function MyBookingsScreen() {
+  useActivityScopeSeen('bookings');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('active');
   const pageWidth = Dimensions.get('window').width;

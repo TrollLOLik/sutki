@@ -21,6 +21,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 import { EmptyState } from '@/components/EmptyState';
 import { IncomingRequestCard } from '@/components/IncomingRequestCard';
@@ -40,6 +41,7 @@ import type { Booking } from '@/types/booking';
 type Tab = 'pending' | 'processed';
 
 export default function IncomingBookingsScreen() {
+  useActivityScopeSeen('incoming');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('pending');
   const pageWidth = Dimensions.get('window').width;

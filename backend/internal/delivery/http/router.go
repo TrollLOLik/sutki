@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// Remove the internal webhook secret before middleware.Logger sees the URL.
@@ -93,6 +93,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Group(func(r chi.Router) {
 			r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
 			r.Get("/me", authHandler.Me)
+			r.Get("/me/activity", activityHandler.counters)
+			r.Post("/me/activity/{scope}/read", activityHandler.markRead)
 			r.Patch("/me", authHandler.UpdateMe)
 			r.Delete("/me", authHandler.DeleteMe)
 			r.Get("/me/sessions", authHandler.ListSessions)

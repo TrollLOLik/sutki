@@ -2,6 +2,7 @@ package booking
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type Config struct {
 	// May be nil; cards are then skipped. Only the backend creates these
 	// system messages — clients can never post non-user kinds.
 	Chat       domain.ChatSystemPoster
+	UserEvents domain.UserEventPublisher
 	ExposeCode bool
 }
 
@@ -34,6 +36,7 @@ type Service struct {
 	repo       domain.BookingRepository
 	notifier   domain.EmailNotifier
 	chat       domain.ChatSystemPoster
+	userEvents domain.UserEventPublisher
 	exposeCode bool
 }
 
@@ -42,8 +45,29 @@ func New(repo domain.BookingRepository, cfg Config) *Service {
 		repo:       repo,
 		notifier:   cfg.Notifier,
 		chat:       cfg.Chat,
+		userEvents: cfg.UserEvents,
 		exposeCode: cfg.ExposeCode,
 	}
+}
+
+func (s *Service) publishChanged(userID int32, scope, action string, bookingID int32, markUnread bool) {
+	if s.userEvents == nil || userID <= 0 {
+		return
+	}
+	key := ""
+	if markUnread {
+		key = fmt.Sprintf("booking:%d:%s:%s", bookingID, action, scope)
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.userEvents.PublishUserEvent(ctx, userID, domain.UserEvent{
+			EventKey: key, Type: "booking.changed", Scope: scope, Action: action,
+			EntityID: int64(bookingID), OccurredAt: time.Now().UTC(), MarkUnread: markUnread,
+		}); err != nil {
+			log.Printf("booking realtime: publish booking %d: %v", bookingID, err)
+		}
+	}()
 }
 
 // postBookingCard fires a booking status card into the owner-guest chat in
@@ -157,7 +181,9 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 		// bookings (pending_verification) get their card later, when email
 		// verification links them to a user (HandleGuestRequestsLinked).
 		s.postBookingCard(created, ownerID, domain.BookingEventNew, "", false)
+		s.publishChanged(ownerID, domain.ActivityScopeIncoming, "created", created.ID, true)
 	}
+	s.publishChanged(created.UserID, domain.ActivityScopeBookings, "created", created.ID, false)
 	return created, nil
 }
 
@@ -200,6 +226,8 @@ func (s *Service) HandleGuestRequestsLinked(ctx context.Context, requestIDs []in
 			}
 		}
 		s.postBookingCard(b, b.House.OwnerID, domain.BookingEventNew, "", false)
+		s.publishChanged(b.House.OwnerID, domain.ActivityScopeIncoming, "created", b.ID, true)
+		s.publishChanged(b.UserID, domain.ActivityScopeBookings, "verified", b.ID, false)
 	}
 }
 
@@ -329,6 +357,8 @@ func (s *Service) Confirm(ctx context.Context, id, ownerID int32) (domain.Bookin
 	// Card with the full address: the exact apartment is revealed only after
 	// the owner approves, matching the DTO privacy rule.
 	s.postBookingCard(updated, ownerID, domain.BookingEventConfirmed, "", true)
+	s.publishChanged(updated.UserID, domain.ActivityScopeBookings, "confirmed", updated.ID, true)
+	s.publishChanged(ownerID, domain.ActivityScopeIncoming, "confirmed", updated.ID, false)
 
 	return updated, nil
 }
@@ -353,6 +383,8 @@ func (s *Service) Reject(ctx context.Context, id, ownerID int32, reason string) 
 	}
 
 	s.postBookingCard(updated, ownerID, domain.BookingEventRejected, reason, false)
+	s.publishChanged(updated.UserID, domain.ActivityScopeBookings, "rejected", updated.ID, true)
+	s.publishChanged(ownerID, domain.ActivityScopeIncoming, "rejected", updated.ID, false)
 
 	return updated, nil
 }
@@ -389,7 +421,7 @@ func (s *Service) Cancel(ctx context.Context, id, userID int32, guestID string) 
 	// pending_verification the owner never learned about the request, so a
 	// cancellation email would only confuse them. Opt-outable via the
 	// owner's "booking" preference inside the notifier.
-	if b.Status == domain.BookingPending {
+	if b.Status == domain.BookingPending || b.Status == domain.BookingLegacyPending {
 		ownerID, _, ownerEmail, err := s.repo.GetHouseForBooking(ctx, b.HouseID)
 		if err != nil {
 			log.Printf("booking notify: owner lookup for cancelled booking %d: %v", updated.ID, err)
@@ -400,8 +432,10 @@ func (s *Service) Cancel(ctx context.Context, id, userID int32, guestID string) 
 				}
 			}
 			s.postBookingCard(updated, ownerID, domain.BookingEventCancelled, "", false)
+			s.publishChanged(ownerID, domain.ActivityScopeIncoming, "cancelled", updated.ID, true)
 		}
 	}
+	s.publishChanged(updated.UserID, domain.ActivityScopeBookings, "cancelled", updated.ID, false)
 	return updated, nil
 }
 

@@ -102,6 +102,7 @@ func (s *Service) CheckPhotos(ctx context.Context, houseID int32) {
 		return
 	}
 	log.Printf("moderation photos: house %d sent to review (duplicate photos)", houseID)
+	s.publishStatus(h.OwnerID, houseID, domain.HouseStatusModerationReview, "", fmt.Sprintf("listing:%d:%s:photo-review", houseID, ContentHash(h)), true)
 	s.checkReviewQueueAlert(ctx)
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
 	paymentinfra "github.com/TrollLOLik/sutki/backend/internal/infrastructure/payment"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/poi"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/realtime"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/telegram"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/ucaller"
@@ -102,6 +103,8 @@ func main() {
 	}
 
 	queries := sqlc.New(pool)
+	userEvents := realtime.NewPublisher(pool, cfg.CentrifugoURL, cfg.CentrifugoKey)
+	activityHandler := httpdelivery.NewActivityHandler(userEvents)
 	httpdelivery.ConfigureMediaFormatter(func(key string) string {
 		if strings.Contains(key, "upload_files/") {
 			clean := strings.TrimPrefix(key, "../")
@@ -143,6 +146,7 @@ func main() {
 		adminAlerter = a
 	}
 	moderationSvc := moderation.New(moderationRepo, llmClientMod, adminAlerter, notifier)
+	moderationSvc.SetUserEvents(userEvents)
 	moderationSvc.StartWorker(ctx)
 
 	listingRepo := postgres.NewListingRepo(queries)
@@ -151,6 +155,7 @@ func main() {
 	locationSummaryJobRepo := postgres.NewLocationSummaryJobRepo(pool)
 	nearbyPOIs := poi.NewOverpass(cfg.OverpassURL, cfg.OverpassTimeout)
 	listingSvc := listing.New(listingRepo, listingViewRepo, publicStorage, aiSummarizer, moderationSvc, locationSummaryJobRepo, nearbyPOIs)
+	listingSvc.SetUserEvents(userEvents)
 	listingSvc.StartLocationSummaryWorker(ctx)
 	listingSvc.StartMediaIntegrityWorker(ctx, 6*time.Hour)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
@@ -217,6 +222,7 @@ func main() {
 	bookingSvc := booking.New(bookingRepo, booking.Config{
 		Notifier:   notifier,
 		Chat:       chatSvc,
+		UserEvents: userEvents,
 		ExposeCode: cfg.AuthExposeCode,
 	})
 	bookingSvc.StartCleanupJob(ctx, 1*time.Hour)
@@ -232,6 +238,7 @@ func main() {
 
 	reviewRepo := postgres.NewReviewRepo(pool, queries)
 	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier, llmClientReviewMod)
+	reviewSvc.SetUserEvents(userEvents)
 	reviewSvc.StartWorker(ctx)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 
@@ -252,7 +259,7 @@ func main() {
 	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, opsWebhookHandler, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, opsWebhookHandler, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabBarStore } from '@/store/tabbar';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
+import { useActivityCounters } from '@/lib/api/activity';
+import { useSessionStore } from '@/store/session';
 
 export const TAB_BAR_HEIGHT = 49;
 
@@ -49,9 +51,10 @@ interface TabButtonProps {
   onPress: () => void;
   reduceMotion: boolean;
   mapTransition: SharedValue<number>;
+  badge?: number;
 }
 
-function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabButtonProps) {
+function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge = 0 }: TabButtonProps) {
   const { palette } = useAppTheme();
   const focusAnim = useSharedValue(focused ? 1 : 0);
 
@@ -146,6 +149,11 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition }: TabB
           </Animated.View>
         </Animated.View>
       </Animated.View>
+      {badge > 0 ? (
+        <View style={[styles.badge, { borderColor: palette.surface }]}>
+          <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+        </View>
+      ) : null}
       <Animated.Text
         numberOfLines={1}
         style={[
@@ -166,6 +174,8 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const { palette } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [reduceMotion, setReduceMotion] = useState(false);
+  const authenticated = useSessionStore((s) => s.status === 'authenticated');
+  const { data: activity } = useActivityCounters(authenticated);
 
   const pulse = useSharedValue(0);
   const rotation = useSharedValue(0);
@@ -293,6 +303,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
     const routeIndex = state.routes.findIndex((r) => r.name === name);
     const focused = state.index === routeIndex;
+    const badge = name === 'messages' ? activity?.messages ?? 0 : name === 'profile' ? activity?.profile ?? 0 : 0;
 
     const onPress = () => {
       const event = navigation.emit({
@@ -313,6 +324,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         onPress={onPress}
         reduceMotion={reduceMotion}
         mapTransition={mapTransition}
+        badge={badge}
       />
     );
   };
@@ -430,6 +442,25 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 11,
     overflow: 'hidden',
+  },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    left: '55%',
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF4D2E',
+    borderWidth: 2,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '800',
   },
   centerBtn: {
     alignItems: 'center',

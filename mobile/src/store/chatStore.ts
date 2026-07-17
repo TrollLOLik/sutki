@@ -48,6 +48,46 @@ interface ChatState {
 	setActiveConversationId: (id: number | null) => void;
 }
 
+interface UserRealtimeEvent {
+	type: string;
+	scope?: string;
+	action?: string;
+	entity_id?: number;
+	conversation_id?: number;
+}
+
+function invalidateRealtimeData(payload?: UserRealtimeEvent) {
+	queryClient.invalidateQueries({ queryKey: ['activity'] });
+	if (!payload) {
+		for (const key of [['chat'], ['bookings'], ['listings'], ['my-listings'], ['reviews'], ['my-reviews'], ['listing-promotions']]) {
+			queryClient.invalidateQueries({ queryKey: key });
+		}
+		return;
+	}
+	switch (payload.type) {
+		case 'unread_update':
+		case 'message.changed':
+			queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+			break;
+		case 'booking.changed':
+			queryClient.invalidateQueries({ queryKey: ['bookings'] });
+			queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+			break;
+		case 'listing.changed':
+			queryClient.invalidateQueries({ queryKey: ['listings'] });
+			queryClient.invalidateQueries({ queryKey: ['my-listings'] });
+			queryClient.invalidateQueries({ queryKey: ['favorites'] });
+			queryClient.invalidateQueries({ queryKey: ['listing-promotions'] });
+			break;
+		case 'review.changed':
+			queryClient.invalidateQueries({ queryKey: ['reviews'] });
+			queryClient.invalidateQueries({ queryKey: ['my-reviews'] });
+			queryClient.invalidateQueries({ queryKey: ['host-reviews'] });
+			queryClient.invalidateQueries({ queryKey: ['listings'] });
+			break;
+	}
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
 	centrifuge: null,
 	status: 'disconnected',
@@ -84,7 +124,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 			set({ status: 'connected' });
 
 			// Invalidate conversation list cache on reconnect to synchronize unread counts
-			queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+			invalidateRealtimeData();
 		});
 
 		centrifuge.on('disconnected', () => {
@@ -95,10 +135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 		// Listen to server-side publications (like personal user#<id> channel events)
 		centrifuge.on('publication', (ctx) => {
 			console.log('[Chat] Received server publication on channel:', ctx.channel, ctx.data);
-			const payload = ctx.data as { type: string; conversation_id?: number; unread_count?: number };
-			if (payload.type === 'unread_update') {
-				queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
-			}
+			invalidateRealtimeData(ctx.data as UserRealtimeEvent);
 		});
 
 		centrifuge.connect();

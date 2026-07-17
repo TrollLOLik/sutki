@@ -53,7 +53,28 @@ type Service struct {
 	moderator           Moderator
 	locationSummaryRepo domain.LocationSummaryRepository
 	nearbyPOIs          domain.NearbyPOIProvider
+	userEvents          domain.UserEventPublisher
 	wake                chan struct{}
+}
+
+func (s *Service) SetUserEvents(events domain.UserEventPublisher) {
+	s.userEvents = events
+}
+
+func (s *Service) publishChanged(ownerID, houseID int32, action string) {
+	if s.userEvents == nil || ownerID <= 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.userEvents.PublishUserEvent(ctx, ownerID, domain.UserEvent{
+			Type: "listing.changed", Scope: domain.ActivityScopeListings,
+			Action: action, EntityID: int64(houseID), OccurredAt: time.Now().UTC(),
+		}); err != nil {
+			log.Printf("listing realtime: publish house %d: %v", houseID, err)
+		}
+	}()
 }
 
 func New(repo domain.ListingRepository, viewRepo domain.ListingViewRepository, storage domain.FileStorage, aiSummarizer domain.AISummarizer, moderator Moderator, locationSummaryRepo domain.LocationSummaryRepository, nearbyPOIs domain.NearbyPOIProvider) *Service {
@@ -282,7 +303,11 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 		s.Wake()
 	}
 
-	return s.Get(ctx, id)
+	house, err := s.Get(ctx, id)
+	if err == nil {
+		s.publishChanged(in.OwnerID, id, "created")
+	}
+	return house, err
 }
 
 // ListMine returns a page of listings owned by ownerID (any status), newest
@@ -372,7 +397,11 @@ func (s *Service) SetPublished(ctx context.Context, id, ownerID int32, published
 	if !changed {
 		return domain.House{}, domain.ErrListingStatusTransition
 	}
-	return s.Get(ctx, id)
+	house, err = s.Get(ctx, id)
+	if err == nil {
+		s.publishChanged(ownerID, id, map[bool]string{true: "published", false: "unpublished"}[published])
+	}
+	return house, err
 }
 
 func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (domain.House, error) {
@@ -479,7 +508,11 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 		s.Wake()
 	}
 
-	return s.Get(ctx, id)
+	house, err := s.Get(ctx, id)
+	if err == nil {
+		s.publishChanged(in.OwnerID, id, "updated")
+	}
+	return house, err
 }
 
 func validateTimeFormat(t string) bool {

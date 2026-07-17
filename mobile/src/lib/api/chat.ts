@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
+import { activityKeys } from '@/lib/api/activity';
 import type { ChatMessage } from '@/store/chatStore';
 
 export interface ConversationSummary {
@@ -138,6 +139,7 @@ export function useReadMessages(convID: number) {
 		mutationFn: (messageID: number) => readMessages(convID, messageID),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+			queryClient.invalidateQueries({ queryKey: activityKeys.counters() });
 		},
 	});
 }

@@ -485,6 +485,11 @@ func (s *Service) ReadMessages(ctx context.Context, userID int32, convID int64, 
 
 	// Notify read event in background
 	go s.publishReadEvent(convID, userID, messageID)
+	go func() {
+		_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", userID), map[string]any{
+			"type": "unread_update", "conversation_id": convID,
+		})
+	}()
 
 	return nil
 }
@@ -552,6 +557,9 @@ func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
 		"conversation_id": msg.ConversationID,
 	}
 	_ = s.centrifugoPublish(personalChannel, personalPayload)
+	// The sender may have the app open on another device. Keep that device's
+	// conversation preview in sync even though its unread count stays zero.
+	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", *msg.SenderID), personalPayload)
 }
 
 func (s *Service) publishReadEvent(convID int64, userID int32, messageID int64) {

@@ -29,7 +29,29 @@ type Service struct {
 	users        domain.UserRepository
 	notifier     domain.EmailNotifier
 	llm          reviewLLM
+	userEvents   domain.UserEventPublisher
 	wake         chan struct{}
+}
+
+func (s *Service) SetUserEvents(events domain.UserEventPublisher) {
+	s.userEvents = events
+}
+
+func (s *Service) publishChanged(userID int32, action string, entityID int64, eventKey string, markUnread bool, payload map[string]any) {
+	if s.userEvents == nil || userID <= 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.userEvents.PublishUserEvent(ctx, userID, domain.UserEvent{
+			EventKey: eventKey, Type: "review.changed", Scope: domain.ActivityScopeReviews,
+			Action: action, EntityID: entityID, Payload: payload,
+			OccurredAt: time.Now().UTC(), MarkUnread: markUnread,
+		}); err != nil {
+			log.Printf("review realtime: publish review %d: %v", entityID, err)
+		}
+	}()
 }
 
 type reviewLLM interface {
@@ -109,6 +131,7 @@ func (s *Service) Create(ctx context.Context, r domain.NewReview) (domain.Review
 	case s.wake <- struct{}{}:
 	default:
 	}
+	s.publishChanged(r.AuthorID, "created", int64(created.ID), "", false, map[string]any{"status": "pending_moderation", "house_id": r.HouseID})
 	return created, nil
 }
 
@@ -131,6 +154,7 @@ func (s *Service) CreateReply(ctx context.Context, reviewID, ownerID int32, body
 		case s.wake <- struct{}{}:
 		default:
 		}
+		s.publishChanged(ownerID, "reply_created", int64(reviewID), "", false, map[string]any{"status": "pending_moderation"})
 	}
 	return reply, err
 }
@@ -296,9 +320,26 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 	if err = s.repo.CompleteModeration(ctx, job, verdict.Decision, verdict.Category, verdict.Reason, verdict.Confidence, raw); err != nil {
 		return err
 	}
-	if target.TargetType == "review" && (verdict.Decision == "approve" || verdict.Decision == "approve_masked") && s.listingRepo != nil && s.notifier != nil && s.users != nil {
+	status := "moderation_review"
+	if verdict.Decision == "approve" || verdict.Decision == "approve_masked" {
+		status = "active"
+	} else if verdict.Decision == "reject" {
+		status = "rejected"
+	}
+	payload := map[string]any{"status": status, "target_type": target.TargetType, "house_id": target.HouseID}
+	if verdict.Reason != "" {
+		payload["reason"] = verdict.Reason
+	}
+	s.publishChanged(target.AuthorID, "moderated", int64(target.ReviewID), fmt.Sprintf("review-job:%d:author", job.ID), true, payload)
+	if status == "active" && target.TargetType == "reply" && target.ReviewAuthorID != target.AuthorID {
+		s.publishChanged(target.ReviewAuthorID, "reply_published", int64(target.ReviewID), fmt.Sprintf("review-job:%d:review-author", job.ID), true, payload)
+	}
+	if target.TargetType == "review" && status == "active" && s.listingRepo != nil {
 		if house, getErr := s.listingRepo.GetByID(context.Background(), target.HouseID); getErr == nil {
-			go s.notifyOwner(context.Background(), house, domain.Review{ID: target.ReviewID, Rating: target.Rating})
+			s.publishChanged(house.OwnerID, "received", int64(target.ReviewID), fmt.Sprintf("review-job:%d:host", job.ID), true, payload)
+			if s.notifier != nil && s.users != nil {
+				go s.notifyOwner(context.Background(), house, domain.Review{ID: target.ReviewID, Rating: target.Rating})
+			}
 		}
 	}
 	return nil

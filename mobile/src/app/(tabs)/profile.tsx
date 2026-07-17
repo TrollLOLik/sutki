@@ -29,6 +29,7 @@ import type { UpdateProfileBody } from '@/types/auth';
 import type { User } from '@/types/user';
 import { GuestProfile } from '@/components/profile/GuestProfile';
 import { ThemeSelector } from '@/components/profile/ThemeSelector';
+import { type ActivityScope, useActivityCounters, useMarkActivityRead } from '@/lib/api/activity';
 
 type SettingsTab = 'basic' | 'security';
 
@@ -122,12 +123,14 @@ function PickerField({
   placeholder,
   icon,
   onPress,
+  count = 0,
 }: {
   label: string;
   value: string;
   placeholder: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
+  count?: number;
 }) {
   const { palette } = useAppTheme();
   return (
@@ -150,11 +153,13 @@ function ProfileAction({
   icon,
   title,
   subtitle,
+  count = 0,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
+  count?: number;
   onPress: () => void;
 }) {
   const { palette } = useAppTheme();
@@ -171,6 +176,11 @@ function ProfileAction({
         <Text className="text-base font-bold text-ink">{title}</Text>
         <Text className="text-sm text-ink-secondary">{subtitle}</Text>
       </View>
+      {count > 0 ? (
+        <View className="h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5">
+          <Text className="text-xs font-extrabold text-white">{count > 99 ? '99+' : count}</Text>
+        </View>
+      ) : null}
       <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
     </Pressable>
   );
@@ -182,10 +192,17 @@ export default function ProfileScreen() {
   const signOut = useSessionStore((s) => s.signOut);
   const setUser = useSessionStore((s) => s.setUser);
   const status = useSessionStore((s) => s.status);
+  const { data: activity } = useActivityCounters(status === 'authenticated');
+  const markActivityRead = useMarkActivityRead();
   const updateMe = useUpdateMe();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('basic');
   const vkLinked = !!user?.vk_id;
+
+  const openSection = (scope: ActivityScope, path: string) => {
+    markActivityRead.mutate(scope);
+    router.push(path as any);
+  };
 
   const { data: sessionsData, refetch: refetchSessions, isLoading: sessionsLoading } = useSessions();
   const {
@@ -770,25 +787,29 @@ export default function ProfileScreen() {
               icon="home-outline"
               title="Мои объявления"
               subtitle="Управляйте объектами, ценами и календарём"
-              onPress={() => router.push('/my-listings' as any)}
+              count={activity?.listings}
+              onPress={() => openSection('listings', '/my-listings')}
             />
             <ProfileAction
               icon="reader-outline"
               title="Мои брони"
               subtitle="История поездок, чеки и отзывы"
-              onPress={() => router.push('/bookings')}
+              count={activity?.bookings}
+              onPress={() => openSection('bookings', '/bookings')}
             />
             <ProfileAction
               icon="file-tray-full-outline"
               title="Входящие заявки"
               subtitle="Новые запросы гостей и подтверждения"
-              onPress={() => router.push('/incoming')}
+              count={activity?.incoming}
+              onPress={() => openSection('incoming', '/incoming')}
             />
             <ProfileAction
               icon="star-outline"
               title="Мои отзывы"
               subtitle="Отзывы, которые вы оставили или получили"
-              onPress={() => router.push('/my-reviews' as any)}
+              count={activity?.reviews}
+              onPress={() => openSection('reviews', '/my-reviews')}
             />
           </View>
 

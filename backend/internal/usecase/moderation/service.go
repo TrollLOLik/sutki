@@ -69,11 +69,12 @@ type OwnerNotifier interface {
 
 // Service implements domain.ListingModerator plus the background worker.
 type Service struct {
-	repo    domain.ModerationRepository
-	llm     LLMClient
-	alerter AdminAlerter
-	owners  OwnerNotifier
-	photo   *photoDeps // optional, see SetPhotoPipeline
+	repo       domain.ModerationRepository
+	llm        LLMClient
+	alerter    AdminAlerter
+	owners     OwnerNotifier
+	userEvents domain.UserEventPublisher
+	photo      *photoDeps // optional, see SetPhotoPipeline
 
 	wake chan struct{}
 
@@ -82,6 +83,31 @@ type Service struct {
 	consecFails  int
 	degraded     bool
 	lastQueueLen int64
+}
+
+func (s *Service) SetUserEvents(events domain.UserEventPublisher) {
+	s.userEvents = events
+}
+
+func (s *Service) publishStatus(ownerID, houseID int32, status, reason, eventKey string, markUnread bool) {
+	if s.userEvents == nil || ownerID <= 0 {
+		return
+	}
+	payload := map[string]any{"status": status}
+	if reason != "" {
+		payload["reason"] = reason
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.userEvents.PublishUserEvent(ctx, ownerID, domain.UserEvent{
+			EventKey: eventKey, Type: "listing.changed", Scope: domain.ActivityScopeListings,
+			Action: "moderated", EntityID: int64(houseID), Payload: payload,
+			OccurredAt: time.Now().UTC(), MarkUnread: markUnread,
+		}); err != nil {
+			log.Printf("moderation realtime: publish house %d: %v", houseID, err)
+		}
+	}()
 }
 
 func New(repo domain.ModerationRepository, llmClient LLMClient, alerter AdminAlerter, owners OwnerNotifier) *Service {
@@ -217,6 +243,7 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		if err := s.repo.SetHouseModeration(ctx, houseID, status, ""); err != nil {
 			return "", err
 		}
+		s.publishStatus(h.OwnerID, houseID, status, finalHit.Reason, fmt.Sprintf("listing:%d:%s:%s", houseID, hash, status), true)
 		if status == domain.HouseStatusModerationReview {
 			s.checkReviewQueueAlert(ctx)
 		}
@@ -237,6 +264,7 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		if err := s.repo.SetHouseModeration(ctx, houseID, domain.HouseStatusModerationReview, ""); err != nil {
 			return "", err
 		}
+		s.publishStatus(h.OwnerID, houseID, domain.HouseStatusModerationReview, "", fmt.Sprintf("listing:%d:%s:review", houseID, hash), true)
 		s.checkReviewQueueAlert(ctx)
 		return domain.HouseStatusModerationReview, nil
 	}
@@ -285,6 +313,7 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 	if err := s.repo.SetHouseModeration(ctx, houseID, target, ""); err != nil {
 		return "", err
 	}
+	s.publishStatus(h.OwnerID, houseID, target, "", fmt.Sprintf("listing:%d:%s:%s", houseID, hash, target), target != domain.HouseStatusPendingModeration)
 	s.Wake()
 	s.spawnPhotoCheck(houseID)
 	return target, nil
@@ -506,6 +535,7 @@ func (s *Service) applyVerdict(ctx context.Context, h domain.ModerationHouse, jo
 			log.Printf("moderation: activate house %d: %v", h.ID, err)
 			return
 		}
+		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusActive, "", fmt.Sprintf("listing:%d:%s:active", h.ID, job.ContentHash), h.Status != domain.HouseStatusActive)
 		if s.owners != nil && h.OwnerEmail != "" && h.Status != domain.HouseStatusActive {
 			// Only mail when the listing was actually waiting (skip the
 			// provisional-active case to avoid a redundant email).
@@ -524,6 +554,7 @@ func (s *Service) applyVerdict(ctx context.Context, h domain.ModerationHouse, jo
 				log.Printf("moderation: queue rejected email for house %d: %v", h.ID, err)
 			}
 		}
+		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusRejected, v.Reason, fmt.Sprintf("listing:%d:%s:rejected", h.ID, job.ContentHash), true)
 
 	default: // review, or reject below the confidence bar
 		if err := s.repo.SetHouseModeration(ctx, h.ID, domain.HouseStatusModerationReview, ""); err != nil {
@@ -531,6 +562,7 @@ func (s *Service) applyVerdict(ctx context.Context, h domain.ModerationHouse, jo
 			return
 		}
 		s.checkReviewQueueAlert(ctx)
+		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusModerationReview, "", fmt.Sprintf("listing:%d:%s:review", h.ID, job.ContentHash), true)
 	}
 }
 

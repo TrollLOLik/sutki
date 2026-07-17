@@ -250,12 +250,12 @@ func (r *ReviewRepo) LoadModerationTarget(ctx context.Context, j domain.ReviewMo
 	var t domain.ReviewModerationTarget
 	var categoriesJSON []byte
 	if j.TargetType == "review" {
-		err := r.pool.QueryRow(ctx, `SELECT 'review',rv.id,rv.id,rv.house_id,rv.owner_id,rv.rating,COALESCE(rv.original_body,rv.body),COALESCE(j.masked_body,''),j.detected_categories FROM review_moderation_job j JOIN review rv ON rv.id=j.target_id WHERE j.id=$1 AND rv.status='pending_moderation'`, j.ID).Scan(&t.TargetType, &t.TargetID, &t.ReviewID, &t.HouseID, &t.AuthorID, &t.Rating, &t.Body, &t.MaskedBody, &categoriesJSON)
+		err := r.pool.QueryRow(ctx, `SELECT 'review',rv.id,rv.id,rv.house_id,rv.owner_id,rv.owner_id,rv.rating,COALESCE(rv.original_body,rv.body),COALESCE(j.masked_body,''),j.detected_categories FROM review_moderation_job j JOIN review rv ON rv.id=j.target_id WHERE j.id=$1 AND rv.status='pending_moderation'`, j.ID).Scan(&t.TargetType, &t.TargetID, &t.ReviewID, &t.HouseID, &t.AuthorID, &t.ReviewAuthorID, &t.Rating, &t.Body, &t.MaskedBody, &categoriesJSON)
 		if err != nil {
 			return t, err
 		}
 	} else {
-		err := r.pool.QueryRow(ctx, `SELECT 'reply',rp.id,rp.review_id,rv.house_id,rp.owner_id,rv.rating,rp.original_body,COALESCE(j.masked_body,''),j.detected_categories FROM review_moderation_job j JOIN review_reply rp ON rp.id=j.target_id JOIN review rv ON rv.id=rp.review_id WHERE j.id=$1 AND rp.status='pending_moderation'`, j.ID).Scan(&t.TargetType, &t.TargetID, &t.ReviewID, &t.HouseID, &t.AuthorID, &t.Rating, &t.Body, &t.MaskedBody, &categoriesJSON)
+		err := r.pool.QueryRow(ctx, `SELECT 'reply',rp.id,rp.review_id,rv.house_id,rp.owner_id,rv.owner_id,rv.rating,rp.original_body,COALESCE(j.masked_body,''),j.detected_categories FROM review_moderation_job j JOIN review_reply rp ON rp.id=j.target_id JOIN review rv ON rv.id=rp.review_id WHERE j.id=$1 AND rp.status='pending_moderation'`, j.ID).Scan(&t.TargetType, &t.TargetID, &t.ReviewID, &t.HouseID, &t.AuthorID, &t.ReviewAuthorID, &t.Rating, &t.Body, &t.MaskedBody, &categoriesJSON)
 		if err != nil {
 			return t, err
 		}

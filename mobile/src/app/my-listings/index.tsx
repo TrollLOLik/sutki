@@ -9,8 +9,10 @@ import { Button } from '@/components/ui';
 import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
 import { ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 export default function MyListingsScreen() {
+  useActivityScopeSeen('listings');
   const { palette } = useAppTheme();
   const { data, isLoading, isError, refetch, isRefetching } = useMyListings({ limit: 50 });
   const items = data?.items ?? [];

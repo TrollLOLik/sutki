@@ -77,13 +77,14 @@ type ReviewModerationJob struct {
 }
 
 type ReviewModerationTarget struct {
-	TargetType string
-	TargetID   int64
-	ReviewID   int32
-	HouseID    int32
-	AuthorID   int32
-	Rating     int32
-	Body       string
-	MaskedBody string
-	Categories []string
+	TargetType     string
+	TargetID       int64
+	ReviewID       int32
+	HouseID        int32
+	AuthorID       int32
+	ReviewAuthorID int32
+	Rating         int32
+	Body           string
+	MaskedBody     string
+	Categories     []string
 }

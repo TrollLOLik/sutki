@@ -23,6 +23,7 @@ import { BottomSheet, Button } from '@/components/ui';
 import { useCreateReviewReply, useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { UserReview } from '@/types/review';
+import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 
 type ReviewTab = 'written' | 'received';
 
@@ -59,6 +60,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function MyReviewsScreen() {
+  useActivityScopeSeen('reviews');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<ReviewTab>('written');
   const pageWidth = Dimensions.get('window').width;
