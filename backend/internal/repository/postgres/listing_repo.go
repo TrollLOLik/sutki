@@ -51,6 +51,14 @@ func nonNil(ids []int32) []int32 {
 	return ids
 }
 
+func refsFromIDs(ids []int32) []domain.Ref {
+	refs := make([]domain.Ref, 0, len(ids))
+	for _, id := range ids {
+		refs = append(refs, domain.Ref{ID: id})
+	}
+	return refs
+}
+
 func pgTimePtr(s *string) pgtype.Time {
 	if s == nil || *s == "" {
 		return pgtype.Time{Valid: false}
@@ -248,6 +256,8 @@ func (r *ListingRepo) ListByOwner(ctx context.Context, ownerID, limit, offset in
 			ChildrenAllowed:    row.ChildrenAllowed,
 			EventsAllowed:      row.EventsAllowed,
 			CreatedAt:          row.CreatedAt.Time,
+			Services:           refsFromIDs(row.ServiceIds),
+			Categories:         refsFromIDs(row.CategoryIds),
 			Rating:             row.Rating,
 			ReviewsCount:       row.ReviewsCount,
 			PromotionTypes:     row.PromotionTypes,

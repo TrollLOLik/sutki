@@ -41,7 +41,7 @@ import { useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { useMyReviewEligibility } from '@/lib/api/reviews';
 import { api, ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { formatRooms } from '@/lib/format';
 import { Button, BottomSheet } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
@@ -648,9 +648,8 @@ export default function ChatDialogScreen() {
 			{/* Custom Gorgeous Header */}
 			<View style={{ paddingTop: insets.top }} className="flex-row items-center px-4 py-3 bg-surface border-b border-line/45 justify-between">
 				<View className="flex-row items-center flex-1">
-					<Pressable
-						onPress={() => goBackOrReplace('/(tabs)/messages')}
-						accessibilityLabel="Назад"
+					<NavigationBackButton
+						fallback="/(tabs)/messages"
 						style={{
 							width: 40,
 							height: 40,
@@ -659,10 +658,8 @@ export default function ChatDialogScreen() {
 							borderRadius: 20,
 							backgroundColor: palette.surfaceMuted,
 						}}
-						className="mr-3 active:opacity-80"
-					>
-						<Ionicons name="chevron-back" size={22} color={palette.ink} />
-					</Pressable>
+						className="mr-3"
+					/>
 
 					{activeConv?.other_user_avatar_url && !isDeletedUser ? (
 						<Image

@@ -20,7 +20,14 @@ import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useCategories, useServices } from '@/lib/api/create-listing';
 import { useFavoriteIds } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
-import { useFiltersStore, type ListingSort, type RoomFilter, type SearchFilters } from '@/store/filters';
+import {
+  useFiltersStore,
+  useMyListingFiltersStore,
+  type ListingSort,
+  type MyListingStatus,
+  type RoomFilter,
+  type SearchFilters,
+} from '@/store/filters';
 import { formatGuests } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
@@ -48,6 +55,14 @@ const SORT_OPTIONS: { label: string; value: ListingSort }[] = [
   { label: 'Популярные', value: 'popular' },
 ];
 
+const STATUS_OPTIONS: { label: string; value: MyListingStatus }[] = [
+  { label: 'Опубликовано', value: 'active' },
+  { label: 'Снято', value: 'unpublished' },
+  { label: 'На проверке', value: 'pending_moderation' },
+  { label: 'Доп. проверка', value: 'moderation_review' },
+  { label: 'Отклонено', value: 'rejected' },
+];
+
 function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
@@ -70,9 +85,12 @@ function dateRangeLabel(checkIn: string | null, checkOut: string | null): string
 
 export default function FiltersScreen() {
   const { palette } = useAppTheme();
-  const { ownerId } = useLocalSearchParams<{ ownerId?: string }>();
+  const { ownerId, scope } = useLocalSearchParams<{ ownerId?: string; scope?: string }>();
+  const isMine = scope === 'mine';
   const numericOwnerId = ownerId ? Number(ownerId) : null;
-  const store = useFiltersStore();
+  const searchStore = useFiltersStore();
+  const myListingStore = useMyListingFiltersStore();
+  const store = isMine ? myListingStore : searchStore;
   const { data: services } = useServices();
   const { data: categories } = useCategories();
   const { data: favoriteIds } = useFavoriteIds();
@@ -98,6 +116,9 @@ export default function FiltersScreen() {
   const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
   const [sort, setSort] = useState<ListingSort>(store.sort);
   const [favoritesOnly, setFavoritesOnly] = useState(store.favoritesOnly);
+  const [statuses, setStatuses] = useState<MyListingStatus[]>(
+    isMine ? myListingStore.statuses : [],
+  );
 
   // Price formatting helper
   const formatPriceString = (val: string) => {
@@ -162,14 +183,14 @@ export default function FiltersScreen() {
   const { data: countData, isFetching: countLoading } = useListings({
     ...countParams,
     ownerId: numericOwnerId ?? undefined,
-  }, { enabled: !areaRangeInvalid && !favoritesOnlyEmpty });
+  }, { enabled: !isMine && !areaRangeInvalid && !favoritesOnlyEmpty });
   const total = favoritesOnlyEmpty ? 0 : countData?.total;
   const isCtaLoading = countLoading || (favoritesOnly && favoriteIds == null);
   const ctaTotal = total;
 
   const apply = () => {
     if (areaRangeInvalid) return;
-    store.setFilters({
+    const nextFilters: SearchFilters = {
       sort,
       city,
       checkIn,
@@ -187,7 +208,13 @@ export default function FiltersScreen() {
       childrenAllowed,
       eventsAllowed,
       favoritesOnly,
-    });
+    };
+    if (isMine) {
+      myListingStore.setFilters({ ...nextFilters, statuses });
+      goBackOrReplace('/my-listings');
+      return;
+    }
+    searchStore.setFilters(nextFilters);
     goBackOrReplace('/(tabs)');
   };
 
@@ -213,11 +240,14 @@ export default function FiltersScreen() {
     setEventsAllowed(false);
     setFavoritesOnly(false);
     setSort('newest');
+    setStatuses([]);
   };
 
 
   const ctaLabel = areaRangeInvalid
     ? 'Проверьте диапазон площади'
+    : isMine
+    ? 'Применить фильтры'
     : isCtaLoading
     ? 'Загрузка…'
     : ctaTotal != null
@@ -240,7 +270,7 @@ export default function FiltersScreen() {
       >
         <Pressable
           accessibilityLabel="Закрыть"
-          onPress={() => goBackOrReplace('/(tabs)')}
+          onPress={() => goBackOrReplace(isMine ? '/my-listings' : '/(tabs)')}
           style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
           <Ionicons name="close" size={24} color={palette.ink} />
@@ -333,6 +363,22 @@ export default function FiltersScreen() {
             thumbColor="white"
           />
         </Pressable>
+
+        {isMine ? (
+          <View style={{ gap: 10 }}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Статус</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {STATUS_OPTIONS.map((option) => (
+                <Chip
+                  key={option.value}
+                  label={option.label}
+                  selected={statuses.includes(option.value)}
+                  onPress={() => setStatuses((current) => toggle(current, option.value))}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         {/* City Card */}
         <Pressable
@@ -675,7 +721,7 @@ export default function FiltersScreen() {
           backgroundColor: palette.surface,
         }}
       >
-        <Button label={ctaLabel} loading={isCtaLoading} disabled={areaRangeInvalid} onPress={apply} />
+        <Button label={ctaLabel} loading={!isMine && isCtaLoading} disabled={areaRangeInvalid} onPress={apply} />
       </View>
 
       {/* City picker bottom sheet */}

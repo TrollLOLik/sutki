@@ -9,6 +9,7 @@ const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { PhoneChangeSheet } from '@/components/PhoneChangeSheet';
 import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
@@ -627,9 +628,9 @@ export default function ProfileScreen() {
         />
 
         {/* Back to Search Button */}
-        <Pressable
-          onPress={() => router.navigate('/')}
+        <NavigationBackButton
           accessibilityLabel="В поиск"
+          onPress={() => router.navigate('/')}
           className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
         >
           {status === 'guest' ? (
@@ -647,7 +648,7 @@ export default function ProfileScreen() {
               </Animated.View>
             </>
           )}
-        </Pressable>
+        </NavigationBackButton>
 
         {/* Title in center */}
         <View className="flex-1 px-3 justify-center items-center">

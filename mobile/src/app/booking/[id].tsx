@@ -28,7 +28,7 @@ import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
 import { requestPhoneCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
-import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -232,18 +232,16 @@ export default function BookingScreen() {
             borderBottomColor: palette.line,
           }}
         >
-          <Pressable
-            onPress={() => goBackOrReplace('/(tabs)')}
-            accessibilityLabel="Назад"
+          <NavigationBackButton
+            fallback="/(tabs)"
+            className=""
             style={{
               width: 40, height: 40,
               alignItems: 'center', justifyContent: 'center',
               borderRadius: 20,
               backgroundColor: palette.surfaceMuted,
             }}
-          >
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
+          />
 
           <Text
             style={{

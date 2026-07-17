@@ -38,8 +38,9 @@ import { useHostResponseStats } from '@/lib/api/hostStats';
 import { formatHostResponseTime } from '@/lib/formatHostStats';
 import { shadows } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { requireAuth } from '@/lib/requireAuth';
+import { useSessionStore } from '@/store/session';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -76,10 +77,17 @@ export default function PublicProfileScreen() {
   }>();
 
   const numericId = Number(id);
+  const sessionUserId = useSessionStore((state) => state.user?.id);
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
+
+  useEffect(() => {
+    if (sessionUserId != null && numericId === sessionUserId) {
+      router.replace('/(tabs)/profile');
+    }
+  }, [numericId, sessionUserId]);
 
   useEffect(() => {
     if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -368,9 +376,8 @@ export default function PublicProfileScreen() {
         />
 
         {/* Back Button */}
-        <Pressable
-          onPress={() => goBackOrReplace('/(tabs)')}
-          accessibilityLabel="Назад"
+        <NavigationBackButton
+          fallback="/(tabs)"
           className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
         >
           <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
@@ -379,7 +386,7 @@ export default function PublicProfileScreen() {
           <Animated.View style={{ opacity: animVisible }}>
             <Ionicons name="chevron-back" size={24} color={palette.ink} />
           </Animated.View>
-        </Pressable>
+        </NavigationBackButton>
 
         {/* Title in center */}
         <View className="flex-1 px-3 justify-center">

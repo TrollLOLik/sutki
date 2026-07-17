@@ -30,7 +30,7 @@ import { generateSecureUUID } from '@/lib/guestId';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 export default function ListingDetailScreen() {
   const { palette, isDark } = useAppTheme();
@@ -376,9 +376,8 @@ export default function ListingDetailScreen() {
             />
 
             {/* Back Button */}
-            <Pressable
-              onPress={() => goBackOrReplace('/(tabs)')}
-              accessibilityLabel="Назад"
+            <NavigationBackButton
+              fallback="/(tabs)"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
             >
               <Animated.View
@@ -395,7 +394,7 @@ export default function ListingDetailScreen() {
                 className="shadow-md"
               />
               <Ionicons name="chevron-back" size={22} color={palette.ink} style={{ zIndex: 1 }} />
-            </Pressable>
+            </NavigationBackButton>
 
             {/* Title in center */}
             <View className="flex-1 px-3 justify-center">
@@ -697,7 +696,11 @@ export default function ListingDetailScreen() {
                 
                 <View className="rounded-2xl border border-line bg-surface p-4">
                   <Pressable
-                    onPress={() =>
+                    onPress={() => {
+                      if (isOwnListing) {
+                        router.navigate('/(tabs)/profile');
+                        return;
+                      }
                       router.push({
                         pathname: '/profile/[id]',
                         params: {
@@ -713,8 +716,8 @@ export default function ListingDetailScreen() {
                           city: data.city,
                           listingId: id,
                         },
-                      })
-                    }
+                      });
+                    }}
                     className="flex-row items-start gap-4 active:opacity-80"
                   >
                     {/* Left: Avatar */}

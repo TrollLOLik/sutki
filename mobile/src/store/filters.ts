@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 export type RoomFilter = 'studio' | '1' | '2' | '3' | '4' | '5plus';
 export type ListingSort = 'newest' | 'oldest' | 'popular';
+export type MyListingStatus = 'active' | 'unpublished' | 'pending_moderation' | 'moderation_review' | 'rejected';
 
 export interface SearchFilters {
   sort: ListingSort;
@@ -69,6 +70,26 @@ export const useFiltersStore = create<FiltersState>((set) => ({
   resetSearch: () =>
     set((s) => ({ ...defaultFilters, favoritesOnly: s.favoritesOnly })),
   reset: () => set(defaultFilters),
+}));
+
+export interface MyListingFilters extends SearchFilters {
+  statuses: MyListingStatus[];
+}
+
+interface MyListingFiltersState extends MyListingFilters {
+  setFilters: (patch: Partial<MyListingFilters>) => void;
+  reset: () => void;
+}
+
+const defaultMyListingFilters: MyListingFilters = {
+  ...defaultFilters,
+  statuses: [],
+};
+
+export const useMyListingFiltersStore = create<MyListingFiltersState>((set) => ({
+  ...defaultMyListingFilters,
+  setFilters: (patch) => set(patch),
+  reset: () => set(defaultMyListingFilters),
 }));
 
 /**

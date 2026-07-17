@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookingCard } from '@/components/BookingCard';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { EmptyState } from '@/components/EmptyState';
 import { HistoryBookingCard } from '@/components/HistoryBookingCard';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
@@ -70,14 +71,6 @@ export default function MyBookingsScreen() {
   const isAuthenticated = authStatus === 'authenticated';
   const eligibility = useMyReviewEligibility(isAuthenticated);
   const eligibilityByRequest = new Map((eligibility.data?.items ?? []).map((item) => [item.request_id, item]));
-
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/profile');
-    }
-  };
 
   const activeQuery = useMyBookings({ limit: 100, scope: 'active' }, { enabled: isAuthenticated });
   const historyQuery = useMyBookings({ limit: 100, scope: 'history' }, { enabled: isAuthenticated });
@@ -145,12 +138,10 @@ export default function MyBookingsScreen() {
       <View className="flex-1 bg-surface">
         <SafeAreaView edges={['top']} className="flex-1">
           <View className="flex-row items-center px-4 py-2">
-            <Pressable
-              onPress={handleBack}
-              accessibilityLabel="Назад"
-              className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
-              <Ionicons name="chevron-back" size={22} color={palette.ink} />
-            </Pressable>
+            <NavigationBackButton
+              fallback="/(tabs)/profile"
+              className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+            />
             <Text className="flex-1 text-center text-lg font-semibold text-ink">Заявки</Text>
             <View className="h-10 w-10" />
           </View>
@@ -183,12 +174,10 @@ export default function MyBookingsScreen() {
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
         <View className="flex-row items-center px-4 py-2">
-          <Pressable
-            onPress={handleBack}
-            accessibilityLabel="Назад"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted">
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
+          <NavigationBackButton
+            fallback="/(tabs)/profile"
+            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+          />
           <Text className="flex-1 text-center text-lg font-semibold text-ink">Заявки</Text>
           {/* Spacer to balance the back button */}
           <View className="h-10 w-10" />

@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
-import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 import { EmptyState } from '@/components/EmptyState';
 import { IncomingRequestCard } from '@/components/IncomingRequestCard';
@@ -178,13 +178,10 @@ export default function IncomingBookingsScreen() {
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
         <View className="flex-row items-center px-4 py-2">
-          <Pressable
-            onPress={() => goBackOrReplace('/(tabs)/profile')}
-            accessibilityLabel="Назад"
+          <NavigationBackButton
+            fallback="/(tabs)/profile"
             className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
-          >
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
+          />
           <Text className="flex-1 text-center text-lg font-semibold text-ink">Входящие заявки</Text>
           <View className="h-10 w-10" />
         </View>

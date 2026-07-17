@@ -65,6 +65,9 @@ export interface ListingCard {
   status?: string;
   /** Rejection reason shown to the owner when status === 'rejected'. */
   rejection_reason?: string | null;
+  /** Owner-only catalog links returned by /listings/mine for local filtering. */
+  service_ids?: number[];
+  category_ids?: number[];
 }
 
 export interface ListingDetail extends ListingCard {

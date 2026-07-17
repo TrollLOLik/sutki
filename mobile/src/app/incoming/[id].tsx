@@ -15,7 +15,7 @@ import { ApiError } from '@/lib/api/client';
 import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 /** Format date without year, e.g. "20 мая" */
 function formatDateShort(date: Date): string {
@@ -110,18 +110,16 @@ export default function IncomingBookingDetailScreen() {
             borderBottomColor: palette.line,
           }}
         >
-          <Pressable
-            onPress={() => goBackOrReplace('/incoming')}
-            accessibilityLabel="Назад"
+          <NavigationBackButton
+            fallback="/incoming"
+            className=""
             style={{
               width: 40, height: 40,
               alignItems: 'center', justifyContent: 'center',
               borderRadius: 20,
               backgroundColor: palette.surfaceMuted,
             }}
-          >
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
+          />
           <Text
             style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: palette.ink }}
           >

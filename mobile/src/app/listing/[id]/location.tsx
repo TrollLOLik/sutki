@@ -10,6 +10,7 @@ import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
 import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 function OrangePin() {
   return (
@@ -85,9 +86,12 @@ export default function LocationScreen() {
     <View style={styles.container}>
       {/* Map Header Overlay */}
       <SafeAreaView edges={['top']} style={styles.headerOverlay}>
-        <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} style={styles.closeButton}>
+        <NavigationBackButton
+          fallback={{ pathname: '/listing/[id]', params: { id } }}
+          className=""
+          style={styles.closeButton}>
           <Ionicons name="close" size={24} color={palette.ink} />
-        </Pressable>
+        </NavigationBackButton>
       </SafeAreaView>
 
       {/* Yandex Map */}

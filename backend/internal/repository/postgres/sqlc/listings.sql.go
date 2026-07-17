@@ -672,6 +672,16 @@ SELECT
   h.children_allowed,
   h.events_allowed,
   h.created_at,
+  COALESCE((
+    SELECT array_agg(hhs.service_id ORDER BY hhs.service_id)::int[]
+    FROM house_house_service hhs
+    WHERE hhs.house_id = h.id
+  ), ARRAY[]::int[])::int[] AS service_ids,
+  COALESCE((
+    SELECT array_agg(hhc.house_category_id ORDER BY hhc.house_category_id)::int[]
+    FROM house_house_category hhc
+    WHERE hhc.house_id = h.id
+  ), ARRAY[]::int[])::int[] AS category_ids,
   COALESCE((SELECT array_agg(lp.type ORDER BY lp.type)::text[] FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),ARRAY[]::text[])::text[] AS promotion_types,
   COALESCE((SELECT max(lp.expires_at)::text FROM listing_promotion lp WHERE lp.house_id=h.id AND lp.status='active' AND lp.starts_at<=now() AND lp.expires_at>now()),'')::text AS promotion_expires_at,
   COALESCE((
@@ -727,6 +737,8 @@ type ListHousesByOwnerRow struct {
 	ChildrenAllowed    *string
 	EventsAllowed      *string
 	CreatedAt          pgtype.Timestamp
+	ServiceIds         []int32
+	CategoryIds        []int32
 	PromotionTypes     []string
 	PromotionExpiresAt string
 	Rating             float64
@@ -767,6 +779,8 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.ChildrenAllowed,
 			&i.EventsAllowed,
 			&i.CreatedAt,
+			&i.ServiceIds,
+			&i.CategoryIds,
 			&i.PromotionTypes,
 			&i.PromotionExpiresAt,
 			&i.Rating,

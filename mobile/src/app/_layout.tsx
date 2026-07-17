@@ -20,6 +20,8 @@ import { AuthGateSheet } from '@/components/AuthGateSheet';
 import { ThemeTransitionOverlay } from '@/components/ThemeTransitionOverlay';
 import { YamapInstance } from 'react-native-yamap-plus';
 import { useNavigationRecovery } from '@/hooks/useNavigationRecovery';
+import { useNavigationHistoryTracker } from '@/hooks/useNavigationHistoryTracker';
+import { NavigationHistoryOverlay } from '@/components/NavigationHistoryOverlay';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -60,6 +62,7 @@ function RootLayout() {
   const { visible, context, closeGate } = useAuthGateStore();
   const { isDark, palette } = useAppTheme();
   useNavigationRecovery();
+  useNavigationHistoryTracker();
 
   useEffect(() => {
     // Theme must hydrate before the splash hides, otherwise a saved dark
@@ -120,6 +123,7 @@ function RootLayout() {
           </Stack>
           <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
         </QueryClientProvider>
+        <NavigationHistoryOverlay />
       </SafeAreaProvider>
       </View>
       {/* Circular-reveal overlay: above everything including tab bar and status

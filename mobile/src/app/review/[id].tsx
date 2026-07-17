@@ -18,6 +18,7 @@ import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 const MAX_BODY = 1500;
 
@@ -88,12 +89,10 @@ export default function LeaveReviewScreen() {
       <SafeAreaView edges={['top']} className="flex-1">
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3 bg-surface border-b border-line">
-          <Pressable
-            onPress={() => goBackOrReplace('/bookings')}
-            accessibilityLabel="Назад"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted active:opacity-70">
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
+          <NavigationBackButton
+            fallback="/bookings"
+            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+          />
           <Text className="text-lg font-extrabold text-ink">
             {elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
               ? 'Изменить отзыв'

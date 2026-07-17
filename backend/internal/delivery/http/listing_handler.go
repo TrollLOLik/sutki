@@ -96,6 +96,8 @@ type listingCardDTO struct {
 	// exclusively by listMine (public list endpoints never set them).
 	Status          string  `json:"status,omitempty"`
 	RejectionReason *string `json:"rejection_reason,omitempty"`
+	ServiceIDs      []int32 `json:"service_ids,omitempty"`
+	CategoryIDs     []int32 `json:"category_ids,omitempty"`
 }
 
 type listingDetailDTO struct {
@@ -399,6 +401,8 @@ func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 		// Owner-only: expose moderation state so the app can render badges
 		// ("На проверке", "Отклонено: причина") in "My listings".
 		card.Status = hs.Status
+		card.ServiceIDs = refIDs(hs.Services)
+		card.CategoryIDs = refIDs(hs.Categories)
 		if hs.Status == domain.HouseStatusRejected {
 			card.RejectionReason = hs.RejectionReason
 		}
@@ -410,6 +414,14 @@ func (h *ListingHandler) listMine(w http.ResponseWriter, r *http.Request) {
 		Limit:  res.Limit,
 		Offset: res.Offset,
 	})
+}
+
+func refIDs(refs []domain.Ref) []int32 {
+	ids := make([]int32, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, ref.ID)
+	}
+	return ids
 }
 
 func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {

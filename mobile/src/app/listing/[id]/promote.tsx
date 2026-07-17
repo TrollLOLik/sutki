@@ -14,6 +14,7 @@ import { formatRub } from '@/lib/format';
 import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 function uuid() {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
@@ -106,9 +107,7 @@ export default function PromoteListingScreen() {
     return (
       <ScreenContainer centered>
         <View className="flex-row items-center justify-between py-3">
-          <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
-            <Ionicons name="chevron-back" size={26} color={palette.ink} />
-          </Pressable>
+          <NavigationBackButton fallback={{ pathname: '/listing/[id]', params: { id } }} />
           <Text className="text-lg font-bold text-ink">Продвижение</Text>
           <View className="h-11 w-11" />
         </View>
@@ -163,9 +162,7 @@ export default function PromoteListingScreen() {
   return (
     <ScreenContainer centered>
       <View className="flex-row items-center justify-between py-3">
-        <Pressable onPress={() => goBackOrReplace({ pathname: '/listing/[id]', params: { id } })} accessibilityLabel="Назад" className="h-11 w-11 items-center justify-center rounded-full active:bg-surface-muted">
-          <Ionicons name="chevron-back" size={26} color={palette.ink} />
-        </Pressable>
+        <NavigationBackButton fallback={{ pathname: '/listing/[id]', params: { id } }} />
         <Text className="text-lg font-bold text-ink">Продвижение</Text>
         <View className="h-11 w-11" />
       </View>
