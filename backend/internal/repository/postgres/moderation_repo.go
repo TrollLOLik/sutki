@@ -162,7 +162,7 @@ func (r *ModerationRepo) FindDuplicateText(ctx context.Context, houseID, ownerID
 			SELECT 1
 			FROM moderation_verdict mv
 			JOIN house h ON h.id = mv.house_id
-			WHERE mv.content_hash = $3
+			WHERE split_part(mv.content_hash, '.', 1) = split_part($3, '.', 1)
 			  AND mv.house_id != $1
 			  AND h.owner_id != $2
 			  AND h.status = 'active'
@@ -221,13 +221,18 @@ func (r *ModerationRepo) GetHouseForModeration(ctx context.Context, houseID int3
 		           JOIN house_category c ON c.id = hhc.house_category_id
 		           WHERE hhc.house_id = h.id
 		       ), ''),
+		       COALESCE((
+		           SELECT array_agg(f.path ORDER BY f.position, f.id)
+		           FROM file f
+		           WHERE f.house_id = h.id AND f.deleted = false
+		       ), ARRAY[]::text[]),
 		       COALESCE(h.pois, '[]'::jsonb)
 		FROM house h
 		JOIN "user" u ON u.id = h.owner_id
 		WHERE h.id = $1 AND h.deleted = false
 	`, houseID).Scan(&h.ID, &h.OwnerID, &h.OwnerEmail, &h.Status, &h.City, &h.Street, &h.HouseNumber, &h.NumberRoom, &h.Description, &h.Price,
 		&h.CountRoom, &h.Area, &h.MaxGuests, &h.SmokingAllowed, &h.PetsAllowed, &h.ChildrenAllowed, &h.EventsAllowed, &h.ServicesList,
-		&h.CategoriesList, &poisBytes)
+		&h.CategoriesList, &h.PhotoKeys, &poisBytes)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ModerationHouse{}, domain.ErrNotFound
 	}

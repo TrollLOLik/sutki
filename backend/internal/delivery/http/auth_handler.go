@@ -240,6 +240,14 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Surname, body.Patronymic, body.Phone, body.City, body.AvatarURL, bday, body.VKID, body.VKIDDoNull)
 	if err != nil {
+		if errors.Is(err, domain.ErrUnsafeImage) {
+			writeError(w, http.StatusUnprocessableEntity, "Изображение не прошло модерацию. Выберите другое фото.")
+			return
+		}
+		if errors.Is(err, domain.ErrImageModerationUnavailable) {
+			writeError(w, http.StatusServiceUnavailable, "Проверка изображения временно недоступна. Попробуйте ещё раз.")
+			return
+		}
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "user not found")
 			return

@@ -51,6 +51,7 @@ type Config struct {
 	PhoneChallenges domain.PhoneChallengeRepository
 	DadataAPIKey    string
 	Storage         domain.FileStorage
+	ImageModerator  domain.ImageModerator
 }
 
 // Service implements passwordless email/phone auth with JWT access/refresh.
@@ -66,6 +67,7 @@ type Service struct {
 	exposeCode      bool
 	now             func() time.Time
 	storage         domain.FileStorage
+	imageModerator  domain.ImageModerator
 
 	notifier     domain.EmailNotifier
 	dadataAPIKey string
@@ -133,6 +135,7 @@ func New(
 		exposeCode:      cfg.ExposeCode,
 		now:             time.Now,
 		storage:         cfg.Storage,
+		imageModerator:  cfg.ImageModerator,
 
 		notifier:     cfg.Notifier,
 		dadataAPIKey: cfg.DadataAPIKey,
@@ -362,6 +365,14 @@ func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, pa
 			return domain.User{}, err
 		}
 		oldAvatarURL = oldUser.AvatarURL
+		if *cleanAvatarURL != "" && *cleanAvatarURL != oldAvatarURL {
+			if !media.IsOwnedKey(*cleanAvatarURL, "avatars", id) {
+				return domain.User{}, domain.ErrUnsafeImage
+			}
+			if err := s.moderateAvatar(ctx, id, *cleanAvatarURL); err != nil {
+				return domain.User{}, err
+			}
+		}
 	}
 
 	u, err := s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), cleanAvatarURL, birthday, vkID, vkIDDoNull)
@@ -374,6 +385,39 @@ func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, pa
 		}
 	}
 	return s.formatUserAvatar(u), nil
+}
+
+func (s *Service) moderateAvatar(ctx context.Context, userID int32, key string) error {
+	if s.storage == nil || s.imageModerator == nil {
+		return nil
+	}
+	if !media.IsOwnedKey(key, "avatars", userID) {
+		return domain.ErrUnsafeImage
+	}
+	info, err := s.storage.StatObject(ctx, key)
+	if err != nil {
+		return fmt.Errorf("verify avatar: %w", err)
+	}
+	contentType := strings.ToLower(strings.TrimSpace(info.ContentType))
+	if info.SizeBytes <= 0 || info.SizeBytes > 5*1024*1024 || (contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp") {
+		return domain.ErrUnsafeImage
+	}
+	url, err := s.storage.PresignGet(ctx, key, 10*time.Minute)
+	if err != nil {
+		return fmt.Errorf("%w: presign avatar: %v", domain.ErrImageModerationUnavailable, err)
+	}
+	result, err := s.imageModerator.ModerateImages(ctx, []string{url}, "avatar")
+	if err != nil {
+		return err
+	}
+	if result.Decision != domain.ImageModerationApprove {
+		log.Printf("auth avatar moderation: rejected avatar for user %d (category=%s)", userID, result.Category)
+		if delErr := s.storage.Delete(ctx, key); delErr != nil {
+			log.Printf("auth avatar moderation: delete rejected avatar for user %d: %v", userID, delErr)
+		}
+		return fmt.Errorf("%w: %s", domain.ErrUnsafeImage, result.Reason)
+	}
+	return nil
 }
 
 // DeleteUser deletes a user account (e.g. if they abort onboarding).

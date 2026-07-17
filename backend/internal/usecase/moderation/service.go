@@ -123,6 +123,12 @@ func New(repo domain.ModerationRepository, llmClient LLMClient, alerter AdminAle
 // ContentHash fingerprints every owner-editable field consumed by moderation.
 // Structured edits must never reuse a verdict for older listing content.
 func ContentHash(h domain.ModerationHouse) string {
+	textHash := textContentHash(h)
+	photoSum := sha256.Sum256([]byte(strings.Join(h.PhotoKeys, "\x00")))
+	return textHash + "." + hex.EncodeToString(photoSum[:])
+}
+
+func textContentHash(h domain.ModerationHouse) string {
 	maxGuests := ""
 	if h.MaxGuests != nil {
 		maxGuests = fmt.Sprintf("%d", *h.MaxGuests)
@@ -308,7 +314,7 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		}, nil); err != nil {
 			log.Printf("moderation: record flagged_user verdict for house %d: %v", houseID, err)
 		}
-	} else if s.isDegraded() {
+	} else if s.isDegraded() && !(s.photo != nil && s.photo.moderator != nil && len(h.PhotoKeys) > 0) {
 		// LLM outage: prefilter-clean listings publish provisionally; the
 		// queued job re-checks them once the circuit closes.
 		target = domain.HouseStatusActive
@@ -402,20 +408,29 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 		return
 	}
 
-	verdict, raw, err := s.askLLM(ctx, h)
-	if err != nil {
-		s.recordLLMFailure(ctx)
-		if int(job.Attempts) >= maxAttempts {
-			// Attempts exhausted. In degraded mode listings stay put
-			// (provisional actives remain active, pending stays pending) and
-			// the job reschedules far out so recovery re-processes it.
-			log.Printf("moderation worker: job %d exhausted attempts: %v", job.ID, err)
-			observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d exhausted attempts: %w", job.ID, err))
-			_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(1*time.Hour), err.Error())
+	if s.photo != nil && s.photo.moderator != nil && len(h.PhotoKeys) > 0 {
+		imageVerdict, err := s.moderateListingImages(ctx, h)
+		if err != nil {
+			s.rescheduleJobAfterFailure(ctx, job, fmt.Errorf("image moderation: %w", err))
 			return
 		}
-		backoff := retryBackoff[min(int(job.Attempts)-1, len(retryBackoff)-1)]
-		_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(backoff), err.Error())
+		if imageVerdict.Decision != domain.ImageModerationApprove {
+			verdict := moderationLLMVerdict{
+				Decision: imageVerdict.Decision, Category: "image_" + imageVerdict.Category,
+				Reason: imageVerdict.Reason, Confidence: imageVerdict.Confidence,
+			}
+			if err := s.repo.CompleteLLM(ctx, job.ID, verdict.Decision, verdict.Category, verdict.Reason, verdict.Confidence, imageVerdict.Raw); err != nil {
+				log.Printf("moderation worker: complete image job %d: %v", job.ID, err)
+				return
+			}
+			s.applyVerdict(ctx, h, job, verdict)
+			return
+		}
+	}
+
+	verdict, raw, err := s.askLLM(ctx, h)
+	if err != nil {
+		s.rescheduleJobAfterFailure(ctx, job, err)
 		return
 	}
 	s.recordLLMSuccess(ctx)
@@ -426,6 +441,18 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 	}
 
 	s.applyVerdict(ctx, h, job, verdict)
+}
+
+func (s *Service) rescheduleJobAfterFailure(ctx context.Context, job domain.ModerationVerdict, err error) {
+	s.recordLLMFailure(ctx)
+	if int(job.Attempts) >= maxAttempts {
+		log.Printf("moderation worker: job %d exhausted attempts: %v", job.ID, err)
+		observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d exhausted attempts: %w", job.ID, err))
+		_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(time.Hour), err.Error())
+		return
+	}
+	backoff := retryBackoff[min(int(job.Attempts)-1, len(retryBackoff)-1)]
+	_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(backoff), err.Error())
 }
 
 // moderationLLMVerdict is the JSON contract with the model.

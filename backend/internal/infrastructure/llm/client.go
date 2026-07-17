@@ -54,6 +54,79 @@ type ChatCompletionsResponse struct {
 	Choices []Choice `json:"choices"`
 }
 
+type multimodalContent struct {
+	Type     string              `json:"type"`
+	Text     string              `json:"text,omitempty"`
+	ImageURL *multimodalImageURL `json:"image_url,omitempty"`
+}
+
+type multimodalImageURL struct {
+	URL string `json:"url"`
+}
+
+// GenerateWithImages sends an OpenAI-compatible vision request. Image URLs
+// should be short-lived server-issued links, never arbitrary client URLs.
+func (c *Client) GenerateWithImages(ctx context.Context, systemPrompt, userPrompt string, imageURLs []string, maxTokens int, temperature float64) (string, error) {
+	if c.apiKey == "" {
+		return "", fmt.Errorf("llm client: API key is not configured")
+	}
+
+	content := make([]multimodalContent, 0, len(imageURLs)+1)
+	content = append(content, multimodalContent{Type: "text", Text: userPrompt})
+	for _, rawURL := range imageURLs {
+		if url := strings.TrimSpace(rawURL); url != "" {
+			content = append(content, multimodalContent{Type: "image_url", ImageURL: &multimodalImageURL{URL: url}})
+		}
+	}
+	if len(content) == 1 {
+		return "", fmt.Errorf("llm client: no image URLs supplied")
+	}
+
+	payload := struct {
+		Model       string  `json:"model"`
+		Messages    []any   `json:"messages"`
+		MaxTokens   int     `json:"max_tokens,omitempty"`
+		Temperature float64 `json:"temperature,omitempty"`
+	}{
+		Model: c.model,
+		Messages: []any{
+			map[string]any{"role": "system", "content": systemPrompt},
+			map[string]any{"role": "user", "content": content},
+		},
+		MaxTokens: maxTokens, Temperature: temperature,
+	}
+
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("llm client: marshal vision request failed: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/chat/completions", c.baseURL), bytes.NewReader(jsonBytes))
+	if err != nil {
+		return "", fmt.Errorf("llm client: create vision request failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("llm client: vision request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
+		return "", fmt.Errorf("llm client: vision status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var response ChatCompletionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("llm client: decode vision response failed: %w", err)
+	}
+	if len(response.Choices) == 0 || strings.TrimSpace(response.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("llm client: empty vision response")
+	}
+	return strings.TrimSpace(response.Choices[0].Message.Content), nil
+}
+
 func (c *Client) Generate(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {
 	if c.apiKey == "" {
 		return "", fmt.Errorf("llm client: API key is not configured")

@@ -2,12 +2,50 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestGenerateWithImagesUsesOpenAIContentParts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string          `json:"role"`
+				Content json.RawMessage `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Model != "vision-model" || len(body.Messages) != 2 {
+			t.Fatalf("body=%+v", body)
+		}
+		var parts []map[string]any
+		if err := json.Unmarshal(body.Messages[1].Content, &parts); err != nil {
+			t.Fatal(err)
+		}
+		if len(parts) != 2 || parts[0]["type"] != "text" || parts[1]["type"] != "image_url" {
+			t.Fatalf("parts=%#v", parts)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"decision\":\"approve\"}"}}]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "key", "vision-model", time.Second)
+	answer, err := client.GenerateWithImages(context.Background(), "system", "user", []string{"https://storage.test/image"}, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(answer, "approve") {
+		t.Fatalf("answer=%q", answer)
+	}
+}
 
 func TestGenerateRejectsEmptyContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

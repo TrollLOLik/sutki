@@ -34,6 +34,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/moderation"
 	paymentuc "github.com/TrollLOLik/sutki/backend/internal/usecase/payment"
@@ -120,6 +121,8 @@ func main() {
 	llmClientGen := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMGenerationModel, cfg.LLMTimeout)
 	llmClientMod := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModerationModel, cfg.LLMTimeout)
 	llmClientReviewMod := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMReviewModerationModel, cfg.LLMTimeout)
+	llmClientImageMod := llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMImageModerationModel, 45*time.Second)
+	imageModerator := imagemoderation.New(llmClientImageMod)
 	aiSummarizer := llm.NewSummarizer(llmClientGen)
 
 	// Durable email pipeline: DB-backed outbox + single worker draining it
@@ -147,11 +150,11 @@ func main() {
 	}
 	moderationSvc := moderation.New(moderationRepo, llmClientMod, adminAlerter, notifier)
 	moderationSvc.SetUserEvents(userEvents)
-	moderationSvc.StartWorker(ctx)
 
 	listingRepo := postgres.NewListingRepo(queries)
 	listingViewRepo := postgres.NewListingViewRepo(pool)
-	moderationSvc.SetPhotoPipeline(listingRepo, publicStorage)
+	moderationSvc.SetPhotoPipeline(listingRepo, publicStorage, imageModerator)
+	moderationSvc.StartWorker(ctx)
 	locationSummaryJobRepo := postgres.NewLocationSummaryJobRepo(pool)
 	nearbyPOIs := poi.NewOverpass(cfg.OverpassURL, cfg.OverpassTimeout)
 	listingSvc := listing.New(listingRepo, listingViewRepo, publicStorage, aiSummarizer, moderationSvc, locationSummaryJobRepo, nearbyPOIs)
@@ -203,6 +206,7 @@ func main() {
 		PhoneChallenges: phoneChallengeRepo,
 		DadataAPIKey:    cfg.DadataAPIKey,
 		Storage:         publicStorage,
+		ImageModerator:  imageModerator,
 	})
 	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
@@ -211,11 +215,12 @@ func main() {
 	// into owner-guest conversations via the ChatSystemPoster interface.
 	chatRepo := postgres.NewChatRepo(queries)
 	chatSvc := chat.New(chatRepo, privateStorage, chat.Config{
-		CentrifugoURL: cfg.CentrifugoURL,
-		CentrifugoKey: cfg.CentrifugoKey,
-		HMACSecret:    cfg.CentrifugoHMACSecret,
-		Notifier:      notifier,
-		UserEvents:    userEvents,
+		CentrifugoURL:  cfg.CentrifugoURL,
+		CentrifugoKey:  cfg.CentrifugoKey,
+		HMACSecret:     cfg.CentrifugoHMACSecret,
+		Notifier:       notifier,
+		UserEvents:     userEvents,
+		ImageModerator: imageModerator,
 	})
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 

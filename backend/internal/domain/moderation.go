@@ -116,6 +116,7 @@ type ModerationHouse struct {
 	EventsAllowed   string
 	ServicesList    string
 	CategoriesList  string
+	PhotoKeys       []string
 	POIs            []HousePOI
 }
 

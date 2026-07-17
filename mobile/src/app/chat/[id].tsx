@@ -39,7 +39,7 @@ import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
 import { useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { useMyReviewEligibility } from '@/lib/api/reviews';
-import { api } from '@/lib/api/client';
+import { api, ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { formatRooms } from '@/lib/format';
 import { Button, BottomSheet } from '@/components/ui';
@@ -471,7 +471,12 @@ export default function ChatDialogScreen() {
 			});
 		} catch (err) {
 			console.error('[Chat] Failed uploading file:', err);
-			Alert.alert('Ошибка загрузки', 'Не удалось загрузить и отправить файл. Попробуйте еще раз.');
+			Alert.alert(
+				'Ошибка загрузки',
+				err instanceof ApiError
+					? err.message
+					: 'Не удалось загрузить и отправить файл. Попробуйте ещё раз.',
+			);
 		} finally {
 			setUploading(false);
 		}

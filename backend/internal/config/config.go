@@ -95,6 +95,7 @@ type Config struct {
 	LLMGenerationModel       string
 	LLMModerationModel       string
 	LLMReviewModerationModel string
+	LLMImageModerationModel  string
 	LLMTimeout               time.Duration
 
 	// Centrifugo config
@@ -169,6 +170,7 @@ func Load() (Config, error) {
 		LLMGenerationModel:       getEnv("LLM_GENERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
 		LLMModerationModel:       getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
 		LLMReviewModerationModel: getEnv("LLM_REVIEW_MODERATION_MODEL", getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b"))),
+		LLMImageModerationModel:  getEnv("LLM_IMAGE_MODERATION_MODEL", "moonshotai/Kimi-K2.6"),
 		LLMTimeout:               getDuration("LLM_TIMEOUT", 15*time.Second),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),

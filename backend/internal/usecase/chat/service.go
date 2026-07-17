@@ -69,28 +69,31 @@ type Config struct {
 	Notifier domain.EmailNotifier
 	// UserEvents persists notification-center events and publishes realtime
 	// invalidations. It is independent from email delivery.
-	UserEvents domain.UserEventPublisher
+	UserEvents     domain.UserEventPublisher
+	ImageModerator domain.ImageModerator
 }
 
 type Service struct {
-	repo          domain.ChatRepository
-	storage       domain.FileStorage
-	centrifugoURL string
-	centrifugoKey string
-	hmacSecret    string
-	notifier      domain.EmailNotifier
-	userEvents    domain.UserEventPublisher
+	repo           domain.ChatRepository
+	storage        domain.FileStorage
+	centrifugoURL  string
+	centrifugoKey  string
+	hmacSecret     string
+	notifier       domain.EmailNotifier
+	userEvents     domain.UserEventPublisher
+	imageModerator domain.ImageModerator
 }
 
 func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Service {
 	return &Service{
-		repo:          repo,
-		storage:       storage,
-		centrifugoURL: cfg.CentrifugoURL,
-		centrifugoKey: cfg.CentrifugoKey,
-		hmacSecret:    cfg.HMACSecret,
-		notifier:      cfg.Notifier,
-		userEvents:    cfg.UserEvents,
+		repo:           repo,
+		storage:        storage,
+		centrifugoURL:  cfg.CentrifugoURL,
+		centrifugoKey:  cfg.CentrifugoKey,
+		hmacSecret:     cfg.HMACSecret,
+		notifier:       cfg.Notifier,
+		userEvents:     cfg.UserEvents,
+		imageModerator: cfg.ImageModerator,
 	}
 }
 
@@ -253,6 +256,8 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	}
 
 	// Verify S3 attachments (stat check)
+	imageKeys := make([]string, 0, len(attachments))
+	imageURLs := make([]string, 0, len(attachments))
 	for i, att := range attachments {
 		// att.URL holds the S3 object key on incoming request. Reject anything
 		// that does not match a key this service minted via PresignUpload,
@@ -281,6 +286,29 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		attachments[i].URL = att.URL
 		attachments[i].SizeBytes = info.SizeBytes
 		attachments[i].MimeType = info.ContentType
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(info.ContentType)), "image/") {
+			url, err := s.storage.PresignGet(ctx, att.URL, 10*time.Minute)
+			if err != nil {
+				return domain.Message{}, fmt.Errorf("%w: presign chat image: %v", domain.ErrImageModerationUnavailable, err)
+			}
+			imageKeys = append(imageKeys, att.URL)
+			imageURLs = append(imageURLs, url)
+		}
+	}
+	if len(imageURLs) > 0 && s.imageModerator != nil {
+		result, err := s.imageModerator.ModerateImages(ctx, imageURLs, "chat")
+		if err != nil {
+			return domain.Message{}, err
+		}
+		if result.Decision != domain.ImageModerationApprove {
+			log.Printf("[Chat] Image moderation rejected upload (user=%d, conv=%d, category=%s)", userID, convID, result.Category)
+			for _, key := range imageKeys {
+				if delErr := s.storage.Delete(ctx, key); delErr != nil {
+					log.Printf("[Chat] Failed to delete rejected image %q: %v", key, delErr)
+				}
+			}
+			return domain.Message{}, fmt.Errorf("%w: %s", domain.ErrUnsafeImage, result.Reason)
+		}
 	}
 
 	msg, err := s.repo.CreateMessage(ctx, convID, userID, body, attachments)

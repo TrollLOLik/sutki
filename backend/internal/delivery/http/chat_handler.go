@@ -297,6 +297,10 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid attachment reference")
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
 			writeError(w, http.StatusBadRequest, "attachment exceeds 15MB limit")
+		case errors.Is(err, domain.ErrUnsafeImage):
+			writeError(w, http.StatusUnprocessableEntity, "Изображение не прошло модерацию. Выберите другое фото.")
+		case errors.Is(err, domain.ErrImageModerationUnavailable):
+			writeError(w, http.StatusServiceUnavailable, "Проверка изображения временно недоступна. Попробуйте ещё раз.")
 		default:
 			log.Printf("[Chat] SendMessage error (user=%d, conv=%d): %v", userID, convID, err)
 			writeInternalError(w, r, err, "internal error")

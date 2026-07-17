@@ -26,14 +26,27 @@ type PhotoLister interface {
 
 // photoDeps are wired via SetPhotoPipeline; nil means photo checking is off.
 type photoDeps struct {
-	photos  PhotoLister
-	storage domain.FileStorage
+	photos    PhotoLister
+	storage   domain.FileStorage
+	moderator domain.ImageModerator
 }
 
 // SetPhotoPipeline enables perceptual-hash duplicate detection for listing
 // photos. Optional: without it, moderation covers text only.
-func (s *Service) SetPhotoPipeline(photos PhotoLister, storage domain.FileStorage) {
-	s.photo = &photoDeps{photos: photos, storage: storage}
+func (s *Service) SetPhotoPipeline(photos PhotoLister, storage domain.FileStorage, moderator domain.ImageModerator) {
+	s.photo = &photoDeps{photos: photos, storage: storage, moderator: moderator}
+}
+
+func (s *Service) moderateListingImages(ctx context.Context, h domain.ModerationHouse) (domain.ImageModerationResult, error) {
+	urls := make([]string, 0, len(h.PhotoKeys))
+	for _, key := range h.PhotoKeys {
+		url, err := s.photo.storage.PresignGet(ctx, key, 10*time.Minute)
+		if err != nil {
+			return domain.ImageModerationResult{}, fmt.Errorf("presign %q: %w", key, err)
+		}
+		urls = append(urls, url)
+	}
+	return s.photo.moderator.ModerateImages(ctx, urls, "listing")
 }
 
 // CheckPhotos hashes every photo of the house and flags the listing for
