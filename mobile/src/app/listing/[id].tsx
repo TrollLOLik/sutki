@@ -19,9 +19,9 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 
-
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
+import { ResilientImage } from '@/components/ResilientImage';
 import { Button } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
@@ -487,10 +487,9 @@ export default function ListingDetailScreen() {
                         setGalleryVisible(true);
                       }}
                     >
-                      <Image
-                        source={{ uri: item.url }}
+                      <ResilientImage
+                        uri={item.url}
                         style={{ width, height: 320 }}
-                        contentFit="cover"
                         transition={150}
                       />
                     </TouchableOpacity>

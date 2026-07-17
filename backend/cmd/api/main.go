@@ -152,6 +152,7 @@ func main() {
 	nearbyPOIs := poi.NewOverpass(cfg.OverpassURL, cfg.OverpassTimeout)
 	listingSvc := listing.New(listingRepo, listingViewRepo, publicStorage, aiSummarizer, moderationSvc, locationSummaryJobRepo, nearbyPOIs)
 	listingSvc.StartLocationSummaryWorker(ctx)
+	listingSvc.StartMediaIntegrityWorker(ctx, 6*time.Hour)
 	listingHandler := httpdelivery.NewListingHandler(listingSvc, cfg.MediaBaseURL)
 
 	ucallerClient := ucaller.NewClient(ucaller.Config{

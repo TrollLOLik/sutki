@@ -100,9 +100,10 @@ export default function MyReviewsScreen() {
 
   const scrollReplyAboveKeyboard = (inputHandle: number) => {
     setTimeout(() => {
-      receivedListRef.current
-        ?.getScrollResponder()
-        ?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
+      const responder = receivedListRef.current?.getScrollResponder() as unknown as
+        | { scrollResponderScrollNativeHandleToKeyboard: (handle: number, offset: number, preventNegativeScrollOffset: boolean) => void }
+        | undefined;
+      responder?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
     }, 300);
   };
 
@@ -171,7 +172,7 @@ export default function MyReviewsScreen() {
             <View className="mt-2 self-end" style={{ width: 140 }}>
               <Button
                 label="Изменить"
-                size="sm"
+                size="md"
                 onPress={() => router.push({ pathname: '/review/[id]', params: { id: String(item.request_id) } })}
               />
             </View>

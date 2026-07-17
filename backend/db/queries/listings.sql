@@ -410,6 +410,19 @@ VALUES ($1, $2, $3, $4, $5, false, $6, now(), now());
 -- name: SoftDeleteHousePhotos :exec
 UPDATE file SET deleted = true, updated_at = now() WHERE house_id = $1;
 
+-- name: ListPublicListingMediaKeys :many
+SELECT DISTINCT f.path
+FROM file f
+JOIN house h ON h.id = f.house_id
+WHERE f.deleted = false
+  AND h.deleted = false
+  AND f.path <> ''
+  AND f.path NOT LIKE 'http://%'
+  AND f.path NOT LIKE 'https://%'
+  AND f.path NOT LIKE '%upload_files/%'
+ORDER BY f.path
+LIMIT $1;
+
 -- name: UserHasConfirmedBookingForHouse :one
 -- Returns true if the given user has a confirmed or active booking for the house.
 -- Used by the detail endpoint to decide whether to reveal exact coordinates.

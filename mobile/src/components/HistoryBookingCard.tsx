@@ -1,12 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { parseISO } from 'date-fns';
-import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 
+import { ResilientImage } from '@/components/ResilientImage';
 import { Badge, Button } from '@/components/ui';
-import { canReview, historyKind, historyMeta } from '@/lib/booking-history';
+import { historyKind, historyMeta } from '@/lib/booking-history';
 import { formatDateRangeRu } from '@/lib/format';
-import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
 interface HistoryBookingCardProps {
@@ -21,7 +19,6 @@ interface HistoryBookingCardProps {
 }
 
 export function HistoryBookingCard({ booking, onPress, onRepeat, onReview, reviewAvailable, reviewLabel }: HistoryBookingCardProps) {
-  const { palette } = useAppTheme();
   const kind = historyKind(booking);
   const meta = historyMeta(kind);
   const cover = booking.house?.cover_url;
@@ -35,13 +32,7 @@ export function HistoryBookingCard({ booking, onPress, onRepeat, onReview, revie
         onPress={onPress}
         className="flex-row gap-3 active:opacity-80">
         <View className="h-20 w-20 overflow-hidden rounded-field bg-surface-skeleton">
-          {cover ? (
-            <Image source={{ uri: cover }} style={{ flex: 1 }} contentFit="cover" transition={150} />
-          ) : (
-            <View className="flex-1 items-center justify-center">
-              <Ionicons name="image-outline" size={24} color={palette.inkMuted} />
-            </View>
-          )}
+          <ResilientImage uri={cover} style={{ flex: 1 }} fallbackSize={24} transition={150} />
         </View>
         <View className="flex-1 justify-between py-0.5">
           <View className="gap-0.5">

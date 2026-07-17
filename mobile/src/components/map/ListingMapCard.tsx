@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ResilientImage } from '@/components/ResilientImage';
 import { formatRating, formatRooms, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
@@ -27,7 +27,6 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [imageFailed, setImageFailed] = useState(false);
   const promoted = (listing?.promotion_types ?? []).length > 0;
   const highlighted = (listing?.promotion_types ?? []).includes('highlight');
 
@@ -45,18 +44,7 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
             onPress={() => router.push(`/listing/${listing.id}`)}
             style={[styles.card, highlighted && styles.cardHighlighted]}
           >
-            {listing.cover_url && !imageFailed ? (
-              <Image
-                source={{ uri: listing.cover_url }}
-                style={styles.image}
-                contentFit="cover"
-                onError={() => setImageFailed(true)}
-              />
-            ) : (
-              <View style={[styles.image, styles.imagePlaceholder]}>
-                <Ionicons name="image-outline" size={30} color={palette.inkMuted} />
-              </View>
-            )}
+            <ResilientImage uri={listing.cover_url} style={styles.image} fallbackSize={30} />
 
             <View style={styles.details}>
               {promoted ? (
@@ -134,11 +122,6 @@ const makeStyles = (palette: Palette) =>
     flex: 1,
     padding: 12,
     justifyContent: 'center',
-  },
-  imagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.surfaceMuted,
   },
   promotionBadge: {
     alignSelf: 'flex-start',

@@ -366,6 +366,16 @@ func (r *ListingRepo) ListPhotos(ctx context.Context, houseID int32) ([]domain.P
 	return photos, nil
 }
 
+// ListPublicMediaKeys returns a bounded set of current listing photo keys for
+// the periodic object-storage integrity audit. Legacy absolute URLs are not
+// owned by the configured public bucket and are intentionally skipped.
+func (r *ListingRepo) ListPublicMediaKeys(ctx context.Context, limit int32) ([]string, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	return r.q.ListPublicListingMediaKeys(ctx, limit)
+}
+
 func (r *ListingRepo) ListServices(ctx context.Context, houseID int32) ([]domain.Ref, error) {
 	rows, err := r.q.ListHouseServices(ctx, houseID)
 	if err != nil {

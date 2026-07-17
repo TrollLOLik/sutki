@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Image } from 'expo-image';
 import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
+import { ResilientImage } from '@/components/ResilientImage';
 import { bookingStatusMeta } from '@/lib/booking-status';
 import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -120,18 +120,12 @@ export function BookingCard({
             flexShrink: 0,
           }}
         >
-          {cover ? (
-            <Image
-              source={{ uri: cover }}
-              style={{ width: imgSize, height: imgSize }}
-              contentFit="cover"
-              transition={150}
-            />
-          ) : (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="image-outline" size={28} color={palette.inkMuted} />
-            </View>
-          )}
+          <ResilientImage
+            uri={cover}
+            style={{ width: imgSize, height: imgSize }}
+            fallbackSize={28}
+            transition={150}
+          />
         </View>
 
         {/* Details */}

@@ -25,6 +25,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { ResilientImage } from '@/components/ResilientImage';
 import { Button, MetricTile, PastelIcon } from '@/components/ui';
 import { useShimmer } from '@/hooks/useShimmer';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
@@ -868,18 +869,12 @@ function HostListingCard({
             </View>
           )}
 
-          {listing.cover_url ? (
-            <Image
-              source={{ uri: listing.cover_url }}
-              style={{ width: imgWidth, height: imgHeight }}
-              contentFit="cover"
-              transition={150}
-            />
-          ) : (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="image-outline" size={32} color={palette.inkMuted} />
-            </View>
-          )}
+          <ResilientImage
+            uri={listing.cover_url}
+            style={{ width: imgWidth, height: imgHeight }}
+            fallbackSize={32}
+            transition={150}
+          />
         </View>
 
         {/* Right: Details */}

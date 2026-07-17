@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
+import { ResilientImage } from '@/components/ResilientImage';
 import { formatRating, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
@@ -124,18 +124,12 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
             </View>
           )}
 
-          {listing.cover_url ? (
-            <Image
-              source={{ uri: listing.cover_url }}
-              style={{ width: imgWidth, height: imgHeight }}
-              contentFit="cover"
-              transition={150}
-            />
-          ) : (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="image-outline" size={32} color={palette.inkMuted} />
-            </View>
-          )}
+          <ResilientImage
+            uri={listing.cover_url}
+            style={{ width: imgWidth, height: imgHeight }}
+            fallbackSize={32}
+            transition={150}
+          />
         </View>
 
         {/* Right: Details Container */}

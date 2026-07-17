@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -189,8 +190,17 @@ func (s *S3Storage) StatObject(ctx context.Context, key string) (domain.ObjectIn
 }
 
 func (s *S3Storage) PublicURL(key string) string {
+	key = strings.TrimLeft(strings.TrimSpace(key), "/")
 	if s.publicURL != "" {
-		return fmt.Sprintf("%s/%s", strings.TrimRight(s.publicURL, "/"), key)
+		base := strings.TrimRight(s.publicURL, "/")
+		// A common S3-compatible setup uses the API endpoint itself as the
+		// public base URL. In path-style mode the bucket is part of the public
+		// path; omitting it produces URLs that upload successfully but return
+		// 404 once the mobile image cache is cold.
+		if s.usePathStyle && sameURLRoot(base, s.endpoint) {
+			return fmt.Sprintf("%s/%s/%s", base, s.bucket, key)
+		}
+		return fmt.Sprintf("%s/%s", base, key)
 	}
 
 	base := strings.TrimRight(s.endpoint, "/")
@@ -205,6 +215,17 @@ func (s *S3Storage) PublicURL(key string) string {
 		host = base[idx+3:]
 	}
 	return fmt.Sprintf("%s%s.%s/%s", proto, s.bucket, host, key)
+}
+
+func sameURLRoot(left, right string) bool {
+	l, lErr := url.Parse(strings.TrimRight(left, "/"))
+	r, rErr := url.Parse(strings.TrimRight(right, "/"))
+	if lErr != nil || rErr != nil {
+		return false
+	}
+	return strings.EqualFold(l.Scheme, r.Scheme) &&
+		strings.EqualFold(l.Host, r.Host) &&
+		strings.TrimRight(l.Path, "/") == strings.TrimRight(r.Path, "/")
 }
 
 func (s *S3Storage) Delete(ctx context.Context, key string) error {

@@ -6,16 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/media"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 const (
 	defaultLimit int32 = 20
 	maxLimit     int32 = 100
+	maxPhotos          = 10
+	maxPhotoSize int64 = 10 * 1024 * 1024
 )
 
 // ErrInvalidListing is returned when create input fails validation.
@@ -26,6 +30,9 @@ var ErrInvalidListing = errors.New("invalid listing")
 var ErrTooManySubmissions = errors.New("too many listing submissions today")
 
 var ErrMissingViewIdentity = errors.New("missing listing view identity")
+
+var ErrInvalidListingMedia = errors.New("invalid listing media")
+var ErrListingMediaUnavailable = errors.New("listing media is unavailable")
 
 // Moderator runs the moderation pipeline for created/updated listings.
 // Implemented by the moderation service; nil disables moderation (tests).
@@ -101,6 +108,88 @@ func (s *Service) MapClusters(ctx context.Context) ([]domain.MapCluster, error) 
 	return repo.ListMapClusters(ctx)
 }
 
+type mediaIntegrityRepository interface {
+	ListPublicMediaKeys(context.Context, int32) ([]string, error)
+}
+
+// StartMediaIntegrityWorker periodically verifies that listing photo keys
+// still exist in object storage. It reports a single summarized error to
+// GlitchTip and logs a bounded sample, avoiding one alert per broken object.
+func (s *Service) StartMediaIntegrityWorker(ctx context.Context, interval time.Duration) {
+	if s.storage == nil || interval <= 0 {
+		return
+	}
+	repo, ok := s.repo.(mediaIntegrityRepository)
+	if !ok {
+		return
+	}
+	go func() {
+		defer observability.RecoverAndRepanic(ctx)
+		timer := time.NewTimer(time.Minute)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				s.auditPublicMedia(ctx, repo)
+				timer.Reset(interval)
+			}
+		}
+	}()
+	log.Printf("listing media integrity worker: started (interval %s)", interval)
+}
+
+func (s *Service) auditPublicMedia(ctx context.Context, repo mediaIntegrityRepository) {
+	const auditLimit int32 = 500
+	keys, err := repo.ListPublicMediaKeys(ctx, auditLimit)
+	if err != nil {
+		wrapped := fmt.Errorf("listing media integrity: list keys: %w", err)
+		log.Print(wrapped)
+		observability.CaptureException(ctx, wrapped)
+		return
+	}
+	broken := make([]string, 0, 10)
+	brokenCount := 0
+	for _, key := range keys {
+		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_, statErr := s.storage.StatObject(checkCtx, key)
+		if statErr == nil {
+			statErr = checkPublicMediaURL(checkCtx, s.storage.PublicURL(key))
+		}
+		cancel()
+		if statErr != nil {
+			brokenCount++
+			if len(broken) < cap(broken) {
+				broken = append(broken, key)
+			}
+		}
+	}
+	if brokenCount == 0 {
+		log.Printf("listing media integrity: checked %d public objects", len(keys))
+		return
+	}
+	err = fmt.Errorf("listing media integrity: %d of %d checked objects are unavailable (sample: %s)", brokenCount, len(keys), strings.Join(broken, ", "))
+	log.Print(err)
+	observability.CaptureException(ctx, err)
+}
+
+func checkPublicMediaURL(ctx context.Context, publicURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, publicURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("public URL returned HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // List returns a filtered page of active listings. Limit is clamped to
 // [1, maxLimit] and offset to [0, ∞). The filter is applied server-side.
 func (s *Service) List(ctx context.Context, filter domain.ListFilter) (ListResult, error) {
@@ -156,6 +245,9 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 	}
 	if in.Price <= 0 || in.Area <= 0 {
 		return domain.House{}, ErrInvalidListing
+	}
+	if err := s.validateListingPhotos(ctx, in.OwnerID, in.Photos); err != nil {
+		return domain.House{}, err
 	}
 
 	// Daily moderation rate limit: blocks flooding and iterative prompt
@@ -281,6 +373,9 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	if in.Price <= 0 || in.Area <= 0 {
 		return domain.House{}, ErrInvalidListing
 	}
+	if err := s.validateListingPhotos(ctx, in.OwnerID, in.Photos); err != nil {
+		return domain.House{}, err
+	}
 
 	// Fetch old listing to see if coordinates or address changed
 	oldHouse, err := s.repo.GetByID(ctx, id)
@@ -377,6 +472,44 @@ func validateTimeFormat(t string) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Service) validateListingPhotos(ctx context.Context, ownerID int32, photos []string) error {
+	if len(photos) > maxPhotos {
+		return fmt.Errorf("%w: at most %d photos are allowed", ErrInvalidListingMedia, maxPhotos)
+	}
+	if len(photos) == 0 {
+		return nil
+	}
+	if s.storage == nil {
+		return ErrListingMediaUnavailable
+	}
+
+	seen := make(map[string]struct{}, len(photos))
+	for _, raw := range photos {
+		key := strings.TrimSpace(raw)
+		if !media.IsOwnedKey(key, "listings", ownerID) {
+			return fmt.Errorf("%w: photo key is outside the owner's listing prefix", ErrInvalidListingMedia)
+		}
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("%w: duplicate photo key", ErrInvalidListingMedia)
+		}
+		seen[key] = struct{}{}
+
+		info, err := s.storage.StatObject(ctx, key)
+		if err != nil {
+			return fmt.Errorf("%w: verify %q: %v", ErrListingMediaUnavailable, key, err)
+		}
+		if info.SizeBytes <= 0 || info.SizeBytes > maxPhotoSize {
+			return fmt.Errorf("%w: invalid photo size", ErrInvalidListingMedia)
+		}
+		switch strings.ToLower(strings.TrimSpace(info.ContentType)) {
+		case "image/jpeg", "image/png", "image/webp":
+		default:
+			return fmt.Errorf("%w: invalid photo content type", ErrInvalidListingMedia)
+		}
+	}
+	return nil
 }
 
 func isValidEnum(val string, allowed []string) bool {

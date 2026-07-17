@@ -249,6 +249,10 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, listing.ErrInvalidListing):
 			writeError(w, http.StatusBadRequest, "invalid listing")
+		case errors.Is(err, listing.ErrInvalidListingMedia):
+			writeError(w, http.StatusBadRequest, "invalid or unavailable listing photo")
+		case errors.Is(err, listing.ErrListingMediaUnavailable):
+			writeError(w, http.StatusServiceUnavailable, "listing photo storage is temporarily unavailable")
 		case errors.Is(err, listing.ErrTooManySubmissions):
 			writeError(w, http.StatusTooManyRequests, "daily listing submission limit reached")
 		default:
@@ -315,6 +319,10 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, listing.ErrInvalidListing):
 			writeError(w, http.StatusBadRequest, "invalid listing")
+		case errors.Is(err, listing.ErrInvalidListingMedia):
+			writeError(w, http.StatusBadRequest, "invalid or unavailable listing photo")
+		case errors.Is(err, listing.ErrListingMediaUnavailable):
+			writeError(w, http.StatusServiceUnavailable, "listing photo storage is temporarily unavailable")
 		case errors.Is(err, listing.ErrTooManySubmissions):
 			writeError(w, http.StatusTooManyRequests, "daily listing submission limit reached")
 		case errors.Is(err, domain.ErrNotFound):

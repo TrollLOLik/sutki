@@ -1040,6 +1040,40 @@ func (q *Queries) ListMapClusters(ctx context.Context) ([]ListMapClustersRow, er
 	return items, nil
 }
 
+const listPublicListingMediaKeys = `-- name: ListPublicListingMediaKeys :many
+SELECT DISTINCT f.path
+FROM file f
+JOIN house h ON h.id = f.house_id
+WHERE f.deleted = false
+  AND h.deleted = false
+  AND f.path <> ''
+  AND f.path NOT LIKE 'http://%'
+  AND f.path NOT LIKE 'https://%'
+  AND f.path NOT LIKE '%upload_files/%'
+ORDER BY f.path
+LIMIT $1
+`
+
+func (q *Queries) ListPublicListingMediaKeys(ctx context.Context, limit int32) ([]string, error) {
+	rows, err := q.db.Query(ctx, listPublicListingMediaKeys, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		items = append(items, path)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteHousePhotos = `-- name: SoftDeleteHousePhotos :exec
 UPDATE file SET deleted = true, updated_at = now() WHERE house_id = $1
 `

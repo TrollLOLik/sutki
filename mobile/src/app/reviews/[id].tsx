@@ -46,9 +46,10 @@ export default function ReviewsScreen() {
 
   const scrollReplyAboveKeyboard = (inputHandle: number) => {
     setTimeout(() => {
-      reviewsListRef.current
-        ?.getScrollResponder()
-        ?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
+      const responder = reviewsListRef.current?.getScrollResponder() as unknown as
+        | { scrollResponderScrollNativeHandleToKeyboard: (handle: number, offset: number, preventNegativeScrollOffset: boolean) => void }
+        | undefined;
+      responder?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
     }, 300);
   };
 

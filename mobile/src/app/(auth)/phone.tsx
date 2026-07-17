@@ -9,6 +9,7 @@ import { PhoneInput } from '@/components/PhoneInput';
 import { useRequestPhoneCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { toFullPhone } from '@/lib/phone';
+import type { RequestCodeResponse } from '@/types/auth';
 
 const schema = z.object({
   phone: z.string().refine((value) => value.replace(/\D/g, '').length === 10, 'Укажите полный номер телефона (10 цифр)'),
@@ -26,26 +27,37 @@ export default function PhoneScreen() {
 
   const onSubmit = handleSubmit(async ({ phone }) => {
     const fullPhone = toFullPhone(phone);
+    let response: RequestCodeResponse;
+
     try {
-      const response = await requestPhoneCode.mutateAsync({ phone: fullPhone });
-      router.push({
-        pathname: '/code',
-        params: {
-          phone: fullPhone,
-          challengeId: response.challenge_id ?? '',
-          deliveryMode: response.delivery_mode ?? 'flash_call',
-          codeLength: String(response.code_length ?? 4),
-          devCode: response.dev_code ?? '',
-          fromBooking: fromBooking ?? '',
-        },
-      });
+      response = await requestPhoneCode.mutateAsync({ phone: fullPhone });
     } catch (err) {
+      console.error('[phone-auth] Failed to request phone challenge', err);
       setError('phone', {
         message: err instanceof ApiError && err.status === 429
           ? 'Слишком частый запрос. Подождите немного.'
           : err instanceof ApiError ? err.message : 'Не удалось отправить запрос. Проверьте соединение.',
       });
+      return;
     }
+
+    if (!response.challenge_id) {
+      console.error('[phone-auth] Challenge response has no challenge_id', response);
+      setError('phone', { message: 'Сервер не вернул данные звонка. Попробуйте ещё раз.' });
+      return;
+    }
+
+    router.push({
+      pathname: '/code',
+      params: {
+        phone: fullPhone,
+        challengeId: response.challenge_id,
+        deliveryMode: response.delivery_mode ?? 'flash_call',
+        codeLength: String(response.code_length ?? 4),
+        devCode: response.dev_code ?? '',
+        fromBooking: fromBooking ?? '',
+      },
+    });
   });
 
   return (
