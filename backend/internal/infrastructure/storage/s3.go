@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"strings"
@@ -187,6 +188,36 @@ func (s *S3Storage) StatObject(ctx context.Context, key string) (domain.ObjectIn
 		SizeBytes:   size,
 		ContentType: contentType,
 	}, nil
+}
+
+func (s *S3Storage) ReadObject(ctx context.Context, key string, maxBytes int64) (domain.ObjectData, error) {
+	if maxBytes <= 0 {
+		return domain.ObjectData{}, fmt.Errorf("invalid object read limit")
+	}
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return domain.ObjectData{}, err
+	}
+	defer out.Body.Close()
+
+	if out.ContentLength != nil && *out.ContentLength > maxBytes {
+		return domain.ObjectData{}, fmt.Errorf("object exceeds %d byte read limit", maxBytes)
+	}
+	data, err := io.ReadAll(io.LimitReader(out.Body, maxBytes+1))
+	if err != nil {
+		return domain.ObjectData{}, err
+	}
+	if int64(len(data)) > maxBytes {
+		return domain.ObjectData{}, fmt.Errorf("object exceeds %d byte read limit", maxBytes)
+	}
+	contentType := ""
+	if out.ContentType != nil {
+		contentType = strings.TrimSpace(*out.ContentType)
+	}
+	return domain.ObjectData{Bytes: data, ContentType: contentType}, nil
 }
 
 func (s *S3Storage) PublicURL(key string) string {

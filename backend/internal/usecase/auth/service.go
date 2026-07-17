@@ -25,6 +25,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/media"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 )
 
 const (
@@ -402,11 +403,7 @@ func (s *Service) moderateAvatar(ctx context.Context, userID int32, key string) 
 	if info.SizeBytes <= 0 || info.SizeBytes > 5*1024*1024 || (contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp") {
 		return domain.ErrUnsafeImage
 	}
-	url, err := s.storage.PresignGet(ctx, key, 10*time.Minute)
-	if err != nil {
-		return fmt.Errorf("%w: presign avatar: %v", domain.ErrImageModerationUnavailable, err)
-	}
-	result, err := s.imageModerator.ModerateImages(ctx, []string{url}, "avatar")
+	result, err := imagemoderation.ModerateStoredImages(ctx, s.imageModerator, s.storage, []string{key}, "avatar", 5*1024*1024)
 	if err != nil {
 		log.Printf("auth avatar moderation: check failed for user %d: %v", userID, err)
 		return err

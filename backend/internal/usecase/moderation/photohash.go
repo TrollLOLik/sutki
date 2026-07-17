@@ -16,6 +16,7 @@ import (
 	"github.com/corona10/goimagehash"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 )
 
 // PhotoLister exposes the photo keys of a listing (implemented by the
@@ -38,15 +39,7 @@ func (s *Service) SetPhotoPipeline(photos PhotoLister, storage domain.FileStorag
 }
 
 func (s *Service) moderateListingImages(ctx context.Context, h domain.ModerationHouse) (domain.ImageModerationResult, error) {
-	urls := make([]string, 0, len(h.PhotoKeys))
-	for _, key := range h.PhotoKeys {
-		url, err := s.photo.storage.PresignGet(ctx, key, 10*time.Minute)
-		if err != nil {
-			return domain.ImageModerationResult{}, fmt.Errorf("presign %q: %w", key, err)
-		}
-		urls = append(urls, url)
-	}
-	return s.photo.moderator.ModerateImages(ctx, urls, "listing")
+	return imagemoderation.ModerateStoredImages(ctx, s.photo.moderator, s.photo.storage, h.PhotoKeys, "listing", 10*1024*1024)
 }
 
 // CheckPhotos hashes every photo of the house and flags the listing for

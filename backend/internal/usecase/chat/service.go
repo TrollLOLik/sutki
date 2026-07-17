@@ -18,6 +18,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 )
 
 // attachmentKeyPattern is the only S3 object-key shape accepted for chat
@@ -257,7 +258,6 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 
 	// Verify S3 attachments (stat check)
 	imageKeys := make([]string, 0, len(attachments))
-	imageURLs := make([]string, 0, len(attachments))
 	for i, att := range attachments {
 		// att.URL holds the S3 object key on incoming request. Reject anything
 		// that does not match a key this service minted via PresignUpload,
@@ -287,16 +287,11 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		attachments[i].SizeBytes = info.SizeBytes
 		attachments[i].MimeType = info.ContentType
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(info.ContentType)), "image/") {
-			url, err := s.storage.PresignGet(ctx, att.URL, 10*time.Minute)
-			if err != nil {
-				return domain.Message{}, fmt.Errorf("%w: presign chat image: %v", domain.ErrImageModerationUnavailable, err)
-			}
 			imageKeys = append(imageKeys, att.URL)
-			imageURLs = append(imageURLs, url)
 		}
 	}
-	if len(imageURLs) > 0 && s.imageModerator != nil {
-		result, err := s.imageModerator.ModerateImages(ctx, imageURLs, "chat")
+	if len(imageKeys) > 0 && s.imageModerator != nil {
+		result, err := imagemoderation.ModerateStoredImages(ctx, s.imageModerator, s.storage, imageKeys, "chat", maxAttachmentBytes)
 		if err != nil {
 			log.Printf("[Chat] Image moderation failed (user=%d, conv=%d): %v", userID, convID, err)
 			return domain.Message{}, err

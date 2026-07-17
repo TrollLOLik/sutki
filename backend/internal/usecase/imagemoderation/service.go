@@ -2,13 +2,17 @@ package imagemoderation
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
+
+const maxBatchRawBytes = 8 << 20
 
 type VisionClient interface {
 	GenerateWithImages(ctx context.Context, systemPrompt, userPrompt string, imageURLs []string, maxTokens int, temperature float64) (string, error)
@@ -73,6 +77,90 @@ func (s *Service) ModerateImages(ctx context.Context, imageURLs []string, usage 
 		Decision: verdict.Decision, Category: verdict.Category, Reason: verdict.Reason,
 		Confidence: verdict.Confidence, Raw: []byte(raw),
 	}, nil
+}
+
+// ModerateStoredImages reads trusted object keys through the backend and sends
+// data URLs to Cloud.ru. The provider cannot resolve arbitrary external URLs,
+// and sending presigned URLs also exposes temporary storage credentials.
+func ModerateStoredImages(ctx context.Context, moderator domain.ImageModerator, storage domain.FileStorage, keys []string, usage string, maxObjectBytes int64) (domain.ImageModerationResult, error) {
+	if len(keys) == 0 {
+		return domain.ImageModerationResult{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 1}, nil
+	}
+	if moderator == nil || storage == nil {
+		return domain.ImageModerationResult{}, domain.ErrImageModerationUnavailable
+	}
+
+	final := domain.ImageModerationResult{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 1}
+	batch := make([]string, 0, len(keys))
+	batchBytes := 0
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		result, err := moderator.ModerateImages(ctx, batch, usage)
+		if err != nil {
+			return err
+		}
+		if result.Decision == domain.ImageModerationReject {
+			final = result
+			return nil
+		}
+		if result.Decision == domain.ImageModerationReview {
+			final = result
+		}
+		batch = batch[:0]
+		batchBytes = 0
+		return nil
+	}
+
+	for _, key := range keys {
+		object, err := storage.ReadObject(ctx, key, maxObjectBytes)
+		if err != nil {
+			return domain.ImageModerationResult{}, fmt.Errorf("%w: read image %q: %v", domain.ErrImageModerationUnavailable, key, err)
+		}
+		dataURL, err := imageDataURL(object)
+		if err != nil {
+			return domain.ImageModerationResult{Decision: domain.ImageModerationReject, Category: "invalid_image", Reason: err.Error(), Confidence: 1}, nil
+		}
+		if len(batch) > 0 && batchBytes+len(object.Bytes) > maxBatchRawBytes {
+			if err := flush(); err != nil {
+				return domain.ImageModerationResult{}, err
+			}
+			if final.Decision == domain.ImageModerationReject {
+				return final, nil
+			}
+		}
+		batch = append(batch, dataURL)
+		batchBytes += len(object.Bytes)
+	}
+	if err := flush(); err != nil {
+		return domain.ImageModerationResult{}, err
+	}
+	return final, nil
+}
+
+func imageDataURL(object domain.ObjectData) (string, error) {
+	if len(object.Bytes) == 0 {
+		return "", fmt.Errorf("empty image")
+	}
+	detected := strings.ToLower(strings.TrimSpace(http.DetectContentType(object.Bytes)))
+	declared := strings.ToLower(strings.TrimSpace(strings.Split(object.ContentType, ";")[0]))
+	if !isSupportedImageType(detected) {
+		return "", fmt.Errorf("unsupported image content type %q", detected)
+	}
+	if declared != "" && declared != "application/octet-stream" && declared != detected {
+		return "", fmt.Errorf("image content type mismatch: declared %q, detected %q", declared, detected)
+	}
+	return "data:" + detected + ";base64," + base64.StdEncoding.EncodeToString(object.Bytes), nil
+}
+
+func isSupportedImageType(contentType string) bool {
+	switch contentType {
+	case "image/jpeg", "image/png", "image/webp", "image/gif":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseVerdict(answer string) (modelVerdict, string, error) {

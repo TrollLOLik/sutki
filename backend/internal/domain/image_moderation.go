@@ -26,8 +26,9 @@ type ImageModerationResult struct {
 	Raw        []byte
 }
 
-// ImageModerator checks short-lived, server-issued image URLs. Implementations
-// must fail closed: malformed model output is returned as an error, not approve.
+// ImageModerator checks server-prepared image references (normally data URLs).
+// Implementations must fail closed: malformed model output is returned as an
+// error, not approve.
 type ImageModerator interface {
 	ModerateImages(ctx context.Context, imageURLs []string, usage string) (ImageModerationResult, error)
 }
