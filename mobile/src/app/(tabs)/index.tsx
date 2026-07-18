@@ -152,8 +152,9 @@ export default function SearchScreen() {
   const isGuest = authStatus === 'guest';
 
   const isFavoritesOnlyEmpty = filters.favoritesOnly && (!favoriteIds || favoriteIds.size === 0);
-  const activeFilters = countActiveFilters(filters);
-  const hasSearchConstraints = activeFilters > 0 || query.trim().length > 0;
+  const searchConstraintCount = countActiveFilters(filters);
+  const activeFilters = searchConstraintCount + Number(filters.showOwnListings);
+  const hasSearchConstraints = searchConstraintCount > 0 || query.trim().length > 0;
 
   const listParams = useMemo(() => {
     const params = filtersToListParams(filters, query, { limit: 50 });
@@ -167,7 +168,10 @@ export default function SearchScreen() {
     enabled: !isFavoritesOnlyEmpty,
   });
 
-  const { data: myListingsData } = useMyListings({ limit: 50 }, { enabled: isAuthenticated });
+  const { data: myListingsData } = useMyListings(
+    { limit: 50 },
+    { enabled: isAuthenticated && !filters.showOwnListings },
+  );
 
   const myListingsIds = useMemo(() => {
     return new Set(myListingsData?.items.map((item) => item.id) ?? []);
@@ -182,11 +186,11 @@ export default function SearchScreen() {
     if (filters.favoritesOnly) {
       list = list.filter((item) => favoriteIds?.has(item.id) ?? false);
     }
-    if (isAuthenticated && myListingsIds.size > 0) {
+    if (isAuthenticated && !filters.showOwnListings && myListingsIds.size > 0) {
       list = list.filter((item) => !myListingsIds.has(item.id));
     }
     return list;
-  }, [data?.items, filters.favoritesOnly, favoriteIds, isAuthenticated, myListingsIds, isFavoritesOnlyEmpty]);
+  }, [data?.items, filters.favoritesOnly, filters.showOwnListings, favoriteIds, isAuthenticated, myListingsIds, isFavoritesOnlyEmpty]);
 
   const similarParams = useMemo(
     () => similarFiltersToListParams(filters, query, { limit: 12 }),
@@ -210,11 +214,11 @@ export default function SearchScreen() {
   const similarVisible = useMemo(() => {
     if (!shouldLoadSimilar) return [];
     let list = similarData?.items ?? [];
-    if (isAuthenticated && myListingsIds.size > 0) {
+    if (isAuthenticated && !filters.showOwnListings && myListingsIds.size > 0) {
       list = list.filter((item) => !myListingsIds.has(item.id));
     }
     return list;
-  }, [isAuthenticated, myListingsIds, shouldLoadSimilar, similarData?.items]);
+  }, [filters.showOwnListings, isAuthenticated, myListingsIds, shouldLoadSimilar, similarData?.items]);
   const similarPending = shouldLoadSimilar && (similarLoading || similarFetching || similarPlaceholder);
   const showingSimilar = shouldLoadSimilar && !similarPending && similarVisible.length > 0;
   const feedItems = showingSimilar ? similarVisible : visible;
@@ -278,10 +282,10 @@ export default function SearchScreen() {
         }
         return `${startDay} ${startMonthName} — ${endDay} ${endMonthName}`;
       } catch (e) {
-        return 'Сегодня — Завтра';
+        return 'Любые даты';
       }
     }
-    return 'Сегодня — Завтра';
+    return 'Любые даты';
   }, [filters.checkIn, filters.checkOut]);
 
   return (
@@ -361,7 +365,12 @@ export default function SearchScreen() {
           </Pressable>
           <Pressable
             accessibilityLabel="Фильтры"
-            onPress={() => router.push('/filters')}
+            onPress={() =>
+              router.push({
+                pathname: '/filters',
+                params: query.trim() ? { q: query.trim() } : undefined,
+              })
+            }
             style={{
               width: 48,
               height: 48,

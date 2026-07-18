@@ -31,6 +31,7 @@ import {
 import { formatGuests } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
+import { useSessionStore } from '@/store/session';
 
 
 const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
@@ -85,7 +86,7 @@ function dateRangeLabel(checkIn: string | null, checkOut: string | null): string
 
 export default function FiltersScreen() {
   const { palette } = useAppTheme();
-  const { ownerId, scope } = useLocalSearchParams<{ ownerId?: string; scope?: string }>();
+  const { ownerId, scope, q } = useLocalSearchParams<{ ownerId?: string; scope?: string; q?: string }>();
   const isMine = scope === 'mine';
   const numericOwnerId = ownerId ? Number(ownerId) : null;
   const searchStore = useFiltersStore();
@@ -94,6 +95,9 @@ export default function FiltersScreen() {
   const { data: services } = useServices();
   const { data: categories } = useCategories();
   const { data: favoriteIds } = useFavoriteIds();
+  const currentUserId = useSessionStore((state) =>
+    state.status === 'authenticated' ? state.user?.id ?? null : null,
+  );
   const insets = useSafeAreaInsets();
 
   // Local draft state; only committed to the store on "Показать".
@@ -116,6 +120,7 @@ export default function FiltersScreen() {
   const [eventsAllowed, setEventsAllowed] = useState(store.eventsAllowed);
   const [sort, setSort] = useState<ListingSort>(store.sort);
   const [favoritesOnly, setFavoritesOnly] = useState(store.favoritesOnly);
+  const [showOwnListings, setShowOwnListings] = useState(store.showOwnListings);
   const [statuses, setStatuses] = useState<MyListingStatus[]>(
     isMine ? myListingStore.statuses : [],
   );
@@ -159,20 +164,21 @@ export default function FiltersScreen() {
       categoryId,
       serviceIds,
       favoritesOnly,
+      showOwnListings,
       smokingAllowed,
       petsAllowed,
       childrenAllowed,
       eventsAllowed,
     }),
-    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, areaMin, areaMax, rooms, categoryId, serviceIds, favoritesOnly, smokingAllowed, petsAllowed, childrenAllowed, eventsAllowed],
+    [sort, city, checkIn, checkOut, guests, priceMinQuery, priceMaxQuery, areaMin, areaMax, rooms, categoryId, serviceIds, favoritesOnly, showOwnListings, smokingAllowed, petsAllowed, childrenAllowed, eventsAllowed],
   );
 
   // Live result count for the CTA.
   const countParams = useMemo(() => {
-    const params = filtersToListParams(draftFilters, '', { limit: 1 });
+    const params = filtersToListParams(draftFilters, q ?? '', { limit: 1 });
     if (favoritesOnly && favoriteIds) params.houseIds = Array.from(favoriteIds);
     return params;
-  }, [draftFilters, favoriteIds, favoritesOnly]);
+  }, [draftFilters, favoriteIds, favoritesOnly, q]);
   const favoritesOnlyEmpty = favoritesOnly && favoriteIds != null && favoriteIds.size === 0;
   const parsedAreaMin = areaMin !== '' ? Number(areaMin) : null;
   const parsedAreaMax = areaMax !== '' ? Number(areaMax) : null;
@@ -184,8 +190,21 @@ export default function FiltersScreen() {
     ...countParams,
     ownerId: numericOwnerId ?? undefined,
   }, { enabled: !isMine && !areaRangeInvalid && !favoritesOnlyEmpty });
-  const total = favoritesOnlyEmpty ? 0 : countData?.total;
-  const isCtaLoading = countLoading || (favoritesOnly && favoriteIds == null);
+  const excludeOwnListings =
+    !isMine && numericOwnerId == null && currentUserId != null && !showOwnListings;
+  const { data: ownCountData, isFetching: ownCountLoading } = useListings(
+    { ...countParams, ownerId: currentUserId ?? undefined },
+    { enabled: excludeOwnListings && !areaRangeInvalid && !favoritesOnlyEmpty },
+  );
+  const total = favoritesOnlyEmpty
+    ? 0
+    : countData?.total == null
+      ? undefined
+      : Math.max(0, countData.total - (excludeOwnListings ? ownCountData?.total ?? 0 : 0));
+  const isCtaLoading =
+    countLoading ||
+    (excludeOwnListings && ownCountLoading) ||
+    (favoritesOnly && favoriteIds == null);
   const ctaTotal = total;
 
   const apply = () => {
@@ -208,6 +227,7 @@ export default function FiltersScreen() {
       childrenAllowed,
       eventsAllowed,
       favoritesOnly,
+      showOwnListings,
     };
     if (isMine) {
       myListingStore.setFilters({ ...nextFilters, statuses });
@@ -239,6 +259,7 @@ export default function FiltersScreen() {
     setChildrenAllowed(false);
     setEventsAllowed(false);
     setFavoritesOnly(false);
+    setShowOwnListings(false);
     setSort('newest');
     setStatuses([]);
   };
@@ -356,13 +377,65 @@ export default function FiltersScreen() {
               Показывать объявления, отмеченные сердечком
             </Text>
           </View>
-          <Switch
-            pointerEvents="none"
-            value={favoritesOnly}
-            trackColor={{ false: palette.line, true: palette.primary }}
-            thumbColor="white"
-          />
+          <View pointerEvents="none">
+            <Switch
+              value={favoritesOnly}
+              trackColor={{ false: palette.line, true: palette.primary }}
+              thumbColor="white"
+            />
+          </View>
         </Pressable>
+
+        {!isMine && numericOwnerId == null && currentUserId != null ? (
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showOwnListings }}
+            accessibilityLabel="Показывать мои объявления"
+            onPress={() => setShowOwnListings((value) => !value)}
+            style={{
+              minHeight: 64,
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: showOwnListings ? palette.primary : palette.line,
+              backgroundColor: showOwnListings ? palette.primaryLight : palette.surface,
+            }}>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                marginRight: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 20,
+                backgroundColor: showOwnListings ? palette.primary : palette.surfaceMuted,
+              }}>
+              <Ionicons
+                name="home-outline"
+                size={20}
+                color={showOwnListings ? 'white' : palette.inkSecondary}
+              />
+            </View>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+                Показывать мои объявления
+              </Text>
+              <Text style={{ marginTop: 2, fontSize: 12, color: palette.inkSecondary }}>
+                Добавить ваши объявления в общую выдачу
+              </Text>
+            </View>
+            <View pointerEvents="none">
+              <Switch
+                value={showOwnListings}
+                trackColor={{ false: palette.line, true: palette.primary }}
+                thumbColor="white"
+              />
+            </View>
+          </Pressable>
+        ) : null}
 
         {isMine ? (
           <View style={{ gap: 10 }}>

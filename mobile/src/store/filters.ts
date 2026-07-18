@@ -21,6 +21,8 @@ export interface SearchFilters {
   serviceIds: number[];
   /** When true, the feed shows only listings the user has favorited. */
   favoritesOnly: boolean;
+  /** When true, the authenticated user's listings remain visible in the main feed. */
+  showOwnListings: boolean;
   smokingAllowed: boolean;
   petsAllowed: boolean;
   childrenAllowed: boolean;
@@ -41,6 +43,7 @@ export const defaultFilters: SearchFilters = {
   categoryId: null,
   serviceIds: [],
   favoritesOnly: false,
+  showOwnListings: false,
   smokingAllowed: false,
   petsAllowed: false,
   childrenAllowed: false,
