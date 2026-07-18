@@ -62,15 +62,19 @@ type ModerationRepository interface {
 	// RecordVerdict stores a final verdict row (prefilter or human source,
 	// or the terminal state of an LLM job).
 	RecordVerdict(ctx context.Context, v ModerationVerdict, rawResponse []byte) error
-	// DueBatch claims up to limit due LLM jobs (queued/processing with
-	// next_attempt_at <= now), marking them processing.
+	// DueBatch claims up to limit due LLM jobs. Stale processing jobs are
+	// reclaimed only after their processing lease expires.
 	DueBatch(ctx context.Context, limit int32) ([]ModerationVerdict, error)
-	// CompleteLLM finalises a claimed job with the LLM decision.
-	CompleteLLM(ctx context.Context, id int64, decision, category, reason string, confidence float32, rawResponse []byte) error
+	// FinalizeLLM atomically stores the verdict and applies the resulting house
+	// status. A job must never become done while its house remains pending.
+	FinalizeLLM(ctx context.Context, id int64, houseID int32, decision, category, reason string, confidence float32, rawResponse []byte, houseStatus, rejectionReason string) error
 	// RescheduleLLM re-queues a claimed job after a transient failure.
 	RescheduleLLM(ctx context.Context, id int64, nextAttempt time.Time, lastError string) error
 	// FailLLM marks a job permanently failed (attempts exhausted).
 	FailLLM(ctx context.Context, id int64, lastError string) error
+	// FailLLMWithHouseStatus atomically marks a job permanently failed and
+	// moves the house to the configured safe fallback status.
+	FailLLMWithHouseStatus(ctx context.Context, id int64, houseID int32, houseStatus, rejectionReason, lastError string) error
 	// SetHouseModeration updates house.status (+ rejection_reason for
 	// rejects; pass "" to clear it).
 	SetHouseModeration(ctx context.Context, houseID int32, status, rejectionReason string) error

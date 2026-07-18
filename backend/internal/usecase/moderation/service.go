@@ -28,7 +28,7 @@ import (
 
 const (
 	maxAttempts      = 4 // 1 initial + 3 retries
-	batchSize        = 10
+	batchSize        = 2
 	pollInterval     = 30 * time.Second
 	breakerThreshold = 3 // consecutive LLM failures before degraded mode
 
@@ -46,6 +46,9 @@ const (
 	reviewQueueAlertSize = 10
 
 	phashMaxDistance = 8 // Hamming distance for "same photo"
+
+	failureStageImage = "image"
+	failureStageText  = "text"
 )
 
 var retryBackoff = []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
@@ -381,12 +384,18 @@ func (s *Service) processDue(ctx context.Context) {
 		if len(batch) == 0 {
 			return
 		}
+		var workers sync.WaitGroup
 		for _, job := range batch {
 			if ctx.Err() != nil {
 				return
 			}
-			s.processJob(ctx, job)
+			workers.Add(1)
+			go func(job domain.ModerationVerdict) {
+				defer workers.Done()
+				s.processJob(ctx, job)
+			}(job)
 		}
+		workers.Wait()
 	}
 }
 
@@ -411,7 +420,7 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 	if s.photo != nil && s.photo.moderator != nil && len(h.PhotoKeys) > 0 {
 		imageVerdict, err := s.moderateListingImages(ctx, h)
 		if err != nil {
-			s.rescheduleJobAfterFailure(ctx, job, fmt.Errorf("image moderation: %w", err))
+			s.rescheduleJobAfterFailure(ctx, h, job, failureStageImage, fmt.Errorf("image moderation: %w", err))
 			return
 		}
 		if imageVerdict.Decision != domain.ImageModerationApprove {
@@ -419,40 +428,88 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 				Decision: imageVerdict.Decision, Category: "image_" + imageVerdict.Category,
 				Reason: imageVerdict.Reason, Confidence: imageVerdict.Confidence,
 			}
-			if err := s.repo.CompleteLLM(ctx, job.ID, verdict.Decision, verdict.Category, verdict.Reason, verdict.Confidence, imageVerdict.Raw); err != nil {
-				log.Printf("moderation worker: complete image job %d: %v", job.ID, err)
-				return
-			}
-			s.applyVerdict(ctx, h, job, verdict)
+			s.recordLLMSuccess(ctx)
+			s.finalizeVerdict(ctx, h, job, verdict, imageVerdict.Raw)
 			return
 		}
 	}
 
 	verdict, raw, err := s.askLLM(ctx, h)
 	if err != nil {
-		s.rescheduleJobAfterFailure(ctx, job, err)
+		s.rescheduleJobAfterFailure(ctx, h, job, failureStageText, err)
 		return
 	}
 	s.recordLLMSuccess(ctx)
-
-	if err := s.repo.CompleteLLM(ctx, job.ID, verdict.Decision, verdict.Category, verdict.Reason, verdict.Confidence, raw); err != nil {
-		log.Printf("moderation worker: complete job %d: %v", job.ID, err)
-		return
-	}
-
-	s.applyVerdict(ctx, h, job, verdict)
+	s.finalizeVerdict(ctx, h, job, verdict, raw)
 }
 
-func (s *Service) rescheduleJobAfterFailure(ctx context.Context, job domain.ModerationVerdict, err error) {
+func (s *Service) rescheduleJobAfterFailure(ctx context.Context, h domain.ModerationHouse, job domain.ModerationVerdict, stage string, err error) {
 	s.recordLLMFailure(ctx)
 	if int(job.Attempts) >= maxAttempts {
 		log.Printf("moderation worker: job %d exhausted attempts: %v", job.ID, err)
 		observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d exhausted attempts: %w", job.ID, err))
-		_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(time.Hour), err.Error())
+
+		status, reason := terminalFailureOutcome(stage)
+		markUnread := h.Status != domain.HouseStatusActive
+		if status == domain.HouseStatusModerationReview {
+			markUnread = true
+		}
+		if failErr := s.repo.FailLLMWithHouseStatus(ctx, job.ID, h.ID, status, reason, err.Error()); failErr != nil {
+			log.Printf("moderation worker: terminal fallback for job %d: %v", job.ID, failErr)
+			observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d terminal fallback: %w", job.ID, failErr))
+			return
+		}
+		s.publishStatus(h.OwnerID, h.ID, status, reason, fmt.Sprintf("listing:%d:%s:%s-fallback", h.ID, job.ContentHash, status), markUnread)
+		if status == domain.HouseStatusModerationReview {
+			s.checkReviewQueueAlert(ctx)
+		}
+		s.alertAdmin(ctx, fmt.Sprintf("listing_moderation_failed_%d_%s", job.ID, stage),
+			"Модерация объявления не завершена автоматически",
+			fmt.Sprintf("Объявление %d: этап %s, попыток %d. Безопасный итоговый статус: %s. Ошибка: %v", h.ID, stage, job.Attempts, status, err))
 		return
 	}
 	backoff := retryBackoff[min(int(job.Attempts)-1, len(retryBackoff)-1)]
-	_ = s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(backoff), err.Error())
+	if retryErr := s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(backoff), err.Error()); retryErr != nil {
+		log.Printf("moderation worker: reschedule job %d: %v", job.ID, retryErr)
+		observability.CaptureException(ctx, fmt.Errorf("reschedule listing moderation job %d: %w", job.ID, retryErr))
+	}
+}
+
+func terminalFailureOutcome(stage string) (status, reason string) {
+	if stage == failureStageImage {
+		// Image safety remains fail-closed. Do not publish media that could
+		// not be inspected, but also never leave the owner in endless pending.
+		return domain.HouseStatusModerationReview, "Автоматическая проверка изображений временно недоступна"
+	}
+	// Text passed deterministic prefilters, so the established degraded-mode
+	// policy allows provisional publication when the text LLM is unavailable.
+	return domain.HouseStatusActive, ""
+}
+
+func verdictOutcome(v moderationLLMVerdict) (status, rejectionReason string) {
+	switch {
+	case v.Decision == domain.ModerationApprove:
+		return domain.HouseStatusActive, ""
+	case v.Decision == domain.ModerationReject && v.Confidence >= rejectConfidenceThreshold:
+		return domain.HouseStatusRejected, v.Reason
+	default:
+		return domain.HouseStatusModerationReview, ""
+	}
+}
+
+func (s *Service) finalizeVerdict(ctx context.Context, h domain.ModerationHouse, job domain.ModerationVerdict, v moderationLLMVerdict, raw []byte) {
+	status, rejectionReason := verdictOutcome(v)
+	if err := s.repo.FinalizeLLM(ctx, job.ID, h.ID, v.Decision, v.Category, v.Reason, v.Confidence, raw, status, rejectionReason); err != nil {
+		log.Printf("moderation worker: finalize job %d: %v", job.ID, err)
+		observability.CaptureException(ctx, fmt.Errorf("finalize listing moderation job %d: %w", job.ID, err))
+		// The transaction rolled back both writes. Requeue when possible; if
+		// the database is unavailable the processing lease will recover it.
+		if retryErr := s.repo.RescheduleLLM(ctx, job.ID, time.Now().Add(time.Minute), err.Error()); retryErr != nil {
+			log.Printf("moderation worker: reschedule finalize job %d: %v", job.ID, retryErr)
+		}
+		return
+	}
+	s.afterVerdictApplied(ctx, h, job, v, status)
 }
 
 // moderationLLMVerdict is the JSON contract with the model.
@@ -562,16 +619,13 @@ func parseLLMVerdict(answer string) (moderationLLMVerdict, string, error) {
 	return v, trimmed, nil
 }
 
-// applyVerdict flips the house status per policy and notifies the owner.
-func (s *Service) applyVerdict(ctx context.Context, h domain.ModerationHouse, job domain.ModerationVerdict, v moderationLLMVerdict) {
+// afterVerdictApplied publishes side effects after the verdict and house
+// status have committed atomically.
+func (s *Service) afterVerdictApplied(ctx context.Context, h domain.ModerationHouse, job domain.ModerationVerdict, v moderationLLMVerdict, status string) {
 	address := strings.TrimSpace(fmt.Sprintf("%s, %s %s", h.City, h.Street, h.HouseNumber))
 
-	switch {
-	case v.Decision == domain.ModerationApprove:
-		if err := s.repo.SetHouseModeration(ctx, h.ID, domain.HouseStatusActive, ""); err != nil {
-			log.Printf("moderation: activate house %d: %v", h.ID, err)
-			return
-		}
+	switch status {
+	case domain.HouseStatusActive:
 		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusActive, "", fmt.Sprintf("listing:%d:%s:active", h.ID, job.ContentHash), h.Status != domain.HouseStatusActive)
 		if s.owners != nil && h.OwnerEmail != "" && h.Status != domain.HouseStatusActive {
 			// Only mail when the listing was actually waiting (skip the
@@ -581,11 +635,7 @@ func (s *Service) applyVerdict(ctx context.Context, h domain.ModerationHouse, jo
 			}
 		}
 
-	case v.Decision == domain.ModerationReject && v.Confidence >= rejectConfidenceThreshold:
-		if err := s.repo.SetHouseModeration(ctx, h.ID, domain.HouseStatusRejected, v.Reason); err != nil {
-			log.Printf("moderation: reject house %d: %v", h.ID, err)
-			return
-		}
+	case domain.HouseStatusRejected:
 		if s.owners != nil && h.OwnerEmail != "" {
 			if err := s.owners.NotifyListingRejected(ctx, h.OwnerID, h.OwnerEmail, h.ID, address, v.Reason); err != nil {
 				log.Printf("moderation: queue rejected email for house %d: %v", h.ID, err)
@@ -593,11 +643,7 @@ func (s *Service) applyVerdict(ctx context.Context, h domain.ModerationHouse, jo
 		}
 		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusRejected, v.Reason, fmt.Sprintf("listing:%d:%s:rejected", h.ID, job.ContentHash), true)
 
-	default: // review, or reject below the confidence bar
-		if err := s.repo.SetHouseModeration(ctx, h.ID, domain.HouseStatusModerationReview, ""); err != nil {
-			log.Printf("moderation: send house %d to review: %v", h.ID, err)
-			return
-		}
+	default:
 		s.checkReviewQueueAlert(ctx)
 		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusModerationReview, "", fmt.Sprintf("listing:%d:%s:review", h.ID, job.ContentHash), true)
 	}

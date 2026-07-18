@@ -55,9 +55,11 @@ func (r *ModerationRepo) DueBatch(ctx context.Context, limit int32) ([]domain.Mo
 		SET status = 'processing', attempts = attempts + 1, updated_at = now()
 		WHERE id IN (
 			SELECT id FROM moderation_verdict
-			WHERE status IN ('queued', 'processing')
-			  AND source = 'llm'
-			  AND next_attempt_at <= now()
+			WHERE source = 'llm'
+			  AND (
+			    (status = 'queued' AND next_attempt_at <= now())
+			    OR (status = 'processing' AND updated_at < now() - interval '10 minutes')
+			  )
 			ORDER BY next_attempt_at
 			LIMIT $1
 			FOR UPDATE SKIP LOCKED
@@ -80,15 +82,38 @@ func (r *ModerationRepo) DueBatch(ctx context.Context, limit int32) ([]domain.Mo
 	return out, rows.Err()
 }
 
-func (r *ModerationRepo) CompleteLLM(ctx context.Context, id int64, decision, category, reason string, confidence float32, rawResponse []byte) error {
-	_, err := r.pool.Exec(ctx, `
+func (r *ModerationRepo) FinalizeLLM(ctx context.Context, id int64, houseID int32, decision, category, reason string, confidence float32, rawResponse []byte, houseStatus, rejectionReason string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin finalise llm verdict %d: %w", id, err)
+	}
+	defer tx.Rollback(ctx)
+
+	jobTag, err := tx.Exec(ctx, `
 		UPDATE moderation_verdict
 		SET status = 'done', decision = $2, category = NULLIF($3, ''), reason = NULLIF($4, ''),
 		    confidence = $5, raw_response = $6, updated_at = now()
-		WHERE id = $1
-	`, id, decision, category, reason, confidence, rawResponse)
+		WHERE id = $1 AND house_id = $7 AND status = 'processing'
+	`, id, decision, category, reason, confidence, rawResponse, houseID)
 	if err != nil {
 		return fmt.Errorf("complete llm verdict %d: %w", id, err)
+	}
+	if jobTag.RowsAffected() != 1 {
+		return fmt.Errorf("complete llm verdict %d: processing job not found", id)
+	}
+	houseTag, err := tx.Exec(ctx, `
+		UPDATE house
+		SET status = $2, rejection_reason = NULLIF(left($3, 2000), ''), updated_at = now()
+		WHERE id = $1 AND deleted = false
+	`, houseID, houseStatus, rejectionReason)
+	if err != nil {
+		return fmt.Errorf("apply house %d moderation outcome: %w", houseID, err)
+	}
+	if houseTag.RowsAffected() != 1 {
+		return fmt.Errorf("apply house %d moderation outcome: house not found", houseID)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit llm verdict %d: %w", id, err)
 	}
 	return nil
 }
@@ -109,6 +134,41 @@ func (r *ModerationRepo) FailLLM(ctx context.Context, id int64, lastError string
 		WHERE id = $1
 	`, id, lastError)
 	return err
+}
+
+func (r *ModerationRepo) FailLLMWithHouseStatus(ctx context.Context, id int64, houseID int32, houseStatus, rejectionReason, lastError string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin fail llm verdict %d: %w", id, err)
+	}
+	defer tx.Rollback(ctx)
+
+	jobTag, err := tx.Exec(ctx, `
+		UPDATE moderation_verdict
+		SET status = 'failed', last_error = left($2, 2000), updated_at = now()
+		WHERE id = $1 AND house_id = $3 AND status = 'processing'
+	`, id, lastError, houseID)
+	if err != nil {
+		return fmt.Errorf("fail llm verdict %d: %w", id, err)
+	}
+	if jobTag.RowsAffected() != 1 {
+		return fmt.Errorf("fail llm verdict %d: processing job not found", id)
+	}
+	houseTag, err := tx.Exec(ctx, `
+		UPDATE house
+		SET status = $2, rejection_reason = NULLIF(left($3, 2000), ''), updated_at = now()
+		WHERE id = $1 AND deleted = false
+	`, houseID, houseStatus, rejectionReason)
+	if err != nil {
+		return fmt.Errorf("apply house %d terminal moderation status: %w", houseID, err)
+	}
+	if houseTag.RowsAffected() != 1 {
+		return fmt.Errorf("apply house %d terminal moderation status: house not found", houseID)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit failed llm verdict %d: %w", id, err)
+	}
+	return nil
 }
 
 func (r *ModerationRepo) SetHouseModeration(ctx context.Context, houseID int32, status, rejectionReason string) error {

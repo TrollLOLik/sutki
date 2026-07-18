@@ -39,7 +39,6 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
   const imgWidth = cardInnerWidth * 0.45;
   const imgHeight = imgWidth * (3 / 4);
 
-  const showSuccessBadge = listing.id % 2 === 0;
   const promotionTypes = listing.promotion_types ?? [];
   const isPromoted = promotionTypes.length > 0;
   const isHighlighted = promotionTypes.includes('highlight');
@@ -91,41 +90,7 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
             <View style={{ position:'absolute',left:8,top:8,borderRadius:999,backgroundColor:palette.primary,paddingHorizontal:10,paddingVertical:4,zIndex:10 }}>
               <Text style={{fontSize:9,fontWeight:'700',color:'#fff',lineHeight:12}}>Продвигается</Text>
             </View>
-          ) : showSuccessBadge ? (
-            <View
-              style={{
-                position: 'absolute',
-                left: 8,
-                top: 8,
-                borderRadius: 999,
-                backgroundColor: '#2EAD6B',
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                zIndex: 10,
-              }}
-            >
-              <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff', lineHeight: 12 }}>
-                Свободно сегодня
-              </Text>
-            </View>
-          ) : (
-            <View
-              style={{
-                position: 'absolute',
-                left: 8,
-                top: 8,
-                borderRadius: 999,
-                backgroundColor: '#2F80ED',
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                zIndex: 10,
-              }}
-            >
-              <Text style={{ fontSize: 9, fontWeight: '700', color: '#fff', lineHeight: 12 }}>
-                Проверено
-              </Text>
-            </View>
-          )}
+          ) : null}
 
           <ResilientImage
             uri={listing.cover_url}
@@ -223,10 +188,10 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
               {moderationBadge.label}
             </Text>
           </View>
-          {listing.status === 'rejected' && listing.rejection_reason ? (
+          {(listing.status === 'rejected' || listing.status === 'moderation_review') && listing.rejection_reason ? (
             <Text numberOfLines={3} className="text-[11px] text-ink-secondary leading-4">
-              Причина: {listing.rejection_reason}. Отредактируйте объявление, чтобы отправить его на
-              повторную проверку.
+              {listing.status === 'rejected' ? 'Причина' : 'Комментарий'}: {listing.rejection_reason}
+              {listing.status === 'rejected' ? '. Отредактируйте объявление, чтобы отправить его на повторную проверку.' : ''}
             </Text>
           ) : null}
         </View>
