@@ -11,17 +11,20 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/media"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 )
 
 type MediaHandler struct {
 	privateStorage domain.FileStorage
 	publicStorage  domain.FileStorage
+	imageModerator domain.ImageModerator
 }
 
-func NewMediaHandler(privateStorage domain.FileStorage, publicStorage domain.FileStorage) *MediaHandler {
+func NewMediaHandler(privateStorage domain.FileStorage, publicStorage domain.FileStorage, imageModerator domain.ImageModerator) *MediaHandler {
 	return &MediaHandler{
 		privateStorage: privateStorage,
 		publicStorage:  publicStorage,
+		imageModerator: imageModerator,
 	}
 }
 
@@ -129,6 +132,75 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Media] PresignUpload OK (type=%s) key=%q", uploadType, target.Key)
 	writeJSON(w, http.StatusOK, target)
+}
+
+type moderateListingMediaRequest struct {
+	Keys []string `json:"keys"`
+}
+
+type moderateListingMediaItem struct {
+	Key        string  `json:"key"`
+	Decision   string  `json:"decision"`
+	Category   string  `json:"category,omitempty"`
+	Reason     string  `json:"reason,omitempty"`
+	Confidence float32 `json:"confidence"`
+}
+
+// ModerateListingImages checks newly uploaded listing photos before the app
+// may show them on the final publication preview. The durable listing worker
+// still repeats this check and remains the authoritative publication gate.
+func (h *MediaHandler) ModerateListingImages(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req moderateListingMediaRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Keys) == 0 || len(req.Keys) > 10 {
+		writeError(w, http.StatusBadRequest, "between 1 and 10 listing image keys are required")
+		return
+	}
+	if h.publicStorage == nil || h.imageModerator == nil {
+		writeError(w, http.StatusServiceUnavailable, "image moderation is temporarily unavailable")
+		return
+	}
+
+	seen := make(map[string]struct{}, len(req.Keys))
+	items := make([]moderateListingMediaItem, 0, len(req.Keys))
+	for _, rawKey := range req.Keys {
+		key := strings.TrimSpace(rawKey)
+		if !media.IsOwnedKey(key, "listings", userID) {
+			writeError(w, http.StatusBadRequest, "listing image key is outside the user's media scope")
+			return
+		}
+		if _, exists := seen[key]; exists {
+			writeError(w, http.StatusBadRequest, "duplicate listing image key")
+			return
+		}
+		seen[key] = struct{}{}
+
+		result, err := imagemoderation.ModerateStoredImages(r.Context(), h.imageModerator, h.publicStorage, []string{key}, "listing_preview", 10*1024*1024)
+		if err != nil {
+			log.Printf("[Media] listing image moderation error key=%q: %v", key, err)
+			writeError(w, http.StatusServiceUnavailable, "image moderation is temporarily unavailable")
+			return
+		}
+		items = append(items, moderateListingMediaItem{
+			Key: key, Decision: result.Decision, Category: result.Category,
+			Reason: result.Reason, Confidence: result.Confidence,
+		})
+		if result.Decision != domain.ImageModerationApprove {
+			if err := h.publicStorage.Delete(r.Context(), key); err != nil {
+				log.Printf("[Media] delete rejected listing image key=%q: %v", key, err)
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func isImageMime(mime string) bool {

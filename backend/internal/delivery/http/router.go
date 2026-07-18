@@ -141,6 +141,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Route("/favorites", favoriteHandler.Routes)
 			r.Route("/chat", chatHandler.Routes)
 			r.Post("/media/presign", mediaHandler.PresignUpload)
+			r.Post("/media/listings/moderate", mediaHandler.ModerateListingImages)
 			r.Post("/ai/listing-description", aiHandler.GenerateDescription)
 			r.Post("/payments/checkout", paymentHandler.Checkout)
 			r.Get("/payments/{id}", paymentHandler.Get)

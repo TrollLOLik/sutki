@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
+import { moderateListingImages, presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 import { api } from '@/lib/api/client';
 import { env } from '@/lib/env';
 import { storeRef } from '@/lib/api/store-ref';
@@ -126,7 +126,9 @@ export default function CreateListingScreen() {
   const [previousDescription, setPreviousDescription] = useState('');
 
   const [loadedEdit, setLoadedEdit] = useState(false);
-  const [uploadStatuses, setUploadStatuses] = useState<Record<string, { progress: number; error: boolean; key?: string }>>({});
+  const [uploadStatuses, setUploadStatuses] = useState<
+    Record<string, { progress: number; error: boolean; key?: string; moderating?: boolean }>
+  >({});
 
   const generateAIDescription = async (action: string = 'generate') => {
     if (action === 'generate' && !draft.city) {
@@ -317,6 +319,26 @@ export default function CreateListingScreen() {
           [uri]: { ...prev[uri], progress },
         }));
       });
+
+      setUploadStatuses((prev) => ({
+        ...prev,
+        [uri]: { progress: 1, error: false, moderating: true },
+      }));
+      const moderation = await moderateListingImages([target.key]);
+      const verdict = moderation.items[0];
+      if (!verdict || verdict.decision !== 'approve') {
+        draft.removePhoto(uri);
+        setUploadStatuses((prev) => {
+          const next = { ...prev };
+          delete next[uri];
+          return next;
+        });
+        Alert.alert(
+          'Фотография не прошла проверку',
+          verdict?.reason || 'Выберите другую фотографию.',
+        );
+        return;
+      }
 
       setUploadStatuses((prev) => ({
         ...prev,
@@ -1420,7 +1442,7 @@ export default function CreateListingScreen() {
                           <View className="absolute inset-0 bg-black/50 items-center justify-center">
                             <ActivityIndicator size="small" color="#FFFFFF" />
                             <Text className="text-[10px] text-white font-semibold mt-1">
-                              {Math.round((status?.progress || 0) * 100)}%
+                              {status?.moderating ? 'Проверка…' : `${Math.round((status?.progress || 0) * 100)}%`}
                             </Text>
                           </View>
                         )}

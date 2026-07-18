@@ -252,7 +252,7 @@ func main() {
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
-	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage)
+	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage, imageModerator)
 	var opsWebhookHandler *httpdelivery.OpsWebhookHandler
 	if cfg.TelegramBotToken != "" {
 		telegramClient := telegram.NewClient(telegram.Config{

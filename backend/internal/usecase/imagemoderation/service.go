@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	maxBatchRawBytes          = 8 << 20
 	maxVisionCompletionTokens = 1024
 )
 
@@ -94,28 +93,6 @@ func ModerateStoredImages(ctx context.Context, moderator domain.ImageModerator, 
 	}
 
 	final := domain.ImageModerationResult{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 1}
-	batch := make([]string, 0, len(keys))
-	batchBytes := 0
-	flush := func() error {
-		if len(batch) == 0 {
-			return nil
-		}
-		result, err := moderator.ModerateImages(ctx, batch, usage)
-		if err != nil {
-			return err
-		}
-		if result.Decision == domain.ImageModerationReject {
-			final = result
-			return nil
-		}
-		if result.Decision == domain.ImageModerationReview {
-			final = result
-		}
-		batch = batch[:0]
-		batchBytes = 0
-		return nil
-	}
-
 	for _, key := range keys {
 		object, err := storage.ReadObject(ctx, key, maxObjectBytes)
 		if err != nil {
@@ -125,19 +102,20 @@ func ModerateStoredImages(ctx context.Context, moderator domain.ImageModerator, 
 		if err != nil {
 			return domain.ImageModerationResult{Decision: domain.ImageModerationReject, Category: "invalid_image", Reason: err.Error(), Confidence: 1}, nil
 		}
-		if len(batch) > 0 && batchBytes+len(object.Bytes) > maxBatchRawBytes {
-			if err := flush(); err != nil {
-				return domain.ImageModerationResult{}, err
-			}
-			if final.Decision == domain.ImageModerationReject {
-				return final, nil
-			}
+
+		// Moderate every object in an independent vision request. Some OpenAI-
+		// compatible vision providers inspect only the first image in a multipart
+		// prompt, which allowed an unsafe non-cover photo to be missed.
+		result, err := moderator.ModerateImages(ctx, []string{dataURL}, usage)
+		if err != nil {
+			return domain.ImageModerationResult{}, err
 		}
-		batch = append(batch, dataURL)
-		batchBytes += len(object.Bytes)
-	}
-	if err := flush(); err != nil {
-		return domain.ImageModerationResult{}, err
+		if result.Decision == domain.ImageModerationReject {
+			return result, nil
+		}
+		if result.Decision == domain.ImageModerationReview {
+			final = result
+		}
 	}
 	return final, nil
 }

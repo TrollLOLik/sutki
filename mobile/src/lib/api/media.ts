@@ -6,6 +6,18 @@ export interface UploadTarget {
 	key: string;
 }
 
+export interface ListingImageModerationItem {
+	key: string;
+	decision: 'approve' | 'reject' | 'review';
+	category?: string;
+	reason?: string;
+	confidence: number;
+}
+
+export function moderateListingImages(keys: string[]): Promise<{ items: ListingImageModerationItem[] }> {
+	return api.post<{ items: ListingImageModerationItem[] }>('/api/v1/media/listings/moderate', { keys });
+}
+
 export function presignMediaUpload(
 	fileName: string,
 	size: number,
