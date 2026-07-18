@@ -296,6 +296,24 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 	enqueued, err := s.repo.EnqueueLLM(ctx, houseID, hash)
 	if err != nil {
 		log.Printf("moderation: enqueue llm for house %d: %v", houseID, err)
+		observability.CaptureException(ctx, fmt.Errorf("enqueue listing %d moderation: %w", houseID, err))
+
+		// There is no durable job to recover when enqueueing itself fails. Never
+		// leave the listing in pending_moderation with nothing for the worker to
+		// process. Image-bearing listings stay fail-closed; prefilter-clean text-
+		// only listings follow the existing degraded-mode publication policy.
+		status, reason := enqueueFailureOutcome(s.photo != nil && s.photo.moderator != nil && len(h.PhotoKeys) > 0)
+		if statusErr := s.repo.SetHouseModeration(ctx, houseID, status, reason); statusErr != nil {
+			return "", fmt.Errorf("enqueue moderation: %v; apply fallback status: %w", err, statusErr)
+		}
+		s.publishStatus(h.OwnerID, houseID, status, reason, fmt.Sprintf("listing:%d:%s:%s-enqueue-fallback", houseID, hash, status), true)
+		if status == domain.HouseStatusModerationReview {
+			s.checkReviewQueueAlert(ctx)
+		}
+		s.alertAdmin(ctx, fmt.Sprintf("listing_moderation_enqueue_failed_%d", houseID),
+			"Объявление не поставлено в очередь модерации",
+			fmt.Sprintf("Объявление %d переведено в безопасный статус %s. Ошибка очереди: %v", houseID, status, err))
+		return status, nil
 	}
 	// Update with unchanged text: a job for this exact content already exists
 	// (queued -> house is already pending; done -> verdict already applied).
@@ -483,6 +501,13 @@ func terminalFailureOutcome(stage string) (status, reason string) {
 	}
 	// Text passed deterministic prefilters, so the established degraded-mode
 	// policy allows provisional publication when the text LLM is unavailable.
+	return domain.HouseStatusActive, ""
+}
+
+func enqueueFailureOutcome(hasImages bool) (status, reason string) {
+	if hasImages {
+		return domain.HouseStatusModerationReview, "Автоматическая проверка изображений временно недоступна"
+	}
 	return domain.HouseStatusActive, ""
 }
 

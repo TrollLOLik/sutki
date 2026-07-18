@@ -1,0 +1,2 @@
+-- Intentionally keep content_hash as text. Shrinking it back to varchar(64)
+-- would truncate current photo-aware hashes and recreate the production bug.
