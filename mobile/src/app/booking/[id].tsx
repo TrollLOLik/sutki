@@ -7,7 +7,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -31,6 +30,7 @@ import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/li
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 const ISO = 'yyyy-MM-dd';
 const MAX_GUESTS = 20;

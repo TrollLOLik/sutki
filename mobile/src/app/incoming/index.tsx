@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -39,6 +38,7 @@ import { cn } from '@/lib/cn';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 type Tab = 'pending' | 'processed';
 type IncomingSort = 'newest' | 'oldest' | 'checkin_asc' | 'checkin_desc';

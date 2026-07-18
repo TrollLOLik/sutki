@@ -1,7 +1,7 @@
 import { addDays, format, parseISO } from 'date-fns';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -23,6 +23,7 @@ import {
   type MyListingStatus,
   type RoomFilter,
 } from '@/store/filters';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 const SORT_OPTIONS: SortOption<ListingSort>[] = [
   { value: 'newest', label: 'Сначала новые', icon: 'arrow-down-outline' },

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Animated, Alert, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { Animated, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
@@ -32,6 +32,7 @@ import { GuestProfile } from '@/components/profile/GuestProfile';
 import { ThemeSelector } from '@/components/profile/ThemeSelector';
 import { type ActivityScope, useActivityCounters, useMarkActivityRead } from '@/lib/api/activity';
 import { useFiltersStore } from '@/store/filters';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 type SettingsTab = 'basic' | 'security';
 
@@ -318,11 +319,11 @@ export default function ProfileScreen() {
     }
   }, [settingsVisible, user]);
 
-  const pickAvatar = async () => {
+  const selectAvatarFromGallery = async (): Promise<string | undefined> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Разрешение отклонено', 'Нам нужен доступ к галерее для выбора фото.');
-      return;
+      return undefined;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -333,8 +334,66 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setFormAvatarUri(result.assets[0].uri);
+      return result.assets[0].uri;
     }
+    return undefined;
+  };
+
+  const pickAvatar = async () => {
+    const uri = await selectAvatarFromGallery();
+    if (uri) setFormAvatarUri(uri);
+  };
+
+  const resolveAvatarURL = async (uri: string | null): Promise<string> => {
+    if (uri === null) return '';
+    if (!uri.startsWith('file://') && !uri.startsWith('content://')) return uri;
+
+    const fileName = uri.split('/').pop() || 'avatar.jpg';
+    const ext = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+    const mimeType = `image/${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'}`;
+    const target = await presignMediaUpload(fileName, 1024 * 1024, mimeType, 'avatar');
+    await uploadToS3(uri, target, fileName, mimeType);
+    return target.key;
+  };
+
+  const saveAvatarImmediately = async (uri: string | null) => {
+    if (!user || uploadingAvatar) return;
+    setUploadingAvatar(true);
+    try {
+      const avatarURL = await resolveAvatarURL(uri);
+      if (avatarURL === (user.avatar_url ?? '')) return;
+      const updated = await updateMe.mutateAsync({ avatar_url: avatarURL });
+      setUser(updated);
+      setFormAvatarUri(updated.avatar_url || null);
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status >= 500) {
+        console.error('[Profile] Error updating avatar:', err);
+      }
+      Alert.alert(
+        'Не удалось изменить фото',
+        err instanceof ApiError ? err.message : 'Попробуйте выбрать фотографию ещё раз.',
+      );
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const pickAndSaveAvatar = async () => {
+    const uri = await selectAvatarFromGallery();
+    if (uri) await saveAvatarImmediately(uri);
+  };
+
+  const handleProfileAvatarPress = async () => {
+    if (uploadingAvatar) return;
+    if (user?.avatar_url) {
+      Alert.alert('Фото профиля', 'Что вы хотите сделать?', [
+        { text: 'Выбрать из галереи', onPress: pickAndSaveAvatar },
+        { text: 'Удалить фото', style: 'destructive', onPress: () => saveAvatarImmediately(null) },
+        { text: 'Отмена', style: 'cancel' },
+      ]);
+      return;
+    }
+    await pickAndSaveAvatar();
   };
 
   const handleAvatarPress = async () => {
@@ -363,23 +422,7 @@ export default function ProfileScreen() {
     setSaveError(null);
     setUploadingAvatar(true);
     try {
-      let finalAvatarUrl = user?.avatar_url || '';
-
-      if (formAvatarUri === null) {
-        finalAvatarUrl = '';
-      } else if (formAvatarUri.startsWith('file://') || formAvatarUri.startsWith('content://')) {
-        // Local file, upload to S3
-        const fileName = formAvatarUri.split('/').pop() || 'avatar.jpg';
-        const ext = fileName.split('.').pop() || 'jpg';
-        const mimeType = `image/${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'}`;
-        const size = 1024 * 1024; // fallback size
-
-        const target = await presignMediaUpload(fileName, size, mimeType, 'avatar');
-        await uploadToS3(formAvatarUri, target, fileName, mimeType);
-        finalAvatarUrl = target.key;
-      } else {
-        finalAvatarUrl = formAvatarUri;
-      }
+      const finalAvatarUrl = await resolveAvatarURL(formAvatarUri);
 
       // Construct update payload containing only changed fields
       const body: UpdateProfileBody = {};
@@ -717,7 +760,14 @@ export default function ProfileScreen() {
         >
           <View className="flex-row items-center gap-4">
             {/* Avatar container with double white border rings */}
-            <View className="h-[84px] w-[84px] items-center justify-center rounded-full border border-white/40 p-[3px] flex-shrink-0">
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Изменить фото профиля"
+              activeOpacity={0.82}
+              disabled={uploadingAvatar}
+              onPress={handleProfileAvatarPress}
+              className="h-[84px] w-[84px] items-center justify-center rounded-full border border-white/40 p-[3px] flex-shrink-0"
+            >
               <View className="h-full w-full items-center justify-center rounded-full border-2 border-white bg-primary-light overflow-hidden">
                 {avatarUrl ? (
                   <Image source={{ uri: avatarUrl }} className="h-full w-full rounded-full" />
@@ -725,7 +775,28 @@ export default function ProfileScreen() {
                   <Text className="text-xl font-extrabold text-primary">{initials(user)}</Text>
                 )}
               </View>
-            </View>
+              <View
+                style={{
+                  position: 'absolute',
+                  right: -2,
+                  bottom: -2,
+                  width: 27,
+                  height: 27,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 14,
+                  borderWidth: 2,
+                  borderColor: '#FFFFFF',
+                  backgroundColor: palette.primary,
+                }}
+              >
+                {uploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="camera-outline" size={15} color="#FFFFFF" />
+                )}
+              </View>
+            </TouchableOpacity>
 
             <View className="flex-1 justify-center">
               <View className="self-start rounded-pill bg-white/20 px-3 py-1">

@@ -6,7 +6,6 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Alert,
   Dimensions,
   Linking,
   Pressable,
@@ -41,6 +40,7 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { requireAuth } from '@/lib/requireAuth';
 import { useSessionStore } from '@/store/session';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);

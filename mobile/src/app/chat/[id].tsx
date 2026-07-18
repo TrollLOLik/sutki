@@ -9,7 +9,6 @@ import {
 	KeyboardAvoidingView,
 	Platform,
 	Pressable,
-	Alert,
 	Keyboard,
 	LayoutAnimation,
 	UIManager,
@@ -24,6 +23,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useQueryClient, InfiniteData } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 import { useSessionStore } from '@/store/session';
 import { useChatStore, ChatMessage } from '@/store/chatStore';

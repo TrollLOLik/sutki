@@ -12,7 +12,6 @@ import {
   ScrollView,
   Text,
   View,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,6 +29,7 @@ import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 type Tab = 'active' | 'history';
 type BookingSort = 'newest' | 'oldest' | 'checkin_asc' | 'checkin_desc';

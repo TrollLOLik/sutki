@@ -11,7 +11,6 @@ import {
 	Text,
 	TextInput,
 	View,
-	Alert,
 	TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +35,7 @@ import { useCreateListingStore } from '@/store/create-listing';
 import { useAppTheme } from '@/theme/useAppTheme';
 import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yamap-plus';
 import * as Location from 'expo-location';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 const TOTAL_STEPS = 6;
 const ROOM_OPTIONS = [

@@ -14,7 +14,6 @@ import {
 	TextInput,
 	TouchableOpacity,
 	View,
-	Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
@@ -31,6 +30,7 @@ import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { User } from '@/types/user';
 import { getGlobalFromBooking, setGlobalFromBooking } from '@/lib/requireAuth';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 // Mock Premium Avatar URL
 const MOCK_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop';

@@ -3,7 +3,7 @@ import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
@@ -17,6 +17,7 @@ import { formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 /** Format date without year, e.g. "20 мая" */
 function formatDateShort(date: Date): string {

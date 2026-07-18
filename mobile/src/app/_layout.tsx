@@ -22,6 +22,7 @@ import { YamapInstance } from 'react-native-yamap-plus';
 import { useNavigationRecovery } from '@/hooks/useNavigationRecovery';
 import { useNavigationHistoryTracker } from '@/hooks/useNavigationHistoryTracker';
 import { NavigationHistoryOverlay } from '@/components/NavigationHistoryOverlay';
+import { AppAlertHost } from '@/components/AppAlert';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -122,6 +123,7 @@ function RootLayout() {
             </Stack.Protected>
           </Stack>
           <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
+          <AppAlertHost />
         </QueryClientProvider>
         <NavigationHistoryOverlay />
       </SafeAreaProvider>
