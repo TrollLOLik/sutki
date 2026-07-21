@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import type { Ref } from 'react';
+import { Text, TextInput, View } from 'react-native';
 
 import { IconButton, SearchField } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -9,6 +10,7 @@ interface SearchOverlayHeaderProps {
   onSubmit: () => void;
   placeholder: string;
   query: string;
+  inputRef?: Ref<TextInput>;
 }
 
 export function SearchOverlayHeader({
@@ -17,6 +19,7 @@ export function SearchOverlayHeader({
   onSubmit,
   placeholder,
   query,
+  inputRef,
 }: SearchOverlayHeaderProps) {
   const { palette } = useAppTheme();
 
@@ -28,7 +31,8 @@ export function SearchOverlayHeader({
         <View style={{ width: 48, height: 48 }} />
       </View>
       <SearchField
-        autoFocus
+        ref={inputRef}
+        showSoftInputOnFocus
         value={query}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import {
   Pressable,
   TextInput,
@@ -17,7 +17,7 @@ interface SearchFieldProps extends Omit<TextInputProps, 'style'> {
   value: string;
 }
 
-export function SearchField({
+export const SearchField = forwardRef<TextInput, SearchFieldProps>(function SearchField({
   containerStyle,
   onBlur,
   onChangeText,
@@ -25,7 +25,7 @@ export function SearchField({
   placeholder = 'Поиск',
   value,
   ...inputProps
-}: SearchFieldProps) {
+}: SearchFieldProps, ref) {
   const { palette } = useAppTheme();
   const [focused, setFocused] = useState(false);
 
@@ -51,6 +51,7 @@ export function SearchField({
       ]}>
       <Ionicons name="search" size={20} color={focused ? palette.primary : palette.inkMuted} />
       <TextInput
+        ref={ref}
         {...inputProps}
         value={value}
         onChangeText={onChangeText}
@@ -87,4 +88,4 @@ export function SearchField({
       ) : null}
     </View>
   );
-}
+});

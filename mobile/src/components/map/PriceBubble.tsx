@@ -13,6 +13,9 @@ interface PriceBubbleProps {
   selected?: boolean;
   promoted?: boolean;
   highlighted?: boolean;
+  favorite?: boolean;
+  viewed?: boolean;
+  own?: boolean;
 }
 
 /**
@@ -24,13 +27,40 @@ interface PriceBubbleProps {
  * is fine for tens of pins. When the map grows to hundreds/thousands of pins,
  * switch to server-side clustering + static-image bubbles to avoid jank.
  */
-export function PriceBubble({ price, selected, promoted, highlighted }: PriceBubbleProps) {
+export function PriceBubble({ price, selected, promoted, highlighted, favorite, viewed, own }: PriceBubbleProps) {
   const { palette } = useAppTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const isViewedOnly = Boolean(viewed && !favorite && !own);
   return (
-    <View style={[styles.bubble, promoted && styles.bubblePromoted, highlighted && styles.bubbleHighlighted, selected && styles.bubbleSelected]}>
-      {highlighted ? <Ionicons name="sparkles" size={12} color={selected ? palette.primary : '#FFFFFF'} /> : null}
-      <Text style={[styles.text, selected && styles.textSelected]}>
+    <View
+      style={[
+        styles.bubble,
+        own && styles.bubbleOwn,
+        (favorite || promoted) && styles.bubbleAccent,
+        promoted && styles.bubblePromoted,
+        highlighted && styles.bubbleHighlighted,
+        isViewedOnly && styles.bubbleViewed,
+        selected && styles.bubbleSelected,
+      ]}
+    >
+      {highlighted ? (
+        <Ionicons name="sparkles" size={12} color={selected ? palette.primary : '#FFFFFF'} />
+      ) : favorite ? (
+        <Ionicons name="heart" size={12} color={selected ? palette.primary : '#FFFFFF'} />
+      ) : own ? (
+        <Ionicons name="home-outline" size={12} color={palette.primary} />
+      ) : viewed ? (
+        <Ionicons name="eye-outline" size={12} color={selected ? palette.primary : palette.inkMuted} />
+      ) : null}
+      <Text
+        style={[
+          styles.text,
+          own && styles.textOwn,
+          (favorite || promoted) && styles.textAccent,
+          isViewedOnly && styles.textViewed,
+          selected && styles.textSelected,
+        ]}
+      >
         {`${formatRub(price)}\u00A0₽`}
       </Text>
     </View>
@@ -44,13 +74,13 @@ const makeStyles = (palette: Palette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      backgroundColor: palette.primary,
+      backgroundColor: palette.surface,
       paddingHorizontal: 10,
       paddingVertical: 5,
       borderRadius: 14,
       borderWidth: 1.5,
-      borderColor: palette.surface,
-      shadowColor: palette.primary,
+      borderColor: palette.line,
+      shadowColor: '#1A1A1A',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.25,
       shadowRadius: 4,
@@ -60,6 +90,21 @@ const makeStyles = (palette: Palette) =>
       backgroundColor: palette.surface,
       borderColor: palette.primary,
       shadowColor: '#1A1A1A',
+    },
+    bubbleViewed: {
+      backgroundColor: palette.surfaceMuted,
+      borderColor: palette.line,
+      shadowOpacity: 0.08,
+      elevation: 2,
+    },
+    bubbleOwn: {
+      backgroundColor: palette.surface,
+      borderColor: palette.primary,
+    },
+    bubbleAccent: {
+      backgroundColor: palette.primary,
+      borderColor: palette.surface,
+      shadowColor: palette.primary,
     },
     bubblePromoted: {
       paddingHorizontal: 14,
@@ -76,11 +121,20 @@ const makeStyles = (palette: Palette) =>
       elevation: 9,
     },
     text: {
-      color: '#FFFFFF',
+      color: palette.ink,
       fontSize: 12,
       fontWeight: 'bold',
     },
     textSelected: {
       color: palette.primary,
+    },
+    textViewed: {
+      color: palette.inkMuted,
+    },
+    textOwn: {
+      color: palette.primary,
+    },
+    textAccent: {
+      color: '#FFFFFF',
     },
   });

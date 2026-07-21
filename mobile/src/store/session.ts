@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 
 import { fetchMe, logout as apiLogout, refreshTokens } from '@/lib/api/auth';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, api } from '@/lib/api/client';
 import { storeRef } from '@/lib/api/store-ref';
 import { SECURE_KEYS, secureStorage } from '@/lib/secure-storage';
 import { initGuestId, getGuestId } from '@/lib/guestId';
 import { readLocalFavorites, writeLocalFavorites } from '@/lib/localFavorites';
 import { addFavorite, fetchFavoriteIds } from '@/lib/api/favorites';
+import { clearLocalViewedListings, readLocalViewedListings } from '@/lib/localViewedListings';
+import { queryClient } from '@/lib/query';
 import type { User } from '@/types/user';
 import { useChatStore } from '@/store/chatStore';
 
@@ -79,6 +81,21 @@ export const useSessionStore = create<SessionState>((set, get) => {
     }
   };
 
+  const mergeLocalViewedListings = async () => {
+    try {
+      const localItems = await readLocalViewedListings();
+      if (localItems.length === 0) return;
+      await api.post<void>('/api/v1/me/viewed-listings/import', {
+        ids: localItems.map((item) => item.id),
+      });
+      clearLocalViewedListings();
+      await queryClient.invalidateQueries({ queryKey: ['viewed-listings'] });
+    } catch (error) {
+      // Keep local history for the next login/restore attempt.
+      console.error('Failed to merge local viewed listings', error);
+    }
+  };
+
   const hydrateFn = async () => {
     const guestId = await initGuestId();
     set({ guestId });
@@ -102,6 +119,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
         useChatStore.getState().init(accessToken);
       }
       await mergeLocalFavorites();
+      await mergeLocalViewedListings();
       return;
     } catch (err) {
       if (err instanceof ApiError && err.status === 401 && refreshToken) {
@@ -116,6 +134,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
           });
           useChatStore.getState().init(res.access_token);
           await mergeLocalFavorites();
+          await mergeLocalViewedListings();
           return;
         } catch {
           // refresh failed
@@ -143,6 +162,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     });
     useChatStore.getState().init(accessToken);
     await mergeLocalFavorites();
+    await mergeLocalViewedListings();
     return needsProfile;
   };
 

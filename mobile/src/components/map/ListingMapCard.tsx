@@ -14,6 +14,9 @@ import type { ListingCard } from '@/types/listing';
 interface ListingMapCardProps {
   listing: ListingCard | null;
   onClose: () => void;
+  isFavorite?: boolean;
+  isViewed?: boolean;
+  isOwn?: boolean;
 }
 
 /**
@@ -23,7 +26,7 @@ interface ListingMapCardProps {
  * Positioned above the tab bar and bottom "search here" pill so it never
  * overlaps them.
  */
-export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
+export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }: ListingMapCardProps) {
   const { palette } = useAppTheme();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
@@ -51,10 +54,27 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
             <ResilientImage uri={listing.cover_url} style={styles.image} fallbackSize={30} />
 
             <View style={styles.details}>
-              {promoted ? (
-                <View style={styles.promotionBadge}>
-                  <Ionicons name="sparkles" size={12} color={palette.primary} />
-                  <Text style={styles.promotionText}>Продвигается</Text>
+              {promoted || isFavorite || isOwn || isViewed ? (
+                <View style={styles.badgesRow}>
+                  {promoted ? (
+                    <View style={styles.promotionBadge}>
+                      <Ionicons name="sparkles" size={12} color={palette.primary} />
+                      <Text style={styles.promotionText}>Продвигается</Text>
+                    </View>
+                  ) : null}
+                  {isOwn || isViewed ? (
+                    <View style={[styles.stateBadge, isOwn && styles.stateBadgeOwn]}>
+                      <Ionicons
+                        name={isOwn ? 'home-outline' : 'eye-outline'}
+                        size={11}
+                        color={isOwn ? '#FFFFFF' : palette.inkSecondary}
+                      />
+                      <Text style={[styles.stateBadgeText, isOwn && styles.stateBadgeTextOwn]}>
+                        {isOwn ? 'Ваше' : 'Просмотрено'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {isFavorite ? <Ionicons name="heart" size={16} color={palette.primary} /> : null}
                 </View>
               ) : null}
               <View style={styles.header}>
@@ -141,11 +161,9 @@ const makeStyles = (palette: Palette) =>
     justifyContent: 'center',
   },
   promotionBadge: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 5,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 999,
@@ -155,6 +173,36 @@ const makeStyles = (palette: Palette) =>
     color: palette.primary,
     fontSize: 11,
     fontWeight: '700',
+  },
+  badgesRow: {
+    minHeight: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 5,
+  },
+  stateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.surface,
+  },
+  stateBadgeOwn: {
+    borderColor: palette.primary,
+    backgroundColor: palette.primary,
+  },
+  stateBadgeText: {
+    color: palette.inkSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  stateBadgeTextOwn: {
+    color: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',

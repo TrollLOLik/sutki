@@ -23,6 +23,7 @@ import { useNavigationRecovery } from '@/hooks/useNavigationRecovery';
 import { useNavigationHistoryTracker } from '@/hooks/useNavigationHistoryTracker';
 import { NavigationHistoryOverlay } from '@/components/NavigationHistoryOverlay';
 import { AppAlertHost } from '@/components/AppAlert';
+import { NetworkStatusBanner } from '@/components/NetworkStatusBanner';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -124,6 +125,7 @@ function RootLayout() {
           </Stack>
           <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
           <AppAlertHost />
+          <NetworkStatusBanner />
         </QueryClientProvider>
         <NavigationHistoryOverlay />
       </SafeAreaProvider>

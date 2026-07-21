@@ -129,6 +129,51 @@ type listingDetailDTO struct {
 	POIs               []poiDTO   `json:"pois"`
 }
 
+type viewedListingIDsResponse struct {
+	IDs []int32 `json:"ids"`
+}
+
+type importViewedListingsRequest struct {
+	IDs []int32 `json:"ids"`
+}
+
+func (h *ListingHandler) viewedIDs(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	ids, err := h.svc.ViewedListingIDs(r.Context(), userID)
+	if err != nil {
+		writeInternalError(w, r, err, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, viewedListingIDsResponse{IDs: ids})
+}
+
+func (h *ListingHandler) importViewed(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body importViewedListingsRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	guestID := strings.TrimSpace(r.Header.Get("X-Guest-Id"))
+	if err := h.svc.AttachGuestViewHistory(r.Context(), userID, guestID, body.IDs); err != nil {
+		switch {
+		case errors.Is(err, listing.ErrMissingViewIdentity), errors.Is(err, listing.ErrInvalidListing):
+			writeError(w, http.StatusBadRequest, "invalid viewed listing history")
+		default:
+			writeInternalError(w, r, err, "internal error")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type listResponse struct {
 	Items  []listingCardDTO `json:"items"`
 	Total  int64            `json:"total"`

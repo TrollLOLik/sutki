@@ -44,13 +44,24 @@ func (r *ListingViewRepo) Record(ctx context.Context, eventID string, houseID in
 	}
 
 	tag, err := tx.Exec(ctx, `
-		INSERT INTO listing_view_event(event_id,house_id,viewer_hash,viewer_kind,viewed_on)
-		VALUES($1::uuid,$2,$3,$4,$5::date)
-		ON CONFLICT DO NOTHING`, eventID, houseID, viewerHash, viewerKind, viewedOn.UTC())
+		INSERT INTO listing_view_event(event_id,house_id,viewer_hash,viewer_kind,viewed_on,user_id)
+		VALUES($1::uuid,$2,$3,$4,$5::date,$6)
+		ON CONFLICT DO NOTHING`, eventID, houseID, viewerHash, viewerKind, viewedOn.UTC(), userID)
 	if err != nil {
 		return domain.ListingViewResult{}, err
 	}
 	if tag.RowsAffected() == 0 {
+		// A repeated open on the same day must not increase counters, but it
+		// still refreshes the product-facing "last viewed" order.
+		if _, err := tx.Exec(ctx, `
+			UPDATE listing_view_event
+			SET created_at=now(), user_id=COALESCE(user_id,$4)
+			WHERE house_id=$1
+			  AND viewed_on=$3::date
+			  AND (viewer_hash=$2 OR ($4::int IS NOT NULL AND user_id=$4))`,
+			houseID, viewerHash, viewedOn.UTC(), userID); err != nil {
+			return domain.ListingViewResult{}, err
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return domain.ListingViewResult{}, err
 		}
@@ -81,4 +92,58 @@ func (r *ListingViewRepo) Record(ctx context.Context, eventID string, houseID in
 		return domain.ListingViewResult{}, err
 	}
 	return domain.ListingViewResult{Counted: true, Views: views}, nil
+}
+
+func (r *ListingViewRepo) ListRecentIDs(ctx context.Context, userID int32, since time.Time, limit int32) ([]int32, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT e.house_id
+		FROM listing_view_event e
+		JOIN house h ON h.id=e.house_id
+		WHERE e.user_id=$1
+		  AND e.created_at >= $2
+		  AND h.deleted=false
+		  AND h.status=$3
+		  AND h.owner_id<>$1
+		GROUP BY e.house_id
+		ORDER BY max(e.created_at) DESC, e.house_id DESC
+		LIMIT $4`, userID, since.UTC(), domain.HouseStatusActive, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int32, 0)
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *ListingViewRepo) AttachGuestHistory(ctx context.Context, userID int32, guestHash []byte, houseIDs []int32, since time.Time) error {
+	if len(houseIDs) == 0 {
+		return nil
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE listing_view_event e
+		SET user_id=$1
+		FROM house h
+		WHERE h.id=e.house_id
+		  AND e.viewer_hash=$2
+		  AND e.house_id=ANY($3::int[])
+		  AND e.created_at >= $4
+		  AND h.deleted=false
+		  AND h.status=$5
+		  AND h.owner_id<>$1
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM listing_view_event existing
+			WHERE existing.house_id=e.house_id
+			  AND existing.user_id=$1
+			  AND existing.viewed_on=e.viewed_on
+		  )`, userID, guestHash, houseIDs, since.UTC(), domain.HouseStatusActive)
+	return err
 }

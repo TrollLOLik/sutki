@@ -44,6 +44,8 @@ type ListingRepository interface {
 // may participate in popularity ranking.
 type ListingViewRepository interface {
 	Record(ctx context.Context, eventID string, houseID int32, viewerHash []byte, viewerKind string, viewedOn time.Time, userID *int32) (ListingViewResult, error)
+	ListRecentIDs(ctx context.Context, userID int32, since time.Time, limit int32) ([]int32, error)
+	AttachGuestHistory(ctx context.Context, userID int32, guestHash []byte, houseIDs []int32, since time.Time) error
 }
 
 // BookingRepository abstracts persistence for rental requests (bookings).

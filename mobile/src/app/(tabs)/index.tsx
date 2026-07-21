@@ -16,6 +16,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -30,6 +31,7 @@ import { Button, Chip, BottomSheet } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
+import { useViewedListingIds } from '@/lib/api/viewed-listings';
 import { filtersToListParams, similarFiltersToListParams, useListings } from '@/lib/api/listings';
 import { formatGuests } from '@/lib/format';
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from '@/lib/recent-searches';
@@ -147,9 +149,10 @@ export default function SearchScreen() {
   const listPaddingTop = insets.top + 182;
 
   const { data: favoriteIds } = useFavoriteIds();
+  const { data: viewedListingIds } = useViewedListingIds();
   const toggleFavorite = useToggleFavorite();
 
-  const { status: authStatus } = useSessionStore();
+  const { status: authStatus, user } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
   const isGuest = authStatus === 'guest';
 
@@ -591,6 +594,8 @@ export default function SearchScreen() {
                 router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
               }
               isFavorite={favoriteIds?.has(item.id) ?? false}
+              isOwn={user?.id === item.owner_id}
+              isViewed={user?.id !== item.owner_id && (viewedListingIds?.has(item.id) ?? false)}
               onToggleFavorite={() =>
                 toggleFavorite.mutate({
                   id: item.id,
@@ -699,6 +704,20 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
+  const searchInputRef = useRef<TextInput>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const focusSearchInput = useCallback(() => {
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      focusTimerRef.current = setTimeout(() => searchInputRef.current?.focus(), 250);
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -753,6 +772,7 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
       statusBarTranslucent
       navigationBarTranslucent
       hardwareAccelerated
+      onShow={focusSearchInput}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
@@ -767,6 +787,7 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
           }}
         >
           <SearchOverlayHeader
+            inputRef={searchInputRef}
             query={searchVal}
             onChangeText={setSearchVal}
             onClose={onClose}

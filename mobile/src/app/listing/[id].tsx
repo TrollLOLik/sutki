@@ -30,6 +30,7 @@ import { ResilientImage } from '@/components/ResilientImage';
 import { Button, IconButton, MaterialSurface, materialSurfaceColor } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
+import { useRememberViewedListing } from '@/lib/api/viewed-listings';
 import { listingKeys, recordListingView, useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
 import { generateSecureUUID } from '@/lib/guestId';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
@@ -46,6 +47,7 @@ export default function ListingDetailScreen() {
   const queryClient = useQueryClient();
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
+  const rememberViewedListing = useRememberViewedListing();
   const isFavorite = favoriteIds?.has(numericId) ?? false;
   const insets = useSafeAreaInsets();
   const viewEventIDRef = useRef(generateSecureUUID());
@@ -77,6 +79,9 @@ export default function ListingDetailScreen() {
   useEffect(() => {
     if (!data || viewRequestStartedRef.current) return;
     viewRequestStartedRef.current = true;
+    if (data.owner_id !== user?.id) {
+      void rememberViewedListing(numericId);
+    }
     recordListingView(numericId, viewEventIDRef.current)
       .then((result) => {
         queryClient.setQueryData(listingKeys.detail(numericId), { ...data, views: result.views });
@@ -84,7 +89,7 @@ export default function ListingDetailScreen() {
       .catch(() => {
         // View analytics must never block or visibly disturb listing details.
       });
-  }, [data, numericId, queryClient]);
+  }, [data, numericId, queryClient, rememberViewedListing, user?.id]);
 
   const isOwnListing = useMemo(() => {
     if (!data || !user) return false;

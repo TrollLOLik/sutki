@@ -22,6 +22,15 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 let activeRefreshPromise: Promise<string | null> | null = null;
 
+async function networkFetch(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new ApiError(0, 'Нет подключения к интернету.', { network_error: true });
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, headers, ...rest } = options;
   const metadata = getDeviceMetadata();
@@ -47,7 +56,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${env.apiUrl}${path}`, {
+  const res = await networkFetch(`${env.apiUrl}${path}`, {
     ...rest,
     headers: finalHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -61,7 +70,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         if (!activeRefreshPromise) {
           activeRefreshPromise = (async () => {
             try {
-              const refreshRes = await fetch(`${env.apiUrl}/api/v1/auth/refresh`, {
+              const refreshRes = await networkFetch(`${env.apiUrl}/api/v1/auth/refresh`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -85,6 +94,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
               }
             } catch (err) {
               console.error('Failed to auto-refresh token inside promise:', err);
+              if (err instanceof ApiError && err.status === 0) throw err;
               await state.signOut();
               return null;
             } finally {
@@ -99,7 +109,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
             ...finalHeaders,
             Authorization: `Bearer ${newAccessToken}`,
           };
-          const retryRes = await fetch(`${env.apiUrl}${path}`, {
+          const retryRes = await networkFetch(`${env.apiUrl}${path}`, {
             ...rest,
             headers: retryHeaders,
             body: body !== undefined ? JSON.stringify(body) : undefined,

@@ -22,6 +22,8 @@ interface ListingCardProps {
   onPress?: () => void;
   /** When set, a heart toggle is shown. */
   isFavorite?: boolean;
+  isOwn?: boolean;
+  isViewed?: boolean;
   onToggleFavorite?: () => void;
   onPromote?: () => void;
   onUnpublish?: () => void;
@@ -40,7 +42,7 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
   unpublished: { label: 'Снято с публикации', bg: '#EEF0F3', fg: '#606873' },
 };
 
-export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote, onUnpublish, onPublish, showOwnerStats = false }: ListingCardProps) {
+export function ListingCard({ listing, onPress, isFavorite, isOwn, isViewed, onToggleFavorite, onPromote, onUnpublish, onPublish, showOwnerStats = false }: ListingCardProps) {
   const { palette, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -123,6 +125,32 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
           {isPromoted ? (
             <View style={{ position: 'absolute', left: 8, top: 8, zIndex: 10 }}>
               <PromotionBadge highlighted={isHighlighted} />
+            </View>
+          ) : null}
+
+          {isOwn || isViewed ? (
+            <View
+              className="absolute bottom-2 left-2 z-10 flex-row items-center gap-1 rounded-full px-2 py-1"
+              style={{
+                backgroundColor: isOwn ? palette.primary : palette.surface,
+                borderColor: isOwn ? palette.primary : palette.line,
+                borderWidth: 1,
+              }}
+            >
+              <Ionicons
+                name={isOwn ? 'home-outline' : 'eye-outline'}
+                size={11}
+                color={isOwn ? '#FFFFFF' : palette.inkSecondary}
+              />
+              <Text
+                style={{
+                  color: isOwn ? '#FFFFFF' : palette.inkSecondary,
+                  fontSize: 10,
+                  fontWeight: '800',
+                }}
+              >
+                {isOwn ? 'Ваше' : 'Просмотрено'}
+              </Text>
             </View>
           ) : null}
 

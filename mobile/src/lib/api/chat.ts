@@ -104,9 +104,13 @@ export function findOrCreateConversation(
 }
 
 export function useFindOrCreateConversation() {
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (params: { houseID: number | null; userID: number }) =>
 			findOrCreateConversation(params.houseID, params.userID),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+		},
 	});
 }
 

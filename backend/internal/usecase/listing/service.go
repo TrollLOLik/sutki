@@ -25,6 +25,8 @@ const (
 	minListingPrice  int32 = 150
 	maxListingPrice  int32 = 100_000_000
 	maxListingGuests int32 = 100
+	viewHistoryLimit int32 = 500
+	viewHistoryDays        = 90
 )
 
 // ErrInvalidListing is returned when create input fails validation.
@@ -112,6 +114,44 @@ func (s *Service) RecordView(ctx context.Context, eventID string, houseID int32,
 	now := time.Now().UTC()
 	viewedOn := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	return s.viewRepo.Record(ctx, eventID, houseID, hash[:], viewerKind, viewedOn, userID)
+}
+
+func (s *Service) ViewedListingIDs(ctx context.Context, userID int32) ([]int32, error) {
+	if s.viewRepo == nil {
+		return nil, errors.New("listing views are not supported")
+	}
+	since := time.Now().UTC().AddDate(0, 0, -viewHistoryDays)
+	return s.viewRepo.ListRecentIDs(ctx, userID, since, viewHistoryLimit)
+}
+
+func (s *Service) AttachGuestViewHistory(ctx context.Context, userID int32, guestID string, houseIDs []int32) error {
+	if s.viewRepo == nil {
+		return errors.New("listing views are not supported")
+	}
+	guestID = strings.TrimSpace(guestID)
+	if guestID == "" {
+		return ErrMissingViewIdentity
+	}
+	if len(houseIDs) > int(viewHistoryLimit) {
+		return ErrInvalidListing
+	}
+
+	unique := make([]int32, 0, len(houseIDs))
+	seen := make(map[int32]struct{}, len(houseIDs))
+	for _, id := range houseIDs {
+		if id <= 0 {
+			return ErrInvalidListing
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	hash := sha256.Sum256([]byte("guest:" + guestID))
+	since := time.Now().UTC().AddDate(0, 0, -viewHistoryDays)
+	return s.viewRepo.AttachGuestHistory(ctx, userID, hash[:], unique, since)
 }
 
 // ListResult is a page of active listings plus pagination metadata.

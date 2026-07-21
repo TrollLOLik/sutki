@@ -96,6 +96,8 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Get("/me/activity", activityHandler.counters)
 			r.Post("/me/activity/{scope}/read", activityHandler.markRead)
 			r.Get("/me/notifications", activityHandler.notifications)
+			r.Get("/me/viewed-listings/ids", listingHandler.viewedIDs)
+			r.Post("/me/viewed-listings/import", listingHandler.importViewed)
 			r.Post("/me/notifications/read", activityHandler.markAllNotificationsRead)
 			r.Post("/me/notifications/{id}/read", activityHandler.markNotificationRead)
 			r.Patch("/me", authHandler.UpdateMe)

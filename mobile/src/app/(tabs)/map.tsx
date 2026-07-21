@@ -24,6 +24,8 @@ import { MapSearchOverlay } from '@/components/map/MapSearchOverlay';
 import { PriceBubble } from '@/components/map/PriceBubble';
 import { CityClusterBubble } from '@/components/map/CityClusterBubble';
 import { useListings, useMapClusters, filtersToListParams, type MapCluster } from '@/lib/api/listings';
+import { useFavoriteIds } from '@/lib/api/favorites';
+import { useViewedListingIds } from '@/lib/api/viewed-listings';
 import { useBboxAutoReload } from '@/hooks/useBboxAutoReload';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
@@ -41,6 +43,9 @@ const GPS_TIMEOUT_MS = 3000;
 const CITY_CLUSTER_ZOOM = 10;
 const LOCATION_BUTTON_SIZE = 52;
 const PROFILE_TAB_INDEX = 4;
+const USER_LOCATION_ICON = {
+  uri: 'data:image/png;base64,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',
+};
 
 function pluralize(count: number, one: string, few: string, many: string) {
   const mod10 = count % 10;
@@ -134,6 +139,8 @@ export default function MapScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const mapRef = useRef<any>(null);
   const user = useSessionStore((state) => state.user);
+  const { data: favoriteIds } = useFavoriteIds();
+  const { data: viewedListingIds } = useViewedListingIds();
   const filters = useFiltersStore();
 
   // ── Loading strategy ──────────────────────────────────────────────────────
@@ -333,6 +340,7 @@ export default function MapScreen() {
   const renderMarker = useCallback(
     ({ point, data }: { point: Point; data: ListingCard }) => {
       const isSelected = selectedListingId === data.id;
+      const isOwn = user?.id === data.owner_id;
       return (
         <Marker
           key={data.id}
@@ -344,11 +352,14 @@ export default function MapScreen() {
             selected={isSelected}
             promoted={(data.promotion_types ?? []).length > 0}
             highlighted={(data.promotion_types ?? []).includes('highlight')}
+            favorite={favoriteIds?.has(data.id) ?? false}
+            viewed={!isOwn && (viewedListingIds?.has(data.id) ?? false)}
+            own={isOwn}
           />
         </Marker>
       );
     },
-    [selectListing, selectedListingId],
+    [favoriteIds, selectListing, selectedListingId, user?.id, viewedListingIds],
   );
 
   const clusteredMarkers = useMemo(
@@ -519,6 +530,11 @@ export default function MapScreen() {
         initialRegion={initialRegion}
         nightMode={isDark}
         showUserPosition
+        userLocationIcon={USER_LOCATION_ICON}
+        userLocationIconScale={0.72}
+        userLocationAccuracyFillColor="rgba(47, 128, 237, 0.12)"
+        userLocationAccuracyStrokeColor="rgba(47, 128, 237, 0.32)"
+        userLocationAccuracyStrokeWidth={1}
         clusteredMarkers={showCityClusters ? [] : clusteredMarkers}
         renderMarker={renderMarker}
         clusterColor={palette.primary}
@@ -681,6 +697,13 @@ export default function MapScreen() {
         key={selectedListing?.id ?? 'no-listing'}
         listing={selectedListing}
         onClose={closeSelectedListing}
+        isFavorite={selectedListing ? favoriteIds?.has(selectedListing.id) ?? false : false}
+        isOwn={selectedListing ? user?.id === selectedListing.owner_id : false}
+        isViewed={
+          selectedListing
+            ? user?.id !== selectedListing.owner_id && (viewedListingIds?.has(selectedListing.id) ?? false)
+            : false
+        }
       />
 
       {/* City/address search overlay */}

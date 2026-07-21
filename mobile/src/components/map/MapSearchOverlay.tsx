@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,6 +50,20 @@ export function MapSearchOverlay({
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [cityContext, setCityContext] = useState<string | null>(null);
+  const searchInputRef = useRef<TextInput>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const focusSearchInput = useCallback(() => {
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      focusTimerRef.current = setTimeout(() => searchInputRef.current?.focus(), 250);
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -171,6 +186,7 @@ export function MapSearchOverlay({
       statusBarTranslucent
       navigationBarTranslucent
       hardwareAccelerated
+      onShow={focusSearchInput}
       onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -178,6 +194,7 @@ export function MapSearchOverlay({
       >
         <View className="flex-1 bg-surface" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
           <SearchOverlayHeader
+            inputRef={searchInputRef}
             query={query}
             onChangeText={(text) => {
               setQuery(text);

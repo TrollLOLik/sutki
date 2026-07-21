@@ -80,7 +80,6 @@ export default function ChatDialogScreen() {
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id: string; title?: string; otherUserId?: string; houseId?: string }>();
 	const convID = parseInt(params.id ?? '0', 10);
-	const otherUserTitle = params.title ?? 'Чат';
 
 	const insets = useSafeAreaInsets();
 	const queryClient = useQueryClient();
@@ -642,12 +641,32 @@ export default function ChatDialogScreen() {
 		);
 	};
 
-	const initials = (otherUserTitle[0] || '?').toUpperCase();
 	const isInputEmpty = !inputText.trim();
 	const isDeletedUser = !!activeConv?.other_user_deleted;
-	const callPhone = activeConv?.other_user_phone || listing?.owner_phone || '';
+	const conversationTitle = activeConv
+		? [activeConv.other_user_name, activeConv.other_user_surname]
+			.map((part) => part?.trim())
+			.filter(Boolean)
+			.join(' ') || 'Собеседник'
+		: params.title?.trim() || 'Собеседник';
+	const callPhone = activeConv?.other_user_phone?.trim() || '';
 	const normalizedCallPhone = callPhone.replace(/[^\d+]/g, '');
-	const canCall = !isDeletedUser && normalizedCallPhone.length > 0;
+	const canCall = !!activeConv && !isDeletedUser && normalizedCallPhone.length > 0;
+	const canOpenProfile = !!activeConv?.other_user_id && !isDeletedUser;
+
+	const handleProfilePress = () => {
+		if (!activeConv || !canOpenProfile) return;
+		router.push({
+			pathname: '/profile/[id]',
+			params: {
+				id: String(activeConv.other_user_id),
+				name: activeConv.other_user_name || undefined,
+				surname: activeConv.other_user_surname || undefined,
+				phone: activeConv.other_user_phone || undefined,
+				avatarUrl: activeConv.other_user_avatar_url || undefined,
+			},
+		} as any);
+	};
 
 	const handleCallPress = () => {
 		if (!canCall) return;
@@ -712,44 +731,49 @@ export default function ChatDialogScreen() {
 						className="mr-3.5"
 					/>
 
-					{activeConv?.other_user_avatar_url && !isDeletedUser ? (
-						<Image
-							source={{ uri: activeConv.other_user_avatar_url }}
-							style={styles.headerAvatar}
-							contentFit="cover"
-						/>
-					) : (
-						<View style={[styles.headerAvatar, { backgroundColor: chatColors.panelRaised }]} className="items-center justify-center">
-							<Ionicons name="person-outline" size={20} color={palette.inkMuted} />
-						</View>
-					)}
+					<TouchableOpacity
+						activeOpacity={0.7}
+						disabled={!canOpenProfile}
+						onPress={handleProfilePress}
+						className="flex-1 flex-row items-center"
+						accessibilityRole={canOpenProfile ? 'button' : undefined}
+						accessibilityLabel={canOpenProfile ? `Открыть профиль: ${conversationTitle}` : undefined}
+					>
+						{activeConv?.other_user_avatar_url && !isDeletedUser ? (
+							<Image
+								source={{ uri: activeConv.other_user_avatar_url }}
+								style={styles.headerAvatar}
+								contentFit="cover"
+							/>
+						) : (
+							<View style={[styles.headerAvatar, { backgroundColor: chatColors.panelRaised }]} className="items-center justify-center">
+								<Ionicons name="person-outline" size={20} color={palette.inkMuted} />
+							</View>
+						)}
 
-					<View className="ml-3.5 flex-1">
-						<Text numberOfLines={1} className="font-extrabold text-[19px] leading-6 text-ink">
-							{isDeletedUser ? 'Удаленный профиль' : otherUserTitle}
-						</Text>
-						<View className="flex-row items-center mt-1">
-							{!isDeletedUser && socketStatus === 'connected' ? (
-								<View style={[styles.presenceDot, { backgroundColor: palette.success }]} />
-							) : null}
-							<Text className={`text-[12px] font-medium ${isDeletedUser ? 'text-ink-muted' : socketStatus === 'connected' ? 'text-success' : 'text-ink-muted'}`}>
-								{isDeletedUser ? 'Профиль удален' : (socketStatus === 'connected' ? 'Чат подключен' : 'Подключение...')}
+						<View className="ml-3.5 flex-1">
+							<Text numberOfLines={1} className="font-extrabold text-[19px] leading-6 text-ink">
+								{isDeletedUser ? 'Удаленный профиль' : conversationTitle}
 							</Text>
+							{isDeletedUser ? (
+								<Text className="mt-1 text-[12px] font-medium text-ink-muted">
+									Профиль удален
+								</Text>
+							) : null}
 						</View>
-					</View>
+					</TouchableOpacity>
 				</View>
 
-				<View className="flex-row items-center">
+				{canCall ? (
 					<IconButton
 						icon="call-outline"
 						iconSize={23}
 						size={48}
 						tone="primary"
 						onPress={handleCallPress}
-						disabled={!canCall}
 						accessibilityLabel="Позвонить"
 					/>
-				</View>
+				) : null}
 			</Animated.View>
 
 			{/* Sticky Listing Context Header */}
@@ -1063,12 +1087,6 @@ const styles = StyleSheet.create({
 		width: 48,
 		height: 48,
 		borderRadius: 24,
-	},
-	presenceDot: {
-		width: 7,
-		height: 7,
-		borderRadius: 4,
-		marginRight: 7,
 	},
 	listingPanel: {
 		marginHorizontal: 14,
