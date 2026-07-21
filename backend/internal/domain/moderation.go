@@ -70,6 +70,9 @@ type ModerationRepository interface {
 	FinalizeLLM(ctx context.Context, id int64, houseID int32, decision, category, reason string, confidence float32, rawResponse []byte, houseStatus, rejectionReason string) error
 	// RescheduleLLM re-queues a claimed job after a transient failure.
 	RescheduleLLM(ctx context.Context, id int64, nextAttempt time.Time, lastError string) error
+	// RescheduleLLMWithHouseStatus atomically re-queues a claimed job and
+	// applies a safe temporary listing status while the provider recovers.
+	RescheduleLLMWithHouseStatus(ctx context.Context, id int64, houseID int32, houseStatus, rejectionReason string, nextAttempt time.Time, lastError string) error
 	// FailLLM marks a job permanently failed (attempts exhausted).
 	FailLLM(ctx context.Context, id int64, lastError string) error
 	// FailLLMWithHouseStatus atomically marks a job permanently failed and

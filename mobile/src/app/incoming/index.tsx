@@ -34,6 +34,7 @@ import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 import { appAlert as Alert } from '@/components/AppAlert';
+import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 
 type Tab = 'pending' | 'processed';
 type IncomingSort = 'newest' | 'oldest' | 'checkin_asc' | 'checkin_desc';
@@ -59,6 +60,7 @@ function filterIncoming(items: Booking[], query: string, sort: IncomingSort): Bo
 }
 
 export default function IncomingBookingsScreen() {
+  const collapsibleHeader = useCollapsibleHeader();
   useActivityScopeSeen('incoming');
   const { palette } = useAppTheme();
   const [tab, setTab] = useState<Tab>('pending');
@@ -107,6 +109,7 @@ export default function IncomingBookingsScreen() {
   }, [tab]);
 
   const handleTabChange = (nextTab: Tab) => {
+    collapsibleHeader.show();
     setTab(nextTab);
     horizontalScrollRef.current?.scrollTo({
       x: nextTab === 'pending' ? 0 : pageWidth,
@@ -184,6 +187,8 @@ export default function IncomingBookingsScreen() {
           <View className="h-12 w-12" />
         </View>
 
+        <View className="flex-1">
+        <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
         <View
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
           className="relative mx-4 mb-2 mt-4 h-12 flex-row rounded-pill bg-surface-muted p-1"
@@ -243,6 +248,7 @@ export default function IncomingBookingsScreen() {
           onSortVisibleChange={setSortVisible}
           onSortChange={setSort}
         />
+        </CollapsibleHeader>
 
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
@@ -271,6 +277,7 @@ export default function IncomingBookingsScreen() {
               const page = Math.round(offsetX / pageWidth);
               const nextTab = page === 0 ? 'pending' : 'processed';
               if (tab !== nextTab) {
+                collapsibleHeader.show();
                 setTab(nextTab);
               }
             }}
@@ -288,6 +295,11 @@ export default function IncomingBookingsScreen() {
                 <FlatList
                   data={pendingItems}
                   keyExtractor={(item) => String(item.id)}
+                  onScroll={collapsibleHeader.onScroll}
+                  onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+                  onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+                  contentContainerStyle={{ paddingTop: collapsibleHeader.height + 4 }}
+                  scrollEventThrottle={16}
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
                   refreshControl={
@@ -334,6 +346,11 @@ export default function IncomingBookingsScreen() {
                 <FlatList
                   data={processedItems}
                   keyExtractor={(item) => String(item.id)}
+                  onScroll={collapsibleHeader.onScroll}
+                  onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+                  onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+                  contentContainerStyle={{ paddingTop: collapsibleHeader.height + 4 }}
+                  scrollEventThrottle={16}
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
                   refreshControl={
@@ -369,6 +386,7 @@ export default function IncomingBookingsScreen() {
             </View>
           </ScrollView>
         )}
+        </View>
       </SafeAreaView>
 
       <BottomSheet

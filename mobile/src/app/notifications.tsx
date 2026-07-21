@@ -24,6 +24,7 @@ import {
   useNotifications,
 } from '@/lib/api/activity';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 
 type NotificationTone = 'primary' | 'info' | 'success' | 'danger' | 'neutral';
 
@@ -353,6 +354,7 @@ function NotificationSummary({
 }
 
 export default function NotificationsScreen() {
+  const collapsibleHeader = useCollapsibleHeader();
   const { palette } = useAppTheme();
   const query = useNotifications();
   const markRead = useMarkNotificationRead();
@@ -397,6 +399,8 @@ export default function NotificationsScreen() {
         </View>
       </SafeAreaView>
 
+      <View style={{ flex: 1 }}>
+      <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
       {hasNotifications ? (
         <View style={styles.summaryWrap}>
           <NotificationSummary
@@ -418,6 +422,7 @@ export default function NotificationsScreen() {
         onSortVisibleChange={setSortVisible}
         onSortChange={setSort}
       />
+      </CollapsibleHeader>
 
       {query.isLoading ? (
         <View style={styles.centeredState}>
@@ -448,7 +453,11 @@ export default function NotificationsScreen() {
         <FlatList
           data={items}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.listContent}
+          onScroll={collapsibleHeader.onScroll}
+          onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+          onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+          scrollEventThrottle={16}
+          contentContainerStyle={[styles.listContent, { paddingTop: collapsibleHeader.height + 4 }]}
           refreshing={query.isRefetching}
           onRefresh={() => query.refetch()}
           ListHeaderComponent={
@@ -462,6 +471,7 @@ export default function NotificationsScreen() {
           )}
         />
       )}
+      </View>
     </View>
   );
 }

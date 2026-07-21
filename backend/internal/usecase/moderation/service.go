@@ -27,10 +27,10 @@ import (
 )
 
 const (
-	maxAttempts      = 4 // 1 initial + 3 retries
-	batchSize        = 2
-	pollInterval     = 30 * time.Second
-	breakerThreshold = 3 // consecutive LLM failures before degraded mode
+	fastRetryAttempts = 4 // 1 initial + 3 fast retries before recovery cadence
+	batchSize         = 2
+	pollInterval      = 30 * time.Second
+	breakerThreshold  = 3 // consecutive LLM failures before degraded mode
 
 	// Auto-reject only on confident verdicts; anything weaker goes to a human.
 	rejectConfidenceThreshold = 0.9
@@ -52,6 +52,8 @@ const (
 )
 
 var retryBackoff = []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
+
+var recoveryRetryBackoff = []time.Duration{30 * time.Minute, time.Hour, 6 * time.Hour}
 
 // LLMClient is the narrow slice of llm.Client the moderator needs.
 type LLMClient interface {
@@ -463,27 +465,34 @@ func (s *Service) processJob(ctx context.Context, job domain.ModerationVerdict) 
 
 func (s *Service) rescheduleJobAfterFailure(ctx context.Context, h domain.ModerationHouse, job domain.ModerationVerdict, stage string, err error) {
 	s.recordLLMFailure(ctx)
-	if int(job.Attempts) >= maxAttempts {
-		log.Printf("moderation worker: job %d exhausted attempts: %v", job.ID, err)
-		observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d exhausted attempts: %w", job.ID, err))
-
+	if int(job.Attempts) >= fastRetryAttempts {
 		status, reason := terminalFailureOutcome(stage)
-		markUnread := h.Status != domain.HouseStatusActive
-		if status == domain.HouseStatusModerationReview {
-			markUnread = true
-		}
-		if failErr := s.repo.FailLLMWithHouseStatus(ctx, job.ID, h.ID, status, reason, err.Error()); failErr != nil {
-			log.Printf("moderation worker: terminal fallback for job %d: %v", job.ID, failErr)
-			observability.CaptureException(ctx, fmt.Errorf("listing moderation job %d terminal fallback: %w", job.ID, failErr))
+		delay := recoveryRetryDelay(int(job.Attempts))
+		nextAttempt := time.Now().Add(delay)
+		if retryErr := s.repo.RescheduleLLMWithHouseStatus(ctx, job.ID, h.ID, status, reason, nextAttempt, err.Error()); retryErr != nil {
+			log.Printf("moderation worker: recovery reschedule job %d: %v", job.ID, retryErr)
+			observability.CaptureException(ctx, fmt.Errorf("recovery reschedule listing moderation job %d: %w", job.ID, retryErr))
 			return
 		}
-		s.publishStatus(h.OwnerID, h.ID, status, reason, fmt.Sprintf("listing:%d:%s:%s-fallback", h.ID, job.ContentHash, status), markUnread)
-		if status == domain.HouseStatusModerationReview {
-			s.checkReviewQueueAlert(ctx)
+		log.Printf("moderation worker: job %d provider failure, retry in %s: %v", job.ID, delay, err)
+
+		// Publish the fallback only when it actually changes the listing. Later
+		// recovery attempts must not create duplicate unread notifications.
+		if h.Status != status {
+			markUnread := status == domain.HouseStatusModerationReview || h.Status != domain.HouseStatusActive
+			s.publishStatus(h.OwnerID, h.ID, status, reason, fmt.Sprintf("listing:%d:%s:%s-fallback", h.ID, job.ContentHash, status), markUnread)
+			if status == domain.HouseStatusModerationReview {
+				s.checkReviewQueueAlert(ctx)
+			}
 		}
-		s.alertAdmin(ctx, fmt.Sprintf("listing_moderation_failed_%d_%s", job.ID, stage),
-			"Модерация объявления не завершена автоматически",
-			fmt.Sprintf("Объявление %d: этап %s, попыток %d. Безопасный итоговый статус: %s. Ошибка: %v", h.ID, stage, job.Attempts, status, err))
+
+		// Alert once when the fast retry budget is first exhausted. The durable
+		// recovery loop itself is expected provider downtime, not an app crash.
+		if int(job.Attempts) == fastRetryAttempts {
+			s.alertAdmin(ctx, fmt.Sprintf("listing_moderation_recovery_%d_%s", job.ID, stage),
+				"Модерация объявления временно отложена",
+				fmt.Sprintf("Объявление %d: этап %s, попыток %d. Повтор через %s. Ошибка: %v", h.ID, stage, job.Attempts, delay, err))
+		}
 		return
 	}
 	backoff := retryBackoff[min(int(job.Attempts)-1, len(retryBackoff)-1)]
@@ -491,6 +500,14 @@ func (s *Service) rescheduleJobAfterFailure(ctx context.Context, h domain.Modera
 		log.Printf("moderation worker: reschedule job %d: %v", job.ID, retryErr)
 		observability.CaptureException(ctx, fmt.Errorf("reschedule listing moderation job %d: %w", job.ID, retryErr))
 	}
+}
+
+func recoveryRetryDelay(attempts int) time.Duration {
+	index := attempts - fastRetryAttempts
+	if index < 0 {
+		index = 0
+	}
+	return recoveryRetryBackoff[min(index, len(recoveryRetryBackoff)-1)]
 }
 
 func terminalFailureOutcome(stage string) (status, reason string) {

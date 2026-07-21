@@ -127,6 +127,43 @@ func (r *ModerationRepo) RescheduleLLM(ctx context.Context, id int64, nextAttemp
 	return err
 }
 
+func (r *ModerationRepo) RescheduleLLMWithHouseStatus(ctx context.Context, id int64, houseID int32, houseStatus, rejectionReason string, nextAttempt time.Time, lastError string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin reschedule llm verdict %d: %w", id, err)
+	}
+	defer tx.Rollback(ctx)
+
+	jobTag, err := tx.Exec(ctx, `
+		UPDATE moderation_verdict
+		SET status = 'queued', next_attempt_at = $2,
+		    last_error = left($3, 2000), updated_at = now()
+		WHERE id = $1 AND house_id = $4 AND status = 'processing'
+	`, id, nextAttempt, lastError, houseID)
+	if err != nil {
+		return fmt.Errorf("reschedule llm verdict %d: %w", id, err)
+	}
+	if jobTag.RowsAffected() != 1 {
+		return fmt.Errorf("reschedule llm verdict %d: processing job not found", id)
+	}
+
+	houseTag, err := tx.Exec(ctx, `
+		UPDATE house
+		SET status = $2, rejection_reason = NULLIF(left($3, 2000), ''), updated_at = now()
+		WHERE id = $1 AND deleted = false
+	`, houseID, houseStatus, rejectionReason)
+	if err != nil {
+		return fmt.Errorf("apply house %d recovery moderation status: %w", houseID, err)
+	}
+	if houseTag.RowsAffected() != 1 {
+		return fmt.Errorf("apply house %d recovery moderation status: house not found", houseID)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit rescheduled llm verdict %d: %w", id, err)
+	}
+	return nil
+}
+
 func (r *ModerationRepo) FailLLM(ctx context.Context, id int64, lastError string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE moderation_verdict

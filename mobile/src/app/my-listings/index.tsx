@@ -19,6 +19,7 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 import type { ListingCard as ListingCardType } from '@/types/listing';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 import {
   countActiveFilters,
   useMyListingFiltersStore,
@@ -59,6 +60,7 @@ function matchesRoom(listing: ListingCardType, filters: RoomFilter[]): boolean {
 }
 
 export default function MyListingsScreen() {
+  const collapsibleHeader = useCollapsibleHeader();
   useActivityScopeSeen('listings');
   const { palette, isDark } = useAppTheme();
   const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
@@ -208,6 +210,7 @@ export default function MyListingsScreen() {
         </View>
 
         <View style={{ flex: 1, paddingTop: 8, backgroundColor: screenBackground }}>
+          <CollapsibleHeader controller={collapsibleHeader} style={{ top: 8, backgroundColor: screenBackground }}>
           <PersonalListToolbar
             query={query}
             onQueryChange={setQuery}
@@ -268,6 +271,7 @@ export default function MyListingsScreen() {
               );
             })}
           </ScrollView>
+          </CollapsibleHeader>
 
         {isLoading ? (
           <View className="flex-1 px-4 pt-1">
@@ -304,7 +308,11 @@ export default function MyListingsScreen() {
           <FlatList
             data={items}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: Math.max(insets.bottom, 16) + 12 }}
+            onScroll={collapsibleHeader.onScroll}
+            onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+            onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: collapsibleHeader.height + 10, paddingBottom: Math.max(insets.bottom, 16) + 12 }}
             refreshControl={
               <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={palette.primary} />
             }

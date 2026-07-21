@@ -27,6 +27,7 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { UserReview } from '@/types/review';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
+import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 
 type ReviewTab = 'written' | 'received';
 type ReviewSort = 'newest' | 'oldest' | 'rating_desc' | 'rating_asc';
@@ -83,6 +84,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function MyReviewsScreen() {
+  const collapsibleHeader = useCollapsibleHeader();
   useActivityScopeSeen('reviews');
   const { palette, isDark } = useAppTheme();
   const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
@@ -124,6 +126,7 @@ export default function MyReviewsScreen() {
   }, [tab]);
 
   const handleTabChange = (nextTab: ReviewTab) => {
+    collapsibleHeader.show();
     setTab(nextTab);
     horizontalScrollRef.current?.scrollTo({
       x: nextTab === 'written' ? 0 : pageWidth,
@@ -283,6 +286,8 @@ export default function MyReviewsScreen() {
           </View>
         </View>
 
+        <View className="flex-1">
+        <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
         {/* Tab switch */}
         <MaterialSurface
           level="raised"
@@ -340,6 +345,7 @@ export default function MyReviewsScreen() {
           onSortVisibleChange={setSortVisible}
           onSortChange={setSort}
         />
+        </CollapsibleHeader>
 
         {/* Content list */}
         {isLoading ? (
@@ -369,6 +375,7 @@ export default function MyReviewsScreen() {
               const page = Math.round(offsetX / pageWidth);
               const nextTab = page === 0 ? 'written' : 'received';
               if (tab !== nextTab) {
+                collapsibleHeader.show();
                 setTab(nextTab);
               }
             }}
@@ -387,6 +394,11 @@ export default function MyReviewsScreen() {
                   data={writtenItems}
                   renderItem={({ item }) => renderItem({ item, isWritten: true })}
                   keyExtractor={(item) => String(item.id)}
+                  onScroll={collapsibleHeader.onScroll}
+                  onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+                  onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+                  contentContainerStyle={{ paddingTop: collapsibleHeader.height + 4 }}
+                  scrollEventThrottle={16}
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
                   ListFooterComponent={
@@ -414,6 +426,11 @@ export default function MyReviewsScreen() {
                   data={receivedItems}
                   renderItem={({ item }) => renderItem({ item, isWritten: false })}
                   keyExtractor={(item) => String(item.id)}
+                  onScroll={collapsibleHeader.onScroll}
+                  onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+                  onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+                  contentContainerStyle={{ paddingTop: collapsibleHeader.height + 4 }}
+                  scrollEventThrottle={16}
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
@@ -429,6 +446,7 @@ export default function MyReviewsScreen() {
             </View>
           </ScrollView>
         )}
+        </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
