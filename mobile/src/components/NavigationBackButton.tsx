@@ -22,7 +22,9 @@ interface NavigationBackButtonProps {
   className?: string;
   fallback?: Href;
   onPress?: () => void;
+  size?: number;
   style?: StyleProp<ViewStyle>;
+  variant?: 'plain' | 'material';
 }
 
 export function NavigationBackButton({
@@ -31,9 +33,11 @@ export function NavigationBackButton({
   className = 'h-11 w-11 items-center justify-center rounded-full',
   fallback = '/(tabs)',
   onPress,
+  size = 44,
   style,
+  variant = 'plain',
 }: NavigationBackButtonProps) {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
 
   const handlePress = useCallback(() => {
@@ -120,7 +124,21 @@ export function NavigationBackButton({
         accessibilityRole="button"
         className={className}
         onAccessibilityTap={handlePress}
-        style={style}>
+        style={[
+          variant === 'material'
+            ? {
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: isDark ? '#202329' : '#F0F1F3',
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(18,24,32,0.07)',
+              }
+            : null,
+          style,
+        ]}>
         {children ?? <Ionicons name="chevron-back" size={24} color={palette.ink} />}
       </View>
     </GestureDetector>

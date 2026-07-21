@@ -1,8 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { MotiView } from 'moti';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
-import { Button, ScreenContainer } from '@/components/ui';
+import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
+import { Button, MaterialSurface } from '@/components/ui';
 import {
   requestEmailCode,
   requestPhoneCode,
@@ -12,8 +15,10 @@ import {
 } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
+import { formatPhoneMask, normalizePhoneDigits } from '@/lib/phone';
 import { setGlobalFromBooking } from '@/lib/requireAuth';
 import { useSessionStore } from '@/store/session';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 const RESEND_SECONDS = 60;
 
@@ -33,6 +38,8 @@ export default function CodeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState(deliveryMode ?? 'flash_call');
   const inputRef = useRef<TextInput>(null);
+  const { width } = useWindowDimensions();
+  const { palette } = useAppTheme();
 
   const verifyEmail = useVerifyEmailCode();
   const verifyPhone = useVerifyPhoneCode();
@@ -101,59 +108,147 @@ export default function CodeScreen() {
   };
 
   const isLoading = verifyEmail.isPending || verifyPhone.isPending;
+  const cellGap = length > 4 ? 6 : 10;
+  const availableWidth = Math.min(width - 64, 520);
+  const cellSize = Math.max(
+    40,
+    Math.min(length > 4 ? 50 : 60, Math.floor((availableWidth - cellGap * (length - 1)) / length)),
+  );
+  const formattedPhone = phone
+    ? `+7 ${formatPhoneMask(normalizePhoneDigits(phone))}`
+    : '';
+  const description = phone
+    ? mode === 'flash_call'
+      ? `Сейчас поступит короткий звонок на ${formattedPhone}. Введите последние 4 цифры номера звонящего.`
+      : `Робот продиктует код по телефону ${formattedPhone}.`
+    : `Код подтверждения отправлен на ${email ?? ''}.`;
 
   return (
-    <ScreenContainer centered>
-      <View className="flex-1 gap-6 pt-6">
-        <View className="gap-2">
-          <Text className="text-2xl font-bold text-ink">Введите код</Text>
-          <Text className="text-base text-ink-secondary">
-            {phone
-              ? mode === 'flash_call'
-                ? `Вам поступит звонок на номер ${phone}. Введите последние 4 цифры номера звонящего.`
-                : `Робот продиктует код по телефону ${phone}.`
-              : `Мы отправили код подтверждения на почту ${email ?? ''}`}
+    <AuthStepScreen
+      icon="shield-checkmark-outline"
+      title="Введите код"
+      description={description}
+      footer={(
+        <Button
+          label="Подтвердить"
+          icon="checkmark-circle-outline"
+          loading={isLoading}
+          disabled={code.length !== length}
+          onPress={onConfirm}
+        />
+      )}>
+      <MaterialSurface
+        level="raised"
+        radius={24}
+        style={{ paddingHorizontal: 12, paddingVertical: 18 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Поле ввода кода"
+          style={{ flexDirection: 'row', justifyContent: 'center', gap: cellGap }}
+          onPress={() => inputRef.current?.focus()}>
+          {Array.from({ length }).map((_, i) => {
+            const isFilled = Boolean(code[i]);
+            const isActive = code.length === i || (code.length === length && i === length - 1);
+            return (
+              <MotiView
+                key={i}
+                animate={{ scale: isFilled ? 1 : 0.985 }}
+                transition={{ type: 'spring', damping: 17, stiffness: 250 }}
+                style={{
+                  width: cellSize,
+                  height: 58,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: isActive || isFilled ? 1.5 : 1,
+                  borderColor: isActive || isFilled ? palette.primary : palette.line,
+                  backgroundColor: isFilled ? palette.primaryLight : palette.surface,
+                }}>
+                <Text style={{ color: palette.ink, fontSize: 24, fontWeight: '800' }}>
+                  {code[i] ?? ''}
+                </Text>
+              </MotiView>
+            );
+          })}
+        </Pressable>
+      </MaterialSurface>
+
+      {error ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 9,
+            marginTop: 14,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            borderRadius: 16,
+            backgroundColor: palette.dangerLight,
+          }}>
+          <Ionicons name="alert-circle-outline" size={20} color={palette.danger} />
+          <Text style={{ flex: 1, color: palette.danger, fontSize: 14, lineHeight: 20 }}>
+            {error}
           </Text>
         </View>
+      ) : null}
 
-        <Pressable className="flex-row justify-center gap-2" onPress={() => inputRef.current?.focus()}>
-          {Array.from({ length }).map((_, i) => (
-            <View key={i} className={cn('h-14 flex-1 items-center justify-center rounded-field border', code.length === i ? 'border-primary' : 'border-line')}>
-              <Text className="text-2xl font-bold text-ink">{code[i] ?? ''}</Text>
-            </View>
-          ))}
-        </Pressable>
+      <TextInput
+        ref={inputRef}
+        value={code}
+        onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, length))}
+        keyboardType="number-pad"
+        textContentType="oneTimeCode"
+        maxLength={length}
+        autoFocus
+        caretHidden
+        className="absolute h-px w-px opacity-0"
+      />
 
-        {error ? <Text className="text-center text-sm text-danger">{error}</Text> : null}
-        <TextInput
-          ref={inputRef}
-          value={code}
-          onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, length))}
-          keyboardType="number-pad"
-          maxLength={length}
-          autoFocus
-          caretHidden
-          className="absolute h-px w-px opacity-0"
-        />
-
-        <Pressable disabled={seconds > 0} onPress={onResend}>
-          <Text className={cn('text-center text-base', seconds > 0 ? 'text-ink-muted' : 'text-primary')}>
+      <View style={{ marginTop: 22, gap: 10 }}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={seconds > 0}
+          onPress={onResend}
+          style={({ pressed }) => ({
+            minHeight: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: pressed ? 0.65 : 1,
+          })}>
+          <Text className={cn('text-center text-base font-semibold', seconds > 0 ? 'text-ink-muted' : 'text-primary')}>
             {seconds > 0
               ? `Повторить через ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
-              : 'Получить звонок повторно'}
+              : phone ? 'Получить звонок повторно' : 'Отправить код повторно'}
           </Text>
         </Pressable>
 
-        {phone && mode === 'flash_call' && (
-          <Pressable onPress={onVoiceFallback} disabled={!challengeId}>
-            <Text className="text-center text-base text-primary font-medium">Не пришёл звонок? Позвонить голосом</Text>
+        {phone && mode === 'flash_call' ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onVoiceFallback}
+            disabled={!challengeId}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: !challengeId ? 0.42 : pressed ? 0.65 : 1,
+            })}>
+            <View
+              style={{
+                width: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+              }}>
+              <Ionicons name="volume-high-outline" size={19} color={palette.primary} />
+              <Text style={{ color: palette.primary, fontSize: 15, fontWeight: '700' }}>
+                Продиктовать код голосом
+              </Text>
+            </View>
           </Pressable>
-        )}
+        ) : null}
       </View>
-
-      <View className="pb-6">
-        <Button label="Подтвердить" loading={isLoading} disabled={code.length !== length} onPress={onConfirm} />
-      </View>
-    </ScreenContainer>
+    </AuthStepScreen>
   );
 }

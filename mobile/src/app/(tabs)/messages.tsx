@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -12,6 +12,7 @@ import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { Button } from '@/components/ui';
+import { EmptyState } from '@/components/EmptyState';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { formatRooms } from '@/lib/format';
 
@@ -24,7 +25,9 @@ const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
 ];
 
 export default function MessagesScreen() {
-  const { palette } = useAppTheme();
+	const { palette, isDark } = useAppTheme();
+	const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+	const softBorder = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(18,24,32,0.07)';
 	const router = useRouter();
 	const status = useSessionStore((state) => state.status);
 	const sessionUser = useSessionStore((state) => state.user);
@@ -113,9 +116,7 @@ export default function MessagesScreen() {
 		const activityDifference = new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
 		return sort === 'oldest' ? -activityDifference : activityDifference;
 	});
-
 	const renderItem = ({ item, index }: { item: ConversationSummary; index: number }) => {
-		const initials = ((item.other_user_name?.[0] ?? '') + (item.other_user_surname?.[0] ?? '')).toUpperCase();
 		const hasUnread = item.unread_count > 0;
 		const hasPreview = !!item.last_message_body;
 		const isLast = index === filteredConversations.length - 1;
@@ -128,111 +129,105 @@ export default function MessagesScreen() {
 
 		return (
 			<TouchableOpacity
-				activeOpacity={0.7}
+				activeOpacity={0.62}
 				onPress={() => handleConversationPress(item)}
-				className="flex-row px-4 items-center bg-surface active:bg-surfaceMuted py-3"
+				style={{ paddingLeft: 18 }}
 			>
-				{/* Avatar Container */}
-				<View className="relative">
-					{item.other_user_avatar_url && !item.other_user_deleted ? (
-						<Image
-							source={{ uri: item.other_user_avatar_url }}
-							style={{ width: 48, height: 48, borderRadius: 24 }}
-							contentFit="cover"
-							transition={200}
-						/>
-					) : (
-						<View className="w-12 h-12 rounded-full bg-surfaceMuted items-center justify-center">
-							<Ionicons name="person-outline" size={20} color={palette.inkMuted} />
-						</View>
-					)}
-				</View>
-
-				{/* Info Container with iOS-style separator */}
-				<View className={`flex-1 ml-4 flex-row items-center pr-1 ${isLast ? '' : 'border-b border-line/30'}`}>
-					<View className="flex-1 justify-center py-1">
-                        <View className="flex-row justify-between items-center mb-1">
-                          <View className="flex-1 mr-4">
-                            <Text
-                              numberOfLines={1}
-                              style={{ lineHeight: 20, includeFontPadding: false, textAlignVertical: 'center' }}
-                              className={`text-[16px] text-ink ${hasUnread ? 'font-extrabold' : 'font-semibold'}`}
-                            >
-                              {item.other_user_deleted
-                                ? 'Удаленный профиль'
-                                : `${item.other_user_name} ${item.other_user_surname}`.trim() || 'Пользователь'}
-                            </Text>
-                          </View>
-                          <Text
-                            style={{ lineHeight: 20, includeFontPadding: false, textAlignVertical: 'center' }}
-                            className={`text-xs ${hasUnread ? 'text-primary font-bold' : 'text-ink-muted font-medium'}`}
-                          >
-                            {formatRelativeTime(item.last_activity)}
-                          </Text>
-                        </View>
-
-						{/* House/Listing context subtitle */}
-						{item.house_id && (
-							<View className="flex-row items-center mb-1">
-								<Ionicons name="home-outline" size={13} color={palette.inkMuted} className="mr-1" />
-								<Text numberOfLines={1} className="text-xs text-ink-muted flex-1 font-medium">
-									{item.house_count_room ? `${formatRooms(item.house_count_room)}, ` : ''}
-									{item.house_street ? `${item.house_street}` : ''}
-									{item.house_number ? `, д. ${item.house_number}` : ''}
-								</Text>
+				<View className="flex-row items-center">
+					<View className="relative">
+						{item.other_user_avatar_url && !item.other_user_deleted ? (
+							<Image
+								source={{ uri: item.other_user_avatar_url }}
+								style={{ width: 58, height: 58, borderRadius: 29 }}
+								contentFit="cover"
+								transition={160}
+							/>
+						) : (
+							<View className="h-[58px] w-[58px] items-center justify-center rounded-full bg-surface-muted">
+								<Ionicons name="person-outline" size={23} color={palette.inkMuted} />
 							</View>
 						)}
-
-						<View className="flex-row items-center justify-between">
-							<View className="flex-row items-center flex-1 mr-4">
-								{isLastMessageByMe && hasPreview && (
-									<View className="mr-1.5 justify-center">
-										{isLastMessageRead ? (
-											<Ionicons name="checkmark-done" size={16} color={palette.primary} />
-										) : (
-											<Ionicons name="checkmark" size={16} color={palette.inkMuted} />
-										)}
-									</View>
-								)}
-								<Text
-									numberOfLines={1}
-									className={`text-[14px] flex-1 ${
-										hasUnread ? 'text-ink font-bold' : 'text-ink-secondary'
-									} ${!hasPreview ? 'italic text-ink-muted font-normal' : ''}`}
-								>
-									{hasPreview ? item.last_message_body : 'Начните переписку'}
-								</Text>
-							</View>
-
-							{hasUnread && (
-								<View className="bg-primary px-2 py-0.5 rounded-full min-w-[20px] items-center justify-center">
-									<Text className="text-white text-[10px] font-bold">
-										{item.unread_count}
-									</Text>
-								</View>
-							)}
-						</View>
+						{hasUnread ? (
+							<View
+								style={{ borderColor: screenBackground }}
+								className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full border-[3px] bg-primary"
+							/>
+						) : null}
 					</View>
 
-					{/* House/Listing Cover Image Thumbnail on the right */}
-					{item.house_id && item.house_cover_path ? (
-						<Image
-							source={{ uri: item.house_cover_path }}
-							style={{ width: 48, height: 48, borderRadius: 8, marginLeft: 12 }}
-							contentFit="cover"
-							transition={200}
-						/>
-					) : null}
+					<View
+						style={{
+							flex: 1,
+							minHeight: 90,
+							marginLeft: 14,
+							paddingVertical: 14,
+							paddingRight: 18,
+							borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+							borderBottomColor: softBorder,
+						}}
+					>
+						<View className="flex-row items-center">
+							<View className="flex-1">
+								<View className="flex-row items-center">
+									<Text numberOfLines={1} className={`mr-3 flex-1 text-[17px] leading-6 text-ink ${hasUnread ? 'font-extrabold' : 'font-bold'}`}>
+										{item.other_user_deleted
+											? 'Удаленный профиль'
+											: `${item.other_user_name} ${item.other_user_surname}`.trim() || 'Пользователь'}
+									</Text>
+									<Text className={`text-[12px] leading-5 ${hasUnread ? 'font-bold text-primary' : 'font-medium text-ink-muted'}`}>
+										{formatRelativeTime(item.last_activity)}
+									</Text>
+								</View>
+
+								{item.house_id ? (
+									<View className="mt-1 flex-row items-center">
+										<Ionicons name="home-outline" size={14} color={palette.inkMuted} />
+										<Text numberOfLines={1} className="ml-1.5 flex-1 text-[12px] leading-5 text-ink-muted">
+											{item.house_count_room ? `${formatRooms(item.house_count_room)}, ` : ''}
+											{item.house_street ?? ''}{item.house_number ? `, д. ${item.house_number}` : ''}
+										</Text>
+									</View>
+								) : null}
+
+								<View className="mt-1 flex-row items-center">
+									{isLastMessageByMe && hasPreview ? (
+										<Ionicons
+											name={isLastMessageRead ? 'checkmark-done' : 'checkmark'}
+											size={16}
+											color={isLastMessageRead ? palette.primary : palette.inkMuted}
+											style={{ marginRight: 5 }}
+										/>
+									) : null}
+									<Text numberOfLines={1} className={`flex-1 text-[14px] leading-5 ${hasUnread ? 'font-bold text-ink' : hasPreview ? 'text-ink-secondary' : 'italic text-ink-muted'}`}>
+										{hasPreview ? item.last_message_body : 'Начните переписку'}
+									</Text>
+									{hasUnread ? (
+										<View className="ml-2 min-w-[22px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5">
+											<Text className="text-[10px] font-extrabold text-white">{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
+										</View>
+									) : null}
+								</View>
+							</View>
+
+							{item.house_id && item.house_cover_path ? (
+								<Image
+									source={{ uri: item.house_cover_path }}
+									style={{ width: 48, height: 48, borderRadius: 12, marginLeft: 12 }}
+									contentFit="cover"
+									transition={160}
+								/>
+							) : null}
+						</View>
+					</View>
 				</View>
 			</TouchableOpacity>
 		);
 	};
 
 	return (
-		<SafeAreaView edges={['top']} className="flex-1 bg-surface">
-			{/* Custom Premium Header */}
-			<View className="px-5 pt-4 pb-3 bg-surface">
-				<Text className="text-3xl font-extrabold text-ink tracking-tight">Сообщения</Text>
+		<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
+			<View className="px-5 pb-4 pt-4">
+				<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
 			</View>
 
 			{conversations && conversations.length > 0 ? (
@@ -252,30 +247,20 @@ export default function MessagesScreen() {
 				data={filteredConversations}
 				keyExtractor={(item) => String(item.conversation_id)}
 				renderItem={renderItem}
-				contentContainerStyle={
-					filteredConversations.length === 0 ? { flexGrow: 1 } : undefined
-				}
+				contentContainerStyle={filteredConversations.length === 0
+					? { flexGrow: 1, paddingTop: 2, paddingBottom: 110 }
+					: { paddingTop: 2, paddingBottom: 110 }}
+				showsVerticalScrollIndicator={false}
 				ListEmptyComponent={
-					<View className="flex-1 items-center justify-center px-8 py-10 bg-surface">
-						<View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-surfaceMuted">
-							<Ionicons name="chatbubble-ellipses-outline" size={28} color={palette.inkMuted} />
-						</View>
-						<Text className="text-center text-lg font-bold text-ink">
-							{searchQuery ? 'Ничего не найдено' : 'Сообщений пока нет'}
-						</Text>
-						<Text className="mt-2 text-center text-[15px] text-ink-secondary leading-6 px-4">
-							{searchQuery
+					<View className="flex-1 justify-center px-6">
+						<EmptyState
+							icon="chatbubble-ellipses-outline"
+							title={searchQuery ? 'Ничего не найдено' : 'Сообщений пока нет'}
+							subtitle={searchQuery
 								? 'Попробуйте изменить запрос или имя собеседника.'
-								: 'Здесь будут ваши переписки с хозяевами квартир.'}
-						</Text>
+								: 'Здесь появятся ваши переписки по объявлениям и заявкам.'}
+						/>
 					</View>
-				}
-				ListFooterComponent={
-					filteredConversations.length > 0 ? (
-						<View className="py-6 items-center">
-							<Text className="text-xs text-ink-muted">Это все переписки</Text>
-						</View>
-					) : null
 				}
 				refreshControl={
 					<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={palette.primary} />

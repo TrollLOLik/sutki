@@ -1,12 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Dimensions,
   Linking,
   Pressable,
   ScrollView,
@@ -16,17 +14,15 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
-  LayoutAnimation,
-  Platform,
-  UIManager,
   BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { ListingCard } from '@/components/ListingCard';
 import { ResilientImage } from '@/components/ResilientImage';
-import { Button, MetricTile, PastelIcon } from '@/components/ui';
-import { useShimmer } from '@/hooks/useShimmer';
+import { Button, IconButton } from '@/components/ui';
+import { ProfileHero, ProfileMetricGrid } from '@/components/profile/ProfileOverview';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
 import { formatRub } from '@/lib/format';
@@ -42,14 +38,8 @@ import { requireAuth } from '@/lib/requireAuth';
 import { useSessionStore } from '@/store/session';
 import { appAlert as Alert } from '@/components/AppAlert';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-
 export default function PublicProfileScreen() {
-  const { palette, isDark } = useAppTheme();
+  const { palette } = useAppTheme();
   const {
     id,
     name,
@@ -89,104 +79,15 @@ export default function PublicProfileScreen() {
     }
   }, [numericId, sessionUserId]);
 
-  useEffect(() => {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-  }, []);
-
-  // Shimmer Sweep Animation from the shared hook
-  const shimmerAnim = useShimmer();
-  const windowWidth = Dimensions.get('window').width;
-  const shimmerTranslateX = shimmerAnim.interpolate({
-    inputRange: [-1, 1.5],
-    outputRange: [-windowWidth, windowWidth * 1.5],
-  });
-
-  // Sticky Header animation logic
-  const animVisible = useRef(new Animated.Value(0)).current;
-  const isHeaderVisibleRef = useRef(false);
-
-  const headerBgOpacity = animVisible;
-  const titleOpacity = animVisible;
-
-  const buttonBgOpacity = useMemo(() => {
-    return animVisible.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    });
-  }, [animVisible]);
-
-  const titleTranslateY = useMemo(() => {
-    return animVisible.interpolate({
-      inputRange: [0, 1],
-      outputRange: [10, 0],
-    });
-  }, [animVisible]);
-
-  const iconColor = useMemo(() => {
-    return animVisible.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['#FFFFFF', palette.ink],
-    });
-  }, [animVisible]);
-
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  const bannerScale = scrollY.interpolate({
-    inputRange: [-150, 0],
-    outputRange: [1.2, 1],
-    extrapolateRight: 'clamp',
-  });
-
-  const bannerTranslateY = scrollY.interpolate({
-    inputRange: [-150, 0, 250],
-    outputRange: [0, 0, 75],
-    extrapolate: 'clamp',
-  });
-
-  const bannerOpacity = scrollY.interpolate({
-    inputRange: [0, 120],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
   const inlineActionsLayoutRef = useRef({ y: 0, height: 0 });
   const isStickyFooterVisibleRef = useRef(false);
   const footerAnim = useRef(new Animated.Value(0)).current;
 
-  const handleMainScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (event: any) => {
+  const handleMainScroll = (event: any) => {
         const y = event.nativeEvent.contentOffset.y;
-        const threshold = 120;
-        if (y >= threshold) {
-          if (!isHeaderVisibleRef.current) {
-            isHeaderVisibleRef.current = true;
-            Animated.timing(animVisible, {
-              toValue: 1,
-              duration: 200,
-              useNativeDriver: true,
-            }).start();
-          }
-        } else {
-          if (isHeaderVisibleRef.current) {
-            isHeaderVisibleRef.current = false;
-            Animated.timing(animVisible, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }).start();
-          }
-        }
-
-        // Sticky buttons: should appear only when the inline action buttons are NOT on screen.
-        // The ScrollView starts below the header, so the viewport spans from scroll y to scroll y + viewportHeight.
         const layout = inlineActionsLayoutRef.current;
         if (layout.y > 0) {
-          const headerHeight = (insets.top || 0) + 64;
+          const headerHeight = 70;
           const viewportHeight = screenHeight - headerHeight;
           const isInlineVisible = (layout.y + layout.height > y) && (layout.y < y + viewportHeight);
 
@@ -210,9 +111,7 @@ export default function PublicProfileScreen() {
             }
           }
         }
-      },
-    }
-  );
+  };
 
 
 
@@ -231,8 +130,6 @@ export default function PublicProfileScreen() {
   // Filter integration: subscribe to the global filters store
   const filters = useFiltersStore();
   const activeFiltersCount = countActiveFilters(filters);
-  const hasFilters = activeFiltersCount > 0;
-
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
@@ -346,204 +243,75 @@ export default function PublicProfileScreen() {
   const hostListingsCount = hostListingCountData?.total ?? 0;
 
   return (
-    <View className="flex-1 bg-surface-muted">
-      {/* Sticky Header */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 20,
-          paddingTop: (insets.top || 0) + 12,
-          paddingBottom: 12,
-        }}
-        className="flex-row items-center px-4"
-      >
-        {/* Animated Solid Background Overlay */}
-        <Animated.View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: palette.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: palette.line,
-            opacity: headerBgOpacity,
-          }}
-        />
-
-        {/* Back Button */}
-        <NavigationBackButton
-          fallback="/(tabs)"
-          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
-        >
-          <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-          </Animated.View>
-          <Animated.View style={{ opacity: animVisible }}>
-            <Ionicons name="chevron-back" size={24} color={palette.ink} />
-          </Animated.View>
-        </NavigationBackButton>
-
-        {/* Title in center */}
-        <View className="flex-1 px-3 justify-center">
-          <Animated.View
-            style={{
-              opacity: titleOpacity,
-              transform: [{ translateY: titleTranslateY }],
-            }}
-          >
-            <Text numberOfLines={1} className="text-base font-bold text-ink">
-              {displayName}
+    <View className="flex-1 bg-surface">
+      <SafeAreaView edges={['top']} style={{ backgroundColor: palette.surface }}>
+        <View
+          className="h-[70px] flex-row items-center px-4"
+          style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
+          <NavigationBackButton fallback="/(tabs)" size={48} variant="material" />
+          <View className="flex-1 items-center px-3">
+            <Text numberOfLines={1} className="text-xl font-extrabold text-ink">
+              Профиль
             </Text>
-          </Animated.View>
+          </View>
+          <IconButton
+            accessibilityLabel="Поделиться профилем"
+            icon="share-outline"
+            iconSize={21}
+            onPress={handleShare}
+            size={48}
+          />
         </View>
-
-        {/* Share Button */}
-        <Pressable
-          onPress={handleShare}
-          accessibilityLabel="Поделиться"
-          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80 relative"
-        >
-          <Animated.View style={{ position: 'absolute', opacity: buttonBgOpacity }}>
-            <Ionicons name="share-outline" size={22} color="#FFFFFF" />
-          </Animated.View>
-          <Animated.View style={{ opacity: animVisible }}>
-            <Ionicons name="share-outline" size={22} color={palette.ink} />
-          </Animated.View>
-        </Pressable>
-      </View>
+      </SafeAreaView>
 
       <ScrollView
+        style={{ backgroundColor: palette.surface }}
         showsVerticalScrollIndicator={false}
-        contentContainerClassName="pb-28"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 128, gap: 16 }}
         onScroll={handleMainScroll}
         scrollEventThrottle={16}
       >
-        {/* Profile Gradient Card with Sweep Animation */}
-        <AnimatedLinearGradient
-          colors={isDark ? ['#8C4E2D', '#3B1E30', '#1A0D1D'] : ['#FF8E53', '#FF5A1F', '#FF2D55']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            borderBottomLeftRadius: 32,
-            borderBottomRightRadius: 32,
-            paddingTop: (insets.top || 0) + 64,
-            paddingBottom: 24,
-            paddingHorizontal: 20,
-            overflow: 'hidden',
-            position: 'relative',
-            transform: [
-              { scale: bannerScale },
-              { translateY: bannerTranslateY },
-            ],
-            opacity: bannerOpacity,
-          }}
-        >
-          <View className="flex-row items-center gap-4">
-            {/* Avatar container with double white border rings */}
-            <View className="h-[84px] w-[84px] items-center justify-center rounded-full border border-white/40 p-[3px] flex-shrink-0">
-              <View className="h-full w-full items-center justify-center rounded-full border-2 border-white bg-primary-light overflow-hidden">
-                {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 9999 }} contentFit="cover" />
-                ) : (
-                  <Text className="text-xl font-extrabold text-primary">{getInitials()}</Text>
-                )}
-              </View>
-            </View>
+        <ProfileHero
+          avatarUri={avatarUrl || null}
+          city={displayCity}
+          initials={getInitials()}
+          name={displayName}
+          onRatingPress={onReviewsPress}
+          rating={ratingNum}
+          reviewsCount={reviewsCountNum}
+          subtitle="Арендодатель"
+          verifiedLabel={phone ? 'Номер подтверждён' : verified ? 'Профиль подтверждён' : undefined}
+        />
 
-            <View className="flex-1 justify-center">
-              <View className="self-start rounded-pill bg-white/20 px-3 py-1">
-                <Text className="text-xs font-bold text-white">Дом рядом</Text>
-              </View>
-              <Text numberOfLines={2} className="mt-1 text-2xl font-extrabold leading-8 text-white">
-                {displayName}
-              </Text>
-              <Text numberOfLines={1} className="mt-0.5 text-sm leading-5 text-white opacity-95">
-                {displayCity} · Хозяин
-              </Text>
-              {/* Rating block */}
-              {ratingNum > 0 ? (
-                <Pressable
-                  onPress={onReviewsPress}
-                  className="flex-row items-center gap-1.5 mt-1 active:opacity-75"
-                >
-                  <Ionicons name="star" size={14} color="#FFFFFF" />
-                  <Text className="text-sm font-bold text-white">{ratingNum.toFixed(1)}</Text>
-                  <Text className="text-sm text-white/80">
-                    ({reviewsCountNum} {formatReviewsPlural(reviewsCountNum)})
-                  </Text>
-                </Pressable>
-              ) : (
-                <View className="flex-row items-center gap-1 mt-1">
-                  <Ionicons name="star" size={14} color="#FFFFFF" />
-                  <Text className="text-sm text-white/80">Нет отзывов</Text>
-                </View>
-              )}
-            </View>
-          </View>
+        <ProfileMetricGrid
+          metrics={[
+            {
+              icon: 'home-outline',
+              label: 'Объявления',
+              value: hostListingsCount,
+              loading: listingsLoading,
+            },
+            {
+              icon: 'star-outline',
+              label: 'Рейтинг',
+              value: ratingNum > 0 ? ratingNum.toFixed(1) : '—',
+              tone: 'neutral',
+            },
+            {
+              icon: phone ? 'checkmark-circle-outline' : 'call-outline',
+              label: 'Номер телефона',
+              value: phone ? 'Подтверждён' : 'Не указан',
+              tone: phone ? 'success' : 'neutral',
+            },
+            {
+              icon: 'chatbubbles-outline',
+              label: 'Среднее время ответа',
+              value: formatHostResponseTime(hostResponseStats),
+              loading: hostResponseStatsLoading,
+            },
+          ]}
+        />
 
-          {/* Shimmer shining sweep overlay */}
-          <Animated.View
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              width: 130,
-              transform: [{ translateX: shimmerTranslateX }, { skewX: '-25deg' }],
-            }}
-            pointerEvents="none"
-          >
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.45)', 'rgba(255, 255, 255, 0)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ flex: 1 }}
-            />
-          </Animated.View>
-        </AnimatedLinearGradient>
-
-        <View className="px-4">
-          <Text className="mt-3 text-xs text-ink-muted">
-            На Сутки.ру с 2024 года
-          </Text>
-
-        {/* 2x2 White Metrics Grid */}
-        <View className="mt-4 gap-3">
-          {/* Row 1: Listings & Rating */}
-          <View className="flex-row gap-3">
-            <MetricTile
-              label="объявления"
-              value={listingsLoading ? null : hostListingsCount}
-              loading={listingsLoading}
-            />
-            <MetricTile
-              label="рейтинг"
-              value={listingsLoading ? null : (ratingNum > 0 ? ratingNum.toFixed(1) : '—')}
-              loading={listingsLoading}
-            />
-          </View>
-
-          {/* Row 2: Verification & Response Time */}
-          <View className="flex-row gap-3">
-            <MetricTile
-              label="Документы проверены"
-              value={verified ? 'Готово' : '—'}
-              icon={<PastelIcon name="shield-checkmark-outline" />}
-            />
-            <MetricTile
-              label="Среднее время ответа"
-              value={formatHostResponseTime(hostResponseStats)}
-              loading={hostResponseStatsLoading}
-              icon={<PastelIcon name="chatbubbles-outline" />}
-            />
-          </View>
-        </View>
-
-        {/* Actions Row */}
         <View
           onLayout={(e) => {
             inlineActionsLayoutRef.current = {
@@ -551,37 +319,26 @@ export default function PublicProfileScreen() {
               height: e.nativeEvent.layout.height,
             };
           }}
-          className="flex-row gap-3 mt-4"
-        >
-          <Pressable
-            onPress={handleCall}
-            className="flex-1 h-12 flex-row items-center justify-center gap-2 rounded-field bg-primary active:bg-primaryPressed"
-          >
-            <Ionicons name="call-outline" size={18} color="white" />
-            <Text className="text-base font-semibold text-white">Позвонить</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleMessage}
-            disabled={isCreatingChat}
-            style={{ opacity: isCreatingChat ? 0.6 : 1 }}
-            className="flex-1 h-12 flex-row items-center justify-center gap-2 rounded-field bg-surface-muted active:bg-surface-muted/80 border border-line"
-          >
-            {isCreatingChat ? (
-              <ActivityIndicator size="small" color={palette.ink} />
-            ) : (
-              <>
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.ink} />
-                <Text className="text-base font-semibold text-ink">Написать</Text>
-              </>
-            )}
-          </Pressable>
+          className="flex-row gap-3">
+          {phone ? (
+            <View className="flex-1">
+              <Button label="Позвонить" icon="call-outline" onPress={handleCall} />
+            </View>
+          ) : null}
+          <View className="flex-1">
+            <Button
+              label="Написать"
+              icon="chatbubble-ellipses-outline"
+              loading={isCreatingChat}
+              onPress={handleMessage}
+              variant={phone ? 'secondary' : 'primary'}
+            />
+          </View>
         </View>
 
-        {/* Listings Section */}
-        <View className="mt-6 gap-3">
+        <View className="mt-1 gap-3">
           <View className="flex-row items-baseline justify-between">
-            <Text className="text-lg font-bold text-ink">Объявления хозяина</Text>
+            <Text className="text-xl font-extrabold text-ink">Объявления</Text>
             <Text className="text-sm font-semibold text-ink-secondary">
               {filteredListings.length} {formatListingsPlural(filteredListings.length)}
             </Text>
@@ -690,7 +447,7 @@ export default function PublicProfileScreen() {
               {filteredListings.map((item) => {
                 const itemIsFavorite = favoriteIds?.has(item.id) ?? false;
                 return (
-                  <HostListingCard
+                  <ListingCard
                     key={item.id}
                     listing={item}
                     isFavorite={itemIsFavorite}
@@ -701,7 +458,6 @@ export default function PublicProfileScreen() {
               })}
             </View>
           )}
-        </View>
         </View>
       </ScrollView>
 
@@ -736,29 +492,21 @@ export default function PublicProfileScreen() {
         }}
       >
         <View className="flex-row gap-3">
-          <Pressable
-            onPress={handleCall}
-            className="flex-1 h-12 flex-row items-center justify-center gap-2 rounded-field bg-primary active:bg-primaryPressed"
-          >
-            <Ionicons name="call-outline" size={18} color="white" />
-            <Text className="text-base font-semibold text-white">Позвонить</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleMessage}
-            disabled={isCreatingChat}
-            style={{ opacity: isCreatingChat ? 0.6 : 1 }}
-            className="flex-1 h-12 flex-row items-center justify-center gap-2 rounded-field bg-surface-muted active:bg-surface-muted/80 border border-line"
-          >
-            {isCreatingChat ? (
-              <ActivityIndicator size="small" color={palette.ink} />
-            ) : (
-              <>
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.ink} />
-                <Text className="text-base font-semibold text-ink">Написать</Text>
-              </>
-            )}
-          </Pressable>
+          {phone ? (
+            <View className="flex-1">
+              <Button label="Позвонить" icon="call-outline" onPress={handleCall} size="md" />
+            </View>
+          ) : null}
+          <View className="flex-1">
+            <Button
+              label="Написать"
+              icon="chatbubble-ellipses-outline"
+              loading={isCreatingChat}
+              onPress={handleMessage}
+              size="md"
+              variant={phone ? 'secondary' : 'primary'}
+            />
+          </View>
         </View>
       </Animated.View>
     </View>
@@ -946,15 +694,6 @@ function HostListingCard({
     </Pressable>
   );
 }
-
-const formatReviewsPlural = (count: number) => {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod100 >= 11 && mod100 <= 19) return 'отзывов';
-  if (mod10 === 1) return 'отзыв';
-  if (mod10 >= 2 && mod10 <= 4) return 'отзыва';
-  return 'отзывов';
-};
 
 const formatListingsPlural = (count: number) => {
   const mod10 = count % 10;

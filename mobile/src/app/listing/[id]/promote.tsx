@@ -15,6 +15,10 @@ import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import {
+  PromotionBadge,
+  PromotionHighlightSurface,
+} from '@/components/promotion/PromotionHighlightSurface';
 
 function uuid() {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
@@ -189,7 +193,7 @@ export default function PromoteListingScreen() {
                     style={{ borderRadius: 8, borderColor: active ? palette.primary : palette.line }}>
                     <Ionicons name={type === 'boost' ? 'trending-up' : 'color-wand-outline'} size={22} color={active ? palette.primary : palette.inkSecondary} />
                     <Text className="mt-2 text-sm font-bold text-ink">{type === 'boost' ? 'Выше в поиске' : 'Яркая карточка'}</Text>
-                    <Text className="mt-1 text-xs leading-4 text-ink-secondary">{type === 'boost' ? 'Приоритет в промо-позициях' : 'Рамка и заметная метка'}</Text>
+                    <Text className="mt-1 text-xs leading-4 text-ink-secondary">{type === 'boost' ? 'Приоритет в промо-позициях' : 'Живой световой акцент и особая метка'}</Text>
                     {existing ? <Text className="mt-2 text-xs font-semibold text-primary">Подключено</Text> : null}
                     {pending ? <Text className="mt-2 text-xs font-semibold text-primary">Оплата не завершена</Text> : null}
                   </Pressable>
@@ -214,18 +218,25 @@ export default function PromoteListingScreen() {
             </View>
 
             <Text className="mb-2 mt-6 text-sm font-bold text-ink">Так увидят гости</Text>
-            <View
-              className="flex-row overflow-hidden bg-surface"
-              style={{ borderRadius: 8, borderWidth: selectedType === 'highlight' ? 2 : 1, borderColor: selectedType === 'highlight' ? palette.primary : palette.line }}>
-              <Image source={listing.data?.cover_url} style={{ width: 112, minHeight: 108, backgroundColor: palette.surfaceMuted }} contentFit="cover" />
-              <View className="flex-1 p-3">
-                <View className="self-start rounded-field bg-primary px-2 py-1">
-                  <Text className="text-xs font-bold text-white">Продвигается</Text>
+            <PromotionHighlightSurface active={selectedType === 'highlight'} radius={18}>
+              <View
+                className="flex-row overflow-hidden bg-surface"
+                style={{
+                  borderRadius: selectedType === 'highlight' ? 16.5 : 18,
+                  borderWidth: selectedType === 'highlight' ? 0 : 1,
+                  borderColor: palette.line,
+                }}
+              >
+                <Image source={listing.data?.cover_url} style={{ width: 116, minHeight: 116, backgroundColor: palette.surfaceMuted }} contentFit="cover" />
+                <View className="flex-1 p-3">
+                  <View className="self-start">
+                    <PromotionBadge highlighted={selectedType === 'highlight'} />
+                  </View>
+                  <Text className="mt-2 text-base font-black text-ink">{listing.data ? `${formatRub(listing.data.price)} ₽ за сутки` : 'Ваше объявление'}</Text>
+                  <Text className="mt-1 text-xs text-ink-secondary" numberOfLines={2}>{listing.data?.address ?? 'После публикации здесь будет превью карточки'}</Text>
                 </View>
-                <Text className="mt-2 text-base font-black text-ink">{listing.data ? `${formatRub(listing.data.price)} ₽ за сутки` : 'Ваше объявление'}</Text>
-                <Text className="mt-1 text-xs text-ink-secondary" numberOfLines={2}>{listing.data?.address ?? 'После публикации здесь будет превью карточки'}</Text>
               </View>
-            </View>
+            </PromotionHighlightSurface>
 
             {selectedProduct ? (
               <View className="mt-5 flex-row items-center justify-between border-t border-line pt-4">

@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addDays, differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { MotiView } from 'moti';
 import { useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
@@ -20,7 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { z } from 'zod';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, MaterialSurface } from '@/components/ui';
 import { PhoneInput } from '@/components/PhoneInput'; // Shared component
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
@@ -86,7 +88,7 @@ type FormValues = z.infer<typeof baseSchema>;
 // ---------------------------------------------------------------------------
 
 export default function BookingScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const listingId = Number(id);
   const user = useSessionStore((s) => s.user);
@@ -156,6 +158,8 @@ export default function BookingScreen() {
   const nights =
     range.start && range.end ? differenceInCalendarDays(range.end, range.start) : 0;
   const total = listing && nights > 0 ? listing.price * nights : 0;
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
 
   const onSubmit = handleSubmit(async (values) => {
     if (!range.start || !range.end) {
@@ -218,37 +222,48 @@ export default function BookingScreen() {
   });
 
   return (
-    <View className="flex-1 bg-surface">
-      <SafeAreaView edges={['top']} className="flex-1">
+    <View style={{ flex: 1, backgroundColor: screenBackground }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: headerBackground }}>
 
         {/* ── Header (centred title) ─────────────────────────────── */}
         <View
           style={{
+            minHeight: 64,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 16,
             paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: palette.line,
+            overflow: 'hidden',
           }}
         >
-          <NavigationBackButton
-            fallback="/(tabs)"
-            className=""
+          <BlurView
+            intensity={88}
+            tint={isDark ? 'dark' : 'light'}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          <View
+            pointerEvents="none"
             style={{
-              width: 40, height: 40,
-              alignItems: 'center', justifyContent: 'center',
-              borderRadius: 20,
-              backgroundColor: palette.surfaceMuted,
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)',
             }}
+          />
+          <NavigationBackButton
+            fallback={{ pathname: '/listing/[id]', params: { id } }}
+            size={42}
+            variant="material"
           />
 
           <Text
             style={{
               flex: 1,
               textAlign: 'center',
-              fontSize: 17,
-              fontWeight: '600',
+              fontSize: 19,
+              fontWeight: '800',
               color: palette.ink,
             }}
           >
@@ -256,27 +271,29 @@ export default function BookingScreen() {
           </Text>
 
           {/* Placeholder to keep title centred */}
-          <View style={{ width: 40 }} />
+          <View style={{ width: 42 }} />
         </View>
 
         {/* ── Content ───────────────────────────────────────────── */}
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          className="flex-1">
+          style={{ flex: 1, backgroundColor: screenBackground }}>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingBottom: 24, paddingTop: 16 }}
+            contentContainerStyle={{ gap: 22, paddingHorizontal: 16, paddingBottom: 30, paddingTop: 18 }}
             keyboardShouldPersistTaps="handled">
 
             {listing ? (
-              <View
+              <MotiView
+                from={{ opacity: 0, translateY: 12 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'spring', damping: 22, stiffness: 230 }}>
+              <MaterialSurface
+                level="raised"
+                radius={18}
                 style={{
                   flexDirection: 'row',
                   gap: 12,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: palette.line,
-                  backgroundColor: palette.surface,
                   padding: 12,
                 }}
               >
@@ -284,9 +301,9 @@ export default function BookingScreen() {
                 <Image
                   source={{ uri: listing.cover_url }}
                   style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 10,
+                    width: 78,
+                    height: 78,
+                    borderRadius: 14,
                     backgroundColor: palette.surfaceSkeleton,
                   }}
                   contentFit="cover"
@@ -297,7 +314,7 @@ export default function BookingScreen() {
                   <View style={{ gap: 2 }}>
                     <Text
                       numberOfLines={1}
-                      style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}
+                      style={{ fontSize: 16, lineHeight: 21, fontWeight: '800', color: palette.ink }}
                     >
                       {(() => {
                         const roomsNum = parseInt(listing.rooms, 10);
@@ -314,15 +331,19 @@ export default function BookingScreen() {
                       {listing.city}, {listing.address}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: palette.primary }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: palette.primary }}>
                     {formatPricePerNight(listing.price)}
                   </Text>
                 </View>
-              </View>
+              </MaterialSurface>
+              </MotiView>
             ) : null}
 
             <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Даты</Text>
+              <View style={{ gap: 3 }}>
+                <Text style={{ fontSize: 19, fontWeight: '800', color: palette.ink }}>Даты проживания</Text>
+                <Text style={{ fontSize: 13, color: palette.inkSecondary }}>Выберите день заезда и выезда</Text>
+              </View>
               <CalendarRange value={range} onChange={setRange} isDateDisabled={isDateDisabled} />
               <View className="flex-row items-center gap-2 mt-1 px-0.5">
                 <View
@@ -330,9 +351,9 @@ export default function BookingScreen() {
                     width: 16,
                     height: 16,
                     borderRadius: 8,
-                    backgroundColor: palette.dangerLight,
+                    backgroundColor: palette.surfaceMuted,
                     borderWidth: 1,
-                    borderColor: '#FAD2D2',
+                    borderColor: palette.line,
                     alignItems: 'center',
                     justifyContent: 'center',
                     overflow: 'hidden',
@@ -344,13 +365,13 @@ export default function BookingScreen() {
                       position: 'absolute',
                       width: 18,
                       height: 1.5,
-                      backgroundColor: '#C92A2A',
+                      backgroundColor: palette.inkMuted,
                       transform: [{ rotate: '-45deg' }],
                     }}
                   />
                 </View>
                 <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
-                  Занятые даты
+                  Недоступные даты
                 </Text>
               </View>
               {hasWarnOverlap ? (
@@ -378,16 +399,15 @@ export default function BookingScreen() {
             </View>
 
             {/* Guests stepper */}
-            <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Гости</Text>
-              <View
+            <View style={{ gap: 10 }}>
+              <Text style={{ fontSize: 19, fontWeight: '800', color: palette.ink }}>Гости</Text>
+              <MaterialSurface
+                level="raised"
+                radius={16}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: palette.line,
                   paddingHorizontal: 16,
                   paddingVertical: 12,
                 }}
@@ -408,12 +428,12 @@ export default function BookingScreen() {
                     onPress={() => setCount((c) => Math.min(maxGuests, c + 1))}
                   />
                 </View>
-              </View>
+              </MaterialSurface>
             </View>
 
             {/* Contact details */}
-            <View style={{ gap: 10 }}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
+            <View style={{ gap: 12 }}>
+              <Text style={{ fontSize: 19, fontWeight: '800', color: palette.ink }}>
                 Контактные данные
               </Text>
 
@@ -466,23 +486,23 @@ export default function BookingScreen() {
 
           <View
             style={{
-              borderTopWidth: 1,
-              borderTopColor: palette.line,
-              backgroundColor: palette.surface,
+              backgroundColor: headerBackground,
               paddingHorizontal: 16,
               paddingTop: 12,
               paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+              shadowColor: '#000',
+              shadowOpacity: isDark ? 0.28 : 0.08,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: -8 },
+              elevation: 8,
             }}
           >
             {nights > 0 && listing ? (
               <View
                 style={{
                   marginBottom: 12,
-                  padding: 12,
-                  borderRadius: 12,
-                  backgroundColor: palette.surfaceMuted,
-                  borderWidth: 1,
-                  borderColor: palette.line,
+                  paddingHorizontal: 2,
+                  paddingBottom: 2,
                   gap: 4,
                 }}
               >

@@ -1,11 +1,14 @@
 import { addDays, format, parseISO } from 'date-fns';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
+import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
 import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
@@ -31,6 +34,18 @@ const SORT_OPTIONS: SortOption<ListingSort>[] = [
   { value: 'popular', label: 'Сначала популярные', icon: 'eye-outline' },
 ];
 
+const QUICK_STATUSES: Array<{
+  key: string;
+  label: string;
+  statuses: MyListingStatus[];
+}> = [
+  { key: 'all', label: 'Все', statuses: [] },
+  { key: 'active', label: 'В поиске', statuses: ['active'] },
+  { key: 'pending', label: 'На проверке', statuses: ['pending_moderation', 'moderation_review'] },
+  { key: 'unpublished', label: 'Снятые', statuses: ['unpublished'] },
+  { key: 'rejected', label: 'Отклонённые', statuses: ['rejected'] },
+];
+
 function normalizedRooms(value: string): number {
   if (value === 'studio' || value === '0') return 0;
   if (value === '5+') return 5;
@@ -45,7 +60,9 @@ function matchesRoom(listing: ListingCardType, filters: RoomFilter[]): boolean {
 
 export default function MyListingsScreen() {
   useActivityScopeSeen('listings');
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
   const { data, isLoading, isError, refetch, isRefetching } = useMyListings({ limit: 100 });
   const incoming = useIncomingBookings({ limit: 100 });
   const { data: favoriteIds } = useFavoriteIds();
@@ -95,6 +112,35 @@ export default function MyListingsScreen() {
   const filterCount = countActiveFilters(filters) + filters.statuses.length + Number(filters.favoritesOnly);
   const insets = useSafeAreaInsets();
   const publication = useListingPublication();
+  const statusCounts = useMemo(() => {
+    const counts: Record<MyListingStatus, number> = {
+      active: 0,
+      unpublished: 0,
+      pending_moderation: 0,
+      moderation_review: 0,
+      rejected: 0,
+    };
+    for (const item of data?.items ?? []) {
+      const status = (item.status ?? 'active') as MyListingStatus;
+      if (status in counts) counts[status] += 1;
+    }
+    return counts;
+  }, [data?.items]);
+
+  const isQuickStatusSelected = (statuses: MyListingStatus[]) => {
+    if (statuses.length === 0) return filters.statuses.length === 0;
+    return statuses.length === filters.statuses.length
+      && statuses.every((status) => filters.statuses.includes(status));
+  };
+
+  const selectQuickStatus = (statuses: MyListingStatus[]) => {
+    filters.setFilters({ statuses: isQuickStatusSelected(statuses) ? [] : statuses });
+  };
+
+  const quickStatusCount = (statuses: MyListingStatus[]) => {
+    if (statuses.length === 0) return data?.items.length ?? 0;
+    return statuses.reduce((total, status) => total + statusCounts[status], 0);
+  };
 
   const changePublication = (id: number, published: boolean) => {
     const title = published ? 'Опубликовать объявление снова?' : 'Снять объявление с публикации?';
@@ -118,33 +164,115 @@ export default function MyListingsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-surface">
-      <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center px-4 py-2">
+    <View style={{ flex: 1, backgroundColor: screenBackground }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: headerBackground }}>
+        <View
+          style={{
+            minHeight: 68,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            overflow: 'hidden',
+          }}
+        >
+          <BlurView
+            intensity={88}
+            tint={isDark ? 'dark' : 'light'}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)',
+            }}
+          />
           <NavigationBackButton
             fallback="/(tabs)/profile"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+            size={48}
+            variant="material"
           />
-          <Text className="flex-1 text-center text-lg font-semibold text-ink">Мои объявления</Text>
-          <View className="h-10 w-10" />
+          <Text className="flex-1 text-center text-xl font-extrabold text-ink">Мои объявления</Text>
+          <Pressable
+            accessibilityLabel="Разместить объявление"
+            onPress={() => router.push('/create')}
+            className="h-12 w-12 items-center justify-center rounded-full border border-line bg-surface active:opacity-70"
+          >
+            <Ionicons name="add" size={24} color={palette.primary} />
+          </Pressable>
         </View>
 
-        <PersonalListToolbar
-          query={query}
-          onQueryChange={setQuery}
-          placeholder="Адрес, город или описание"
-          sort={sort}
-          sortOptions={SORT_OPTIONS}
-          sortVisible={sortVisible}
-          onSortVisibleChange={setSortVisible}
-          onSortChange={(value) => filters.setFilters({ sort: value })}
-          filterCount={filterCount}
-          onFilterPress={() => router.push({ pathname: '/filters', params: { scope: 'mine' } })}
-        />
+        <View style={{ flex: 1, paddingTop: 8, backgroundColor: screenBackground }}>
+          <PersonalListToolbar
+            query={query}
+            onQueryChange={setQuery}
+            placeholder="Адрес, город или описание"
+            sort={sort}
+            sortOptions={SORT_OPTIONS}
+            sortVisible={sortVisible}
+            onSortVisibleChange={setSortVisible}
+            onSortChange={(value) => filters.setFilters({ sort: value })}
+            filterCount={filterCount}
+            onFilterPress={() => router.push({ pathname: '/filters', params: { scope: 'mine' } })}
+          />
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ height: 54, flexGrow: 0, flexShrink: 0 }}
+            contentContainerStyle={{ alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 12 }}
+          >
+            {QUICK_STATUSES.map((option) => {
+              const selected = isQuickStatusSelected(option.statuses);
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => selectQuickStatus(option.statuses)}
+                  className="active:opacity-80"
+                  style={{
+                    minHeight: 38,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 7,
+                    borderRadius: 19,
+                    borderWidth: 1,
+                    borderColor: selected ? palette.primary : palette.line,
+                    backgroundColor: selected ? palette.primaryLight : palette.surface,
+                    paddingHorizontal: 13,
+                  }}
+                >
+                  <Text style={{ color: selected ? palette.primary : palette.inkSecondary, fontSize: 13, fontWeight: '700' }}>
+                    {option.label}
+                  </Text>
+                  <View
+                    style={{
+                      minWidth: 22,
+                      height: 22,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 11,
+                      backgroundColor: selected ? palette.primary : palette.surfaceMuted,
+                      paddingHorizontal: 5,
+                    }}
+                  >
+                    <Text style={{ color: selected ? '#FFFFFF' : palette.inkMuted, fontSize: 11, fontWeight: '800' }}>
+                      {quickStatusCount(option.statuses)}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
 
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={palette.primary} />
+          <View className="flex-1 px-4 pt-1">
+            <ListingCardSkeleton />
+            <ListingCardSkeleton />
           </View>
         ) : isError ? (
           <View 
@@ -176,7 +304,7 @@ export default function MyListingsScreen() {
           <FlatList
             data={items}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ padding: 16, gap: 12 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 2, paddingBottom: Math.max(insets.bottom, 16) + 12 }}
             refreshControl={
               <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={palette.primary} />
             }
@@ -196,6 +324,7 @@ export default function MyListingsScreen() {
             )}
           />
         )}
+        </View>
       </SafeAreaView>
 
     </View>

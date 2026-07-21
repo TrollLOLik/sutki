@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -71,7 +71,7 @@ export function BookingStatusCard({
 	reviewStatus,
 	onReview,
 }: Props) {
-	const { palette } = useAppTheme();
+	const { palette, isDark } = useAppTheme();
 	const meta = EVENT_META[payload.event] ?? EVENT_META.new;
 
 	const iconColor =
@@ -99,16 +99,33 @@ export function BookingStatusCard({
 	}
 
 	return (
-		<View className="items-center my-2 px-6">
-			<View className="w-full max-w-[340px] rounded-2xl border border-line/40 bg-surfaceMuted px-4 py-3.5">
-				<View className="flex-row items-center">
-					<View className="w-9 h-9 rounded-full bg-surface items-center justify-center mr-3">
-						<Ionicons name={meta.icon} size={20} color={iconColor} />
+		<View className="items-center my-2.5 px-5">
+			<View
+				style={[
+					styles.card,
+					{
+						backgroundColor: isDark ? '#181B20' : '#FFFFFF',
+						borderColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(18,24,32,0.09)',
+						shadowColor: isDark ? '#000' : '#53606F',
+					},
+				]}
+			>
+				<View className="flex-row items-start">
+					<View
+						style={[
+							styles.iconRing,
+							{
+								borderColor: iconColor,
+								backgroundColor: isDark ? '#202329' : palette.surfaceMuted,
+							},
+						]}
+					>
+						<Ionicons name={meta.icon} size={23} color={iconColor} />
 					</View>
 					<View className="flex-1">
-						<Text className="text-[14px] font-bold text-ink">{meta.title}</Text>
+						<Text className="text-[15px] leading-5 font-extrabold text-ink">{meta.title}</Text>
 						{dates ? (
-							<Text className="text-[12px] text-ink-secondary mt-0.5">
+							<Text className="text-[12px] leading-5 text-ink-secondary mt-1">
 								{dates}
 								{payload.guests ? ` · ${guestsLabel(payload.guests)}` : ''}
 							</Text>
@@ -141,13 +158,13 @@ export function BookingStatusCard({
 				) : null}
 
 				{showActions ? (
-					<View className="flex-row gap-2 mt-3">
+					<View className="flex-row gap-2 mt-4">
 						<TouchableOpacity
 							onPress={() => onConfirm?.(payload.request_id)}
 							disabled={busy}
 							activeOpacity={0.8}
 							style={{ backgroundColor: palette.primary, opacity: busy ? 0.6 : 1 }}
-							className="flex-1 flex-row items-center justify-center rounded-xl py-2.5"
+							className="flex-1 flex-row items-center justify-center rounded-[14px] py-3"
 						>
 							{confirming ? (
 								<ActivityIndicator size="small" color="#fff" />
@@ -160,7 +177,7 @@ export function BookingStatusCard({
 							disabled={busy}
 							activeOpacity={0.8}
 							style={{ opacity: busy ? 0.6 : 1 }}
-							className="flex-1 flex-row items-center justify-center rounded-xl py-2.5 bg-surface border border-line/60"
+							className="flex-1 flex-row items-center justify-center rounded-[14px] py-3 bg-surface border border-line/60"
 						>
 							{rejecting ? (
 								<ActivityIndicator size="small" color={palette.danger} />
@@ -186,3 +203,27 @@ export function BookingStatusCard({
 		</View>
 	);
 }
+
+const styles = StyleSheet.create({
+	card: {
+		width: '100%',
+		maxWidth: 360,
+		borderRadius: 20,
+		borderWidth: StyleSheet.hairlineWidth,
+		paddingHorizontal: 16,
+		paddingVertical: 15,
+		shadowOpacity: 0.08,
+		shadowRadius: 16,
+		shadowOffset: { width: 0, height: 8 },
+		elevation: 2,
+	},
+	iconRing: {
+		width: 44,
+		height: 44,
+		borderRadius: 22,
+		borderWidth: 1.5,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginRight: 13,
+	},
+});

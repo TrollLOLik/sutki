@@ -8,11 +8,12 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
+import { SearchResultItem } from '@/components/SearchResultItem';
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -169,33 +170,16 @@ export function MapSearchOverlay({
         className="flex-1 bg-surface"
       >
         <View className="flex-1 bg-surface" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-4 pb-4 pt-2 border-b border-line">
-            <View className="flex-1 flex-row items-center rounded-field bg-surface-muted px-3 h-12 border border-line">
-              <Ionicons name="search" size={20} color={palette.inkMuted} />
-              <TextInput
-                value={query}
-                onChangeText={(text) => {
-                  setQuery(text);
-                  // Clear city context if user starts typing fresh
-                  if (text.length === 0) setCityContext(null);
-                }}
-                placeholder={cityContextName ? `Адрес в ${cityContextName}…` : 'Город или адрес'}
-                placeholderTextColor={palette.inkMuted}
-                autoFocus
-                className="ml-2 flex-1 text-base text-ink"
-                onSubmitEditing={handleSubmitText}
-              />
-              {query.length > 0 ? (
-                <Pressable onPress={() => setQuery('')}>
-                  <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-                </Pressable>
-              ) : null}
-            </View>
-            <Pressable onPress={onClose} className="ml-4 h-12 justify-center">
-              <Text className="text-base font-semibold text-primary">Отменить</Text>
-            </Pressable>
-          </View>
+          <SearchOverlayHeader
+            query={query}
+            onChangeText={(text) => {
+              setQuery(text);
+              if (text.length === 0) setCityContext(null);
+            }}
+            onClose={onClose}
+            onSubmit={handleSubmitText}
+            placeholder={cityContextName ? `Адрес в ${cityContextName}…` : 'Город или адрес'}
+          />
 
           {/* City context chip */}
           {cityContextName ? (
@@ -215,7 +199,10 @@ export function MapSearchOverlay({
           ) : null}
 
           {/* Suggestions */}
-          <ScrollView className="flex-1 px-4 pt-2 pb-6" keyboardShouldPersistTaps="handled">
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32 }}
+            keyboardShouldPersistTaps="handled">
             {loadingCities || loadingAddresses ? (
               <View className="py-8 items-center justify-center">
                 <ActivityIndicator color={palette.primary} size="small" />
@@ -225,48 +212,33 @@ export function MapSearchOverlay({
                 <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-3 mb-3">
                   ГОРОДА
                 </Text>
-                {citySuggestions.map((city) => (
-                  <Pressable
-                    key={city}
-                    onPress={() => handleSelectCity(city)}
-                    className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
-                  >
-                    <View className="h-9 w-9 rounded-pill bg-surface-muted items-center justify-center mr-3">
-                      <Ionicons name="location-outline" size={18} color={palette.primary} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-base text-ink font-semibold" numberOfLines={1}>
-                        {city}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
-                  </Pressable>
-                ))}
+                <View style={{ gap: 8 }}>
+                  {citySuggestions.map((city) => (
+                    <SearchResultItem
+                      key={city}
+                      icon="location-outline"
+                      title={city}
+                      onPress={() => handleSelectCity(city)}
+                    />
+                  ))}
+                </View>
               </View>
             ) : addressSuggestions.length > 0 ? (
               <View>
                 <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-3 mb-3">
                   {cityContextName ? 'АДРЕСА' : 'АДРЕСА'}
                 </Text>
-                {addressSuggestions.map((suggestion, index) => (
-                  <Pressable
-                    key={`${suggestion.value}-${index}`}
-                    onPress={() => handleSelectAddress(suggestion)}
-                    className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
-                  >
-                    <View className="h-9 w-9 rounded-pill bg-primary-light items-center justify-center mr-3">
-                      <Ionicons name="navigate-outline" size={16} color={palette.primary} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-base text-ink font-semibold" numberOfLines={1}>
-                        {suggestion.value}
-                      </Text>
-                      {suggestion.data.city && !cityContextName ? (
-                        <Text className="text-xs text-ink-muted mt-0.5">{suggestion.data.city}</Text>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                ))}
+                <View style={{ gap: 8 }}>
+                  {addressSuggestions.map((suggestion, index) => (
+                    <SearchResultItem
+                      key={`${suggestion.value}-${index}`}
+                      icon="navigate-outline"
+                      title={suggestion.value}
+                      subtitle={suggestion.data.city && !cityContextName ? suggestion.data.city : undefined}
+                      onPress={() => handleSelectAddress(suggestion)}
+                    />
+                  ))}
+                </View>
               </View>
             ) : query.trim().length > 0 ? (
               <View className="py-8 items-center">

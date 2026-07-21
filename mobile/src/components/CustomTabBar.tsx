@@ -1,18 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
   withTiming,
   withSpring,
   Easing,
   interpolateColor,
   interpolate,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,8 +22,20 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 import { useActivityCounters } from '@/lib/api/activity';
 import { useSessionStore } from '@/store/session';
+import { CreateListingButton } from '@/components/CreateListingButton';
 
-export const TAB_BAR_HEIGHT = 49;
+export const TAB_BAR_HEIGHT = 58;
+export const TAB_BAR_HORIZONTAL_MARGIN = 10;
+export const TAB_BAR_SLOT_COUNT = 5;
+
+export function getTabBarBottomOffset(safeAreaBottom: number) {
+  return safeAreaBottom > 0 ? safeAreaBottom + 7 : 10;
+}
+
+export function getTabSlotCenterX(windowWidth: number, slotIndex: number) {
+  const usableWidth = Math.max(0, windowWidth - TAB_BAR_HORIZONTAL_MARGIN * 2);
+  return TAB_BAR_HORIZONTAL_MARGIN + (usableWidth / TAB_BAR_SLOT_COUNT) * (slotIndex + 0.5);
+}
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -55,8 +67,9 @@ interface TabButtonProps {
 }
 
 function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge = 0 }: TabButtonProps) {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const focusAnim = useSharedValue(focused ? 1 : 0);
+  const pressAnim = useSharedValue(1);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -70,9 +83,12 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge 
     }
   }, [focused, reduceMotion]);
 
-  /* Icon scale on focus */
   const iconScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + focusAnim.value * 0.12 }],
+    transform: [{ scale: 1 + focusAnim.value * 0.07 }],
+  }));
+
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressAnim.value }],
   }));
 
   const activeIconOpacity = useAnimatedStyle(() => ({
@@ -83,41 +99,25 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge 
     opacity: 1 - focusAnim.value,
   }));
 
-  const textColorStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(focusAnim.value, [0, 1], [palette.inkMuted, palette.primary]),
-  }));
-
-  /*
-   * Card: grows from 28 → 48 px, gains a themed surface background, border,
-   * rounded corners, and shadow. Layout (flex: 1 on the slot) never
-   * changes, so no janky reflows.
-   */
-  // Hex8 alpha variants of theme colors: interpolate from a fully transparent
-  // version of the SAME hue (NOT 'transparent', which RN parses as
-  // rgba(0,0,0,0) and produces a gray smear mid-transition).
   const surfaceTransparent = `${palette.surface}00`;
   const lineTransparent = `${palette.line}00`;
   const cardStyle = useAnimatedStyle(() => {
-    const size = interpolate(mapTransition.value, [0, 1], [28, 48]);
+    const size = 48;
     return {
       width: size,
       height: size,
-      // Always a perfect circle — no square shape mid-transition
       borderRadius: size / 2,
       backgroundColor: interpolateColor(
         mapTransition.value,
         [0, 0.5, 1],
         [surfaceTransparent, surfaceTransparent, palette.surface],
       ),
-      // Border fades in only in the final 30% of the transition
       borderWidth: interpolate(mapTransition.value, [0, 0.7, 1], [0, 0, 1]),
       borderColor: interpolateColor(
         mapTransition.value,
         [0, 0.7, 1],
         [lineTransparent, lineTransparent, palette.line],
       ),
-      // Shadow appears only at the very end — no phantom squares mid-flight
-      // (fixed near-black: a light ink shadow would glow in dark mode)
       shadowColor: '#1A1A1A',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: interpolate(mapTransition.value, [0, 0.8, 1], [0, 0, 0.12]),
@@ -126,20 +126,34 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge 
     };
   });
 
-  /* Label fades & collapses in map mode */
-  const labelStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(mapTransition.value, [0, 0.35], [1, 0]),
-    maxHeight: interpolate(mapTransition.value, [0, 1], [16, 0]),
-    marginTop: interpolate(mapTransition.value, [0, 1], [4, 0]),
+  const activeIndicatorStyle = useAnimatedStyle(() => ({
+    opacity: focusAnim.value * (1 - mapTransition.value),
+    transform: [{ scale: 0.88 + focusAnim.value * 0.12 }],
   }));
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={meta.label}
       accessibilityState={focused ? { selected: true } : {}}
       onPress={onPress}
+      onPressIn={() => {
+        pressAnim.value = reduceMotion ? 0.96 : withTiming(0.92, { duration: 90 });
+      }}
+      onPressOut={() => {
+        pressAnim.value = reduceMotion
+          ? 1
+          : withSpring(1, { damping: 18, stiffness: 320, mass: 0.7 });
+      }}
       style={styles.tabSlot}>
-      <Animated.View style={[styles.cardBase, cardStyle]}>
+      <Animated.View style={[styles.cardBase, cardStyle, pressStyle]}>
+        <Animated.View
+          style={[
+            styles.activeIndicator,
+            { backgroundColor: isDark ? 'rgba(255,107,53,0.17)' : palette.primaryLight },
+            activeIndicatorStyle,
+          ]}
+        />
         <Animated.View style={[styles.iconWrap, iconScaleStyle]}>
           <Animated.View style={[StyleSheet.absoluteFill, styles.iconCenter, inactiveIconOpacity]}>
             <Ionicons name={meta.icon} size={24} color={palette.inkMuted} />
@@ -150,20 +164,10 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge 
         </Animated.View>
       </Animated.View>
       {badge > 0 ? (
-        <View style={[styles.badge, { borderColor: palette.surface }]}>
+        <View style={[styles.badge, { borderColor: isDark ? '#181A1F' : '#FFFFFF' }]}>
           <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
         </View>
       ) : null}
-      <Animated.Text
-        numberOfLines={1}
-        style={[
-          styles.tabLabel,
-          { fontWeight: focused ? '600' : '500' },
-          textColorStyle,
-          labelStyle,
-        ]}>
-        {meta.label}
-      </Animated.Text>
     </Pressable>
   );
 }
@@ -171,71 +175,11 @@ function TabButton({ focused, meta, onPress, reduceMotion, mapTransition, badge 
 /* ──────────────────────── CustomTabBar ──────────────────────── */
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReducedMotion();
   const authenticated = useSessionStore((s) => s.status === 'authenticated');
   const { data: activity } = useActivityCounters(authenticated);
-
-  const pulse = useSharedValue(0);
-  const rotation = useSharedValue(0);
-  const centerScale = useSharedValue(1);
-  const centerRotate = useSharedValue(0);
-  const shimmer = useSharedValue(0);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => sub.remove();
-  }, []);
-
-  useEffect(() => {
-    // Gradient background: steady linear spin
-    rotation.value = withRepeat(
-      withTiming(360, { duration: 4000, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    // Pulse ring: ease-out expansion, then jump back
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    // Shimmer: smooth ease-in-out that reverses seamlessly
-    shimmer.value = withRepeat(
-      withTiming(1, { duration: 2500, easing: Easing.ease }),
-      -1,
-      true, // ← reverse: ping-pong so there's no jump
-    );
-  }, []);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse.value * 0.35 }],
-    opacity: 0.6 * (1 - pulse.value),
-  }));
-
-  const rotationStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  // Scale wraps the whole button — spring for organic bounce
-  const centerScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: centerScale.value }],
-  }));
-
-  // Rotation applied ONLY to the "+" icon glyph
-  const centerRotateStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${centerRotate.value}deg` }],
-  }));
-
-  // Shimmer beam travels across the circle diagonally
-  const shimmerStyle = useAnimatedStyle(() => {
-    const translateX = interpolate(shimmer.value, [0, 1], [-60, 60]);
-    return {
-      transform: [{ translateX }, { rotate: '30deg' }],
-    };
-  });
 
   /* ── routing helpers ── */
   const routeByName = Object.fromEntries(state.routes.map((r) => [r.name, r] as const));
@@ -250,49 +194,46 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   }, [activeName]);
 
   useEffect(() => {
-    translateY.value = withTiming(visible ? 0 : 100 + insets.bottom, {
-      duration: 250,
-      easing: Easing.out(Easing.ease),
-    });
-  }, [visible, insets.bottom]);
+    translateY.value = reduceMotion
+      ? visible ? 0 : 100 + insets.bottom
+      : withTiming(visible ? 0 : 100 + insets.bottom, {
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+        });
+  }, [visible, insets.bottom, reduceMotion]);
 
   /* ── map ↔ normal transition (spring for organic feel) ── */
   const isMap = activeName === 'map';
   const mapTransition = useSharedValue(isMap ? 1 : 0);
 
   useEffect(() => {
-    mapTransition.value = withSpring(isMap ? 1 : 0, {
-      damping: 22,
-      stiffness: 200,
-      mass: 0.8,
-    });
-  }, [isMap]);
+    mapTransition.value = reduceMotion
+      ? isMap ? 1 : 0
+      : withSpring(isMap ? 1 : 0, {
+          damping: 22,
+          stiffness: 200,
+          mass: 0.8,
+        });
+  }, [isMap, reduceMotion]);
 
   /* ── container animated styles ── */
   const hideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
-  const containerBgStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      mapTransition.value,
-      [0, 1],
-      [palette.surface, 'transparent'],
-    ),
+  const materialStyle = useAnimatedStyle(() => ({
+    opacity: 1 - mapTransition.value,
   }));
 
-  const containerBorderStyle = useAnimatedStyle(() => ({
-    borderTopWidth: interpolate(mapTransition.value, [0, 1], [1, 0]),
-    borderTopColor: interpolateColor(
-      mapTransition.value,
-      [0, 1],
-      [palette.line, 'transparent'],
-    ),
-  }));
-
-  /* Center "+" lift animation */
-  const centerLiftStyle = useAnimatedStyle(() => ({
-    marginTop: interpolate(mapTransition.value, [0, 1], [-18, 0]),
+  const shellStyle = useAnimatedStyle(() => ({
+    minHeight: 58,
+    borderWidth: interpolate(mapTransition.value, [0, 1], [StyleSheet.hairlineWidth, 0]),
+    borderColor: interpolateColor(mapTransition.value, [0, 1], [
+      isDark ? 'rgba(255,255,255,0.11)' : 'rgba(18,24,32,0.09)',
+      'transparent',
+    ]),
+    shadowOpacity: interpolate(mapTransition.value, [0, 1], [isDark ? 0.3 : 0.14, 0]),
+    elevation: interpolate(mapTransition.value, [0, 1], [10, 0]),
   }));
 
   /* ── render helper ── */
@@ -334,74 +275,38 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     <Animated.View
       style={[
         styles.container,
-        { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 },
+        { bottom: getTabBarBottomOffset(insets.bottom) },
         hideStyle,
-        containerBgStyle,
-        containerBorderStyle,
       ]}>
-
-      {LEFT_TABS.map(renderTab)}
-
-      {/* Center "+" — animated create-listing action */}
-      <View style={styles.tabSlot}>
-        <Animated.View style={centerLiftStyle}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Разместить объявление"
-            onPressIn={() => {
-              // Spring-in: quick compress with slight overshoot on release
-              centerScale.value = withSpring(0.88, { damping: 20, stiffness: 400 });
-              centerRotate.value = withSpring(45, { damping: 20, stiffness: 400 });
-            }}
-            onPressOut={() => {
-              // Bouncy spring-back
-              centerScale.value = withSpring(1, { damping: 12, stiffness: 250 });
-              centerRotate.value = withSpring(0, { damping: 12, stiffness: 250 });
-            }}
-            onPress={() => {
-              if (requireAuth('listing')) {
-                router.push('/create');
-              }
-            }}
-            style={styles.centerBtn}>
-
-            {/* Layer 1: Pulse ring — fully independent */}
-            <Animated.View style={[styles.pulseBg, pulseStyle]} />
-
-            {/* Layer 2: Main circle — spring-scales on press */}
-            <Animated.View style={[styles.gradientWrap, centerScaleStyle]}>
-
-              {/* Layer 3: Spinning gradient — always runs, clips to circle */}
-              <Animated.View style={[styles.gradientOversize, rotationStyle]}>
-                <LinearGradient
-                  colors={['#FF8E53', '#FF5A1F', '#FF2D55', '#FF8E53']}
-                  start={{ x: 0.0, y: 0.0 }}
-                  end={{ x: 1.0, y: 1.0 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              </Animated.View>
-
-              {/* Layer 4: Shimmer beam — ping-pongs horizontally */}
-              <Animated.View style={[styles.shimmerBeam, shimmerStyle]}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={StyleSheet.absoluteFill}
-                />
-              </Animated.View>
-
-              {/* Layer 5: Icon — rotates on press ONLY, nothing else */}
-              <Animated.View style={centerRotateStyle}>
-                <Ionicons name="add" size={28} color="#FFFFFF" />
-              </Animated.View>
-
-            </Animated.View>
-          </Pressable>
+      <Animated.View style={[styles.shell, shellStyle]}>
+        <Animated.View pointerEvents="none" style={[styles.materialClip, materialStyle]}>
+          <BlurView
+            intensity={88}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: isDark ? 'rgba(24,26,31,0.76)' : 'rgba(255,255,255,0.76)' },
+            ]}
+          />
         </Animated.View>
-      </View>
 
-      {RIGHT_TABS.map(renderTab)}
+        {LEFT_TABS.map(renderTab)}
+
+        <View style={styles.tabSlot}>
+          <CreateListingButton
+            onPress={() => {
+                if (requireAuth('listing')) {
+                  router.push('/create');
+                }
+            }}
+          />
+        </View>
+
+        {RIGHT_TABS.map(renderTab)}
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -411,23 +316,49 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
+    overflow: 'visible',
+  },
+  shell: {
+    flex: 1,
+    marginHorizontal: TAB_BAR_HORIZONTAL_MARGIN,
     flexDirection: 'row',
     alignItems: 'flex-end',
+    borderRadius: 30,
+    shadowColor: '#000000',
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
     overflow: 'visible',
+  },
+  materialClip: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 30,
+    overflow: 'hidden',
   },
   tabSlot: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    minWidth: 0,
+    paddingVertical: 5,
   },
   cardBase: {
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 999,
   },
   iconWrap: {
     width: 28,
@@ -439,13 +370,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabLabel: {
-    fontSize: 11,
-    overflow: 'hidden',
-  },
   badge: {
     position: 'absolute',
-    top: 2,
+    top: 1,
     left: '55%',
     minWidth: 18,
     height: 18,
@@ -461,49 +388,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 12,
     fontWeight: '800',
-  },
-  centerBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // The center "+" sits on a fixed brand-orange gradient (#FF8E53→#FF5A1F→
-  // #FF2D55) that is intentionally NOT themed, so these use the brand
-  // constant rather than the theme palette.
-  pulseBg: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FF5A1F',
-  },
-  // overflow:'hidden' clips the spinning gradient AND shimmer to the circle
-  // Shadow must live on a separate wrapper outside the clipping view (iOS)
-  gradientWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FF5A1F',
-    shadowColor: '#FF5A1F',
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gradientOversize: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    top: -16,
-    left: -16,
-  },
-  // Shimmer beam: a narrow strip that ping-pongs across the circle
-  shimmerBeam: {
-    position: 'absolute',
-    top: -8,
-    bottom: -8,
-    width: 22,
   },
 });

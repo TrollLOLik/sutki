@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DatePickerSheet } from '@/components/DatePickerSheet';
-import { Button, Chip, RangeSlider } from '@/components/ui';
+import { Button, Chip, IconButton, MaterialSurface, RangeSlider } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useCategories, useServices } from '@/lib/api/create-listing';
 import { useFavoriteIds } from '@/lib/api/favorites';
@@ -85,7 +86,9 @@ function dateRangeLabel(checkIn: string | null, checkOut: string | null): string
 }
 
 export default function FiltersScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
   const { ownerId, scope, q } = useLocalSearchParams<{ ownerId?: string; scope?: string; q?: string }>();
   const isMine = scope === 'mine';
   const numericOwnerId = ownerId ? Number(ownerId) : null;
@@ -276,35 +279,54 @@ export default function FiltersScreen() {
       : 'Показать варианты';
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface">
-      {/* Header bar styled like mock */}
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: headerBackground }}>
       <View
         style={{
+          minHeight: 68,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: palette.line,
+          paddingVertical: 10,
+          overflow: 'hidden',
         }}
       >
-        <Pressable
-          accessibilityLabel="Закрыть"
-          onPress={() => goBackOrReplace(isMine ? '/my-listings' : '/(tabs)')}
-          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="close" size={24} color={palette.ink} />
-        </Pressable>
+        <BlurView
+          intensity={88}
+          tint={isDark ? 'dark' : 'light'}
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)',
+          }}
+        />
+        <View style={{ width: 68, alignItems: 'flex-start' }}>
+          <IconButton
+            icon="close"
+            iconSize={22}
+            size={48}
+            accessibilityLabel="Закрыть"
+            onPress={() => goBackOrReplace(isMine ? '/my-listings' : '/(tabs)')}
+          />
+        </View>
 
-        <Text style={{ fontSize: 17, fontWeight: '700', color: palette.ink }}>
-          Фильтры
-        </Text>
+        <View pointerEvents="none" style={{ position: 'absolute', left: 84, right: 84, alignItems: 'center' }}>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: palette.ink }}>
+            Фильтры
+          </Text>
+        </View>
 
         <Pressable
           accessibilityLabel="Сбросить все фильтры"
           onPress={reset}
-          style={{ paddingHorizontal: 4 }}
+          style={{ minWidth: 68, minHeight: 42, alignItems: 'flex-end', justifyContent: 'center' }}
         >
           <Text style={{ fontSize: 15, fontWeight: '600', color: palette.primary }}>
             Сбросить
@@ -312,9 +334,13 @@ export default function FiltersScreen() {
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingHorizontal: 16, paddingVertical: 16 }}>
-        <View style={{ gap: 10 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Сортировка</Text>
+      <ScrollView
+        style={{ backgroundColor: screenBackground }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ gap: 16, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24 }}
+      >
+        <MaterialSurface level="base" radius={20} style={{ gap: 12, padding: 16 }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Сортировка</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {SORT_OPTIONS.map((option) => {
               const selected = sort === option.value;
@@ -327,7 +353,7 @@ export default function FiltersScreen() {
                     minHeight: 44,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: 12,
+                    borderRadius: 14,
                     borderWidth: 1,
                     borderColor: selected ? palette.primary : palette.line,
                     backgroundColor: selected ? palette.primaryLight : palette.surface,
@@ -341,7 +367,7 @@ export default function FiltersScreen() {
               );
             })}
           </View>
-        </View>
+        </MaterialSurface>
 
         <Pressable
           accessibilityRole="switch"
@@ -453,79 +479,74 @@ export default function FiltersScreen() {
           </View>
         ) : null}
 
-        {/* City Card */}
-        <Pressable
-          onPress={() => setCitySheet(true)}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: palette.surface,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: palette.line,
-            padding: 14,
-            gap: 14,
-          }}
-        >
-          <View
+        <MaterialSurface level="base" radius={20}>
+          <Pressable
+            onPress={() => setCitySheet(true)}
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: palette.surfaceMuted,
+              minHeight: 68,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
+              paddingHorizontal: 14,
+              gap: 14,
             }}
           >
-            <Ionicons name="location-outline" size={20} color={palette.inkSecondary} />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, color: palette.inkMuted }}>Город</Text>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
-              {city ?? 'Любой'}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
-        </Pressable>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: palette.surfaceMuted,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="location-outline" size={20} color={palette.primary} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 12, color: palette.inkMuted }}>Город</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+                {city ?? 'Любой'}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+          </Pressable>
 
-        {/* Dates Card */}
-        <Pressable
-          onPress={() => setDateSheet(true)}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: palette.surface,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: palette.line,
-            padding: 14,
-            gap: 14,
-          }}
-        >
-          <View
+          <View style={{ height: 1, marginLeft: 68, backgroundColor: palette.line }} />
+
+          <Pressable
+            onPress={() => setDateSheet(true)}
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: palette.surfaceMuted,
+              minHeight: 68,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
+              paddingHorizontal: 14,
+              gap: 14,
             }}
           >
-            <Ionicons name="calendar-outline" size={20} color={palette.inkSecondary} />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, color: palette.inkMuted }}>Даты проживания</Text>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>
-              {dateRangeLabel(checkIn, checkOut)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
-        </Pressable>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: palette.surfaceMuted,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="calendar-outline" size={20} color={palette.primary} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 12, color: palette.inkMuted }}>Даты проживания</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
+                {dateRangeLabel(checkIn, checkOut)}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+          </Pressable>
+        </MaterialSurface>
 
-        {/* Price Section */}
+        <MaterialSurface level="base" radius={20} style={{ gap: 18, padding: 16 }}>
         <View style={{ gap: 12 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Цена за сутки, ₽</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Цена за сутки, ₽</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {/* Min Price Input */}
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
@@ -615,7 +636,7 @@ export default function FiltersScreen() {
 
         {/* Area */}
         <View style={{ gap: 12 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Площадь, м²</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Площадь, м²</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {[
               { value: areaMin, setter: setAreaMin, prefix: 'от', placeholder: '5' },
@@ -637,10 +658,12 @@ export default function FiltersScreen() {
             ))}
           </View>
         </View>
+        </MaterialSurface>
 
+        <MaterialSurface level="base" radius={20} style={{ gap: 20, padding: 16 }}>
         {/* Category */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Тип жилья</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Тип жилья</Text>
           {categories == null ? (
             <ActivityIndicator color={palette.primary} />
           ) : (
@@ -659,7 +682,7 @@ export default function FiltersScreen() {
 
         {/* Rooms */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Комнаты</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Комнаты</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {ROOM_OPTIONS.map((o) => (
               <Chip
@@ -674,7 +697,7 @@ export default function FiltersScreen() {
 
         {/* Guests */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Гости</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Гости</Text>
           <View
             style={{
               flexDirection: 'row',
@@ -735,10 +758,12 @@ export default function FiltersScreen() {
             </View>
           </View>
         </View>
+        </MaterialSurface>
 
+        <MaterialSurface level="base" radius={20} style={{ gap: 20, padding: 16 }}>
         {/* House Rules */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Правила дома</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Правила дома</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Chip
               label="Можно курить"
@@ -765,7 +790,7 @@ export default function FiltersScreen() {
 
         {/* Amenities */}
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: palette.ink }}>Удобства</Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Удобства</Text>
           {services == null ? (
             <ActivityIndicator color={palette.primary} />
           ) : (
@@ -781,17 +806,18 @@ export default function FiltersScreen() {
             </View>
           )}
         </View>
+        </MaterialSurface>
       </ScrollView>
 
       {/* Sticky footer action button */}
       <View
         style={{
           borderTopWidth: 1,
-          borderTopColor: palette.line,
+          borderTopColor: isDark ? 'rgba(255,255,255,0.09)' : palette.line,
           paddingHorizontal: 16,
           paddingTop: 12,
           paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-          backgroundColor: palette.surface,
+          backgroundColor: isDark ? 'rgba(20,22,27,0.97)' : 'rgba(255,255,255,0.97)',
         }}
       >
         <Button label={ctaLabel} loading={!isMine && isCtaLoading} disabled={areaRangeInvalid} onPress={apply} />

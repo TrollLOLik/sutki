@@ -137,13 +137,16 @@ export default function MyBookingsScreen() {
     return (
       <View className="flex-1 bg-surface">
         <SafeAreaView edges={['top']} className="flex-1">
-          <View className="flex-row items-center px-4 py-2">
+          <View
+            className="h-[70px] flex-row items-center px-4"
+            style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
             <NavigationBackButton
               fallback="/(tabs)/profile"
-              className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+              size={48}
+              variant="material"
             />
-            <Text className="flex-1 text-center text-lg font-semibold text-ink">Заявки</Text>
-            <View className="h-10 w-10" />
+            <Text className="flex-1 text-center text-xl font-extrabold text-ink">Мои брони</Text>
+            <View className="h-12 w-12" />
           </View>
 
           {authStatus === 'loading' ? (
@@ -154,8 +157,8 @@ export default function MyBookingsScreen() {
             <View className="flex-1 gap-4 px-4">
               <EmptyState
                 icon="lock-closed-outline"
-                title="Войдите, чтобы видеть заявки"
-                subtitle="Заявки привязываются к вашему аккаунту. Локально у гостя остается только избранное."
+                title="Войдите, чтобы видеть брони"
+                subtitle="Все заявки на аренду и их статусы будут доступны в одном месте."
               />
               <View className="px-8">
                 <Button
@@ -173,19 +176,22 @@ export default function MyBookingsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center px-4 py-2">
+        <View
+          className="h-[70px] flex-row items-center px-4"
+          style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
           <NavigationBackButton
             fallback="/(tabs)/profile"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+            size={48}
+            variant="material"
           />
-          <Text className="flex-1 text-center text-lg font-semibold text-ink">Заявки</Text>
-          {/* Spacer to balance the back button */}
-          <View className="h-10 w-10" />
+          <Text className="flex-1 text-center text-xl font-extrabold text-ink">Мои брони</Text>
+          <View className="h-12 w-12" />
         </View>
 
         <View
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          className="flex-row rounded-pill bg-surface-muted p-1 mx-4 mb-2 relative"
+          className="relative mx-4 mb-2 mt-4 h-12 flex-row rounded-pill bg-surface-muted p-1"
+          style={{ borderWidth: 1, borderColor: palette.line }}
         >
           <Animated.View
             style={{
@@ -213,19 +219,19 @@ export default function MyBookingsScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'active' }}
             onPress={() => handleTabChange('active')}
-            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+            className="relative z-10 flex-1 items-center justify-center rounded-pill"
           >
-            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'active' ? 'text-ink' : 'text-ink-secondary'}`}>
-              Мои заявки
+            <Text className={`text-sm font-bold ${tab === 'active' ? 'text-ink' : 'text-ink-secondary'}`}>
+              Активные
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'history' }}
             onPress={() => handleTabChange('history')}
-            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+            className="relative z-10 flex-1 items-center justify-center rounded-pill"
           >
-            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'history' ? 'text-ink' : 'text-ink-secondary'}`}>
+            <Text className={`text-sm font-bold ${tab === 'history' ? 'text-ink' : 'text-ink-secondary'}`}>
               История
             </Text>
           </Pressable>
@@ -279,7 +285,7 @@ export default function MyBookingsScreen() {
               {activeItems.length === 0 ? (
                 <EmptyState
                   icon={rawActiveItems.length > 0 ? 'search-outline' : 'reader-outline'}
-                  title={rawActiveItems.length > 0 ? 'Ничего не найдено' : 'Активных заявок нет'}
+                  title={rawActiveItems.length > 0 ? 'Ничего не найдено' : 'Активных броней нет'}
                   subtitle={rawActiveItems.length > 0 ? 'Попробуйте изменить поисковый запрос.' : 'Выберите объявление и оставьте заявку на аренду.'}
                 />
               ) : (
@@ -299,14 +305,13 @@ export default function MyBookingsScreen() {
                     <BookingCard
                       booking={item}
                       onPress={() => open(item)}
-                      onRepeat={() => repeat(item)}
                       onChatPress={() => handleOpenChat(item)}
                     />
                   )}
                   ListFooterComponent={
                     activeItems.length > 0 ? (
                       <View className="py-6 items-center">
-                        <Text className="text-xs text-ink-muted">Это все заявки</Text>
+                        <Text className="text-xs font-semibold text-ink-muted">Это все активные брони</Text>
                       </View>
                     ) : null
                   }
@@ -354,7 +359,7 @@ export default function MyBookingsScreen() {
                   ListFooterComponent={
                     historyItems.length > 0 ? (
                       <View className="py-6 items-center">
-                        <Text className="text-xs text-ink-muted">Это все заявки</Text>
+                        <Text className="text-xs font-semibold text-ink-muted">Это вся история</Text>
                       </View>
                     ) : null
                   }

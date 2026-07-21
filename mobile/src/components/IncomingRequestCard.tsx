@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
-import { ActivityIndicator, Pressable, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { formatGuests, formatRub } from '@/lib/format';
+import { Button, MaterialSurface } from '@/components/ui';
+import { bookingStatusMeta } from '@/lib/booking-status';
+import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
 
@@ -19,42 +21,36 @@ interface IncomingRequestCardProps {
   onChatPress?: () => void;
 }
 
-function formatCompactDateRange(start: Date, end: Date | null): string {
-  const currentYear = new Date().getFullYear();
-  const startYear = start.getFullYear();
-  
-  if (!end) {
-    const showYear = startYear !== currentYear;
-    const dateStr = showYear
-      ? format(start, 'd MMMM yyyy', { locale: ru })
-      : format(start, 'd MMMM', { locale: ru });
-    return `с ${dateStr}`;
+function statusVisual(status: string, hasReason: boolean, palette: ReturnType<typeof useAppTheme>['palette']) {
+  if (status === 'confirmed' || status === 'active') {
+    return {
+      label: status === 'active' ? 'Проживание' : 'Подтверждена',
+      color: palette.success,
+      background: palette.successLight,
+      icon: 'checkmark-circle-outline' as const,
+    };
   }
-
-  const endYear = end.getFullYear();
-  const startMonth = start.getMonth();
-  const endMonth = end.getMonth();
-
-  const showYear = startYear !== currentYear || endYear !== currentYear;
-
-  if (startMonth === endMonth && startYear === endYear) {
-    const dayStart = format(start, 'd');
-    const dayEnd = format(end, 'd');
-    const month = format(start, 'MMMM', { locale: ru });
-    return showYear
-      ? `${dayStart} — ${dayEnd} ${month} ${startYear}`
-      : `${dayStart} — ${dayEnd} ${month}`;
-  } else {
-    if (showYear) {
-      const startStr = format(start, 'd MMM', { locale: ru }).replace(/\./g, '');
-      const endStr = format(end, 'd MMM', { locale: ru }).replace(/\./g, '');
-      return `${startStr} — ${endStr} ${endYear}`;
-    } else {
-      const startStr = format(start, 'd MMMM', { locale: ru });
-      const endStr = format(end, 'd MMMM', { locale: ru });
-      return `${startStr} — ${endStr}`;
-    }
+  if (status === 'cancelled') {
+    return {
+      label: hasReason ? 'Отклонена' : 'Отменена',
+      color: hasReason ? palette.danger : palette.inkSecondary,
+      background: hasReason ? palette.dangerLight : palette.surfaceMuted,
+      icon: hasReason ? 'close-circle-outline' as const : 'return-down-back-outline' as const,
+    };
   }
+  const statusMeta = bookingStatusMeta(status);
+  return {
+    label: statusMeta.label,
+    color: palette.primary,
+    background: palette.primaryLight,
+    icon: 'time-outline' as const,
+  };
+}
+
+function compactGuestName(booking: Booking) {
+  const name = booking.guest?.name || booking.name || 'Гость';
+  const surname = booking.guest?.surname || booking.surname || '';
+  return surname.trim() ? `${name} ${surname.trim().charAt(0)}.` : name;
 }
 
 export function IncomingRequestCard({
@@ -67,295 +63,264 @@ export function IncomingRequestCard({
   disabled = false,
   onChatPress,
 }: IncomingRequestCardProps) {
-  const { palette, isDark } = useAppTheme();
+  const { palette } = useAppTheme();
   const start = parseISO(booking.start_date);
   const end = booking.end_date ? parseISO(booking.end_date) : null;
-  const nights = end ? differenceInCalendarDays(end, start) : 0;
-  
-  const totalPrice = nights > 0 && booking.house?.price
-    ? booking.house.price * nights
-    : null;
-
-  const getFormattedName = () => {
-    const name = booking.guest?.name || booking.name || 'Гость';
-    const surname = booking.guest?.surname || booking.surname || '';
-    if (surname.trim()) {
-      return `${name} ${surname.trim().charAt(0)}.`;
-    }
-    return name;
-  };
-
-  const formattedName = getFormattedName();
-  const isDeletedUser = formattedName === 'Удаленный пользователь';
-
-  const guestInitial = (booking.guest?.name || booking.name || 'Г').charAt(0).toUpperCase();
-
-  const getAvatarBg = (char: string) => {
-    const code = char.charCodeAt(0) % 5;
-    const colors = [
-      '#FEE2E2', // light red
-      '#FEF3C7', // light amber
-      '#D1FAE5', // light emerald
-      '#DBEAFE', // light blue
-      '#F3E8FF', // light purple
-    ];
-    const textColors = [
-      '#EF4444',
-      '#F59E0B',
-      '#10B981',
-      '#3B82F6',
-      '#8B5CF6',
-    ];
-    return { bg: colors[code], text: textColors[code] };
-  };
-
-  const avatarStyle = getAvatarBg(guestInitial);
-
-  const formatNightsRu = (count: number) => {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) {
-      return `${count} ночь`;
-    }
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
-      return `${count} ночи`;
-    }
-    return `${count} ночей`;
-  };
-
-  const createdAt = format(parseISO(booking.created_at), 'd MMMM, HH:mm', { locale: ru });
-
-  const getStatusTone = (status: string) => {
-    switch (status) {
-      case 'pending':
-      case 'in_progress':
-        return {
-          bg: palette.primaryLight,
-          text: palette.primary,
-        };
-      case 'confirmed':
-      case 'active':
-        return { 
-          bg: palette.successLight, 
-          text: isDark ? '#A7F3D0' : palette.success 
-        };
-      case 'cancelled':
-        return { 
-          bg: palette.dangerLight, 
-          text: isDark ? '#FECACA' : palette.danger 
-        };
-      default:
-        return { 
-          bg: palette.surfaceMuted, 
-          text: isDark ? '#E6E8EA' : palette.inkMuted 
-        };
-    }
-  };
-
-  const getStatusLabel = (status: string, hasRejectionReason: boolean) => {
-    if (status === 'pending' || status === 'in_progress') return 'На рассмотрении';
-    if (status === 'confirmed') return 'Принята';
-    if (status === 'active') return 'Проживание';
-    if (status === 'cancelled') {
-      return hasRejectionReason ? 'Отклонена' : 'Отменена';
-    }
-    return status;
-  };
-
-  const statusTone = getStatusTone(booking.status);
+  const nights = end ? Math.max(1, differenceInCalendarDays(end, start)) : 1;
+  const total = booking.house?.price ? booking.house.price * nights : null;
+  const guestName = compactGuestName(booking);
+  const initial = guestName.charAt(0).toUpperCase();
+  const visual = statusVisual(booking.status, Boolean(booking.rejection_reason), palette);
+  const pending = booking.status === 'in_progress' || booking.status === 'pending';
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      className="mb-3 rounded-[20px] border border-line bg-surface p-4 active:opacity-95"
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-      }}
-    >
-      {/* Left Column (Info) */}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        {/* Guest Header: Avatar + Name + Rating */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {booking.guest?.avatar_url ? (
-            <Image
-              source={{ uri: booking.guest.avatar_url }}
-              style={{ width: 44, height: 44, borderRadius: 22 }}
-              contentFit="cover"
-            />
-          ) : (
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: avatarStyle.bg,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '700', color: avatarStyle.text }}>
-                {guestInitial}
-              </Text>
-            </View>
-          )}
+    <MaterialSurface level="raised" radius={24} style={styles.card}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        activeOpacity={0.72}
+        onPress={onPress}
+        style={styles.main}>
+        <View style={styles.topRow}>
+          <View style={[styles.statusBadge, { backgroundColor: visual.background }]}>
+            <Ionicons name={visual.icon} size={14} color={visual.color} />
+            <Text style={[styles.statusText, { color: visual.color }]}>{visual.label}</Text>
+          </View>
+          <Text numberOfLines={1} style={[styles.requestMeta, { color: palette.inkMuted }]}>№{booking.id}</Text>
+        </View>
 
-          <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
-              <Text 
-                numberOfLines={1} 
-                style={{ 
-                  fontSize: 15, 
-                  fontWeight: isDeletedUser ? '500' : '800', 
-                  fontStyle: isDeletedUser ? 'italic' : 'normal',
-                  color: isDeletedUser ? palette.inkMuted : palette.ink, 
-                  flexShrink: 1 
-                }}
-              >
-                {formattedName}
-              </Text>
-              
-              {/* Rating */}
+        <View style={styles.guestRow}>
+          <View style={[styles.avatar, { backgroundColor: palette.primaryLight }]}>
+            {booking.guest?.avatar_url ? (
+              <Image source={{ uri: booking.guest.avatar_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+            ) : (
+              <Text style={[styles.avatarInitial, { color: palette.primary }]}>{initial}</Text>
+            )}
+          </View>
+
+          <View style={styles.guestCopy}>
+            <View style={styles.nameRow}>
+              <Text numberOfLines={1} style={[styles.title, { color: palette.ink }]}>{guestName}</Text>
               {booking.guest?.rating && booking.guest.rating > 0 ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-                  <Ionicons name="star" size={13} color="#FFB400" />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: palette.ink }}>
-                    {booking.guest.rating.toFixed(1)}
-                  </Text>
+                <View style={styles.rating}>
+                  <Ionicons name="star" size={13} color={palette.star} />
+                  <Text style={[styles.ratingText, { color: palette.ink }]}>{booking.guest.rating.toFixed(1)}</Text>
                 </View>
               ) : (
-                <Text style={{ fontSize: 12, fontWeight: '600', color: palette.inkMuted, flexShrink: 0 }}>
-                  Новый гость
+                <Text style={[styles.newGuest, { color: palette.inkMuted }]}>Новый гость</Text>
+              )}
+            </View>
+            {booking.house?.address ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="home-outline" size={14} color={palette.inkMuted} />
+                <Text numberOfLines={1} style={[styles.detailText, { color: palette.inkSecondary }]}>
+                  {booking.house.address}
                 </Text>
-              )}
-            </View>
-            
-            <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
-              {formatGuests(booking.count)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Booking Details */}
-        <View style={{ gap: 4, marginTop: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="calendar-outline" size={14} color={palette.inkMuted} />
-            <Text style={{ fontSize: 13, color: palette.inkSecondary, fontWeight: '500' }}>
-              Заезд {formatCompactDateRange(start, end)}
-            </Text>
-          </View>
-
-          {totalPrice != null ? (
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: palette.ink }}>
-                {formatRub(totalPrice)} ₽
-              </Text>
-              <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
-                за {formatNightsRu(nights)}
+              </View>
+            ) : null}
+            <View style={styles.detailRow}>
+              <Ionicons name="calendar-outline" size={14} color={palette.inkMuted} />
+              <Text numberOfLines={1} style={[styles.detailText, { color: palette.inkSecondary }]}>
+                {formatDateRangeRu(start, end)}
               </Text>
             </View>
-          ) : null}
+            <View style={styles.detailRow}>
+              <Ionicons name="people-outline" size={14} color={palette.inkMuted} />
+              <Text style={[styles.detailText, { color: palette.inkSecondary }]}>{formatGuests(booking.count)}</Text>
+            </View>
+          </View>
 
-          <Text style={{ fontSize: 11, color: palette.inkMuted, marginTop: 4 }}>
-            Создана {createdAt}
-          </Text>
+          <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
         </View>
-      </View>
 
-      {/* Right Column (Buttons Stack) */}
-      <View style={{ width: 120, gap: 8 }}>
-        {booking.status === 'in_progress' ? (
-          <>
-            {/* Accept Button */}
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); onConfirm(); }}
-              disabled={disabled}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                height: 36,
-                borderWidth: 1.5,
-                borderColor: palette.success,
-                borderRadius: 18,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {isConfirming ? (
-                <ActivityIndicator size="small" color={palette.success} />
-              ) : (
-                <Text style={{ fontSize: 13, fontWeight: '500', color: palette.success }}>Принять</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Reject Button */}
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); onReject(); }}
-              disabled={disabled}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={{
-                height: 36,
-                borderWidth: 1.5,
-                borderColor: palette.danger,
-                borderRadius: 18,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {isRejecting ? (
-                <ActivityIndicator size="small" color={palette.danger} />
-              ) : (
-                <Text style={{ fontSize: 13, fontWeight: '500', color: palette.danger }}>Отклонить</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        ) : (
-          /* Badge for final states */
-          <View
-            style={{
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: statusTone.bg,
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingHorizontal: 8,
-            }}
-          >
+        {total != null ? (
+          <View style={styles.totalRow}>
+            <View style={styles.totalCopy}>
+              <Text style={[styles.totalLabel, { color: palette.inkSecondary }]}>Стоимость проживания</Text>
+              <Text style={[styles.createdAt, { color: palette.inkMuted }]}>
+                Создана {format(parseISO(booking.created_at), 'd MMM, HH:mm', { locale: ru })}
+              </Text>
+            </View>
             <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
               numberOfLines={1}
-              style={{
-                fontSize: 13,
-                fontWeight: '500',
-                color: statusTone.text,
-              }}
-            >
-              {getStatusLabel(booking.status, !!booking.rejection_reason)}
+              style={[styles.totalValue, { color: palette.ink }]}>
+              {formatRub(total)} ₽
             </Text>
           </View>
-        )}
+        ) : null}
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={(e) => { e.stopPropagation(); onChatPress ? onChatPress() : onPress(); }}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{
-            height: 36,
-            borderWidth: 1.5,
-            borderColor: palette.inkSecondary,
-            borderRadius: 18,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Ionicons name="chatbubble-outline" size={12} color={palette.inkSecondary} />
-          <Text style={{ fontSize: 13, fontWeight: '500', color: palette.inkSecondary }}>Чат</Text>
-        </TouchableOpacity>
+      <View style={[styles.actions, { borderTopColor: palette.line }]}>
+        {pending ? (
+          <View style={styles.decisionRow}>
+            <View style={styles.actionCell}>
+              <Button label="Отклонить" icon="close-outline" variant="danger" size="md" loading={isRejecting} disabled={disabled} onPress={onReject} />
+            </View>
+            <View style={styles.actionCell}>
+              <Button label="Принять" icon="checkmark-outline" variant="success" size="md" loading={isConfirming} disabled={disabled} onPress={onConfirm} />
+            </View>
+          </View>
+        ) : null}
+        <Button
+          label="Чат"
+          icon="chatbubble-outline"
+          variant="secondary"
+          size="md"
+          onPress={onChatPress ?? onPress}
+        />
       </View>
-    </Pressable>
+    </MaterialSurface>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  main: {
+    paddingHorizontal: 20,
+    paddingVertical: 17,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingRight: 8,
+  },
+  statusBadge: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  statusText: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '800',
+  },
+  requestMeta: {
+    maxWidth: 72,
+    flexShrink: 1,
+    marginRight: 2,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  guestRow: {
+    marginTop: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingRight: 5,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarInitial: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '900',
+  },
+  guestCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  title: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '800',
+  },
+  rating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  ratingText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+  },
+  newGuest: {
+    flexShrink: 0,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  detailText: {
+    flexShrink: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  totalRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    paddingLeft: 2,
+    paddingRight: 10,
+  },
+  totalCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  totalLabel: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+  createdAt: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '600',
+  },
+  totalValue: {
+    width: 118,
+    flexShrink: 0,
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  actions: {
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  decisionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionCell: {
+    flex: 1,
+  },
+});

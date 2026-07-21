@@ -1,14 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { parseISO } from 'date-fns';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { Stars } from '@/components/Stars';
-import { BottomSheet, Button } from '@/components/ui';
+import { BottomSheet, Button, IconButton, MaterialSurface } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useReviews, useHostReviews, useCreateReviewReply } from '@/lib/api/reviews';
 import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
@@ -25,7 +26,9 @@ const REVIEW_EMOJI_OPTIONS = [
 ];
 
 export default function ReviewsScreen() {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
   const { id, isHost } = useLocalSearchParams<{ id: string; isHost?: string }>();
   const numericId = Number(id);
   const reviewsListRef = useRef<FlatList<Review>>(null);
@@ -56,23 +59,22 @@ export default function ReviewsScreen() {
 
 
   return (
-    <View className="flex-1 bg-surface">
-      <SafeAreaView edges={['top', 'bottom']} className="flex-1">
+    <View className="flex-1" style={{ backgroundColor: headerBackground }}>
+      <SafeAreaView edges={['top', 'bottom']} className="flex-1" style={{ backgroundColor: headerBackground }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
+          style={{ backgroundColor: screenBackground }}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
         >
-        {/* Header with centered title */}
-        <View className="flex-row items-center justify-between px-4 py-2 relative h-14 bg-surface border-b border-line">
-          <NavigationBackButton
-            fallback={{ pathname: '/listing/[id]', params: { id } }}
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted z-10"
-          />
-          <View className="absolute left-0 right-0 top-0 bottom-0 items-center justify-center">
-            <Text className="text-lg font-semibold text-ink">Отзывы</Text>
+        <View style={styles.header}>
+          <BlurView intensity={88} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' }]} />
+          <View style={styles.headerContent}>
+            <NavigationBackButton fallback={{ pathname: '/listing/[id]', params: { id } }} size={48} variant="material" />
+            <Text className="text-xl font-extrabold text-ink" style={styles.headerTitle}>Отзывы</Text>
+            <View style={styles.headerSpacer} />
           </View>
-          <View className="w-10 h-10" />
         </View>
 
         {isLoading ? (
@@ -94,9 +96,10 @@ export default function ReviewsScreen() {
           <>
             <FlatList
               ref={reviewsListRef}
+              style={styles.list}
               data={items}
               keyExtractor={(item) => String(item.id)}
-              contentContainerClassName="px-4 pb-6"
+              contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 }}
               showsVerticalScrollIndicator={false}
               onRefresh={() => refetch()}
               refreshing={isRefetching}
@@ -119,7 +122,7 @@ export default function ReviewsScreen() {
             />
 
             {isHost !== 'true' ? (
-              <View className="border-t border-line px-4 py-3 bg-surface">
+              <View className="px-4 py-3" style={{ backgroundColor: isDark ? '#14161B' : '#FFFFFF' }}>
                 {isOwnListing ? (
                   <Button
                     label="Редактировать"
@@ -146,24 +149,22 @@ function SummaryHeader({ summary }: { summary: ReviewSummary }) {
   const { palette } = useAppTheme();
   const max = Math.max(1, ...Object.values(summary.distribution));
   return (
-    <View className="flex-row gap-3 py-4">
-      {/* Left Card: Average Rating */}
-      <View className="w-[38%] rounded-2xl border border-line bg-surface p-4 items-center justify-center">
-        <Text className="text-4xl font-extrabold text-ink leading-tight">{formatRating(summary.average)}</Text>
-        <View className="my-1.5">
+    <MaterialSurface level="raised" radius={22} className="mb-4 flex-row p-4">
+      <View className="w-[38%] items-center justify-center border-r border-line pr-4">
+        <Text className="text-[40px] font-extrabold leading-[44px] text-ink">{formatRating(summary.average)}</Text>
+        <View className="my-1.5 rounded-full bg-primary-light px-2.5 py-1">
           <Stars value={summary.average} size={14} />
         </View>
-        <Text className="text-xs text-ink-muted text-center leading-none">
+        <Text className="text-center text-xs leading-4 text-ink-muted">
           {formatReviewsCount(summary.total)}
         </Text>
       </View>
 
-      {/* Right Card: Distribution */}
-      <View className="flex-1 rounded-2xl border border-line bg-surface p-4 justify-between">
+      <View className="flex-1 justify-between py-1 pl-4">
         {[5, 4, 3, 2, 1].map((star) => {
           const count = summary.distribution[String(star)] ?? 0;
           return (
-            <View key={star} className="flex-row items-center gap-2 h-4">
+            <View key={star} className="h-4 flex-row items-center gap-2">
               <Text className="w-2 text-[11px] font-semibold text-ink-secondary">{star}</Text>
               <Ionicons name="star" size={9} color={palette.inkMuted} />
               <View className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-skeleton">
@@ -177,9 +178,38 @@ function SummaryHeader({ summary }: { summary: ReviewSummary }) {
           );
         })}
       </View>
-    </View>
+    </MaterialSurface>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    height: 68,
+    flexShrink: 0,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerContent: {
+    height: 68,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    position: 'absolute',
+    left: 80,
+    right: 80,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
+    height: 48,
+  },
+  list: {
+    flex: 1,
+  },
+});
 
 function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canReply: boolean; onReplyFocus: (inputHandle: number) => void }) {
   const { palette } = useAppTheme();
@@ -189,7 +219,7 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
   const createReply=useCreateReviewReply(review.id);
   const date = review.created_at ? parseISO(review.created_at) : null;
   return (
-    <View className="mb-3 rounded-2xl border border-line bg-surface p-4">
+    <MaterialSurface level="raised" radius={20} className="mb-3 p-4">
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
           <View className="h-10 w-10 overflow-hidden rounded-full bg-surface-skeleton">
@@ -206,18 +236,21 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
             {date ? <Text className="text-xs text-ink-muted mt-0.5">{formatDateRu(date)}</Text> : null}
           </View>
         </View>
-        <View className="flex-row items-center gap-1">
+        <View className="flex-row items-center gap-1 rounded-full bg-primary-light px-2.5 py-1.5">
           <Ionicons name="star" size={14} color={palette.primary} />
           <Text className="text-sm font-bold text-ink">{formatRating(review.rating)}</Text>
         </View>
       </View>
       {review.body ? (
-        <Text className="mt-3 text-[14px] leading-5 text-ink-secondary">{review.body}</Text>
+        <Text className="mt-3 text-[15px] leading-6 text-ink">{review.body}</Text>
       ) : null}
       {review.reply?.status === 'active' ? (
-        <View className="ml-5 mt-3 border-l-2 border-primary pl-3">
-          <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
-          <Text className="mt-1 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
+        <View className="mt-3 rounded-2xl bg-primary-light p-3.5">
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={palette.primary} />
+            <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
+          </View>
+          <Text className="mt-2 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
         </View>
       ) : submitted || (canReply && review.reply?.status === 'pending_moderation') ? (
         <Text className="mt-3 text-xs font-semibold text-primary">Ответ отправлен на проверку</Text>
@@ -226,7 +259,10 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
       ) : canReply && review.reply?.status === 'rejected' ? (
         <Text className="mt-3 text-xs font-semibold text-danger">Ответ отклонён</Text>
       ) : canReply && !replying ? (
-        <Pressable onPress={()=>setReplying(true)} className="mt-3 self-start"><Text className="text-sm font-bold text-primary">Ответить</Text></Pressable>
+        <Pressable onPress={()=>setReplying(true)} className="mt-3 self-start flex-row items-center gap-2 rounded-full bg-primary-light px-3 py-2">
+          <Ionicons name="return-up-back-outline" size={17} color={palette.primary} />
+          <Text className="text-sm font-bold text-primary">Ответить</Text>
+        </Pressable>
       ) : null}
       {canReply && replying && !review.reply && !submitted ? (
         <ListingReviewReplyEditor
@@ -239,14 +275,7 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
           disabled={!replyBody.trim()}
         />
       ) : null}
-      {false && canReply && replying && !review.reply && !submitted ? (
-        <View className="mt-3 gap-2">
-          <TextInput value={replyBody} onChangeText={setReplyBody} multiline maxLength={1500} placeholder="Ответ гостю" placeholderTextColor={palette.inkMuted} className="min-h-20 rounded-field border border-line bg-surface-muted p-3 text-sm text-ink" />
-          <View className="flex-row gap-2"><View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={()=>{setReplying(false);setReplyBody('')}} /></View><View className="flex-1"><Button label="Отправить" size="md" loading={createReply.isPending} disabled={!replyBody.trim()} onPress={()=>createReply.mutate(replyBody.trim(),{onSuccess:()=>{setReplying(false);setReplyBody('');setSubmitted(true)}})} /></View></View>
-          <Text className="text-xs text-ink-muted">Ответ появится после проверки.</Text>
-        </View>
-      ) : null}
-    </View>
+    </MaterialSurface>
   );
 }
 
@@ -285,9 +314,7 @@ function ListingReviewReplyEditor({
           className="min-h-16 flex-1 text-sm text-ink"
           textAlignVertical="top"
         />
-        <Pressable onPress={() => setEmojiPickerVisible(true)} className="h-9 w-9 items-center justify-center rounded-full" accessibilityLabel="Выбрать смайлик">
-          <Ionicons name="happy-outline" size={22} color={palette.inkSecondary} />
-        </Pressable>
+        <IconButton icon="happy-outline" size={38} iconSize={21} onPress={() => setEmojiPickerVisible(true)} accessibilityLabel="Выбрать смайлик" />
       </View>
       <View className="flex-row gap-2">
         <View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={onCancel} /></View>

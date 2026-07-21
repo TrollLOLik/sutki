@@ -11,7 +11,6 @@ import {
   View,
 } from 'react-native';
 
-import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface BottomSheetProps {
@@ -96,10 +95,11 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
             isOpened.current = true;
             Animated.parallel([
               Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-              Animated.timing(slide, {
+              Animated.spring(slide, {
                 toValue: 0,
-                duration: 250,
-                easing: Easing.out(Easing.ease),
+                damping: 26,
+                stiffness: 260,
+                mass: 1,
                 useNativeDriver: true,
               }),
             ]).start();
@@ -142,13 +142,33 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
             {
               transform: [{ translateY: slide }],
               backgroundColor: palette.surface,
-              borderTopLeftRadius: radii.card,
-              borderTopRightRadius: radii.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderBottomWidth: 0,
+              borderColor: palette.line,
+              shadowColor: '#000',
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: -8 },
+              elevation: 12,
             },
             height ? { height: height as any } : null,
           ]}
-          className="px-4 pb-8 pt-4"
+          className="px-4 pb-8 pt-3"
         >
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{
+              width: 38,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: palette.line,
+              alignSelf: 'center',
+              marginBottom: 14,
+            }}
+          />
           {children}
         </Animated.View>
       </KeyboardAvoidingView>

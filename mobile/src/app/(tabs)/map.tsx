@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +15,11 @@ import {
 } from 'react-native-yamap-plus';
 
 import { ListingMapCard } from '@/components/map/ListingMapCard';
-import { TAB_BAR_HEIGHT } from '@/components/CustomTabBar';
+import {
+  getTabBarBottomOffset,
+  getTabSlotCenterX,
+  TAB_BAR_HEIGHT,
+} from '@/components/CustomTabBar';
 import { MapSearchOverlay } from '@/components/map/MapSearchOverlay';
 import { PriceBubble } from '@/components/map/PriceBubble';
 import { CityClusterBubble } from '@/components/map/CityClusterBubble';
@@ -34,6 +38,17 @@ import type { ListingCard } from '@/types/listing';
 const DEFAULT_CENTER = { lat: 53.4129, lon: 59.0019 };
 const DEFAULT_ZOOM = 12;
 const GPS_TIMEOUT_MS = 3000;
+const CITY_CLUSTER_ZOOM = 10;
+const LOCATION_BUTTON_SIZE = 52;
+const PROFILE_TAB_INDEX = 4;
+
+function pluralize(count: number, one: string, few: string, many: string) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
 
 /**
  * Resolves the camera center on mount using a strict priority order:
@@ -113,9 +128,10 @@ async function detectCityByIP(): Promise<string | null> {
 
 export default function MapScreen() {
   const { palette, isDark } = useAppTheme();
-  const styles = useMemo(() => makeStyles(palette, isDark), [palette, isDark]);
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const mapRef = useRef<any>(null);
   const user = useSessionStore((state) => state.user);
   const filters = useFiltersStore();
@@ -132,19 +148,28 @@ export default function MapScreen() {
     return params;
   }, [filters, bbox]);
 
-  // Disable network fetching when zoomed out past city level (zoom < 10)
-  const isQueryEnabled = bbox == null || currentZoom >= 10;
+  // At regional zoom the lightweight city aggregates replace individual
+  // listings, so there is no reason to keep the heavier bbox query running.
+  const showCityClusters = currentZoom < CITY_CLUSTER_ZOOM;
+  const isQueryEnabled = !showCityClusters;
   const { data, isLoading, isRefetching, isFetching } = useListings(listParams, {
     enabled: isQueryEnabled,
   });
   const listings = data?.items ?? [];
-  const showCityClusters = currentZoom < 10;
-  const mapClusters = useMapClusters(showCityClusters);
+  // Keep aggregates warm before the user zooms out. This removes the blank
+  // frame that previously appeared while switching map layers.
+  const mapClusters = useMapClusters(true);
   const cityClusters = mapClusters.data?.items ?? [];
   const cityClusterTotal = useMemo(
     () => cityClusters.reduce((total, cluster) => total + cluster.count, 0),
     [cityClusters],
   );
+  const isMapContentLoading = showCityClusters
+    ? mapClusters.isLoading || mapClusters.isFetching
+    : isLoading || isFetching;
+  const mapCountLabel = showCityClusters
+    ? `${cityClusters.length} ${pluralize(cityClusters.length, 'город', 'города', 'городов')} · ${cityClusterTotal} ${pluralize(cityClusterTotal, 'объявление', 'объявления', 'объявлений')}`
+    : `Найдено: ${listings.length}`;
 
 
 
@@ -274,7 +299,8 @@ export default function MapScreen() {
 
   const handleCameraPositionChange = useCallback((event: any) => {
     if (isProgrammatic.current) return;
-    if (event?.nativeEvent?.reason === 'GESTURES') {
+    const camera = event?.nativeEvent ?? event;
+    if (camera?.reason === 'GESTURES') {
       setIsDragging(true);
     }
   }, []);
@@ -283,8 +309,9 @@ export default function MapScreen() {
     (event: any) => {
       setIsDragging(false);
 
-      const zoom = event?.nativeEvent?.zoom;
-      if (zoom != null) {
+      const camera = event?.nativeEvent ?? event;
+      const zoom = Number(camera?.zoom);
+      if (Number.isFinite(zoom)) {
         setCurrentZoom(zoom);
       }
 
@@ -296,7 +323,7 @@ export default function MapScreen() {
 
       mapRef.current.getVisibleRegion((region: any) => {
         if (region) {
-          triggerReload(region, zoom ?? currentZoom, event?.nativeEvent?.reason);
+          triggerReload(region, Number.isFinite(zoom) ? zoom : currentZoom, camera?.reason);
         }
       });
     },
@@ -336,12 +363,18 @@ export default function MapScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const activeFilters = countActiveFilters(filters);
+  const tabBarBottomOffset = getTabBarBottomOffset(insets.bottom);
+  const locationButtonRight = Math.max(
+    8,
+    windowWidth - getTabSlotCenterX(windowWidth, PROFILE_TAB_INDEX) - LOCATION_BUTTON_SIZE / 2,
+  );
 
   /** Helper to safely move camera and set isProgrammatic guard. */
   const moveCamera = useCallback(
     (center: Point, zoom: number, duration = 0.6) => {
       if (!mapRef.current) return;
       isProgrammatic.current = true;
+      setCurrentZoom(zoom);
       mapRef.current.setCenter(center, zoom, 0, 0, duration, Animation.SMOOTH);
       setTimeout(() => {
         if (mapRef.current) {
@@ -426,16 +459,25 @@ export default function MapScreen() {
   const searchLabel = filters.city ?? 'Город или адрес';
 
   // ── Warning state ──────────────────────────────────────────────────────────
-  const [warningType, setWarningType] = useState<'zoom' | 'empty' | 'limit' | null>(null);
+  const [warningType, setWarningType] = useState<'empty' | 'limit' | null>(null);
 
   useEffect(() => {
-    if (bbox == null || isDragging) {
+    if (isDragging) {
       setWarningType(null);
       return;
     }
 
-    if (currentZoom < 10) {
-      setWarningType('zoom');
+    if (showCityClusters) {
+      if (!mapClusters.isLoading && !mapClusters.isFetching && cityClusters.length === 0) {
+        setWarningType('empty');
+      } else {
+        setWarningType(null);
+      }
+      return;
+    }
+
+    if (bbox == null) {
+      setWarningType(null);
       return;
     }
 
@@ -449,10 +491,20 @@ export default function MapScreen() {
         setWarningType(null);
       }
     } else {
-      // Reset zoom warning immediately on zoom-in. Keep empty/limit warnings during refetch to prevent flickering.
-      setWarningType((prev) => (prev === 'zoom' ? null : prev));
+      // Keep the previous content warning during refetch to prevent flickering.
     }
-  }, [currentZoom, isLoading, isFetching, isRefetching, listings.length, bbox, isDragging]);
+  }, [
+    showCityClusters,
+    mapClusters.isLoading,
+    mapClusters.isFetching,
+    cityClusters.length,
+    isLoading,
+    isFetching,
+    isRefetching,
+    listings.length,
+    bbox,
+    isDragging,
+  ]);
 
 
   return (
@@ -480,6 +532,7 @@ export default function MapScreen() {
             key={`city-${cluster.city}`}
             point={{ lat: cluster.lat, lon: cluster.lng }}
             onPress={() => handleCityClusterPress(cluster)}
+            excludeFromCluster
           >
             <CityClusterBubble count={cluster.count} />
           </Marker>
@@ -533,52 +586,48 @@ export default function MapScreen() {
 
         {/* Count chip */}
         <View style={styles.countChip}>
-          {isLoading || isFetching ? (
+          {isMapContentLoading ? (
             <ActivityIndicator size="small" color={palette.primary} style={{ marginRight: 4 }} />
           ) : (
-            <Ionicons name="map" size={14} color={palette.primary} style={{ marginRight: 4 }} />
+            <Ionicons
+              name={showCityClusters ? 'business-outline' : 'map-outline'}
+              size={14}
+              color={palette.primary}
+              style={{ marginRight: 4 }}
+            />
           )}
           <Text style={styles.countChipText}>
-            {isLoading || isFetching
-              ? 'Загрузка…'
-              : `Найдено: ${showCityClusters ? cityClusterTotal : listings.length}`}
+            {isMapContentLoading ? 'Загрузка…' : mapCountLabel}
           </Text>
         </View>
       </View>
 
       {/* FAB "locate me" */}
-      <View pointerEvents="box-none" style={[styles.fabContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}>
-        <Pressable onPress={handleLocateUser} style={styles.fab} disabled={isLocating}>
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.fabContainer,
+          {
+            right: locationButtonRight,
+            bottom: tabBarBottomOffset + TAB_BAR_HEIGHT + 10,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={handleLocateUser}
+          style={styles.fab}
+          disabled={isLocating}
+        >
           {isLocating ? (
             <ActivityIndicator size="small" color={palette.primary} />
           ) : (
-            <Ionicons name="navigate-outline" size={24} color={palette.primary} />
+            <Ionicons name="locate-outline" size={23} color={palette.primary} />
           )}
         </Pressable>
       </View>
 
       {/* Dynamic Map Warning Overlays (Zoom out, limit reach, empty results) */}
       <AnimatePresence>
-        {warningType === 'zoom' && (
-          <MotiView
-            key="zoom-warning"
-            from={{ translateY: 10, opacity: 0 }}
-            animate={{ translateY: 0, opacity: 1 }}
-            exit={{ translateY: 5, opacity: 0 }}
-            transition={{
-              type: 'timing',
-              duration: 180,
-            }}
-            pointerEvents="box-none"
-            style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
-          >
-            <View style={styles.emptyBar}>
-              <Text style={styles.emptyText}>
-                Приблизьте карту, чтобы увидеть объявления
-              </Text>
-            </View>
-          </MotiView>
-        )}
         {warningType === 'empty' && (
           <MotiView
             key="empty-warning"
@@ -593,6 +642,9 @@ export default function MapScreen() {
             style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
           >
             <View style={styles.emptyBar}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="search-outline" size={18} color={palette.primary} />
+              </View>
               <Text style={styles.emptyText}>
                 В этой области нет объявлений — отдалите карту или измените фильтры
               </Text>
@@ -613,6 +665,9 @@ export default function MapScreen() {
             style={[styles.emptyContainer, { bottom: insets.bottom + TAB_BAR_HEIGHT + 80 }]}
           >
             <View style={styles.emptyBar}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="scan-outline" size={18} color={palette.primary} />
+              </View>
               <Text style={styles.emptyText}>
                 Показано 200+ объявлений. Приблизьте карту для точного поиска
               </Text>
@@ -640,7 +695,7 @@ export default function MapScreen() {
   );
 }
 
-const makeStyles = (palette: Palette, isDark: boolean) =>
+const makeStyles = (palette: Palette) =>
   StyleSheet.create({
   container: {
     flex: 1,
@@ -723,9 +778,10 @@ const makeStyles = (palette: Palette, isDark: boolean) =>
     backgroundColor: palette.overlaySurface,
     borderWidth: 1,
     borderColor: palette.line,
+    minHeight: 32,
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    paddingHorizontal: 13,
+    borderRadius: 17,
     alignItems: 'center',
     marginTop: 10,
     shadowColor: '#1A1A1A',
@@ -741,16 +797,15 @@ const makeStyles = (palette: Palette, isDark: boolean) =>
   },
   fabContainer: {
     position: 'absolute',
-    right: 16,
     alignItems: 'center',
   },
   fab: {
     backgroundColor: palette.surface,
     borderWidth: 1,
     borderColor: palette.line,
-    borderRadius: 24,
-    width: 48,
-    height: 48,
+    borderRadius: LOCATION_BUTTON_SIZE / 2,
+    width: LOCATION_BUTTON_SIZE,
+    height: LOCATION_BUTTON_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#1A1A1A',
@@ -818,17 +873,33 @@ const makeStyles = (palette: Palette, isDark: boolean) =>
   emptyBar: {
     backgroundColor: palette.overlaySurface,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(26, 26, 26, 0.4)',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    borderColor: palette.line,
+    paddingVertical: 10,
+    paddingHorizontal: 11,
+    borderRadius: 22,
     alignSelf: 'stretch',
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  emptyIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.primaryLight,
   },
   emptyText: {
+    flex: 1,
     fontSize: 13,
-    fontWeight: '400',
-    textAlign: 'center',
+    lineHeight: 18,
+    fontWeight: '500',
     color: palette.ink,
   },
 });

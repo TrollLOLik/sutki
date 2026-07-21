@@ -9,10 +9,11 @@ interface PhoneInputProps {
   onChange: (v: string) => void;
   onBlur?: () => void;
   error?: string;
+  autoFocus?: boolean;
 }
 
-export function PhoneInput({ value, onChange, onBlur, error }: PhoneInputProps) {
-  const { palette } = useAppTheme();
+export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }: PhoneInputProps) {
+  const { palette, isDark } = useAppTheme();
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
@@ -21,11 +22,7 @@ export function PhoneInput({ value, onChange, onBlur, error }: PhoneInputProps) 
     onChange(formatPhoneMask(digits));
   };
 
-  const borderColor = error
-    ? palette.danger
-    : focused
-    ? palette.primary
-    : palette.line;
+  const borderColor = error ? palette.danger : focused ? palette.primary : palette.line;
 
   return (
     <View style={{ width: '100%' }}>
@@ -36,41 +33,35 @@ export function PhoneInput({ value, onChange, onBlur, error }: PhoneInputProps) 
           height: 56,
           flexDirection: 'row',
           alignItems: 'center',
-          borderRadius: 12,
+          borderRadius: 18,
           borderWidth: 1,
           borderColor,
-          backgroundColor: palette.surface,
-          paddingHorizontal: 14,
-          gap: 10,
-        }}
-      >
-        {/* Flag + prefix */}
+          backgroundColor: isDark ? '#202329' : '#F0F1F3',
+          paddingHorizontal: 16,
+        }}>
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             gap: 6,
-            paddingRight: 10,
+            paddingRight: 12,
             borderRightWidth: 1,
             borderRightColor: palette.line,
-          }}
-        >
-          <Text style={{ fontSize: 20, lineHeight: 24 }}>🇷🇺</Text>
+          }}>
+          <Text style={{ fontSize: 19, lineHeight: 23 }}>🇷🇺</Text>
           <Text
             style={{
-              fontSize: 15,
-              fontWeight: '600',
+              fontSize: 16,
+              fontWeight: '700',
               color: focused ? palette.primary : palette.ink,
-              letterSpacing: 0.3,
-            }}
-          >
+            }}>
             +7
           </Text>
         </View>
 
-        {/* Masked input */}
         <TextInput
           ref={inputRef}
+          autoFocus={autoFocus}
           value={value}
           onChangeText={handleChangeText}
           onFocus={() => setFocused(true)}
@@ -83,10 +74,12 @@ export function PhoneInput({ value, onChange, onBlur, error }: PhoneInputProps) 
           placeholderTextColor={palette.inkMuted}
           style={{
             flex: 1,
-            fontSize: 15,
+            height: '100%',
+            marginLeft: 12,
+            fontSize: 16,
             color: palette.ink,
           }}
-          maxLength={15} // "(XXX) XXX-XX-XX" = 15 chars
+          maxLength={15}
         />
       </TouchableOpacity>
 

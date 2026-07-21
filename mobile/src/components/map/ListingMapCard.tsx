@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { AnimatePresence, MotiView } from 'moti';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,17 +31,20 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
   const promoted = (listing?.promotion_types ?? []).length > 0;
   const highlighted = (listing?.promotion_types ?? []).includes('highlight');
 
-  if (!listing) return null;
-
   return (
-    <View
-      key={listing.id}
-      collapsable={false}
-      pointerEvents="box-none"
-      style={[styles.container, { marginBottom: insets.bottom + 96 }]}
-    >
+    <AnimatePresence>
+      {listing ? (
+        <MotiView
+          key={listing.id}
+          pointerEvents="box-none"
+          from={{ opacity: 0, translateY: 24, scale: 0.98 }}
+          animate={{ opacity: 1, translateY: 0, scale: 1 }}
+          exit={{ opacity: 0, translateY: 24, scale: 0.97 }}
+          transition={{ type: 'spring', damping: 20, stiffness: 230, mass: 0.8 }}
+          exitTransition={{ type: 'timing', duration: 220 }}
+          style={[styles.container, { marginBottom: insets.bottom + 96 }]}
+        >
           <Pressable
-            collapsable={false}
             onPress={() => router.push(`/listing/${listing.id}`)}
             style={[styles.card, highlighted && styles.cardHighlighted]}
           >
@@ -78,11 +82,17 @@ export function ListingMapCard({ listing, onClose }: ListingMapCardProps) {
               </View>
             </View>
 
-            <Pressable hitSlop={10} onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close-circle" size={24} color={palette.inkMuted} />
+            <Pressable
+              hitSlop={10}
+              onPress={onClose}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={17} color={palette.inkSecondary} />
             </Pressable>
           </Pressable>
-    </View>
+        </MotiView>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -96,31 +106,38 @@ const makeStyles = (palette: Palette) =>
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: palette.surface,
-    borderRadius: 16,
+    alignItems: 'center',
+    backgroundColor: palette.surfaceMuted,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: palette.line,
     overflow: 'hidden',
-    height: 116,
+    height: 128,
+    padding: 9,
     shadowColor: '#1A1A1A',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
     elevation: 10,
   },
   cardHighlighted: {
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: palette.primary,
     shadowColor: palette.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
     elevation: 14,
   },
   image: {
-    width: 116,
-    height: '100%',
+    width: 110,
+    height: 110,
+    borderRadius: 18,
   },
   details: {
     flex: 1,
-    padding: 12,
+    paddingLeft: 12,
+    paddingRight: 28,
+    paddingVertical: 3,
     justifyContent: 'center',
   },
   promotionBadge: {
@@ -128,7 +145,11 @@ const makeStyles = (palette: Palette) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
+    marginBottom: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: palette.primaryLight,
   },
   promotionText: {
     color: palette.primary,
@@ -142,9 +163,10 @@ const makeStyles = (palette: Palette) =>
     marginBottom: 4,
   },
   price: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 19,
+    fontWeight: '800',
     color: palette.primary,
+    fontVariant: ['tabular-nums'],
   },
   ratingRow: {
     flexDirection: 'row',
@@ -161,9 +183,9 @@ const makeStyles = (palette: Palette) =>
   },
   title: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: palette.ink,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   address: {
     fontSize: 12,
@@ -181,8 +203,16 @@ const makeStyles = (palette: Palette) =>
   },
   closeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 10,
+    right: 10,
     zIndex: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.surface,
+    borderWidth: 1,
+    borderColor: palette.line,
   },
 });

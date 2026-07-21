@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import { MotiView } from 'moti';
 import {
 	ActivityIndicator,
 	Animated,
 	FlatList,
+	LayoutAnimation,
+	Platform,
 	Pressable,
 	ScrollView,
 	Share,
@@ -15,6 +19,7 @@ import {
 	View,
 	TouchableOpacity,
 	StyleSheet,
+	UIManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
@@ -22,7 +27,7 @@ import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ResilientImage } from '@/components/ResilientImage';
-import { Button } from '@/components/ui';
+import { Button, IconButton, MaterialSurface, materialSurfaceColor } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { listingKeys, recordListingView, useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
@@ -54,6 +59,12 @@ export default function ListingDetailScreen() {
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -180,13 +191,6 @@ export default function ListingDetailScreen() {
 
   const headerBgOpacity = animVisible;
   const titleOpacity = animVisible;
-
-  const buttonBgOpacity = useMemo(() => {
-    return animVisible.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 0],
-    });
-  }, [animVisible]);
 
   const titleTranslateY = useMemo(() => {
     return animVisible.interpolate({
@@ -324,16 +328,30 @@ export default function ListingDetailScreen() {
     return 'apps-outline';
   };
 
+  const toggleDescription = () => {
+    LayoutAnimation.configureNext({
+      duration: 280,
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      update: { type: LayoutAnimation.Types.spring, springDamping: 0.86 },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+    setIsExpanded((value) => !value);
+  };
+
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
+  const raisedSurface = materialSurfaceColor(isDark, 'raised');
+
   return (
-    <View className="flex-1 bg-surface">
+    <View style={{ flex: 1, backgroundColor: screenBackground }}>
       {isLoading ? (
-        <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface">
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: screenBackground }}>
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator color={palette.primary} />
           </View>
         </SafeAreaView>
       ) : isError || !data ? (
-        <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface">
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: screenBackground }}>
           <View className="flex-1 gap-4 px-4 justify-center">
             <EmptyState
               icon="cloud-offline-outline"
@@ -360,7 +378,7 @@ export default function ListingDetailScreen() {
             }}
             className="flex-row items-center px-4"
           >
-            {/* Animated Solid Background Overlay */}
+            {/* Header material becomes visible as content scrolls under it. */}
             <Animated.View
               style={{
                 position: 'absolute',
@@ -368,36 +386,31 @@ export default function ListingDetailScreen() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: palette.surface,
-                borderBottomWidth: 1,
-                borderBottomColor: palette.line,
                 opacity: headerBgOpacity,
-              }}
-            />
+                overflow: 'hidden',
+              }}>
+              <BlurView
+                intensity={88}
+                tint={isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+              />
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' },
+                ]}
+              />
+            </Animated.View>
 
             {/* Back Button */}
             <NavigationBackButton
               fallback="/(tabs)"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-            >
-              <Animated.View
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  borderRadius: 999,
-                  backgroundColor: palette.surface,
-                  opacity: buttonBgOpacity,
-                }}
-                className="shadow-md"
-              />
-              <Ionicons name="chevron-back" size={22} color={palette.ink} style={{ zIndex: 1 }} />
-            </NavigationBackButton>
+              size={48}
+              variant="material"
+            />
 
             {/* Title in center */}
-            <View className="flex-1 px-3 justify-center">
+            <View style={{ flex: 1, minWidth: 0, justifyContent: 'center', paddingHorizontal: 10 }}>
               <Animated.View
                 style={{
                   opacity: titleOpacity,
@@ -411,55 +424,27 @@ export default function ListingDetailScreen() {
             </View>
 
             {/* Action Buttons */}
-            <View className="flex-row items-center gap-2">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               {!isOwnListing && (
-                <Pressable
+                <IconButton
+                  icon={isFavorite ? 'heart' : 'heart-outline'}
+                  iconSize={22}
+                  size={48}
+                  selected={isFavorite}
+                  tone="primary"
                   onPress={() => toggleFavorite.mutate({ id: numericId, isFavorite })}
                   disabled={numericId <= 0}
                   accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-                  className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-                >
-                  <Animated.View
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      borderRadius: 999,
-                      backgroundColor: palette.surface,
-                      opacity: buttonBgOpacity,
-                    }}
-                    className="shadow-md"
-                  />
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isFavorite ? palette.primary : palette.ink}
-                    style={{ zIndex: 1 }}
-                  />
-                </Pressable>
+                />
               )}
-              <Pressable
+              <IconButton
+                icon="share-outline"
+                iconSize={22}
+                size={48}
+                tone="primary"
                 onPress={handleShare}
                 accessibilityLabel="Поделиться"
-                className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-              >
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    borderRadius: 999,
-                    backgroundColor: palette.surface,
-                    opacity: buttonBgOpacity,
-                  }}
-                  className="shadow-md"
-                />
-                <Ionicons name="share-outline" size={20} color={palette.ink} style={{ zIndex: 1 }} />
-              </Pressable>
+              />
 
             </View>
           </View>
@@ -469,7 +454,7 @@ export default function ListingDetailScreen() {
             onScroll={handleMainScroll}
             scrollEventThrottle={16}
           >
-            <View className="relative h-[320px] bg-surface-skeleton">
+            <View className="relative h-[340px] bg-surface-skeleton">
               {data.photos.length > 0 ? (
                 <FlatList
                   data={data.photos}
@@ -489,7 +474,7 @@ export default function ListingDetailScreen() {
                     >
                       <ResilientImage
                         uri={item.url}
-                        style={{ width, height: 320 }}
+                        style={{ width, height: 340 }}
                         transition={150}
                       />
                     </TouchableOpacity>
@@ -517,7 +502,9 @@ export default function ListingDetailScreen() {
               onClose={() => setGalleryVisible(false)}
             />
 
-            <View className="bg-surface rounded-t-[24px] mt-[-20px] px-4 pt-5 pb-8 gap-5">
+            <View
+              className="rounded-t-[28px] mt-[-24px] px-4 pt-6 pb-8 gap-6"
+              style={{ backgroundColor: screenBackground }}>
               {/* Moderation Banner for Owner */}
               {isOwnListing && data.status && data.status !== 'active' && (
                 <View
@@ -570,32 +557,46 @@ export default function ListingDetailScreen() {
                 className="gap-1"
                 onLayout={(event) => {
                   const { y, height } = event.nativeEvent.layout;
-                  // parent container starts at y = 300px (320px image slider height minus 20px negative margin)
-                  titleBottomRef.current = 300 + y + height;
+                  // Hero height minus the overlap of the content surface.
+                  titleBottomRef.current = 316 + y + height;
                 }}
               >
-                <Text className="text-xl font-bold text-ink leading-tight">{getListingTitle()}</Text>
-                <Text className="text-sm text-ink-secondary">{getListingSubtitle()}</Text>
+                <Text className="text-2xl font-extrabold text-ink leading-tight">{getListingTitle()}</Text>
+                <View className="mt-1 flex-row items-start gap-2">
+                  <Ionicons name="location-outline" size={17} color={palette.inkMuted} style={{ marginTop: 1 }} />
+                  <Text className="flex-1 text-sm leading-5 text-ink-secondary">{getListingSubtitle()}</Text>
+                </View>
               </View>
 
-              <Pressable
-                onPress={() => router.push({ pathname: '/reviews/[id]', params: { id } })}
-                className="flex-row items-center gap-1 active:opacity-70">
-                <Ionicons name="star" size={15} color={palette.primary} />
-                <Text className="text-sm font-bold text-ink">{formatRating(data.rating)}</Text>
-                <Text className="text-sm text-ink-secondary">({formatReviewsCount(data.reviews_count)})</Text>
-              </Pressable>
+              <View className="flex-row" style={{ gap: 10 }}>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/reviews/[id]', params: { id } })}
+                  className="flex-1 flex-row items-center gap-2 rounded-2xl border border-line px-3 py-3 active:opacity-70"
+                  style={{ backgroundColor: raisedSurface }}>
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-light">
+                    <Ionicons name="star" size={17} color={palette.primary} />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-extrabold text-ink">{formatRating(data.rating)}</Text>
+                    <Text className="text-[11px] text-ink-secondary">{formatReviewsCount(data.reviews_count)}</Text>
+                  </View>
+                </Pressable>
 
-              <View className="flex-row items-center gap-1.5">
-                <Ionicons name="eye-outline" size={16} color={palette.inkMuted} />
-                <Text className="text-sm text-ink-secondary">{data.views} просмотров</Text>
-                {isOwnListing && data.views_30d != null ? (
-                  <Text className="text-sm text-ink-muted">· {data.views_30d} за 30 дней</Text>
-                ) : null}
+                <View
+                  className="flex-1 flex-row items-center gap-2 rounded-2xl border border-line px-3 py-3"
+                  style={{ backgroundColor: raisedSurface }}>
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-surface-muted">
+                    <Ionicons name="eye-outline" size={17} color={palette.inkSecondary} />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-extrabold text-ink">{data.views}</Text>
+                    <Text className="text-[11px] text-ink-secondary">просмотров</Text>
+                  </View>
+                </View>
               </View>
 
               <View className="flex-row items-baseline gap-1">
-                <Text className="text-2xl font-extrabold text-ink">{formatRub(data.price)} ₽</Text>
+                <Text className="text-[28px] font-extrabold text-ink">{formatRub(data.price)} ₽</Text>
                 <Text className="text-sm text-ink-muted">/ сутки</Text>
               </View>
 
@@ -609,7 +610,7 @@ export default function ListingDetailScreen() {
                   </View>
                 )}
                 <View className="bg-surface-muted px-3 py-1.5 rounded-xl">
-                  <Text className="text-xs font-semibold text-ink-secondary">до {parseInt(data.rooms, 10) * 2} гостей</Text>
+                  <Text className="text-xs font-semibold text-ink-secondary">до {data.max_guests || Math.max(1, parseInt(data.rooms, 10) * 2)} гостей</Text>
                 </View>
                 <View className="bg-surface-muted px-3 py-1.5 rounded-xl">
                   <Text className="text-xs font-semibold text-ink-secondary">{(data.id % 9) + 1} этаж</Text>
@@ -617,34 +618,39 @@ export default function ListingDetailScreen() {
               </View>
 
               {data.description ? (
-                <View className="border-t border-line pt-4">
-                  {isExpanded ? (
-                    <View className="gap-2">
-                      <Text className="text-base font-bold text-ink">Описание</Text>
-                      <Text className="text-sm leading-5 text-ink-secondary">{data.description}</Text>
-                      <Pressable onPress={() => setIsExpanded(false)} className="pt-2 active:opacity-70">
-                        <Text className="text-sm font-bold text-primary">Свернуть</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View className="gap-1">
-                      <Text numberOfLines={3} className="text-sm leading-5 text-ink-secondary">
-                        {data.description}
+                <MaterialSurface level="raised" radius={18} style={{ padding: 16 }}>
+                  <View className="gap-2">
+                    <Text className="text-base font-bold text-ink">Описание</Text>
+                    <Text
+                      numberOfLines={isExpanded ? undefined : 3}
+                      className="text-sm leading-5 text-ink-secondary">
+                      {data.description}
+                    </Text>
+                    <Pressable
+                      onPress={toggleDescription}
+                      className="mt-1 flex-row items-center self-start py-1 active:opacity-70">
+                      <Text className="mr-1 text-sm font-bold text-primary">
+                        {isExpanded ? 'Свернуть' : 'Подробнее'}
                       </Text>
-                      <Pressable onPress={() => setIsExpanded(true)} className="items-center py-1.5 active:opacity-70">
-                        <Ionicons name="chevron-down" size={20} color={palette.inkMuted} />
-                      </Pressable>
-                    </View>
-                  )}
-                </View>
+                      <MotiView
+                        animate={{ rotate: isExpanded ? '180deg' : '0deg' }}
+                        transition={{ type: 'spring', damping: 20, stiffness: 240 }}>
+                        <Ionicons name="chevron-down" size={17} color={palette.primary} />
+                      </MotiView>
+                    </Pressable>
+                  </View>
+                </MaterialSurface>
               ) : null}
 
               {data.services.length > 0 ? (
-                <View className="border-t border-line pt-4 gap-3">
+                <View className="gap-3">
                   <Text className="text-base font-bold text-ink">Удобства</Text>
                   <View className="flex-row flex-wrap gap-2">
                     {data.services.map((s) => (
-                      <View key={s.id} style={{ width: '31.5%' }} className="rounded-xl border border-line bg-surface p-2 flex-row items-center gap-1.5">
+                      <View
+                        key={s.id}
+                        style={{ width: '31.5%', backgroundColor: raisedSurface }}
+                        className="rounded-xl border border-line p-2 flex-row items-center gap-1.5">
                         <Ionicons name={getServiceIcon(s.name)} size={20} color={palette.primary} />
                         <Text numberOfLines={2} className="text-[10px] font-semibold text-ink-secondary flex-1 leading-tight">
                           {s.name}
@@ -656,20 +662,30 @@ export default function ListingDetailScreen() {
               ) : null}
 
               {rules.length > 0 ? (
-                <View className="border-t border-line pt-4 gap-3">
+                <View className="gap-3">
                   <Text className="text-base font-bold text-ink">Правила проживания</Text>
-                  <View className="rounded-2xl border border-line bg-surface overflow-hidden">
-                    {rules.map((rule, idx) => (
-                      <View
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {rules.map((rule) => (
+                      <MaterialSurface
                         key={rule.key}
-                        className={`flex-row items-center justify-between p-4 ${
-                          idx < rules.length - 1 ? 'border-b border-line' : ''
-                        }`}>
-                        <View className="flex-row items-center gap-3">
-                          <Ionicons name={rule.icon} size={20} color={palette.primary} />
-                          <Text className="text-sm font-semibold text-ink">{rule.label}</Text>
+                        level="raised"
+                        radius={16}
+                        style={{
+                          width: (width - 42) / 2,
+                          minHeight: 76,
+                          justifyContent: 'center',
+                          paddingHorizontal: 12,
+                          paddingVertical: 11,
+                        }}>
+                        <View className="flex-row items-center" style={{ gap: 9 }}>
+                          <View className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-light">
+                            <Ionicons name={rule.icon} size={17} color={palette.primary} />
+                          </View>
+                          <Text className="flex-1 text-xs font-semibold leading-4 text-ink" numberOfLines={3}>
+                            {rule.label}
+                          </Text>
                         </View>
-                      </View>
+                      </MaterialSurface>
                     ))}
                   </View>
                 </View>
@@ -677,24 +693,27 @@ export default function ListingDetailScreen() {
 
               {/* AI Reviews Summary Card */}
               {data.reviews_summary ? (
-                <View className="border-t border-line pt-4 gap-3">
+                <View className="gap-3">
                   <View className="flex-row items-center gap-1.5">
                     <Ionicons name="sparkles" size={16} color={palette.primary} />
                     <Text className="text-base font-bold text-ink">Что говорят гости (ИИ)</Text>
                   </View>
-                  <View className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                  <MaterialSurface
+                    level="raised"
+                    radius={18}
+                    style={{ borderColor: 'rgba(255,90,31,0.22)', padding: 16 }}>
                     <Text className="text-sm leading-5 text-ink-secondary">
                       {data.reviews_summary}
                     </Text>
-                  </View>
+                  </MaterialSurface>
                 </View>
               ) : null}
 
               {/* Владелец жилья (Avito Style) */}
-              <View className="border-t border-line pt-4 gap-3">
+              <View className="gap-3">
                 <Text className="text-base font-bold text-ink">Владелец жилья</Text>
                 
-                <View className="rounded-2xl border border-line bg-surface p-4">
+                <MaterialSurface level="raised" radius={18} style={{ padding: 16 }}>
                   <Pressable
                     onPress={() => {
                       if (isOwnListing) {
@@ -792,11 +811,11 @@ export default function ListingDetailScreen() {
                       </View>
                     ) : null}
                   </View>
-                </View>
+                </MaterialSurface>
               </View>
 
               {data.lat != null && data.lng != null && (data.qc_geo == null || data.qc_geo < 2) ? (
-                <View className="border-t border-line pt-4 gap-3">
+                <View className="gap-3">
                   <Text className="text-base font-bold text-ink">На карте</Text>
                   <Pressable
                     onPress={() => router.push(`/listing/${id}/location`)}
@@ -824,7 +843,9 @@ export default function ListingDetailScreen() {
                     <View style={StyleSheet.absoluteFill} className="bg-transparent" />
                   </Pressable>
                   {data.location_summary ? (
-                    <View className="mt-1 bg-surface-muted px-4 py-3 rounded-2xl border border-line/60">
+                    <View
+                      className="mt-1 px-4 py-3 rounded-2xl border border-line/60"
+                      style={{ backgroundColor: raisedSurface }}>
                       <Text className="text-sm leading-5 text-ink-secondary">
                         {data.location_summary}
                       </Text>
@@ -834,7 +855,7 @@ export default function ListingDetailScreen() {
               ) : null}
 
               {(similarLoading || (!similarError && similarListings.length > 0)) ? (
-                <View className="border-t border-line pt-4 gap-3">
+                <View className="gap-3">
                   <View className="flex-row items-end justify-between gap-3">
                     <View className="flex-1">
                       <Text className="text-base font-bold text-ink">Похожие варианты</Text>
@@ -852,7 +873,10 @@ export default function ListingDetailScreen() {
                   {similarLoading ? (
                     <View className="gap-3">
                       {[1, 2].map((item) => (
-                        <View key={item} className="rounded-card border border-line bg-surface p-3">
+                        <View
+                          key={item}
+                          className="rounded-card border border-line p-3"
+                          style={{ backgroundColor: raisedSurface }}>
                           <View className="flex-row gap-3">
                             <View className="h-28 w-[45%] rounded-field bg-surface-skeleton" />
                             <View className="flex-1 justify-between py-1">
@@ -888,17 +912,36 @@ export default function ListingDetailScreen() {
             </View>
           </ScrollView>
 
-          <SafeAreaView edges={['bottom']} className="border-t border-line px-4 py-3 bg-surface">
+          <SafeAreaView
+            edges={['bottom']}
+            style={{
+              backgroundColor: headerBackground,
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              shadowColor: '#000',
+              shadowOpacity: isDark ? 0.3 : 0.09,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: -8 },
+              elevation: 8,
+            }}>
             {isOwnListing ? (
               <Button
                 label="Редактировать"
                 onPress={() => router.push({ pathname: '/create', params: { editId: id } } as any)}
               />
             ) : (
-              <Button
-                label="Оставить заявку"
-                onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
-              />
+              <View className="flex-row items-center" style={{ gap: 14 }}>
+                <View style={{ minWidth: 108 }}>
+                  <Text className="text-lg font-extrabold text-ink">{formatRub(data.price)} ₽</Text>
+                  <Text className="text-xs text-ink-muted">за сутки</Text>
+                </View>
+                <View className="flex-1">
+                  <Button
+                    label="Оставить заявку"
+                    onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
+                  />
+                </View>
+              </View>
             )}
           </SafeAreaView>
         </>

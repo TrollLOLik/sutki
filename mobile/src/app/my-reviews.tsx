@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,12 +7,12 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
-  Easing,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -20,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { BottomSheet, Button } from '@/components/ui';
+import { BottomSheet, Button, IconButton, MaterialSurface } from '@/components/ui';
 import { useCreateReviewReply, useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -83,7 +84,9 @@ function formatDate(dateStr: string): string {
 
 export default function MyReviewsScreen() {
   useActivityScopeSeen('reviews');
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
   const [tab, setTab] = useState<ReviewTab>('written');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ReviewSort>('newest');
@@ -111,10 +114,11 @@ export default function MyReviewsScreen() {
   };
 
   useEffect(() => {
-    Animated.timing(tabAnim, {
+    Animated.spring(tabAnim, {
       toValue: tab === 'written' ? 0 : 1,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
+      damping: 22,
+      stiffness: 240,
+      mass: 0.8,
       useNativeDriver: false,
     }).start();
   }, [tab]);
@@ -147,17 +151,17 @@ export default function MyReviewsScreen() {
     }
     if (isWritten) {
       return (
-        <View className="mb-3 rounded-card border border-line bg-surface p-3 gap-3">
+        <MaterialSurface level="raised" radius={20} className="mb-3 gap-3 p-4">
           <View className="flex-row items-center gap-3">
             {item.house_cover_url ? (
               <Image
                 source={{ uri: item.house_cover_url }}
-                style={{ width: 60, height: 45, borderRadius: 8 }}
+                style={{ width: 68, height: 52, borderRadius: 13 }}
                 contentFit="cover"
               />
             ) : (
-              <View className="items-center justify-center rounded bg-surface-muted" style={{ width: 60, height: 45 }}>
-                <Ionicons name="image-outline" size={16} color={palette.inkMuted} />
+              <View className="items-center justify-center rounded-xl bg-surface-muted" style={{ width: 68, height: 52 }}>
+                <Ionicons name="image-outline" size={20} color={palette.inkMuted} />
               </View>
             )}
             <View className="flex-1 gap-0.5">
@@ -170,10 +174,8 @@ export default function MyReviewsScreen() {
             </View>
           </View>
 
-          <View className="h-px bg-line" />
-
           <View className="flex-row items-center justify-between">
-            <View className="flex-row gap-0.5">
+            <View className="flex-row items-center gap-0.5 rounded-full bg-primary-light px-2.5 py-1.5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Ionicons
                   key={i}
@@ -186,11 +188,12 @@ export default function MyReviewsScreen() {
             <Text className="text-xs text-ink-secondary">{formatDate(item.created_at)}</Text>
           </View>
 
-          <Text className="text-base text-ink leading-5 font-normal">
+          <Text className="text-[15px] font-normal leading-6 text-ink">
             {item.body}
           </Text>
           {item.status && item.status !== 'active' ? (
-            <View className="self-start rounded-pill bg-primary-light px-3 py-1.5">
+            <View className="self-start flex-row items-center gap-1.5 rounded-pill bg-primary-light px-3 py-1.5">
+              <Ionicons name={item.status === 'rejected' ? 'close-circle-outline' : 'time-outline'} size={14} color={item.status === 'rejected' ? palette.danger : palette.primary} />
               <Text className="text-xs font-bold text-primary">
                 {item.status === 'rejected' ? 'Отклонён' : item.status === 'moderation_review' ? 'Дополнительная проверка' : 'На проверке'}
               </Text>
@@ -206,7 +209,7 @@ export default function MyReviewsScreen() {
               />
             </View>
           ) : null}
-        </View>
+        </MaterialSurface>
       );
     }
 
@@ -262,28 +265,31 @@ export default function MyReviewsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-surface">
-      <SafeAreaView edges={['top']} className="flex-1">
+    <View className="flex-1" style={{ backgroundColor: headerBackground }}>
+      <SafeAreaView edges={['top']} className="flex-1" style={{ backgroundColor: headerBackground }}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1"
+          style={{ backgroundColor: screenBackground }}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
         >
-        {/* Header */}
-        <View className="flex-row items-center px-4 py-2">
-          <NavigationBackButton
-            fallback="/(tabs)/profile"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
-          />
-          <Text className="flex-1 text-center text-lg font-semibold text-ink">Мои отзывы</Text>
-          {/* Spacer to balance the back button */}
-          <View className="h-10 w-10" />
+        <View style={screenStyles.header}>
+          <BlurView intensity={88} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' }]} />
+          <View style={screenStyles.headerContent}>
+            <NavigationBackButton fallback="/(tabs)/profile" size={48} variant="material" />
+            <Text className="text-xl font-extrabold text-ink" style={screenStyles.headerTitle}>Мои отзывы</Text>
+            <View style={screenStyles.headerSpacer} />
+          </View>
         </View>
 
         {/* Tab switch */}
-        <View
+        <MaterialSurface
+          level="raised"
+          radius={18}
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          className="flex-row rounded-pill bg-surface-muted p-1 mx-4 mb-2 relative"
+          className="relative mx-4 mb-3 mt-3 h-12 flex-row p-1"
+          style={screenStyles.tabs}
         >
           <Animated.View
             style={{
@@ -298,22 +304,17 @@ export default function MyReviewsScreen() {
                   outputRange: [0, (containerWidth - 8) / 2],
                 })
               }],
-              backgroundColor: palette.surface,
-              borderRadius: 9999,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 4,
-              elevation: 2,
+              backgroundColor: palette.primaryLight,
+              borderRadius: 14,
             }}
           />
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'written' }}
             onPress={() => handleTabChange('written')}
-            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+            className="relative z-10 h-10 flex-1 items-center justify-center rounded-xl"
           >
-            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'written' ? 'text-ink' : 'text-ink-secondary'}`}>
+            <Text className={`text-sm font-bold ${tab === 'written' ? 'text-primary' : 'text-ink-secondary'}`}>
               Оставленные
             </Text>
           </Pressable>
@@ -321,13 +322,13 @@ export default function MyReviewsScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'received' }}
             onPress={() => handleTabChange('received')}
-            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+            className="relative z-10 h-10 flex-1 items-center justify-center rounded-xl"
           >
-            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'received' ? 'text-ink' : 'text-ink-secondary'}`}>
+            <Text className={`text-sm font-bold ${tab === 'received' ? 'text-primary' : 'text-ink-secondary'}`}>
               Полученные
             </Text>
           </Pressable>
-        </View>
+        </MaterialSurface>
 
         <PersonalListToolbar
           query={query}
@@ -434,6 +435,41 @@ export default function MyReviewsScreen() {
   );
 }
 
+const screenStyles = StyleSheet.create({
+  header: {
+    height: 68,
+    flexShrink: 0,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  headerContent: {
+    height: 68,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    position: 'absolute',
+    left: 80,
+    right: 80,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 48,
+    height: 48,
+  },
+  tabs: {
+    height: 48,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 12,
+    padding: 4,
+    flexDirection: 'row',
+    position: 'relative',
+  },
+});
+
 function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onReplyFocus: (inputHandle: number) => void }) {
   const { palette } = useAppTheme();
   const [replying, setReplying] = useState(false);
@@ -459,7 +495,7 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
   };
 
   return (
-    <View className="mb-3 rounded-card border border-line bg-surface p-3 gap-3">
+    <MaterialSurface level="raised" radius={20} className="mb-3 gap-3 p-4">
       <View className="flex-row items-center gap-3">
         {review.author_avatar_url ? (
           <Image source={{ uri: review.author_avatar_url }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
@@ -474,21 +510,23 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
         </View>
       </View>
 
-      <View className="h-px bg-line" />
       <View className="flex-row items-center justify-between">
-        <View className="flex-row gap-0.5">
+        <View className="flex-row items-center gap-0.5 rounded-full bg-primary-light px-2.5 py-1.5">
           {Array.from({ length: 5 }).map((_, i) => <Ionicons key={i} name={i < review.rating ? 'star' : 'star-outline'} size={16} color={i < review.rating ? palette.star : palette.inkMuted} />)}
         </View>
-        <View className="bg-surface-muted px-2.5 py-1 rounded-pill border border-line" style={{ maxWidth: '60%' }}>
+        <View className="rounded-pill bg-surface-muted px-2.5 py-1" style={{ maxWidth: '60%' }}>
           <Text className="text-xs text-ink-secondary font-medium" numberOfLines={1}>{review.house_street}, {review.house_number}</Text>
         </View>
       </View>
-      <Text className="text-base text-ink leading-5 font-normal">{review.body}</Text>
+      <Text className="text-[15px] font-normal leading-6 text-ink">{review.body}</Text>
 
       {review.reply?.status === 'active' ? (
-        <View className="ml-3 border-l-2 border-primary pl-3">
-          <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
-          <Text className="mt-1 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
+        <View className="rounded-2xl bg-primary-light p-3.5">
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={palette.primary} />
+            <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
+          </View>
+          <Text className="mt-2 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
         </View>
       ) : submitted || review.reply?.status === 'pending_moderation' ? (
         <Text className="text-xs font-semibold text-primary">Ответ отправлен на проверку</Text>
@@ -497,7 +535,8 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
       ) : review.reply?.status === 'rejected' ? (
         <Text className="text-xs font-semibold text-danger">Ответ отклонён</Text>
       ) : !replying ? (
-        <Pressable onPress={openReply} className="self-start py-1" accessibilityRole="button">
+        <Pressable onPress={openReply} className="self-start flex-row items-center gap-2 rounded-full bg-primary-light px-3 py-2" accessibilityRole="button">
+          <Ionicons name="return-up-back-outline" size={17} color={palette.primary} />
           <Text className="text-sm font-bold text-primary">Ответить</Text>
         </Pressable>
       ) : null}
@@ -516,9 +555,7 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
               className="min-h-16 flex-1 text-sm text-ink"
               textAlignVertical="top"
             />
-            <Pressable onPress={() => setEmojiPickerVisible(true)} className="h-9 w-9 items-center justify-center rounded-full" accessibilityLabel="Выбрать смайлик">
-              <Ionicons name="happy-outline" size={22} color={palette.inkSecondary} />
-            </Pressable>
+            <IconButton icon="happy-outline" size={38} iconSize={21} onPress={() => setEmojiPickerVisible(true)} accessibilityLabel="Выбрать смайлик" />
           </View>
           <View className="flex-row gap-2">
             <View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={closeReply} /></View>
@@ -540,6 +577,6 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
           </View>
         </View>
       </BottomSheet>
-    </View>
+    </MaterialSurface>
   );
 }

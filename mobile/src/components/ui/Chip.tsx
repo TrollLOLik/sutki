@@ -16,7 +16,7 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
       accessibilityState={{ selected }}
       onPress={onPress}
       style={{
-        height: 36,
+        minHeight: 38,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 999,

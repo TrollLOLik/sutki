@@ -13,10 +13,12 @@ import {
 	LayoutAnimation,
 	UIManager,
 	Linking,
+	StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -43,8 +45,9 @@ import { api, ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { formatRooms } from '@/lib/format';
-import { Button, BottomSheet } from '@/components/ui';
+import { Button, BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 /** Canned owner replies shown as chips above the input. Client-only. */
 const QUICK_REPLIES = [
@@ -61,7 +64,19 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function ChatDialogScreen() {
-	const { palette } = useAppTheme();
+	const { palette, isDark } = useAppTheme();
+	const chatColors = React.useMemo(
+		() => ({
+			background: isDark ? '#0D0F12' : '#F4F5F7',
+			chrome: isDark ? 'rgba(20, 22, 27, 0.97)' : 'rgba(255, 255, 255, 0.97)',
+			panel: isDark ? '#181A1F' : '#FFFFFF',
+			panelRaised: isDark ? '#202329' : '#F0F1F3',
+			incoming: isDark ? '#1B1E23' : '#FFFFFF',
+			border: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(18,24,32,0.09)',
+			softBorder: isDark ? 'rgba(255,255,255,0.055)' : 'rgba(18,24,32,0.06)',
+		}),
+		[isDark],
+	);
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id: string; title?: string; otherUserId?: string; houseId?: string }>();
 	const convID = parseInt(params.id ?? '0', 10);
@@ -521,13 +536,28 @@ export default function ChatDialogScreen() {
 		const isMe = item.sender_id != null && item.sender_id === sessionUser?.id;
 		const isPending = item.pending;
 		const isFailed = item.failed;
+		const hasAttachments = !!item.attachments?.length;
+		const isImageOnly =
+			hasAttachments &&
+			!item.body &&
+			item.attachments!.every((attachment) => attachment.mime_type.startsWith('image/'));
 
 		return (
-			<View className={`flex-row my-1 px-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
+			<View className={`flex-row my-1.5 px-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
 				<View
-					className={`max-w-[78%] rounded-[18px] px-3.5 py-2.5 ${
-						isMe ? 'bg-primary rounded-tr-[4px]' : 'bg-surfaceMuted border border-line/30 rounded-tl-[4px]'
-					}`}
+					style={[
+						styles.messageBubble,
+						{
+							backgroundColor: isImageOnly
+								? 'transparent'
+								: isMe
+									? palette.primary
+									: chatColors.incoming,
+							borderColor: isImageOnly || isMe ? 'transparent' : chatColors.softBorder,
+							paddingHorizontal: isImageOnly ? 0 : 15,
+							paddingVertical: isImageOnly ? 0 : 11,
+						},
+					]}
 				>
 					{/* Render attachments */}
 					{item.attachments && item.attachments.map((att) => {
@@ -544,7 +574,7 @@ export default function ChatDialogScreen() {
 											setGalleryVisible(true);
 										}
 									}}
-									className="mb-1.5 rounded-xl overflow-hidden bg-surfaceMuted border border-line/20"
+									style={styles.imageAttachment}
 								>
 									<Image
 										source={{ uri: att.url }}
@@ -580,8 +610,13 @@ export default function ChatDialogScreen() {
 					) : null}
 
 					{/* Time & Sent Status Info */}
-					<View className="flex-row justify-end items-center mt-1 self-end">
-						<Text className={`text-[10px] ${isMe ? 'text-white/75' : 'text-ink-muted'} mr-1`}>
+					<View
+						className="flex-row justify-end items-center mt-1 self-end"
+						style={isImageOnly ? styles.imageTimestamp : undefined}
+					>
+						<Text
+							className={`text-[10px] ${isMe || isImageOnly ? 'text-white/80' : 'text-ink-muted'} mr-1`}
+						>
 							{formatMessageTime(item.created_at)}
 						</Text>
 						{isMe && (
@@ -636,7 +671,7 @@ export default function ChatDialogScreen() {
 	const showQuickReplies = isListingOwner && !isDeletedUser && isInputEmpty && userMessageCount < 3;
 
 	return (
-		<View style={{ flex: 1, backgroundColor: palette.surface }}>
+		<View style={{ flex: 1, backgroundColor: chatColors.background }}>
 			<Stack.Screen options={{ headerShown: false }} />
 
 			<KeyboardAvoidingView
@@ -645,81 +680,101 @@ export default function ChatDialogScreen() {
 				keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
 			>
 
-			{/* Custom Gorgeous Header */}
-			<View style={{ paddingTop: insets.top }} className="flex-row items-center px-4 py-3 bg-surface border-b border-line/45 justify-between">
+			{/* Floating conversation chrome */}
+			<Animated.View
+				entering={FadeIn.duration(220)}
+				style={[
+					styles.header,
+					{
+						paddingTop: insets.top + 8,
+						backgroundColor: 'transparent',
+						borderBottomColor: chatColors.softBorder,
+					},
+				]}
+			>
+				<BlurView
+					intensity={88}
+					tint={isDark ? 'dark' : 'light'}
+					style={StyleSheet.absoluteFill}
+				/>
+				<View
+					pointerEvents="none"
+					style={[
+						StyleSheet.absoluteFill,
+						{ backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' },
+					]}
+				/>
 				<View className="flex-row items-center flex-1">
 					<NavigationBackButton
 						fallback="/(tabs)/messages"
-						style={{
-							width: 40,
-							height: 40,
-							alignItems: 'center',
-							justifyContent: 'center',
-							borderRadius: 20,
-							backgroundColor: palette.surfaceMuted,
-						}}
-						className="mr-3"
+						size={48}
+						variant="material"
+						className="mr-3.5"
 					/>
 
 					{activeConv?.other_user_avatar_url && !isDeletedUser ? (
 						<Image
 							source={{ uri: activeConv.other_user_avatar_url }}
-							className="w-10 h-10 rounded-full bg-surfaceMuted"
+							style={styles.headerAvatar}
 							contentFit="cover"
 						/>
 					) : (
-						<View className="w-10 h-10 rounded-full bg-surfaceMuted items-center justify-center">
-							<Ionicons name="person-outline" size={18} color={palette.inkMuted} />
+						<View style={[styles.headerAvatar, { backgroundColor: chatColors.panelRaised }]} className="items-center justify-center">
+							<Ionicons name="person-outline" size={20} color={palette.inkMuted} />
 						</View>
 					)}
 
-					<View className="ml-3 flex-1">
-						<Text numberOfLines={1} className="font-bold text-[16px] text-ink">
+					<View className="ml-3.5 flex-1">
+						<Text numberOfLines={1} className="font-extrabold text-[19px] leading-6 text-ink">
 							{isDeletedUser ? 'Удаленный профиль' : otherUserTitle}
 						</Text>
-						<Text className={`text-[11px] mt-0.5 font-medium ${isDeletedUser ? 'text-ink-muted' : 'text-primary'}`}>
-							{isDeletedUser ? 'Профиль удален' : (socketStatus === 'connected' ? 'В сети' : 'Был недавно')}
-						</Text>
+						<View className="flex-row items-center mt-1">
+							{!isDeletedUser && socketStatus === 'connected' ? (
+								<View style={[styles.presenceDot, { backgroundColor: palette.success }]} />
+							) : null}
+							<Text className={`text-[12px] font-medium ${isDeletedUser ? 'text-ink-muted' : socketStatus === 'connected' ? 'text-success' : 'text-ink-muted'}`}>
+								{isDeletedUser ? 'Профиль удален' : (socketStatus === 'connected' ? 'Чат подключен' : 'Подключение...')}
+							</Text>
+						</View>
 					</View>
 				</View>
 
 				<View className="flex-row items-center">
-					<TouchableOpacity
+					<IconButton
+						icon="call-outline"
+						iconSize={23}
+						size={48}
+						tone="primary"
 						onPress={handleCallPress}
 						disabled={!canCall}
-						activeOpacity={0.75}
-						accessibilityRole="button"
 						accessibilityLabel="Позвонить"
-						className={`w-10 h-10 rounded-full items-center justify-center mr-2 ${canCall ? 'bg-surfaceMuted active:bg-line/40' : 'opacity-40'}`}
-					>
-						<Ionicons name="call-outline" size={20} color={canCall ? palette.primary : palette.inkMuted} />
-					</TouchableOpacity>
-					{!isDeletedUser && (
-						socketStatus === 'connecting' ? (
-							<ActivityIndicator size="small" color={palette.primary} className="mr-2" />
-						) : socketStatus === 'disconnected' ? (
-							<Ionicons name="cloud-offline-outline" size={20} color="#EF4444" className="mr-2" />
-						) : (
-							<View className="w-2.5 h-2.5 rounded-full bg-primary mr-2" />
-						)
-					)}
+					/>
 				</View>
-			</View>
+			</Animated.View>
 
 			{/* Sticky Listing Context Header */}
 			{listing && (
-				<View className="flex-row items-center px-4 py-2.5 bg-surface border-b border-line/40 justify-between">
+				<Animated.View
+					entering={FadeInDown.duration(260)}
+				>
+					<MaterialSurface level="floating" radius={18} style={styles.listingPanel}>
 					<View className="flex-row items-center flex-1 mr-3">
-						<Image
-							source={{ uri: listing.cover_url }}
-							className="w-12 h-12 rounded-lg bg-surfaceMuted"
-							contentFit="cover"
-						/>
+						{listing.cover_url ? (
+							<Image
+								source={{ uri: listing.cover_url }}
+								style={styles.listingImage}
+								contentFit="cover"
+							/>
+						) : (
+							<View style={[styles.listingImage, { backgroundColor: chatColors.panelRaised }]} className="items-center justify-center">
+								<Ionicons name="image-outline" size={25} color={palette.inkMuted} />
+							</View>
+						)}
 						<View className="ml-3 flex-1 justify-center">
-							<Text numberOfLines={1} className="text-[14px] font-bold text-ink">
+							<Text numberOfLines={2} className="text-[15px] leading-5 font-extrabold text-ink">
 								{`${formatRooms(listing.rooms)}, ${listing.address}`}
 							</Text>
-							<Text className="text-xs text-primary font-bold mt-0.5">
+							<Text className="text-[14px] text-primary font-bold mt-1">
 								{listing.price.toLocaleString('ru-RU')} ₽ / сутки
 							</Text>
 						</View>
@@ -727,16 +782,21 @@ export default function ChatDialogScreen() {
 					<TouchableOpacity
 						onPress={() => router.push(`/listing/${listing.id}` as any)}
 						activeOpacity={0.7}
-						className="bg-primaryLight px-4 py-1.5 rounded-full active:bg-primaryLight/80"
+						className="flex-row items-center py-2 pl-2"
 					>
-						<Text className="text-primary font-bold text-xs">Подробнее</Text>
+						<Text className="text-primary font-bold text-[13px]">Подробнее</Text>
+						<Ionicons name="chevron-forward" size={16} color={palette.primary} style={{ marginLeft: 3 }} />
 					</TouchableOpacity>
-				</View>
+					</MaterialSurface>
+				</Animated.View>
 			)}
 
 			{/* Contextual anti-scam notice for fresh dialogs, dismissible */}
 			{showSafetyNotice && (
-				<View className="flex-row items-start px-4 py-2.5 bg-primaryLight border-b border-line/30">
+				<View
+					style={{ backgroundColor: chatColors.panel, borderColor: chatColors.softBorder }}
+					className="flex-row items-start mx-4 mb-2 px-3.5 py-2.5 rounded-2xl border"
+				>
 					<Ionicons name="shield-checkmark-outline" size={18} color={palette.primary} style={{ marginTop: 1 }} />
 					<Text className="flex-1 text-[12px] text-ink-secondary leading-4 ml-2.5 mr-2">
 						Не переводите предоплату вне приложения и не переходите по внешним ссылкам на оплату.
@@ -752,12 +812,12 @@ export default function ChatDialogScreen() {
 			)}
 
 			{isLoading ? (
-				<View className="flex-1 justify-center items-center bg-surface">
+				<View style={{ backgroundColor: chatColors.background }} className="flex-1 justify-center items-center">
 					<ActivityIndicator size="large" color={palette.primary} />
 				</View>
 			) : messages.length === 0 ? (
 				/* Perfectly Centered Welcome Empty State */
-				<View className="flex-1 justify-center items-center px-8 bg-surface">
+				<View style={{ backgroundColor: chatColors.background }} className="flex-1 justify-center items-center px-8">
 					<View className="w-22 h-22 rounded-full bg-primary/10 items-center justify-center mb-6">
 						<Ionicons name="chatbubbles" size={44} color={palette.primary} />
 					</View>
@@ -780,7 +840,8 @@ export default function ChatDialogScreen() {
 						}
 					}}
 					onEndReachedThreshold={0.3}
-					contentContainerStyle={{ paddingVertical: 12 }}
+					contentContainerStyle={{ paddingVertical: 18 }}
+					style={{ backgroundColor: chatColors.background }}
 					ListFooterComponent={
 						isFetchingNextPage ? (
 							<ActivityIndicator size="small" color={palette.primary} className="my-2" />
@@ -807,7 +868,11 @@ export default function ChatDialogScreen() {
 						</View>
 					</View>
 				) : (
-					<View className="border-t border-line/30 bg-surface shadow-sm">
+					<Animated.View
+						entering={FadeInDown.duration(240)}
+						style={{ backgroundColor: chatColors.chrome, borderTopColor: chatColors.softBorder }}
+						className="border-t"
+					>
 					{/* Quick replies for the owner in fresh dialogs */}
 					{showQuickReplies && (
 						<FlatList
@@ -820,19 +885,22 @@ export default function ChatDialogScreen() {
 								<TouchableOpacity
 									onPress={() => setInputText(reply)}
 									activeOpacity={0.7}
-									className="px-3.5 py-2 rounded-full bg-surfaceMuted border border-line/40"
+									style={{ backgroundColor: chatColors.panelRaised, borderColor: chatColors.border }}
+									className="px-3.5 py-2 rounded-full border"
 								>
 									<Text className="text-[12px] text-ink-secondary font-medium">{reply}</Text>
 								</TouchableOpacity>
 							)}
 						/>
 					)}
-					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 12 }} className="flex-row items-center px-4 py-3">
+					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 12 }} className="px-3 py-2.5">
+						<MaterialSurface level="base" radius={29} style={styles.composer}>
 						{/* Add Attachment Button */}
 						<TouchableOpacity
 							onPress={handlePickMedia}
 							disabled={uploading}
-							className="w-10 h-10 rounded-full bg-surfaceMuted items-center justify-center mr-2 active:bg-line/40"
+							style={{ backgroundColor: chatColors.panelRaised }}
+							className="w-11 h-11 rounded-full items-center justify-center mr-2"
 							activeOpacity={0.7}
 						>
 							{uploading ? (
@@ -842,44 +910,40 @@ export default function ChatDialogScreen() {
 							)}
 						</TouchableOpacity>
 
-						{/* Text Input */}
-						<TextInput
-							placeholder="Сообщение..."
-							value={inputText}
-							onChangeText={setInputText}
-							className="flex-1 bg-surfaceMuted px-5 py-2.5 rounded-2xl text-ink max-h-24 text-[15px]"
-							multiline
-						/>
-
-						{/* Emoji Button */}
-						<TouchableOpacity
-							onPress={() => setIsEmojiPickerVisible(true)}
-							className="w-10 h-10 rounded-full bg-surfaceMuted items-center justify-center ml-2 active:bg-line/40"
-							activeOpacity={0.7}
-							accessibilityRole="button"
-							accessibilityLabel="Выбрать смайлик"
-						>
-							<Ionicons name="happy-outline" size={22} color={palette.inkSecondary} />
-						</TouchableOpacity>
+						{/* Input and emoji share one continuous material. */}
+						<View style={{ backgroundColor: chatColors.panelRaised }} className="flex-1 flex-row items-center rounded-[22px] min-h-11">
+							<TextInput
+								placeholder="Сообщение..."
+								placeholderTextColor={palette.inkMuted}
+								value={inputText}
+								onChangeText={setInputText}
+								className="flex-1 pl-4 pr-1 py-2.5 text-ink max-h-24 text-[15px]"
+								multiline
+							/>
+							<IconButton
+								icon="happy-outline"
+								iconSize={21}
+								size={40}
+								onPress={() => setIsEmojiPickerVisible(true)}
+								accessibilityLabel="Выбрать смайлик"
+								style={{ marginRight: 2, borderWidth: 0, backgroundColor: 'transparent' }}
+							/>
+						</View>
 
 						{/* Send Button */}
-						<TouchableOpacity
+						<IconButton
+							icon="arrow-up"
+							iconSize={20}
+							size={44}
+							tone={isInputEmpty ? 'neutral' : 'primary'}
+							filled={!isInputEmpty}
 							onPress={handleSend}
 							disabled={isInputEmpty}
-							style={{
-								backgroundColor: isInputEmpty ? palette.surfaceMuted : palette.primary,
-							}}
-							className="w-10 h-10 rounded-full items-center justify-center ml-2"
-							activeOpacity={0.7}
-						>
-							<Ionicons
-								name="arrow-up"
-								size={20}
-								color={isInputEmpty ? palette.inkMuted : '#fff'}
-							/>
-						</TouchableOpacity>
+							style={{ marginLeft: 8 }}
+						/>
+						</MaterialSurface>
 					</View>
-					</View>
+					</Animated.View>
 				)}
 			</KeyboardAvoidingView>
 
@@ -984,3 +1048,74 @@ export default function ChatDialogScreen() {
 		</View>
 	);
 }
+
+const styles = StyleSheet.create({
+	header: {
+		minHeight: 82,
+		paddingHorizontal: 16,
+		paddingBottom: 12,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		borderBottomWidth: StyleSheet.hairlineWidth,
+	},
+	headerAvatar: {
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+	},
+	presenceDot: {
+		width: 7,
+		height: 7,
+		borderRadius: 4,
+		marginRight: 7,
+	},
+	listingPanel: {
+		marginHorizontal: 14,
+		marginTop: 10,
+		marginBottom: 8,
+		minHeight: 84,
+		padding: 10,
+		borderRadius: 18,
+		borderWidth: StyleSheet.hairlineWidth,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		shadowOpacity: 0.08,
+		shadowRadius: 16,
+		shadowOffset: { width: 0, height: 8 },
+		elevation: 2,
+	},
+	listingImage: {
+		width: 64,
+		height: 64,
+		borderRadius: 13,
+	},
+	messageBubble: {
+		maxWidth: '82%',
+		borderRadius: 21,
+		borderWidth: StyleSheet.hairlineWidth,
+	},
+	imageAttachment: {
+		marginBottom: 2,
+		borderRadius: 18,
+		overflow: 'hidden',
+	},
+	imageTimestamp: {
+		position: 'absolute',
+		right: 8,
+		bottom: 7,
+		backgroundColor: 'rgba(0,0,0,0.52)',
+		borderRadius: 10,
+		paddingHorizontal: 6,
+		paddingVertical: 3,
+	},
+	composer: {
+		minHeight: 58,
+		borderRadius: 29,
+		borderWidth: StyleSheet.hairlineWidth,
+		padding: 6,
+		flexDirection: 'row',
+		alignItems: 'flex-end',
+	},
+});

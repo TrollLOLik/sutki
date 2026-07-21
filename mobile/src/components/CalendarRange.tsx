@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
+  addDays,
   addMonths,
+  differenceInCalendarDays,
   eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
   format,
   isBefore,
   isSameDay,
@@ -15,10 +15,10 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { cn } from '@/lib/cn';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { IconButton, MaterialSurface } from '@/components/ui';
 
 export interface DateRange {
   start: Date | null;
@@ -46,13 +46,17 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
   const { palette } = useAppTheme();
   const min = startOfDay(minDate ?? new Date());
   const [month, setMonth] = useState(() => startOfMonth(value.start ?? min));
+  const [gridWidth, setGridWidth] = useState(0);
 
+  const gridStart = startOfWeek(startOfMonth(month), WEEK_OPTS);
   const days = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(month), WEEK_OPTS),
-    end: endOfWeek(endOfMonth(month), WEEK_OPTS),
+    start: gridStart,
+    end: addDays(gridStart, 41),
   });
 
   const canGoPrev = isBefore(startOfMonth(min), startOfMonth(month));
+  const hasCompleteRange = value.start != null && value.end != null;
+  const nights = value.start && value.end ? differenceInCalendarDays(value.end, value.start) : 0;
 
   // True if any day in (start, end] is marked unavailable — prevents selecting a
   // range that spans a booked night.
@@ -81,40 +85,46 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
     onChange({ start, end: day });
   };
 
+  const changeMonth = (delta: number) => {
+    setMonth((current) => addMonths(current, delta));
+  };
+
   return (
-    <View className="gap-3">
-      <View className="flex-row items-center justify-between">
-        <Pressable
+    <MaterialSurface level="raised" radius={22} style={{ paddingHorizontal: 12, paddingBottom: 14, paddingTop: 12 }}>
+      <View className="flex-row items-center justify-between px-1 pb-3">
+        <IconButton
+          icon="chevron-back"
+          iconSize={18}
+          size={40}
           accessibilityLabel="Предыдущий месяц"
           disabled={!canGoPrev}
-          onPress={() => setMonth((m) => addMonths(m, -1))}
-          className={cn(
-            'h-9 w-9 items-center justify-center rounded-full bg-surface-muted',
-            !canGoPrev && 'opacity-30',
-          )}>
-          <Ionicons name="chevron-back" size={18} color={palette.ink} />
-        </Pressable>
-        <Text className="text-base font-semibold capitalize text-ink">
+          onPress={() => changeMonth(-1)}
+        />
+        <Text className="text-[17px] font-extrabold capitalize text-ink">
           {format(month, 'LLLL yyyy', { locale: ru })}
         </Text>
-        <Pressable
+        <IconButton
+          icon="chevron-forward"
+          iconSize={18}
+          size={40}
           accessibilityLabel="Следующий месяц"
-          onPress={() => setMonth((m) => addMonths(m, 1))}
-          className="h-9 w-9 items-center justify-center rounded-full bg-surface-muted">
-          <Ionicons name="chevron-forward" size={18} color={palette.ink} />
-        </Pressable>
+          onPress={() => changeMonth(1)}
+        />
       </View>
 
-      <View className="flex-row">
-        {WEEKDAYS.map((w) => (
-          <Text key={w} className="flex-1 text-center text-xs font-medium text-ink-muted">
-            {w}
-          </Text>
-        ))}
-      </View>
+      <View style={styles.gridFrame} onLayout={(event) => setGridWidth(event.nativeEvent.layout.width)}>
+        <View style={styles.weekRow}>
+          {WEEKDAYS.map((w) => (
+            <View key={w} style={[styles.weekCell, { width: gridWidth > 0 ? gridWidth / 7 : 0 }]}>
+              <Text className="text-center text-[11px] font-bold uppercase text-ink-muted">{w}</Text>
+            </View>
+          ))}
+        </View>
 
-      <View className="flex-row flex-wrap">
-        {days.map((day) => {
+        <View key={month.toISOString()} style={styles.calendarGrid}>
+        {Array.from({ length: 6 }, (_, weekIndex) => (
+          <View key={weekIndex} style={styles.calendarWeek}>
+          {days.slice(weekIndex * 7, weekIndex * 7 + 7).map((day) => {
           const outside = !isSameMonth(day, month);
           const blocked = isDateDisabled?.(day) ?? false;
           const isPast = isBefore(day, min);
@@ -126,37 +136,178 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
             value.end != null &&
             isWithinInterval(day, { start: value.start, end: value.end });
           const endpoint = isStart || isEnd;
+          const selected = (endpoint || inRange) && !outside;
+          const today = isSameDay(day, new Date());
+          const dayTextColor = endpoint || inRange
+            ? '#FFFFFF'
+            : outside || disabled
+              ? palette.inkMuted
+              : inRange
+                ? palette.primary
+                : palette.ink;
 
           return (
-            <View key={day.toISOString()} className="items-center" style={{ width: `${100 / 7}%` }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ disabled: disabled || outside }}
-                disabled={disabled || outside}
-                onPress={() => onDayPress(day)}
-                className={cn(
-                  'my-0.5 h-10 w-10 items-center justify-center rounded-full',
-                  inRange && !endpoint && 'bg-primary-light',
-                  endpoint && 'bg-primary',
-                  blocked && !outside && 'bg-[#FFF0F0] border border-[#FAD2D2]',
-                )}>
+            <View
+              key={day.toISOString()}
+              style={{ width: gridWidth > 0 ? gridWidth / 7 : 0, height: 46, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.dayVisual,
+                  {
+                    borderWidth: today && !endpoint ? 1.5 : 0,
+                    borderColor: today && !endpoint ? palette.primary : 'transparent',
+                    backgroundColor: selected ? palette.primary : 'transparent',
+                    opacity: selected ? 1 : outside ? 0.22 : disabled ? 0.4 : 1,
+                  },
+                  endpoint ? styles.selectedEndpoint : null,
+                ]}>
                 <Text
-                  className={cn(
-                    'text-sm',
-                    endpoint && 'font-bold text-white',
-                    inRange && !endpoint && 'text-primary',
-                    !disabled && !outside && !inRange && 'text-ink',
-                    outside && 'text-ink-muted opacity-20',
-                    isPast && !outside && 'text-ink-muted opacity-40',
-                    blocked && !outside && 'text-[#C92A2A] font-semibold line-through',
-                  )}>
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 18,
+                    includeFontPadding: false,
+                    textAlign: 'center',
+                    fontWeight: endpoint || (inRange && !disabled) ? '800' : '500',
+                    color: dayTextColor,
+                    textDecorationLine: blocked && !outside && !selected ? 'line-through' : 'none',
+                  }}>
                   {format(day, 'd')}
                 </Text>
-              </Pressable>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: disabled || outside, selected: endpoint }}
+                disabled={disabled || outside}
+                onPress={() => onDayPress(day)}
+                style={StyleSheet.absoluteFill}
+              />
             </View>
           );
-        })}
+          })}
+          </View>
+        ))}
+        </View>
       </View>
-    </View>
+
+      <View style={[styles.selectionPanel, { backgroundColor: palette.surfaceMuted }]}>
+        <View style={styles.selectionHeader}>
+          <View style={[styles.calendarIcon, { backgroundColor: palette.primaryLight }]}>
+            <Ionicons name="calendar-clear" size={17} color={palette.primary} />
+          </View>
+          <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: palette.inkSecondary }}>
+            {hasCompleteRange ? `${nights} ${nightLabel(nights)}` : value.start ? 'Теперь выберите день выезда' : 'Сначала выберите день заезда'}
+          </Text>
+        </View>
+
+        <View style={styles.selectionDates}>
+          <View style={styles.dateColumn}>
+            <Text style={[styles.dateCaption, { color: palette.inkMuted }]}>ЗАЕЗД</Text>
+            <Text style={[styles.dateValue, { color: value.start ? palette.ink : palette.inkMuted }]}>
+              {value.start ? format(value.start, 'd MMM', { locale: ru }) : 'Выберите'}
+            </Text>
+          </View>
+          <View style={[styles.rangeArrow, { backgroundColor: hasCompleteRange ? palette.primaryLight : palette.surface }]}>
+            <Ionicons name="arrow-forward" size={17} color={hasCompleteRange ? palette.primary : palette.inkMuted} />
+          </View>
+          <View style={styles.dateColumn}>
+            <Text style={[styles.dateCaption, { color: palette.inkMuted }]}>ВЫЕЗД</Text>
+            <Text style={[styles.dateValue, { color: value.end ? palette.ink : palette.inkMuted }]}>
+              {value.end ? format(value.end, 'd MMM', { locale: ru }) : 'Выберите'}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </MaterialSurface>
   );
 }
+
+function nightLabel(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'ночь';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'ночи';
+  return 'ночей';
+}
+
+const styles = StyleSheet.create({
+  gridFrame: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  weekRow: {
+    marginBottom: 4,
+    flexDirection: 'row',
+  },
+  weekCell: {
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarGrid: {
+    width: '100%',
+  },
+  calendarWeek: {
+    width: '100%',
+    height: 46,
+    flexDirection: 'row',
+  },
+  dayVisual: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedEndpoint: {
+    shadowColor: '#FF6B35',
+    shadowOpacity: 0.34,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  selectionPanel: {
+    marginHorizontal: 4,
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 12,
+    gap: 11,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  calendarIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionDates: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  dateColumn: {
+    flex: 1,
+    gap: 3,
+  },
+  dateCaption: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  dateValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+  rangeArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

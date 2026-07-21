@@ -21,7 +21,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     <View className="w-full">
       <View
         className={cn(
-          'h-14 flex-row items-center rounded-field border bg-surface px-4 transition-all duration-150',
+          'h-14 flex-row items-center rounded-[18px] border bg-surface-muted px-4 transition-all duration-150',
           error 
             ? 'border-danger' 
             : isFocused 

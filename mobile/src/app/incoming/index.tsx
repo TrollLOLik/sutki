@@ -8,15 +8,11 @@ import {
   Dimensions,
   Easing,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,7 +22,7 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { EmptyState } from '@/components/EmptyState';
 import { IncomingRequestCard } from '@/components/IncomingRequestCard';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { Button } from '@/components/ui';
+import { BottomSheet, Button } from '@/components/ui';
 import {
   bookingKeys,
   useConfirmBooking,
@@ -34,7 +30,6 @@ import {
   useRejectBooking,
 } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
-import { cn } from '@/lib/cn';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
@@ -177,18 +172,22 @@ export default function IncomingBookingsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View className="flex-row items-center px-4 py-2">
+        <View
+          className="h-[70px] flex-row items-center px-4"
+          style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
           <NavigationBackButton
             fallback="/(tabs)/profile"
-            className="h-10 w-10 items-center justify-center rounded-full bg-surface-muted"
+            size={48}
+            variant="material"
           />
-          <Text className="flex-1 text-center text-lg font-semibold text-ink">Входящие заявки</Text>
-          <View className="h-10 w-10" />
+          <Text className="flex-1 text-center text-xl font-extrabold text-ink">Входящие заявки</Text>
+          <View className="h-12 w-12" />
         </View>
 
         <View
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          className="flex-row rounded-pill bg-surface-muted p-1 mx-4 mb-2 relative"
+          className="relative mx-4 mb-2 mt-4 h-12 flex-row rounded-pill bg-surface-muted p-1"
+          style={{ borderWidth: 1, borderColor: palette.line }}
         >
           <Animated.View
             style={{
@@ -216,9 +215,9 @@ export default function IncomingBookingsScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'pending' }}
             onPress={() => handleTabChange('pending')}
-            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+            className="relative z-10 flex-1 items-center justify-center rounded-pill"
           >
-            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'pending' ? 'text-ink' : 'text-ink-secondary'}`}>
+            <Text className={`text-sm font-bold ${tab === 'pending' ? 'text-ink' : 'text-ink-secondary'}`}>
               Ожидают
             </Text>
           </Pressable>
@@ -226,9 +225,9 @@ export default function IncomingBookingsScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === 'processed' }}
             onPress={() => handleTabChange('processed')}
-            className="h-10 flex-1 items-center justify-center rounded-pill relative z-10"
+            className="relative z-10 flex-1 items-center justify-center rounded-pill"
           >
-            <Text className={`text-sm font-semibold transition-colors duration-200 ${tab === 'processed' ? 'text-ink' : 'text-ink-secondary'}`}>
+            <Text className={`text-sm font-bold ${tab === 'processed' ? 'text-ink' : 'text-ink-secondary'}`}>
               Обработанные
             </Text>
           </Pressable>
@@ -372,121 +371,79 @@ export default function IncomingBookingsScreen() {
         )}
       </SafeAreaView>
 
-      {/* Rejection Reason Modal */}
-      <Modal
+      <BottomSheet
         visible={rejectionTarget !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
+        onClose={() => {
           setRejectionTarget(null);
           setReason('');
-        }}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-          }}
-          onPress={() => {
-            setRejectionTarget(null);
-            setReason('');
-          }}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ width: '100%', maxWidth: 340 }}
-          >
-            <Pressable
+        }}>
+        <View style={{ gap: 18 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View
               style={{
-                backgroundColor: palette.surface,
-                borderRadius: 20,
-                padding: 20,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 10,
-                elevation: 5,
-                gap: 16,
-              }}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <View style={{ gap: 4 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>
-                  Отклонить заявку
-                </Text>
-                <Text style={{ fontSize: 13, color: palette.inkSecondary }}>
-                  Укажите причину отклонения (необязательно)
-                </Text>
-              </View>
+                width: 44,
+                height: 44,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: palette.dangerLight,
+              }}>
+              <Ionicons name="close-circle-outline" size={23} color={palette.danger} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: palette.ink }}>Отклонить заявку</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: palette.inkSecondary }}>
+                Причина поможет гостю понять ваше решение
+              </Text>
+            </View>
+          </View>
 
-              <TextInput
-                placeholder="Причина отклонения..."
-                value={reason}
-                onChangeText={setReason}
-                multiline
-                numberOfLines={3}
-                placeholderTextColor={palette.inkMuted}
-                style={{
-                  minHeight: 80,
-                  borderWidth: 1,
-                  borderColor: palette.line,
-                  borderRadius: 10,
-                  padding: 10,
-                  fontSize: 14,
-                  color: palette.ink,
-                  textAlignVertical: 'top',
+          <TextInput
+            placeholder="Причина отклонения (необязательно)"
+            value={reason}
+            onChangeText={setReason}
+            multiline
+            autoFocus
+            placeholderTextColor={palette.inkMuted}
+            style={{
+              minHeight: 112,
+              borderWidth: 1,
+              borderColor: palette.line,
+              borderRadius: 18,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              backgroundColor: palette.surfaceMuted,
+              fontSize: 15,
+              lineHeight: 21,
+              color: palette.ink,
+              textAlignVertical: 'top',
+            }}
+          />
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Назад"
+                variant="secondary"
+                size="md"
+                onPress={() => {
+                  setRejectionTarget(null);
+                  setReason('');
                 }}
               />
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setRejectionTarget(null);
-                    setReason('');
-                  }}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    borderRadius: 999,
-                    borderWidth: 1.5,
-                    borderColor: palette.line,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: palette.ink }}>
-                    Назад
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleRejectSubmit}
-                  disabled={rejectMutation.isPending}
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    borderRadius: 999,
-                    backgroundColor: palette.danger,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {rejectMutation.isPending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
-                      Отклонить
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Отклонить"
+                variant="danger"
+                size="md"
+                loading={rejectMutation.isPending}
+                onPress={handleRejectSubmit}
+              />
+            </View>
+          </View>
+        </View>
+      </BottomSheet>
     </View>
   );
 }

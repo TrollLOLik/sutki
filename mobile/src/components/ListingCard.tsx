@@ -1,7 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { ResilientImage } from '@/components/ResilientImage';
+import {
+  PromotionBadge,
+  PromotionHighlightSurface,
+} from '@/components/promotion/PromotionHighlightSurface';
+import { materialSurfaceColor } from '@/components/ui';
 import { formatRating, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
@@ -30,8 +41,13 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
 };
 
 export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, onPromote, onUnpublish, onPublish, showOwnerStats = false }: ListingCardProps) {
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
+  const pressScale = useSharedValue(1);
+  const animatedCardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
 
   // card: screen - 16px margin each side - 12px padding each side = screenWidth - 56
   // image column: 45% of that, aspect ratio 4:3
@@ -42,6 +58,7 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
   const promotionTypes = listing.promotion_types ?? [];
   const isPromoted = promotionTypes.length > 0;
   const isHighlighted = promotionTypes.includes('highlight');
+  const cardBackground = materialSurfaceColor(isDark, 'raised');
 
   const getCardTitle = () => {
     const roomsNum = parseInt(listing.rooms, 10);
@@ -59,21 +76,38 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
     return `${n} комнат`;
   };
 
-  const metroTime = (listing.id % 12) + 4;
-
   const moderationBadge =
     listing.status && listing.status !== 'active' ? MODERATION_BADGES[listing.status] : undefined;
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      className="mb-3 rounded-card border bg-surface p-3 active:opacity-95"
-      style={{
-        borderColor: isHighlighted ? palette.primary : palette.line,
-        borderWidth: isHighlighted ? 2 : 1,
-      }}
-    >
+    <Animated.View style={[{ marginBottom: 12 }, animatedCardStyle]}>
+      <PromotionHighlightSurface active={isHighlighted} radius={20}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={() => {
+            pressScale.value = reduceMotion
+              ? 1
+              : withSpring(0.985, { damping: 22, stiffness: 340, mass: 0.6 });
+          }}
+          onPressOut={() => {
+            pressScale.value = reduceMotion
+              ? 1
+              : withSpring(1, { damping: 18, stiffness: 260, mass: 0.7 });
+          }}
+          accessibilityRole="button"
+          className="border p-3 active:opacity-95"
+          style={{
+            borderRadius: isHighlighted ? 18.5 : 20,
+            backgroundColor: cardBackground,
+            borderColor: isHighlighted ? 'transparent' : palette.line,
+            borderWidth: isHighlighted ? 0 : 1,
+            shadowColor: '#000000',
+            shadowOpacity: isHighlighted ? 0 : isDark ? 0.14 : 0.05,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 7 },
+            elevation: isHighlighted ? 0 : isDark ? 1 : 2,
+          }}
+        >
       {/* Top Part: Image on Left, Details on Right */}
       <View className="flex-row gap-3">
         {/* Left: Image with explicit numeric size */}
@@ -81,14 +115,14 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
           style={{
             width: imgWidth,
             height: imgHeight,
-            borderRadius: 12,
+            borderRadius: 14,
             overflow: 'hidden',
             backgroundColor: palette.surfaceSkeleton,
           }}
         >
           {isPromoted ? (
-            <View style={{ position:'absolute',left:8,top:8,borderRadius:999,backgroundColor:palette.primary,paddingHorizontal:10,paddingVertical:4,zIndex:10 }}>
-              <Text style={{fontSize:9,fontWeight:'700',color:'#fff',lineHeight:12}}>Продвигается</Text>
+            <View style={{ position: 'absolute', left: 8, top: 8, zIndex: 10 }}>
+              <PromotionBadge highlighted={isHighlighted} />
             </View>
           ) : null}
 
@@ -130,7 +164,7 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
             </View>
 
             {/* Title */}
-            <Text numberOfLines={2} className="text-sm font-bold text-ink leading-tight">
+            <Text numberOfLines={2} className="text-[15px] font-extrabold leading-5 text-ink">
               {getCardTitle()}
             </Text>
 
@@ -139,11 +173,10 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
               {listing.address}
             </Text>
 
-            {/* Metro */}
-            <View className="flex-row items-center gap-1 mt-0.5">
-              <Text className="text-danger font-black text-xs leading-none">М</Text>
+            <View className="mt-0.5 flex-row items-center gap-1">
+              <Ionicons name="location-outline" size={12} color={palette.primary} />
               <Text numberOfLines={1} className="text-[11px] text-ink-secondary">
-                {listing.city}, {metroTime} мин
+                {listing.city}
               </Text>
             </View>
 
@@ -162,10 +195,6 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
               <View className="flex-row items-center gap-0.5">
                 <Ionicons name="eye-outline" size={12} color={palette.inkMuted} />
                 <Text className="text-[10px] text-ink-secondary">{listing.views}</Text>
-              </View>
-              <View className="flex-row items-center gap-0.5">
-                <Ionicons name="layers-outline" size={12} color={palette.inkMuted} />
-                <Text className="text-[10px] text-ink-secondary">{(listing.id % 9) + 1} этаж</Text>
               </View>
             </View>
           </View>
@@ -215,9 +244,11 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
 
         <Pressable
           onPress={onPress}
-          className="rounded-full bg-primary-light px-6 py-2.5 active:opacity-85"
+          hitSlop={6}
+          className="min-h-11 flex-row items-center gap-0.5 px-2 active:opacity-70"
         >
           <Text className="text-sm font-bold text-primary">Открыть</Text>
+          <Ionicons name="chevron-forward" size={16} color={palette.primary} />
         </Pressable>
       </View>
       {onPromote ? (
@@ -235,6 +266,8 @@ export function ListingCard({ listing, onPress, isFavorite, onToggleFavorite, on
           <Ionicons name="cloud-upload-outline" size={17} color="#fff"/><Text className="text-sm font-bold text-white">Опубликовать снова</Text>
         </Pressable>
       ) : null}
-    </Pressable>
+        </Pressable>
+      </PromotionHighlightSurface>
+    </Animated.View>
   );
 }

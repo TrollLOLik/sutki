@@ -146,10 +146,11 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
       requestAnimationFrame(() => {
         Animated.parallel([
           Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-          Animated.timing(slide, {
+          Animated.spring(slide, {
             toValue: 0,
-            duration: 250,
-            easing: Easing.out(Easing.ease),
+            damping: 26,
+            stiffness: 260,
+            mass: 1,
             useNativeDriver: true,
           }),
         ]).start();

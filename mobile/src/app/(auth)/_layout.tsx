@@ -12,16 +12,14 @@ export default function AuthLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        headerShadowVisible: false,
-        headerTintColor: palette.ink,
-        headerStyle: { backgroundColor: palette.surface },
-        headerTitleStyle: { fontWeight: '600' },
+        animation: 'slide_from_right',
+        gestureEnabled: true,
         contentStyle: { backgroundColor: palette.surface },
       }}>
-      <Stack.Screen name="welcome" />
-      <Stack.Screen name="email" options={{ headerShown: true, title: '' }} />
-      <Stack.Screen name="phone" options={{ headerShown: true, title: '' }} />
-      <Stack.Screen name="code" options={{ headerShown: true, title: '' }} />
+      <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+      <Stack.Screen name="email" />
+      <Stack.Screen name="phone" />
+      <Stack.Screen name="code" />
     </Stack>
   );
 }

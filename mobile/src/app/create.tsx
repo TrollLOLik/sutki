@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
@@ -36,6 +37,7 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yamap-plus';
 import * as Location from 'expo-location';
 import { appAlert as Alert } from '@/components/AppAlert';
+import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 const TOTAL_STEPS = 6;
 const ROOM_OPTIONS = [
@@ -797,89 +799,236 @@ export default function CreateListingScreen() {
     }
   };
 
-  const progress = useMemo(() => (step + 1) / TOTAL_STEPS, [step]);
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
+  const headerBackground = isDark ? '#14161B' : '#FFFFFF';
 
   if (published) {
     return (
-      <SafeAreaView className="flex-1 bg-surface">
-        <View className="flex-1 items-center justify-center px-6">
+      <SafeAreaView style={{ flex: 1, backgroundColor: screenBackground }} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 32 }}>
           <MotiView
-            from={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', damping: 12 }}
-            className="h-20 w-20 items-center justify-center rounded-full bg-success-light">
-            <Ionicons name="checkmark" size={44} color={palette.success} />
-          </MotiView>
-          <Text className="mt-6 text-center text-2xl font-bold text-ink">
-            {isEditing ? 'Объявление обновлено!' : 'Объявление отправлено!'}
-          </Text>
-          <Text className="mt-2 text-center text-base text-ink-secondary">
-            {isEditing
-              ? 'Изменения отправлены на проверку и появятся в поиске после её прохождения — обычно это занимает пару минут. Статус виден в разделе «Мои объявления».'
-              : 'Объявление проходит проверку и появится в поиске после её завершения — обычно это занимает пару минут. Статус виден в разделе «Мои объявления».'}
-          </Text>
-          <View style={{ width: '100%', maxWidth: 320, gap: 12, marginTop: 32 }}>
-            {!isEditing && publishedListingId != null ? (
+            from={{ opacity: 0, translateY: 18, scale: 0.97 }}
+            animate={{ opacity: 1, translateY: 0, scale: 1 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 210, mass: 0.85 }}
+            style={{
+              overflow: 'hidden',
+              borderRadius: 22,
+              borderWidth: 1,
+              borderColor: palette.line,
+              backgroundColor: headerBackground,
+              paddingHorizontal: 22,
+              paddingBottom: 22,
+              paddingTop: 28,
+            }}>
+            <View style={{ alignItems: 'center' }}>
+              <MotiView
+                from={{ scale: 0.55, rotate: '-8deg' }}
+                animate={{ scale: 1, rotate: '0deg' }}
+                transition={{ type: 'spring', damping: 13, stiffness: 220, delay: 100 }}
+                style={{
+                  width: 76,
+                  height: 76,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 38,
+                  borderWidth: 1,
+                  borderColor: palette.success,
+                  backgroundColor: palette.successLight,
+                }}>
+                <Ionicons name="checkmark" size={40} color={palette.success} />
+              </MotiView>
+
+              <View
+                style={{
+                  marginTop: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  borderRadius: 999,
+                  backgroundColor: palette.surfaceMuted,
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                }}>
+                <Ionicons name="time-outline" size={14} color={palette.inkSecondary} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: palette.inkSecondary }}>
+                  Отправлено на проверку
+                </Text>
+              </View>
+
+              <Text style={{ marginTop: 16, textAlign: 'center', fontSize: 25, fontWeight: '800', color: palette.ink }}>
+                {isEditing ? 'Изменения сохранены' : 'Объявление отправлено'}
+              </Text>
+              <Text style={{ marginTop: 9, textAlign: 'center', fontSize: 15, lineHeight: 22, color: palette.inkSecondary }}>
+                {isEditing
+                  ? 'Мы проверим изменения. Актуальный статус всегда доступен в разделе «Мои объявления».'
+                  : 'После проверки объявление появится в поиске. Актуальный статус всегда доступен в разделе «Мои объявления».'}
+              </Text>
+            </View>
+
+            <View style={{ gap: 11, marginTop: 28 }}>
+              {!isEditing && publishedListingId != null ? (
+                <Button
+                  label="Продвинуть объявление"
+                  onPress={() => {
+                    const id = publishedListingId;
+                    draft.reset();
+                    router.replace(`/listing/${id}/promote` as any);
+                  }}
+                />
+              ) : null}
               <Button
-                label="Продвинуть объявление"
+                label="Мои объявления"
+                variant={!isEditing && publishedListingId != null ? 'secondary' : undefined}
                 onPress={() => {
-                  const id = publishedListingId;
                   draft.reset();
-                  router.replace(`/listing/${id}/promote` as any);
+                  router.replace('/my-listings' as any);
                 }}
               />
-            ) : null}
-            <Button
-              label="Мои объявления"
-              variant={!isEditing && publishedListingId != null ? 'secondary' : undefined}
-              onPress={() => {
-                draft.reset();
-                router.replace('/my-listings' as any);
-              }}
-            />
-            <Button
-              label="На главную"
-              variant="secondary"
-              onPress={() => {
-                draft.reset();
-                router.replace('/(tabs)');
-              }}
-            />
-          </View>
+              <Pressable
+                onPress={() => {
+                  draft.reset();
+                  router.replace('/(tabs)');
+                }}
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.62 : 1,
+                })}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: palette.inkSecondary }}>
+                  На главную
+                </Text>
+              </Pressable>
+            </View>
+          </MotiView>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top', 'bottom']}>
-      {/* Header */}
-      <View className="flex-row items-center justify-between px-4 pb-2 pt-1">
-        <Pressable onPress={goBack} className="h-10 w-10 items-center justify-center active:opacity-60">
-          <Ionicons name={step === 0 ? 'close' : 'arrow-back'} size={26} color={palette.ink} />
-        </Pressable>
-        <Text className="text-base font-semibold text-ink">{STEP_TITLES[step]}</Text>
-        <Text className="w-10 text-right text-sm font-medium text-ink-muted">
-          {step + 1}/{TOTAL_STEPS}
-        </Text>
-      </View>
+    <SafeAreaView
+      edges={['top', 'bottom']}
+      style={{ flex: 1, backgroundColor: headerBackground }}>
+      <View style={{ backgroundColor: screenBackground }}>
+        <View
+          style={{
+            minHeight: 68,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            overflow: 'hidden',
+          }}>
+          <BlurView
+            intensity={88}
+            tint={isDark ? 'dark' : 'light'}
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)',
+            }}
+          />
+          <NavigationBackButton
+            accessibilityLabel={step === 0 ? 'Закрыть' : 'Назад'}
+            onPress={goBack}
+            size={48}
+            variant="material">
+            <Ionicons name={step === 0 ? 'close' : 'chevron-back'} size={22} color={palette.ink} />
+          </NavigationBackButton>
 
-      {/* Progress bar */}
-      <View className="mx-4 h-1.5 overflow-hidden rounded-pill bg-surface-muted">
-        <MotiView
-          animate={{ width: `${progress * 100}%` }}
-          transition={{ type: 'timing', duration: 250 }}
-          className="h-full rounded-pill bg-primary"
-        />
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: palette.ink }}>
+              {isEditing ? 'Редактирование' : 'Новое объявление'}
+            </Text>
+            <Text style={{ marginTop: 2, fontSize: 12, fontWeight: '600', color: palette.inkMuted }}>
+              {STEP_TITLES[step]}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              width: 48,
+              height: 32,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: palette.line,
+              backgroundColor: palette.surface,
+              paddingHorizontal: 9,
+            }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: palette.inkSecondary }}>
+              {step + 1}/{TOTAL_STEPS}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 6,
+            paddingHorizontal: 20,
+            paddingBottom: 12,
+            backgroundColor: headerBackground,
+          }}>
+          {STEP_TITLES.map((title, index) => (
+            <View
+              key={title}
+              accessibilityLabel={`Шаг ${index + 1}: ${title}`}
+              style={{
+                height: 4,
+                flex: 1,
+                borderRadius: 2,
+                backgroundColor: index <= step ? palette.primary : palette.line,
+                opacity: index <= step ? 1 : 0.72,
+              }}
+            />
+          ))}
+        </View>
       </View>
 
       <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: screenBackground }}
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ padding: 20, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 28 }}
           keyboardShouldPersistTaps="handled">
+          <MotiView
+            key={step}
+            from={{ opacity: 0, translateX: 12 }}
+            animate={{ opacity: 1, translateX: 0 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 240, mass: 0.8 }}>
+            {error && (
+              <View
+                style={{
+                  marginBottom: 18,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: palette.danger,
+                  backgroundColor: isDark ? 'rgba(239,68,68,0.10)' : 'rgba(239,68,68,0.07)',
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                }}>
+                <Ionicons name="alert-circle-outline" size={21} color={palette.danger} />
+                <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: palette.danger }}>
+                  {error}
+                </Text>
+              </View>
+            )}
           {step === 0 && (
             <View className="gap-6">
               <View className="gap-3">
@@ -1516,11 +1665,19 @@ export default function CreateListingScreen() {
             </View>
           )}
 
-          {error && <Text className="mt-4 text-sm font-medium text-danger">{error}</Text>}
+          </MotiView>
         </ScrollView>
 
         {/* Footer */}
-        <View className="border-t border-line px-5 pb-2 pt-3">
+        <View
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: palette.line,
+            backgroundColor: headerBackground,
+            paddingHorizontal: 20,
+            paddingBottom: 10,
+            paddingTop: 12,
+          }}>
           {step < TOTAL_STEPS - 1 ? (
             <Button label="Далее" onPress={goNext} />
           ) : (

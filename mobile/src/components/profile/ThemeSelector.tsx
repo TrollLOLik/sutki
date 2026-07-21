@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { MaterialSurface } from '@/components/ui/MaterialSurface';
 import { useThemeStore, type ThemePreference } from '@/store/theme';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { shadows } from '@/theme/tokens';
 
 const OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light', label: 'Светлая', icon: 'sunny-outline' },
@@ -54,14 +54,17 @@ export function ThemeSelector() {
   };
 
   return (
-    <View
-      className="border border-line bg-surface p-4 rounded-card"
-      style={shadows.tile}>
-      <View className="mb-3 flex-row items-center gap-2">
-        <Ionicons name="color-palette-outline" size={18} color={palette.primary} />
-        <Text className="text-sm font-extrabold text-ink">Оформление</Text>
+    <MaterialSurface level="raised" radius={24} style={{ padding: 16 }}>
+      <View className="mb-4 flex-row items-center gap-3">
+        <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
+          <Ionicons name="color-palette-outline" size={20} color={palette.primary} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-base font-extrabold text-ink">Оформление</Text>
+          <Text className="mt-0.5 text-xs font-medium text-ink-secondary">Выберите тему приложения</Text>
+        </View>
       </View>
-      <View className="flex-row rounded-field bg-surface-muted p-1" accessibilityRole="radiogroup">
+      <View className="flex-row rounded-[16px] bg-surface-muted p-1" accessibilityRole="radiogroup">
         {OPTIONS.map((option) => {
           const active = preference === option.value;
           return (
@@ -74,10 +77,10 @@ export function ThemeSelector() {
               accessibilityState={{ selected: active }}
               accessibilityLabel={`Тема: ${option.label}`}
               onPress={() => handleOptionPress(option.value)}
-              className={`h-10 flex-1 flex-row items-center justify-center gap-1.5 rounded-[9px] ${
+              className={`h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-[13px] ${
                 active ? 'bg-surface' : ''
               }`}
-              style={active ? shadows.tile : undefined}>
+              style={active ? { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2 } : undefined}>
               <Ionicons
                 name={option.icon}
                 size={15}
@@ -91,6 +94,6 @@ export function ThemeSelector() {
           );
         })}
       </View>
-    </View>
+    </MaterialSurface>
   );
 }

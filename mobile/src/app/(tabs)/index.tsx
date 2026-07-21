@@ -10,7 +10,6 @@ import {
   Pressable,
   RefreshControl,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   ActivityIndicator,
@@ -25,6 +24,8 @@ import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
+import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
+import { SearchResultItem } from '@/components/SearchResultItem';
 import { Button, Chip, BottomSheet } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useMyListings } from '@/lib/api/create-listing';
@@ -51,6 +52,7 @@ const QUICK_FILTERS: { label: string; value: 'all' | RoomFilter }[] = [
 
 export default function SearchScreen() {
   const { palette, isDark } = useAppTheme();
+  const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
   const [query, setQuery] = useState('');
   const filters = useFiltersStore();
   const insets = useSafeAreaInsets();
@@ -289,7 +291,7 @@ export default function SearchScreen() {
   }, [filters.checkIn, filters.checkOut]);
 
   return (
-    <View className="flex-1 bg-surface">
+    <View style={{ flex: 1, backgroundColor: screenBackground }}>
       <Animated.View
         style={[
           {
@@ -316,9 +318,19 @@ export default function SearchScreen() {
           }}
         >
           <BlurView
-            intensity={95}
+            intensity={88}
             tint={isDark ? 'dark' : 'light'}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: isDark ? 'rgba(13,15,18,0.72)' : 'rgba(244,245,247,0.7)',
+            }}
           />
         </Animated.View>
         <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -431,7 +443,8 @@ export default function SearchScreen() {
                       filters.toggleRoom(roomValue);
                     }
                   }}
-                  className={`h-9 items-center justify-center rounded-field border px-4 active:opacity-80 ${
+                  style={{ borderRadius: 18 }}
+                  className={`h-9 items-center justify-center border px-4 active:opacity-80 ${
                     selected ? 'border-primary bg-primary' : 'border-line bg-surface-muted'
                   }`}
                 >
@@ -447,7 +460,8 @@ export default function SearchScreen() {
             {/* Dates Button */}
             <Pressable
               onPress={() => setDateModalVisible(true)}
-              className="flex-1 h-12 flex-row items-center justify-between rounded-field border border-line bg-surface px-3 active:bg-surface-muted">
+              style={{ borderRadius: 16 }}
+              className="flex-1 h-12 flex-row items-center justify-between border border-line bg-surface px-3 active:bg-surface-muted">
               <View className="flex-row items-center gap-2 flex-1 mr-1">
                 <Ionicons name="calendar-outline" size={18} color={palette.primary} />
                 <Text className="text-xs font-medium text-ink" numberOfLines={1}>{dateLabel}</Text>
@@ -458,7 +472,8 @@ export default function SearchScreen() {
             {/* Guests Button */}
             <Pressable
               onPress={openGuestModal}
-              className="flex-1 h-12 flex-row items-center justify-between rounded-field border border-line bg-surface px-3 active:bg-surface-muted">
+              style={{ borderRadius: 16 }}
+              className="flex-1 h-12 flex-row items-center justify-between border border-line bg-surface px-3 active:bg-surface-muted">
               <View className="flex-row items-center gap-2 flex-1 mr-1">
                 <Ionicons name="person-outline" size={18} color={palette.primary} />
                 <Text className="text-xs font-medium text-ink" numberOfLines={1}>{formatGuests(filters.guests)}</Text>
@@ -471,7 +486,8 @@ export default function SearchScreen() {
               accessibilityLabel="Только избранное"
               accessibilityState={{ selected: filters.favoritesOnly }}
               onPress={filters.toggleFavoritesOnly}
-              className={`h-12 w-12 items-center justify-center rounded-field border active:opacity-80 ${
+              style={{ borderRadius: 16 }}
+              className={`h-12 w-12 items-center justify-center border active:opacity-80 ${
                 filters.favoritesOnly ? 'border-primary bg-primary-light' : 'border-line bg-surface'
               }`}>
               <Ionicons
@@ -541,7 +557,7 @@ export default function SearchScreen() {
           scrollEventThrottle={16}
           ListHeaderComponent={
             showingSimilar ? (
-              <View className="mb-3 rounded-card border border-line bg-surface-muted p-4">
+              <View style={{ borderRadius: 18 }} className="mb-3 border border-line bg-surface-muted p-4">
                 <View className="flex-row items-center">
                   <View className="mr-3 h-10 w-10 items-center justify-center rounded-full bg-primary-light">
                     <Ionicons name="sparkles-outline" size={20} color={palette.primary} />
@@ -745,39 +761,21 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
             paddingBottom: insets.bottom,
           }}
         >
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-4 pb-4 pt-2 border-b border-line">
-            <View className="flex-1 flex-row items-center rounded-field bg-surface-muted px-3 h-12 border border-line">
-              <Ionicons name="search" size={20} color={palette.inkMuted} />
-              <TextInput
-                value={searchVal}
-                onChangeText={setSearchVal}
-                placeholder="Город, адрес или название"
-                placeholderTextColor={palette.inkMuted}
-                autoFocus
-                className="ml-2 flex-1 text-base text-ink"
-                onSubmitEditing={() => {
-                  if (searchVal.trim()) {
-                    onSubmitQuery(searchVal.trim());
-                  }
-                }}
-              />
-              {searchVal.length > 0 ? (
-                <Pressable onPress={() => setSearchVal('')}>
-                  <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-                </Pressable>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={onClose}
-              className="ml-4 h-12 justify-center"
-            >
-              <Text className="text-base font-semibold text-primary">Отменить</Text>
-            </Pressable>
-          </View>
+          <SearchOverlayHeader
+            query={searchVal}
+            onChangeText={setSearchVal}
+            onClose={onClose}
+            onSubmit={() => {
+              if (searchVal.trim()) onSubmitQuery(searchVal.trim());
+            }}
+            placeholder="Город, адрес или название"
+          />
 
           {/* Suggestions & Popular */}
-          <ScrollView className="flex-1 px-4 pt-2 pb-6" keyboardShouldPersistTaps="handled">
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32 }}
+            keyboardShouldPersistTaps="handled">
             {isLoadingSuggestions ? (
               <View className="py-8 items-center justify-center">
                 <ActivityIndicator color={palette.primary} size="small" />
@@ -785,20 +783,11 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
             ) : searchVal.trim().length > 0 ? (
               <View>
                 <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-3 mb-3">ГОРОДА</Text>
-                {suggestions.map((item, index) => (
-                  <Pressable
-                    key={index}
-                    onPress={() => onSelectCity(item)}
-                    className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
-                  >
-                    <View className="h-9 w-9 rounded-pill bg-surface-muted items-center justify-center mr-3">
-                      <Ionicons name="location-outline" size={18} color={palette.primary} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-base text-ink font-semibold" numberOfLines={1}>{item}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+                <View style={{ gap: 8 }}>
+                  {suggestions.map((item) => (
+                    <SearchResultItem key={item} icon="location-outline" title={item} onPress={() => onSelectCity(item)} />
+                  ))}
+                </View>
                 {suggestions.length === 0 && (
                   <View className="py-8 items-center">
                     <Text className="text-sm text-ink-secondary">Город не найден. Нажмите «ввод», чтобы искать по адресу.</Text>
@@ -815,39 +804,32 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
                         <Text className="text-xs font-semibold text-primary">Очистить</Text>
                       </Pressable>
                     </View>
-                    {recent.map((item, index) => (
-                      <Pressable
-                        key={index}
-                        onPress={() => onSelectCity(item)}
-                        className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
-                      >
-                        <View className="h-9 w-9 rounded-pill bg-surface-muted items-center justify-center mr-3">
-                          <Ionicons name="time-outline" size={18} color={palette.inkSecondary} />
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-base text-ink font-medium" numberOfLines={1}>{item}</Text>
-                        </View>
-                      </Pressable>
-                    ))}
+                    <View style={{ gap: 8 }}>
+                      {recent.map((item) => (
+                        <SearchResultItem
+                          key={item}
+                          icon="time-outline"
+                          title={item}
+                          tone="neutral"
+                          onPress={() => onSelectCity(item)}
+                        />
+                      ))}
+                    </View>
                   </>
                 ) : null}
 
                 <Text className="text-xs font-bold text-ink-secondary tracking-wider mt-6 mb-3">ПОПУЛЯРНЫЕ НАПРАВЛЕНИЯ</Text>
-                {POPULAR_DESTINATIONS.map((item, index) => (
-                  <Pressable
-                    key={index}
-                    onPress={() => onSelectCity(item.name)}
-                    className="flex-row items-center py-3.5 border-b border-line active:opacity-70"
-                  >
-                    <View className="h-9 w-9 rounded-pill bg-primary-light items-center justify-center mr-3">
-                      <Ionicons name="trending-up" size={18} color={palette.primary} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-base text-ink font-semibold">{item.name}</Text>
-                      <Text className="text-xs text-ink-secondary mt-0.5">{item.desc}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+                <View style={{ gap: 8 }}>
+                  {POPULAR_DESTINATIONS.map((item) => (
+                    <SearchResultItem
+                      key={item.name}
+                      icon="trending-up"
+                      title={item.name}
+                      subtitle={item.desc}
+                      onPress={() => onSelectCity(item.name)}
+                    />
+                  ))}
+                </View>
               </View>
             )}
           </ScrollView>

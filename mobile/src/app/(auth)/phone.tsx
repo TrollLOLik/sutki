@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { z } from 'zod';
 
-import { Button, ScreenContainer } from '@/components/ui';
+import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
+import { Button } from '@/components/ui';
 import { PhoneInput } from '@/components/PhoneInput';
 import { useRequestPhoneCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
@@ -61,27 +61,31 @@ export default function PhoneScreen() {
   });
 
   return (
-    <ScreenContainer centered>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <View className="flex-1 gap-6 pt-6">
-          <View className="gap-2">
-            <Text className="text-2xl font-bold text-ink">Введите номер телефона</Text>
-            <Text className="text-base text-ink-secondary">
-              Вам поступит звонок. Введите последние 4 цифры номера входящего вызова.
-            </Text>
-          </View>
-          <Controller
-            control={control}
-            name="phone"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <PhoneInput value={value} onChange={onChange} onBlur={onBlur} error={errors.phone?.message} />
-            )}
+    <AuthStepScreen
+      icon="call-outline"
+      title="Введите номер телефона"
+      description="Мы позвоним на указанный номер. Отвечать не нужно — для входа понадобятся последние 4 цифры номера звонящего."
+      footer={(
+        <Button
+          label="Получить звонок"
+          icon="call-outline"
+          loading={requestPhoneCode.isPending}
+          onPress={onSubmit}
+        />
+      )}>
+      <Controller
+        control={control}
+        name="phone"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <PhoneInput
+            autoFocus
+            value={value}
+            onChange={onChange}
+            onBlur={onBlur}
+            error={errors.phone?.message}
           />
-        </View>
-        <View className="pb-6">
-          <Button label="Получить звонок" loading={requestPhoneCode.isPending} onPress={onSubmit} />
-        </View>
-      </KeyboardAvoidingView>
-    </ScreenContainer>
+        )}
+      />
+    </AuthStepScreen>
   );
 }

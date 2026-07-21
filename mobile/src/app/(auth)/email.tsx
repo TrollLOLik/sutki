@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { z } from 'zod';
 
-import { Button, Input, ScreenContainer } from '@/components/ui';
+import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
+import { Button, Input } from '@/components/ui';
 import { useRequestEmailCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 
@@ -48,42 +48,36 @@ export default function EmailScreen() {
   });
 
   return (
-    <ScreenContainer centered>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1">
-        <View className="flex-1 gap-6 pt-6">
-          <View className="gap-2">
-            <Text className="text-2xl font-bold text-ink">Введите email</Text>
-            <Text className="text-base text-ink-secondary">
-              Отправим письмо с кодом подтверждения.
-            </Text>
-          </View>
-
-          <Controller
-            control={control}
-            name="email"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                icon="mail-outline"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                placeholder="you@example.com"
-                autoFocus
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={errors.email?.message}
-              />
-            )}
+    <AuthStepScreen
+      icon="mail-outline"
+      title="Введите email"
+      description="Отправим одноразовый код для безопасного входа. Пароль создавать не понадобится."
+      footer={(
+        <Button
+          label="Получить код"
+          icon="arrow-forward"
+          loading={requestCode.isPending}
+          onPress={onSubmit}
+        />
+      )}>
+      <Controller
+        control={control}
+        name="email"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            icon="mail-outline"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            placeholder="name@example.com"
+            autoFocus
+            value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.email?.message}
           />
-        </View>
-
-        <View className="pb-6">
-          <Button label="Получить код" loading={requestCode.isPending} onPress={onSubmit} />
-        </View>
-      </KeyboardAvoidingView>
-    </ScreenContainer>
+        )}
+      />
+    </AuthStepScreen>
   );
 }
