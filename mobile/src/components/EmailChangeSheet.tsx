@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { Button } from '@/components/ui';
@@ -124,7 +124,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   }, [secondsNew]);
 
   // Open/Reset animations and values
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible) {
       // Always reset the session state when opening the sheet to start fresh
       setStep(hasCurrentEmail ? 'verify_old' : 'input_new');
@@ -140,23 +140,27 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
       setError(null);
       setLocalEmailError(null);
 
+      fade.stopAnimation();
+      slide.stopAnimation();
       fade.setValue(0);
       slide.setValue(600);
-
-      requestAnimationFrame(() => {
-        Animated.parallel([
-          Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-          Animated.spring(slide, {
-            toValue: 0,
-            damping: 26,
-            stiffness: 260,
-            mass: 1,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      });
     }
   }, [visible]);
+
+  const handleShow = () => {
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
+        Animated.spring(slide, {
+          toValue: 0,
+          damping: 26,
+          stiffness: 260,
+          mass: 1,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
 
   // Auto-focus inputs on step change
   useEffect(() => {
@@ -176,6 +180,8 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   }, [step, codeSentOld, visible]);
 
   const handleClose = () => {
+    fade.stopAnimation();
+    slide.stopAnimation();
     Animated.parallel([
       Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
       Animated.timing(slide, {
@@ -284,7 +290,15 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
     : handleReset;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleClose}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
+      onShow={handleShow}
+      onRequestClose={handleClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 justify-end"

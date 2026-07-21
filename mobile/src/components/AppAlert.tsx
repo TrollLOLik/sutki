@@ -139,32 +139,59 @@ export function AppAlertHost() {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.94)).current;
   const closing = useRef(false);
+  const modalShown = useRef(false);
+  const presentedRequestID = useRef<number | null>(null);
+  const openFrame = useRef<number | null>(null);
+
+  const stopAnimations = useCallback(() => {
+    if (openFrame.current != null) {
+      cancelAnimationFrame(openFrame.current);
+      openFrame.current = null;
+    }
+    opacity.stopAnimation();
+    scale.stopAnimation();
+  }, [opacity, scale]);
+
+  const animateOpen = useCallback(() => {
+    if (!request || closing.current) return;
+    stopAnimations();
+    opacity.setValue(0);
+    scale.setValue(0.94);
+    openFrame.current = requestAnimationFrame(() => {
+      openFrame.current = null;
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          damping: 19,
+          stiffness: 230,
+          mass: 0.78,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  }, [opacity, request, scale, stopAnimations]);
 
   useEffect(() => {
     if (!request) return;
     closing.current = false;
-    opacity.setValue(0);
-    scale.setValue(0.94);
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 170,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scale, {
-        toValue: 1,
-        damping: 18,
-        stiffness: 220,
-        mass: 0.8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [opacity, request?.id, scale]);
+    if (modalShown.current && presentedRequestID.current !== request.id) {
+      presentedRequestID.current = request.id;
+      animateOpen();
+    }
+  }, [animateOpen, request?.id]);
+
+  useEffect(() => () => stopAnimations(), [stopAnimations]);
 
   const close = useCallback(
     (button?: AlertButton, dismissed = false) => {
       if (!request || closing.current) return;
       closing.current = true;
+      stopAnimations();
       Animated.parallel([
         Animated.timing(opacity, {
           toValue: 0,
@@ -177,13 +204,15 @@ export function AppAlertHost() {
           useNativeDriver: true,
         }),
       ]).start(() => {
+        modalShown.current = false;
+        presentedRequestID.current = null;
         useAlertStore.getState().clear(request.id);
         closing.current = false;
         if (dismissed) request.options?.onDismiss?.();
         button?.onPress?.();
       });
     },
-    [opacity, request, scale],
+    [opacity, request, scale, stopAnimations],
   );
 
   if (!request) return null;
@@ -256,7 +285,14 @@ export function AppAlertHost() {
       visible
       transparent
       statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
       animationType="none"
+      onShow={() => {
+        modalShown.current = true;
+        presentedRequestID.current = request.id;
+        animateOpen();
+      }}
       onRequestClose={() => {
         if (canDismiss) close(undefined, true);
       }}>
@@ -269,6 +305,16 @@ export function AppAlertHost() {
           paddingHorizontal: 24,
           paddingVertical: 32,
         }}>
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: '#000000',
+            opacity: opacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.56] }),
+          }}>
         <Pressable
           accessibilityLabel="Закрыть окно"
           disabled={!canDismiss}
@@ -279,9 +325,10 @@ export function AppAlertHost() {
             right: 0,
             bottom: 0,
             left: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.56)',
+            backgroundColor: 'transparent',
           }}
         />
+        </Animated.View>
 
         <Animated.View
           style={{

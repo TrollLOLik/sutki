@@ -706,6 +706,9 @@ export default function ProfileScreen() {
         visible={settingsVisible}
         animationType="slide"
         transparent={false}
+        statusBarTranslucent
+        navigationBarTranslucent
+        hardwareAccelerated
         onRequestClose={closeSettings}
       >
         <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface px-4 pt-2 pb-6">

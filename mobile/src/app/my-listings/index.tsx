@@ -314,7 +314,13 @@ export default function MyListingsScreen() {
             scrollEventThrottle={16}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: collapsibleHeader.height + 10, paddingBottom: Math.max(insets.bottom, 16) + 12 }}
             refreshControl={
-              <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={palette.primary} />
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+                tintColor={palette.primary}
+                colors={[palette.primary]}
+                progressViewOffset={collapsibleHeader.height}
+              />
             }
             renderItem={({ item }) => (
               <ListingCard

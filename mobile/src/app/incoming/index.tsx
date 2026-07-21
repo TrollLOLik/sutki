@@ -307,6 +307,8 @@ export default function IncomingBookingsScreen() {
                       refreshing={isRefetching}
                       onRefresh={() => refetch()}
                       tintColor={palette.primary}
+                      colors={[palette.primary]}
+                      progressViewOffset={collapsibleHeader.height}
                     />
                   }
                   renderItem={({ item }) => (
@@ -358,6 +360,8 @@ export default function IncomingBookingsScreen() {
                       refreshing={isRefetching}
                       onRefresh={() => refetch()}
                       tintColor={palette.primary}
+                      colors={[palette.primary]}
+                      progressViewOffset={collapsibleHeader.height}
                     />
                   }
                   renderItem={({ item }) => (

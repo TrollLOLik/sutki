@@ -39,6 +39,8 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 			animationType="fade"
 			onRequestClose={onClose}
 			statusBarTranslucent
+			navigationBarTranslucent
+			hardwareAccelerated
 		>
 			<View className="flex-1 bg-black">
 				<StatusBar barStyle="light-content" translucent />

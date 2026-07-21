@@ -575,6 +575,8 @@ export default function SearchScreen() {
           refreshControl={
             <RefreshControl
               refreshing={isRefetching || (showingSimilar && similarFetching)}
+              progressViewOffset={listPaddingTop}
+              colors={[palette.primary]}
               onRefresh={async () => {
                 await refetch();
                 if (showingSimilar) await refetchSimilar();
@@ -748,6 +750,9 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
       visible={visible}
       animationType="fade"
       transparent={true}
+      statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView

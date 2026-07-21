@@ -311,6 +311,8 @@ export default function MyBookingsScreen() {
                       refreshing={isRefetching}
                       onRefresh={() => refetch()}
                       tintColor={palette.primary}
+                      colors={[palette.primary]}
+                      progressViewOffset={collapsibleHeader.height}
                     />
                   }
                   renderItem={({ item }) => (
@@ -355,6 +357,8 @@ export default function MyBookingsScreen() {
                       refreshing={isRefetching}
                       onRefresh={() => refetch()}
                       tintColor={palette.primary}
+                      colors={[palette.primary]}
+                      progressViewOffset={collapsibleHeader.height}
                     />
                   }
                   renderItem={({ item }) => {

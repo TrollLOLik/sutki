@@ -263,7 +263,13 @@ export default function MessagesScreen() {
 					</View>
 				}
 				refreshControl={
-					<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={palette.primary} />
+					<RefreshControl
+						refreshing={isFetching}
+						onRefresh={refetch}
+						tintColor={palette.primary}
+						colors={[palette.primary]}
+						progressViewOffset={72}
+					/>
 				}
 			/>
 		</SafeAreaView>

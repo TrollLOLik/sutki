@@ -164,7 +164,14 @@ export function MapSearchOverlay({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent={false}
+      statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
+      onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 bg-surface"

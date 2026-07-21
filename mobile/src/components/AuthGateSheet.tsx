@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -20,26 +20,33 @@ export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps)
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(400)).current;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible) {
+      fade.stopAnimation();
+      slide.stopAnimation();
       fade.setValue(0);
       slide.setValue(400);
-      requestAnimationFrame(() => {
-        Animated.parallel([
-          Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-          Animated.spring(slide, {
-            toValue: 0,
-            damping: 26,
-            stiffness: 260,
-            mass: 1,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      });
     }
   }, [visible]);
 
+  const handleShow = () => {
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
+        Animated.spring(slide, {
+          toValue: 0,
+          damping: 26,
+          stiffness: 260,
+          mass: 1,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
+
   const handleClose = () => {
+    fade.stopAnimation();
+    slide.stopAnimation();
     Animated.parallel([
       Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
       Animated.timing(slide, {
@@ -88,7 +95,15 @@ export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps)
   }
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleClose}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
+      onShow={handleShow}
+      onRequestClose={handleClose}>
       <View className="flex-1 justify-end">
         {/* Backdrop */}
         <Animated.View

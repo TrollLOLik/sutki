@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
 
 import { Button } from '@/components/ui';
@@ -97,7 +97,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
   };
 
   // Open/Reset animations and values
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible) {
       // Only reset the session if the previous deletion completed successfully or was blocked.
       if (step === 'success' || step === 'active_bookings_blocked') {
@@ -109,27 +109,31 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
         setError(null);
       }
 
+      fade.stopAnimation();
+      slide.stopAnimation();
       fade.setValue(0);
       slide.setValue(600);
-
-      requestAnimationFrame(() => {
-        Animated.parallel([
-          Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-          Animated.spring(slide, {
-            toValue: 0,
-            damping: 26,
-            stiffness: 260,
-            mass: 1,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          if (step === 'checking' || step === 'success' || step === 'active_bookings_blocked') {
-            handleStartCheck();
-          }
-        });
-      });
     }
   }, [visible]);
+
+  const handleShow = () => {
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
+        Animated.spring(slide, {
+          toValue: 0,
+          damping: 26,
+          stiffness: 260,
+          mass: 1,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        if (step === 'checking' || step === 'success' || step === 'active_bookings_blocked') {
+          handleStartCheck();
+        }
+      });
+    });
+  };
 
   // Auto-focus input on verify step
   useEffect(() => {
@@ -141,6 +145,8 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
   }, [step, visible]);
 
   const handleClose = () => {
+    fade.stopAnimation();
+    slide.stopAnimation();
     Animated.parallel([
       Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
       Animated.timing(slide, {
@@ -193,7 +199,15 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
   if (!visible) return null;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleClose}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
+      onShow={handleShow}
+      onRequestClose={handleClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 justify-end"
