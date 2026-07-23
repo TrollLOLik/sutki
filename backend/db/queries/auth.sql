@@ -24,18 +24,18 @@ UPDATE auth_code SET attempts = attempts + 1 WHERE channel = $1 AND target = $2;
 DELETE FROM auth_code WHERE channel = $1 AND target = $2;
 
 -- name: GetUserByEmail :one
-SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 FROM "user"
 WHERE email = $1 AND deleted = false;
 
 -- name: GetUserByPhone :one
-SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 FROM "user"
 WHERE phone_normalized = $1 AND deleted = false;
 
 -- name: GetUserByID :one
 SELECT 
-  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.phone_normalized, u.phone_verified_at, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
+  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.phone_normalized, u.phone_verified_at, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id, u.created_at,
   (
     SELECT count(*)::int
     FROM house h
@@ -53,7 +53,7 @@ WHERE u.id = $1 AND u.deleted = false;
 -- name: CreateUser :one
 INSERT INTO "user" (email, phone, phone_normalized, phone_verified_at, roles, deleted, is_verified, enable, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, false, true, true, now(), now())
-RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id;
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at;
 
 -- name: UpdateUserProfile :one
 UPDATE "user"
@@ -69,7 +69,7 @@ SET name = COALESCE(sqlc.narg('name'), name),
     phone_verified_at = COALESCE(sqlc.narg('phone_verified_at'), phone_verified_at),
     updated_at = now()
 WHERE id = sqlc.arg('id') AND deleted = false
-RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id;
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at;
 
 -- name: UpdateUserPhone :one
 UPDATE "user"
@@ -78,7 +78,7 @@ SET phone = $2,
     phone_verified_at = $4,
     updated_at = now()
 WHERE id = $1 AND deleted = false
-RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id;
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at;
 
 -- name: CreateRefreshToken :one
 INSERT INTO refresh_token (user_id, token_hash, expires_at, device_name, device_os, app_version, ip_address, location, last_active_at, created_at)

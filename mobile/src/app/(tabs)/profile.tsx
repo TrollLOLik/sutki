@@ -28,6 +28,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 import { useHostResponseStats } from '@/lib/api/hostStats';
 import { formatHostResponseTime } from '@/lib/formatHostStats';
+import { formatMemberSince } from '@/lib/formatMemberSince';
 import { formatPhoneMask, normalizePhoneDigits } from '@/lib/phone';
 import type { UpdateProfileBody } from '@/types/auth';
 import type { User } from '@/types/user';
@@ -564,7 +565,7 @@ export default function ProfileScreen() {
             name={displayName}
             onAvatarPress={handleProfileAvatarPress}
             rating={user?.rating ?? 0}
-            subtitle="Личный кабинет"
+            subtitle={formatMemberSince(user?.created_at)}
             uploadingAvatar={uploadingAvatar}
             verifiedLabel={user?.phone_verified_at ? 'Номер подтверждён' : undefined}
           />

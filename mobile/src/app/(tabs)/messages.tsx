@@ -82,7 +82,7 @@ export default function MessagesScreen() {
 					</View>
 					<Text className="text-center text-xl font-bold text-ink mb-2">Сообщения</Text>
 					<Text className="text-center text-base text-ink-secondary px-4 leading-6">
-						Войдите в аккаунт, чтобы вести переписку с хозяевами квартир и обсуждать детали бронирования.
+						Войдите в аккаунт, чтобы общаться с владельцами жилья и обсуждать детали бронирования.
 					</Text>
 				</View>
 				<Button

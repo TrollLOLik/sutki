@@ -14,8 +14,13 @@ const tones: Record<Tone, { bg: string; text: string }> = {
 export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
   const t = tones[tone];
   return (
-    <View className={cn('self-start rounded-pill px-2.5 py-1', t.bg)}>
-      <Text className={cn('text-xs font-semibold', t.text)}>{label}</Text>
+    <View className={cn('max-w-full self-start rounded-pill px-2.5 py-1', t.bg)}>
+      <Text
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        className={cn('shrink text-xs font-semibold', t.text)}>
+        {label}
+      </Text>
     </View>
   );
 }

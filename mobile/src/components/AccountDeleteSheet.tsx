@@ -26,7 +26,7 @@ type Step = 'checking' | 'active_bookings_blocked' | 'confirm_warning' | 'verify
 function translateError(msg: string): string {
   const clean = msg.toLowerCase().trim();
   if (clean.includes('cannot delete account') || clean.includes('active bookings') || clean.includes('бронировани')) {
-    return 'Невозможно удалить аккаунт: у вас есть активные поездки, аренды или объявления.';
+    return 'Невозможно удалить аккаунт: у вас есть активные бронирования, заявки или объявления.';
   }
   if (clean.includes('invalid code') || clean.includes('code invalid')) {
     return 'Неверный код подтверждения. Пожалуйста, проверьте и введите еще раз.';
@@ -274,8 +274,8 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
                   </View>
                 </View>
                 <Text className="text-base text-ink-secondary text-center px-4 leading-6">
-                  У вас есть активные бронирования, поездки или объявления в аренде.{'\n\n'}
-                  Пожалуйста, завершите все активные поездки и снимите объявления с публикации перед удалением профиля.
+                  У вас есть активные бронирования, заявки или опубликованные объявления.{'\n\n'}
+                  Пожалуйста, завершите бронирования и снимите объявления с публикации перед удалением профиля.
                 </Text>
               </View>
             ) : null}

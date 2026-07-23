@@ -79,7 +79,7 @@ export default function WelcomeScreen() {
               fontSize: 16,
               lineHeight: 23,
             }}>
-            Жильё рядом — для коротких поездок{"\n"}и новых бронирований
+            Жильё рядом — для посуточной аренды{"\n"}и удобного бронирования
           </Text>
 
           <MaterialSurface

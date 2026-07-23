@@ -87,7 +87,7 @@ export default function MyBookingsScreen() {
       router.push({
         pathname: `/chat/${res.conversation_id}` as any,
         params: {
-          title: `${booking.house.owner_name ?? ''} ${booking.house.owner_surname ?? ''}`.trim() || 'Хозяин',
+          title: `${booking.house.owner_name ?? ''} ${booking.house.owner_surname ?? ''}`.trim() || 'Владелец',
           otherUserId: booking.house.owner_id,
           houseId: String(booking.house_id),
         },

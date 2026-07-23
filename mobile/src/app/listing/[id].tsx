@@ -6,7 +6,6 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import {
-	ActivityIndicator,
 	Animated,
 	FlatList,
 	LayoutAnimation,
@@ -27,7 +26,7 @@ import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ResilientImage } from '@/components/ResilientImage';
-import { Button, IconButton, MaterialSurface, materialSurfaceColor } from '@/components/ui';
+import { Button, IconButton, MaterialSurface, Skeleton, materialSurfaceColor } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useRememberViewedListing } from '@/lib/api/viewed-listings';
@@ -272,7 +271,7 @@ export default function ListingDetailScreen() {
       const title = getListingTitle();
       const address = getListingSubtitle();
       const priceFormatted = formatRub(data.price);
-      const url = `https://sutki.ru/listing/${numericId}`;
+      const url = `https://arenda.titop.ru/listing/${numericId}`;
       const message = `${title}\n📍 ${address}\n💵 ${priceFormatted} ₽ / сутки\n\n🔗 ${url}`;
 
       await Share.share({
@@ -350,11 +349,12 @@ export default function ListingDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: screenBackground }}>
       {isLoading ? (
-        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: screenBackground }}>
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={palette.primary} />
-          </View>
-        </SafeAreaView>
+        <ListingDetailSkeleton
+          topInset={insets.top}
+          screenBackground={screenBackground}
+          headerBackground={headerBackground}
+          raisedSurface={raisedSurface}
+        />
       ) : isError || !data ? (
         <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: screenBackground }}>
           <View className="flex-1 gap-4 px-4 justify-center">
@@ -806,13 +806,17 @@ export default function ListingDetailScreen() {
                   {/* Badges block */}
                   <View className="flex-row flex-wrap gap-2 mt-3 border-t border-line/60 pt-3">
                     {data.owner_is_verified && (
-                      <View className="bg-success-light px-3 py-1 rounded-pill">
-                        <Text className="text-xs font-semibold text-success">Документы проверены</Text>
+                      <View className="max-w-full bg-success-light px-3 py-1 rounded-pill">
+                        <Text numberOfLines={1} className="shrink text-xs font-semibold text-success">
+                          Документы проверены
+                        </Text>
                       </View>
                     )}
                     {data.owner_phone ? (
-                      <View className="bg-primary-light px-3 py-1 rounded-pill">
-                        <Text className="text-xs font-semibold text-primary">Телефон подтвержден</Text>
+                      <View className="max-w-full bg-primary-light px-3 py-1 rounded-pill">
+                        <Text numberOfLines={1} className="shrink text-xs font-semibold text-primary">
+                          Телефон подтверждён
+                        </Text>
                       </View>
                     ) : null}
                   </View>
@@ -951,6 +955,174 @@ export default function ListingDetailScreen() {
           </SafeAreaView>
         </>
       )}
+    </View>
+  );
+}
+
+function ListingDetailSkeleton({
+  topInset,
+  screenBackground,
+  headerBackground,
+  raisedSurface,
+}: {
+  topInset: number;
+  screenBackground: string;
+  headerBackground: string;
+  raisedSurface: string;
+}) {
+  return (
+    <View
+      accessibilityLabel="Загрузка объявления"
+      style={{ flex: 1, backgroundColor: screenBackground }}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 2,
+          paddingTop: topInset + 12,
+          paddingHorizontal: 16,
+          paddingBottom: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+        <Skeleton width={48} height={48} radius={24} style={{ backgroundColor: raisedSurface }} />
+        <View style={{ flex: 1 }} />
+        <Skeleton width={48} height={48} radius={24} style={{ backgroundColor: raisedSurface }} />
+        <Skeleton width={48} height={48} radius={24} style={{ backgroundColor: raisedSurface }} />
+      </View>
+
+      <ScrollView
+        pointerEvents="none"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 110 }}>
+        <Skeleton width="100%" height={340} radius={0} />
+
+        <View
+          style={{
+            marginTop: -24,
+            gap: 24,
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            backgroundColor: screenBackground,
+            paddingHorizontal: 16,
+            paddingBottom: 32,
+            paddingTop: 28,
+          }}>
+          <View style={{ gap: 9 }}>
+            <Skeleton width="86%" height={27} radius={7} />
+            <Skeleton width="62%" height={15} radius={5} />
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {[0, 1].map((item) => (
+              <View
+                key={item}
+                style={{
+                  minHeight: 66,
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  borderRadius: 18,
+                  backgroundColor: raisedSurface,
+                  paddingHorizontal: 12,
+                }}>
+                <Skeleton width={36} height={36} radius={18} />
+                <View style={{ flex: 1, gap: 7 }}>
+                  <Skeleton width="58%" height={14} radius={4} />
+                  <Skeleton width="82%" height={10} radius={4} />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={{ gap: 16 }}>
+            <Skeleton width="42%" height={30} radius={7} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Skeleton width={82} height={30} radius={10} />
+              <Skeleton width={66} height={30} radius={10} />
+              <Skeleton width={94} height={30} radius={10} />
+            </View>
+          </View>
+
+          <View
+            style={{
+              gap: 11,
+              borderRadius: 18,
+              backgroundColor: raisedSurface,
+              padding: 16,
+            }}>
+            <Skeleton width="30%" height={17} radius={5} />
+            <Skeleton width="100%" height={13} radius={4} />
+            <Skeleton width="94%" height={13} radius={4} />
+            <Skeleton width="72%" height={13} radius={4} />
+          </View>
+
+          <View style={{ gap: 12 }}>
+            <Skeleton width="28%" height={18} radius={5} />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {[0, 1, 2].map((item) => (
+                <View
+                  key={item}
+                  style={{
+                    minHeight: 58,
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderRadius: 14,
+                    backgroundColor: raisedSurface,
+                    padding: 9,
+                  }}>
+                  <Skeleton width={24} height={24} radius={12} />
+                  <Skeleton width="55%" height={10} radius={4} />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              borderRadius: 20,
+              backgroundColor: raisedSurface,
+              padding: 16,
+            }}>
+            <Skeleton width={54} height={54} radius={27} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <Skeleton width="54%" height={17} radius={5} />
+              <Skeleton width="38%" height={12} radius={4} />
+            </View>
+            <Skeleton width={38} height={38} radius={19} />
+          </View>
+        </View>
+      </ScrollView>
+
+      <SafeAreaView
+        edges={['bottom']}
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(128,128,128,0.14)',
+          backgroundColor: headerBackground,
+          paddingHorizontal: 16,
+          paddingTop: 12,
+        }}>
+        <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{ width: 108, gap: 7 }}>
+            <Skeleton width={92} height={20} radius={5} />
+            <Skeleton width={58} height={10} radius={4} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Skeleton width="100%" height={52} radius={18} />
+          </View>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }

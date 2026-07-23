@@ -30,6 +30,25 @@ module.exports = {
       },
       predictiveBackGestureEnabled: false,
       package: "ru.titop.arenda",
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "arenda.titop.ru",
+              pathPrefix: "/listing/",
+            },
+            {
+              scheme: "https",
+              host: "arenda.titop.ru",
+              pathPrefix: "/profile/",
+            },
+          ],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
       permissions: [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",

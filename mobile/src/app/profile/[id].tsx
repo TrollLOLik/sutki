@@ -31,7 +31,9 @@ import { useFiltersStore, countActiveFilters } from '@/store/filters';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
 import { useHostResponseStats } from '@/lib/api/hostStats';
+import { usePublicProfile } from '@/lib/api/profiles';
 import { formatHostResponseTime } from '@/lib/formatHostStats';
+import { formatMemberSince } from '@/lib/formatMemberSince';
 import { shadows } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
@@ -69,6 +71,7 @@ export default function PublicProfileScreen() {
   }>();
 
   const numericId = Number(id);
+  const { data: publicProfile } = usePublicProfile(Number.isFinite(numericId) ? numericId : undefined);
   const sessionUserId = useSessionStore((state) => state.user?.id);
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
@@ -119,14 +122,21 @@ export default function PublicProfileScreen() {
 
 
 
-  const displayName = [name, patronymic, surname].filter(Boolean).join(' ') || 'Арендодатель';
-  const displayCity = city || 'Челябинск';
-  const ratingNum = rating ? Number(rating) : 0;
+  const resolvedName = publicProfile?.name || name;
+  const resolvedSurname = publicProfile?.surname || surname;
+  const resolvedPatronymic = publicProfile?.patronymic || patronymic;
+  const publicPhone = publicProfile?.phone || phone || '';
+  const publicAvatarUrl = publicProfile?.avatar_url || avatarUrl || '';
+  const displayName =
+    [resolvedName, resolvedPatronymic, resolvedSurname].filter(Boolean).join(' ') || 'Арендодатель';
+  const displayCity = publicProfile?.city || city || 'Город не указан';
+  const ratingNum = publicProfile?.rating ?? (rating ? Number(rating) : 0);
   const reviewsCountNum = reviewsCount ? Number(reviewsCount) : 0;
-  const verified = isVerified === 'true';
+  const verified = publicProfile?.is_verified ?? isVerified === 'true';
+  const memberSince = formatMemberSince(publicProfile?.created_at);
 
   const getInitials = () => {
-    const parts = [name, surname].filter((p): p is string => !!p);
+    const parts = [resolvedName, resolvedSurname].filter((p): p is string => !!p);
     if (parts.length === 0) return 'А';
     return parts.map((part) => part.trim()[0]).join('').toUpperCase();
   };
@@ -192,11 +202,11 @@ export default function PublicProfileScreen() {
   });
 
   const handleCall = () => {
-    if (!phone) {
+    if (!publicPhone) {
       Alert.alert('Информация', 'Телефон владельца не указан.');
       return;
     }
-    Linking.openURL(`tel:${phone}`).catch(() => {
+    Linking.openURL(`tel:${publicPhone}`).catch(() => {
       Alert.alert('Ошибка', 'Не удалось совершить звонок.');
     });
   };
@@ -224,8 +234,8 @@ export default function PublicProfileScreen() {
 
   const handleShare = async () => {
     try {
-      const url = `https://sutki.ru/profile/${numericId}`;
-      const message = `Профиль арендодателя ${displayName} на Сутки.ру\nРейтинг: ${ratingNum > 0 ? ratingNum.toFixed(1) + ' ★' : 'Нет оценок'}\n🔗 ${url}`;
+      const url = `https://arenda.titop.ru/profile/${numericId}`;
+      const message = `Профиль ${displayName} в Дом рядом\nРейтинг: ${ratingNum > 0 ? ratingNum.toFixed(1) + ' ★' : 'Нет оценок'}\n🔗 ${url}`;
       await Share.share({
         message,
         url,
@@ -244,7 +254,7 @@ export default function PublicProfileScreen() {
     });
   };
 
-  const hostListingsCount = hostListingCountData?.total ?? 0;
+  const hostListingsCount = publicProfile?.listings_count ?? hostListingCountData?.total ?? 0;
 
   return (
     <View className="flex-1 bg-surface">
@@ -276,15 +286,21 @@ export default function PublicProfileScreen() {
         scrollEventThrottle={16}
       >
         <ProfileHero
-          avatarUri={avatarUrl || null}
+          avatarUri={publicAvatarUrl || null}
           city={displayCity}
           initials={getInitials()}
           name={displayName}
           onRatingPress={onReviewsPress}
           rating={ratingNum}
           reviewsCount={reviewsCountNum}
-          subtitle="Арендодатель"
-          verifiedLabel={phone ? 'Номер подтверждён' : verified ? 'Профиль подтверждён' : undefined}
+          subtitle={memberSince}
+          verifiedLabel={
+            publicProfile?.phone_verified_at || publicPhone
+              ? 'Номер подтверждён'
+              : verified
+                ? 'Профиль подтверждён'
+                : undefined
+          }
         />
 
         <ProfileMetricGrid
@@ -302,10 +318,10 @@ export default function PublicProfileScreen() {
               tone: 'neutral',
             },
             {
-              icon: phone ? 'checkmark-circle-outline' : 'call-outline',
+              icon: publicPhone ? 'checkmark-circle-outline' : 'call-outline',
               label: 'Номер телефона',
-              value: phone ? 'Подтверждён' : 'Не указан',
-              tone: phone ? 'success' : 'neutral',
+              value: publicPhone ? 'Подтверждён' : 'Не указан',
+              tone: publicPhone ? 'success' : 'neutral',
             },
             {
               icon: 'chatbubbles-outline',
@@ -324,7 +340,7 @@ export default function PublicProfileScreen() {
             };
           }}
           className="flex-row gap-3">
-          {phone ? (
+          {publicPhone ? (
             <View className="flex-1">
               <Button label="Позвонить" icon="call-outline" onPress={handleCall} />
             </View>
@@ -335,7 +351,7 @@ export default function PublicProfileScreen() {
               icon="chatbubble-ellipses-outline"
               loading={isCreatingChat}
               onPress={handleMessage}
-              variant={phone ? 'secondary' : 'primary'}
+              variant={publicPhone ? 'secondary' : 'primary'}
             />
           </View>
         </View>
@@ -517,7 +533,7 @@ export default function PublicProfileScreen() {
         }}
       >
         <View className="flex-row gap-3">
-          {phone ? (
+          {publicPhone ? (
             <View className="flex-1">
               <Button label="Позвонить" icon="call-outline" onPress={handleCall} size="md" />
             </View>
@@ -529,7 +545,7 @@ export default function PublicProfileScreen() {
               loading={isCreatingChat}
               onPress={handleMessage}
               size="md"
-              variant={phone ? 'secondary' : 'primary'}
+              variant={publicPhone ? 'secondary' : 'primary'}
             />
           </View>
         </View>

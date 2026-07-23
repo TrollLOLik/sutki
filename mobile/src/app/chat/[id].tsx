@@ -541,7 +541,14 @@ export default function ChatDialogScreen() {
 
 	const pickDocument = async () => {
 		const result = await DocumentPicker.getDocumentAsync({
-			type: '*/*',
+			type: [
+				'application/pdf',
+				'text/plain',
+				'application/msword',
+				'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+				'application/vnd.ms-excel',
+				'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+			],
 			copyToCacheDirectory: true,
 		});
 
@@ -1010,7 +1017,7 @@ export default function ChatDialogScreen() {
 						<Ionicons name="chatbubbles" size={44} color={palette.primary} />
 					</View>
 					<Text className="text-xl font-bold text-ink text-center mb-2">
-						Начните общение с хозяином
+						Начните общение с владельцем
 					</Text>
 					<Text className="text-sm text-ink-secondary text-center leading-6 max-w-[300px]">
 						Уточните время прибытия, правила проживания или обсудите индивидуальные условия заселения.
@@ -1214,7 +1221,7 @@ export default function ChatDialogScreen() {
 						</View>
 						<View className="flex-1">
 							<Text className="text-[15px] font-bold text-ink">Документ</Text>
-							<Text className="text-xs text-ink-secondary mt-0.5">Файл любого формата</Text>
+							<Text className="text-xs text-ink-secondary mt-0.5">PDF, TXT, DOC, DOCX, XLS или XLSX</Text>
 						</View>
 						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
 					</TouchableOpacity>

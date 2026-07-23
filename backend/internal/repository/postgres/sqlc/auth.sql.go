@@ -107,7 +107,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO "user" (email, phone, phone_normalized, phone_verified_at, roles, deleted, is_verified, enable, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, false, true, true, now(), now())
-RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 `
 
 type CreateUserParams struct {
@@ -133,6 +133,7 @@ type CreateUserRow struct {
 	Roles           []byte
 	Birthday        pgtype.Date
 	VkID            *string
+	CreatedAt       pgtype.Timestamp
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -159,6 +160,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.Roles,
 		&i.Birthday,
 		&i.VkID,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -294,7 +296,7 @@ func (q *Queries) GetRefreshTokenByID(ctx context.Context, id int64) (RefreshTok
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 FROM "user"
 WHERE email = $1 AND deleted = false
 `
@@ -314,6 +316,7 @@ type GetUserByEmailRow struct {
 	Roles           []byte
 	Birthday        pgtype.Date
 	VkID            *string
+	CreatedAt       pgtype.Timestamp
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email *string) (GetUserByEmailRow, error) {
@@ -334,13 +337,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email *string) (GetUserByE
 		&i.Roles,
 		&i.Birthday,
 		&i.VkID,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT 
-  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.phone_normalized, u.phone_verified_at, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id,
+  u.id, u.name, u.surname, u.patronymic, u.email, u.phone, u.phone_normalized, u.phone_verified_at, u.city, u.avatar_url, u.is_verified, u.roles, u.birthday, u.vk_id, u.created_at,
   (
     SELECT count(*)::int
     FROM house h
@@ -371,6 +375,7 @@ type GetUserByIDRow struct {
 	Roles           []byte
 	Birthday        pgtype.Date
 	VkID            *string
+	CreatedAt       pgtype.Timestamp
 	ListingsCount   int32
 	Rating          float64
 }
@@ -393,6 +398,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, er
 		&i.Roles,
 		&i.Birthday,
 		&i.VkID,
+		&i.CreatedAt,
 		&i.ListingsCount,
 		&i.Rating,
 	)
@@ -400,7 +406,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, er
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+SELECT id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 FROM "user"
 WHERE phone_normalized = $1 AND deleted = false
 `
@@ -420,6 +426,7 @@ type GetUserByPhoneRow struct {
 	Roles           []byte
 	Birthday        pgtype.Date
 	VkID            *string
+	CreatedAt       pgtype.Timestamp
 }
 
 func (q *Queries) GetUserByPhone(ctx context.Context, phoneNormalized *string) (GetUserByPhoneRow, error) {
@@ -440,6 +447,7 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phoneNormalized *string) (
 		&i.Roles,
 		&i.Birthday,
 		&i.VkID,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -636,7 +644,7 @@ SET phone = $2,
     phone_verified_at = $4,
     updated_at = now()
 WHERE id = $1 AND deleted = false
-RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 `
 
 type UpdateUserPhoneParams struct {
@@ -661,6 +669,7 @@ type UpdateUserPhoneRow struct {
 	Roles           []byte
 	Birthday        pgtype.Date
 	VkID            *string
+	CreatedAt       pgtype.Timestamp
 }
 
 func (q *Queries) UpdateUserPhone(ctx context.Context, arg UpdateUserPhoneParams) (UpdateUserPhoneRow, error) {
@@ -686,6 +695,7 @@ func (q *Queries) UpdateUserPhone(ctx context.Context, arg UpdateUserPhoneParams
 		&i.Roles,
 		&i.Birthday,
 		&i.VkID,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -704,7 +714,7 @@ SET name = COALESCE($1, name),
     phone_verified_at = COALESCE($11, phone_verified_at),
     updated_at = now()
 WHERE id = $12 AND deleted = false
-RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id
+RETURNING id, name, surname, patronymic, email, phone, phone_normalized, phone_verified_at, city, avatar_url, is_verified, roles, birthday, vk_id, created_at
 `
 
 type UpdateUserProfileParams struct {
@@ -737,6 +747,7 @@ type UpdateUserProfileRow struct {
 	Roles           []byte
 	Birthday        pgtype.Date
 	VkID            *string
+	CreatedAt       pgtype.Timestamp
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error) {
@@ -770,6 +781,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.Roles,
 		&i.Birthday,
 		&i.VkID,
+		&i.CreatedAt,
 	)
 	return i, err
 }

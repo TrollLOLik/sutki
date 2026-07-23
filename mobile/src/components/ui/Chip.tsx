@@ -26,7 +26,10 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
         borderColor: selected ? palette.primary : palette.line,
       }}>
       <Text
+        numberOfLines={1}
+        ellipsizeMode="tail"
         style={{
+          flexShrink: 1,
           fontSize: 14,
           fontWeight: selected ? '600' : '400',
           color: selected ? palette.primary : palette.inkSecondary,

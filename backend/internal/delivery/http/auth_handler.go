@@ -47,6 +47,22 @@ type userDTO struct {
 	AvatarURL       string  `json:"avatar_url"`
 	IsVerified      bool    `json:"is_verified"`
 	Birthday        *string `json:"birthday"`
+	CreatedAt       string  `json:"created_at"`
+	ListingsCount   int32   `json:"listings_count"`
+	Rating          float64 `json:"rating"`
+}
+
+type publicUserDTO struct {
+	ID              int32   `json:"id"`
+	Name            string  `json:"name"`
+	Surname         string  `json:"surname"`
+	Patronymic      string  `json:"patronymic"`
+	Phone           string  `json:"phone"`
+	PhoneVerifiedAt *string `json:"phone_verified_at"`
+	City            string  `json:"city"`
+	AvatarURL       string  `json:"avatar_url"`
+	IsVerified      bool    `json:"is_verified"`
+	CreatedAt       string  `json:"created_at"`
 	ListingsCount   int32   `json:"listings_count"`
 	Rating          float64 `json:"rating"`
 }
@@ -75,8 +91,35 @@ func toUserDTO(u domain.User) userDTO {
 		AvatarURL:       resolveMediaURL(u.AvatarURL),
 		IsVerified:      u.IsVerified,
 		Birthday:        bdayStr,
+		CreatedAt:       u.CreatedAt.Format(time.RFC3339),
 		ListingsCount:   u.ListingsCount,
 		Rating:          u.Rating,
+	}
+}
+
+func toPublicUserDTO(u domain.User) publicUserDTO {
+	dto := toUserDTO(u)
+	phone := ""
+	var phoneVerifiedAt *string
+	// A phone number is public only for a verified host with at least one
+	// listing. This keeps guest phone numbers out of the enumerable endpoint.
+	if u.ListingsCount > 0 && u.PhoneVerifiedAt != nil {
+		phone = dto.Phone
+		phoneVerifiedAt = dto.PhoneVerifiedAt
+	}
+	return publicUserDTO{
+		ID:              dto.ID,
+		Name:            dto.Name,
+		Surname:         dto.Surname,
+		Patronymic:      dto.Patronymic,
+		Phone:           phone,
+		PhoneVerifiedAt: phoneVerifiedAt,
+		City:            dto.City,
+		AvatarURL:       dto.AvatarURL,
+		IsVerified:      dto.IsVerified,
+		CreatedAt:       dto.CreatedAt,
+		ListingsCount:   dto.ListingsCount,
+		Rating:          dto.Rating,
 	}
 }
 
@@ -199,6 +242,25 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))
+}
+
+// PublicProfile returns the non-sensitive fields used by public profile screens.
+func (h *AuthHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	user, err := h.svc.GetUser(r.Context(), int32(id))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeInternalError(w, r, err, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, toPublicUserDTO(user))
 }
 
 // UpdateMe updates the authenticated user's profile (requires AuthMiddleware).

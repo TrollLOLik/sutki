@@ -119,12 +119,22 @@ export function ProfileHero({
         <View style={styles.heroText}>
           <View style={styles.badges}>
             <View style={[styles.badge, { backgroundColor: palette.primaryLight }]}>
-              <Text style={[styles.badgeText, { color: palette.primary }]}>{badge}</Text>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={[styles.badgeText, { color: palette.primary }]}>
+                {badge}
+              </Text>
             </View>
             {verifiedLabel ? (
               <View style={[styles.badge, { backgroundColor: palette.successLight }]}>
                 <Ionicons name="checkmark-circle" size={13} color={palette.success} />
-                <Text style={[styles.badgeText, { color: palette.success }]}>{verifiedLabel}</Text>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.badgeText, { color: palette.success }]}>
+                  {verifiedLabel}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -198,7 +208,8 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
                   <Text
                     numberOfLines={1}
                     adjustsFontSizeToFit
-                    minimumFontScale={0.78}
+                    minimumFontScale={0.62}
+                    maxFontSizeMultiplier={1.15}
                     style={[styles.metricValue, { color: palette.ink }]}>
                     {metric.value}
                   </Text>
@@ -398,6 +409,7 @@ const styles = StyleSheet.create({
   },
   metricCell: {
     width: '50%',
+    minWidth: 0,
     minHeight: 94,
     paddingHorizontal: 15,
     paddingVertical: 16,
@@ -423,6 +435,7 @@ const styles = StyleSheet.create({
     height: 24,
   },
   metricValue: {
+    flexShrink: 1,
     fontSize: 18,
     lineHeight: 23,
     fontWeight: '800',

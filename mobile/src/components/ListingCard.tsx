@@ -518,7 +518,10 @@ export function ListingCard({
               size={13}
               color={moderationBadge.fg}
             />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: moderationBadge.fg }}>
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={{ flexShrink: 1, fontSize: 11, fontWeight: '700', color: moderationBadge.fg }}>
               {moderationBadge.label}
             </Text>
           </View>

@@ -45,6 +45,7 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (domain.User, e
 		AvatarURL:       deref(row.AvatarUrl),
 		IsVerified:      row.IsVerified,
 		Birthday:        toTimePtr(row.Birthday),
+		CreatedAt:       row.CreatedAt.Time,
 		ListingsCount:   0,
 		Rating:          0.0,
 	}, nil
@@ -71,6 +72,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id int32) (domain.User, error) {
 		AvatarURL:       deref(row.AvatarUrl),
 		IsVerified:      row.IsVerified,
 		Birthday:        toTimePtr(row.Birthday),
+		CreatedAt:       row.CreatedAt.Time,
 		ListingsCount:   row.ListingsCount,
 		Rating:          row.Rating,
 	}, nil
@@ -94,6 +96,7 @@ func (r *UserRepo) Create(ctx context.Context, email string) (domain.User, error
 		AvatarURL:       deref(row.AvatarUrl),
 		IsVerified:      row.IsVerified,
 		Birthday:        toTimePtr(row.Birthday),
+		CreatedAt:       row.CreatedAt.Time,
 		ListingsCount:   0,
 		Rating:          0.0,
 	}, nil
@@ -285,8 +288,6 @@ WHERE id = $2::int
 	return linkedIDs, nil
 }
 
-
-
 func deref(s *string) string {
 	if s == nil {
 		return ""
@@ -323,6 +324,7 @@ func (r *UserRepo) GetByPhone(ctx context.Context, phone string) (domain.User, e
 		AvatarURL:       deref(row.AvatarUrl),
 		IsVerified:      row.IsVerified,
 		Birthday:        toTimePtr(row.Birthday),
+		CreatedAt:       row.CreatedAt.Time,
 		ListingsCount:   0,
 		Rating:          0.0,
 	}, nil
@@ -351,6 +353,7 @@ func (r *UserRepo) CreateWithPhone(ctx context.Context, phone string) (domain.Us
 		AvatarURL:       deref(row.AvatarUrl),
 		IsVerified:      row.IsVerified,
 		Birthday:        toTimePtr(row.Birthday),
+		CreatedAt:       row.CreatedAt.Time,
 		ListingsCount:   0,
 		Rating:          0.0,
 	}, nil

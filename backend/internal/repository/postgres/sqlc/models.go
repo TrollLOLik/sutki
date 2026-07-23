@@ -219,6 +219,7 @@ type ListingViewEvent struct {
 	ViewerKind string
 	ViewedOn   pgtype.Date
 	CreatedAt  pgtype.Timestamptz
+	UserID     *int32
 }
 
 type LocationSummaryJob struct {
@@ -566,6 +567,7 @@ type User struct {
 	Birthday        pgtype.Date
 	PhoneNormalized *string
 	PhoneVerifiedAt pgtype.Timestamptz
+	LastSeenAt      pgtype.Timestamptz
 }
 
 type UserActivityEvent struct {

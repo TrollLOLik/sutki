@@ -14,9 +14,26 @@ export interface User {
   avatar_url: string;
   is_verified: boolean;
   birthday?: string;
+  created_at?: string;
   listings_count?: number;
   rating?: number;
   phone_normalized?: string;
   phone_verified_at?: string;
   vk_id?: string;
 }
+
+export type PublicUser = Pick<
+  User,
+  | 'id'
+  | 'name'
+  | 'surname'
+  | 'patronymic'
+  | 'phone'
+  | 'phone_verified_at'
+  | 'city'
+  | 'avatar_url'
+  | 'is_verified'
+  | 'created_at'
+  | 'listings_count'
+  | 'rating'
+>;

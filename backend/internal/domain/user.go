@@ -20,6 +20,7 @@ type User struct {
 	AvatarURL       string
 	IsVerified      bool
 	Birthday        *time.Time
+	CreatedAt       time.Time
 	ListingsCount   int32
 	Rating          float64
 	VKID            string

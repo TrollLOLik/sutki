@@ -367,15 +367,15 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrBookingForbidden):
-			writeError(w, http.StatusForbidden, "not a participant of this conversation")
+			writeError(w, http.StatusForbidden, "У вас нет доступа к этому диалогу.")
 		case errors.Is(err, chat.ErrRecipientDeleted):
-			writeError(w, http.StatusBadRequest, "нельзя написать этому пользователю, так как его профиль удален")
+			writeError(w, http.StatusBadRequest, "Нельзя написать этому пользователю: его профиль удалён.")
 		case errors.Is(err, chat.ErrEmptyMessage):
-			writeError(w, http.StatusBadRequest, "message cannot be empty")
+			writeError(w, http.StatusBadRequest, "Сообщение не может быть пустым.")
 		case errors.Is(err, chat.ErrInvalidAttachment):
-			writeError(w, http.StatusBadRequest, "invalid attachment reference")
+			writeError(w, http.StatusBadRequest, "Некорректное вложение. Выберите файл ещё раз.")
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
-			writeError(w, http.StatusBadRequest, "attachment exceeds 15MB limit")
+			writeError(w, http.StatusBadRequest, "Размер вложения превышает 15 МБ.")
 		case errors.Is(err, domain.ErrUnsafeImage):
 			writeError(w, http.StatusUnprocessableEntity, "Изображение не прошло модерацию. Выберите другое фото.")
 		case errors.Is(err, domain.ErrImageModerationUnavailable):
@@ -457,9 +457,9 @@ func (h *ChatHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, chat.ErrFileTooLarge):
-			writeError(w, http.StatusBadRequest, "file size exceeds 15MB limit")
+			writeError(w, http.StatusBadRequest, "Размер файла превышает 15 МБ.")
 		case errors.Is(err, chat.ErrFileTypeNotAllowed):
-			writeError(w, http.StatusBadRequest, "file type is not allowed")
+			writeError(w, http.StatusBadRequest, "Этот тип файла не поддерживается. Выберите PDF, TXT, DOC, DOCX, XLS или XLSX.")
 		default:
 			log.Printf("[Chat] PresignUpload error (user=%d): %v", userID, err)
 			writeInternalError(w, r, err, "internal error")

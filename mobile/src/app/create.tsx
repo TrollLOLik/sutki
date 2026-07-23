@@ -54,6 +54,25 @@ const MIN_LISTING_PRICE = 150;
 const MAX_LISTING_PRICE = 100_000_000;
 const MAX_LISTING_GUESTS = 100;
 
+type ValidationAnchor =
+  | 'category'
+  | 'rooms'
+  | 'city'
+  | 'street'
+  | 'house'
+  | 'area'
+  | 'price'
+  | 'guests'
+  | 'description'
+  | 'checkIn'
+  | 'checkOut'
+  | 'photos';
+
+type StepValidationError = {
+  message: string;
+  anchor: ValidationAnchor;
+};
+
 const formatTimeInput = (text: string) => {
   const digits = text.replace(/\D/g, '').split('');
   const result: string[] = [];
@@ -122,6 +141,9 @@ export default function CreateListingScreen() {
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const formScrollRef = useRef<ScrollView>(null);
+  const fieldRefsRef = useRef<Partial<Record<ValidationAnchor, View>>>({});
+  const pendingErrorAnchorRef = useRef<ValidationAnchor | null>(null);
   const [published, setPublished] = useState(false);
   const [publishedListingId, setPublishedListingId] = useState<number | null>(null);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
@@ -681,36 +703,99 @@ export default function CreateListingScreen() {
     );
   }
 
-  const validateStep = (s: number): string | null => {
+  const scrollToErrorAnchor = (anchor: ValidationAnchor) => {
+    pendingErrorAnchorRef.current = anchor;
+    const field = fieldRefsRef.current[anchor];
+    const scrollContentNode = formScrollRef.current?.getInnerViewNode?.();
+    if (!field || !scrollContentNode) return;
+
+    requestAnimationFrame(() => {
+      field.measureLayout(
+        scrollContentNode,
+        (_x, y) => {
+          formScrollRef.current?.scrollTo({ y: Math.max(0, y - 18), animated: true });
+          pendingErrorAnchorRef.current = null;
+        },
+        () => {
+          formScrollRef.current?.scrollTo({ y: 0, animated: true });
+        },
+      );
+    });
+  };
+
+  const registerValidationAnchor =
+    (anchor: ValidationAnchor) =>
+    (node: View | null) => {
+      if (!node) {
+        delete fieldRefsRef.current[anchor];
+        return;
+      }
+      fieldRefsRef.current[anchor] = node;
+      if (pendingErrorAnchorRef.current === anchor) setTimeout(() => scrollToErrorAnchor(anchor), 0);
+    };
+
+  const showValidationError = (validationError: StepValidationError, targetStep = step) => {
+    pendingErrorAnchorRef.current = validationError.anchor;
+    setError(validationError.message);
+
+    if (targetStep !== step) {
+      fieldRefsRef.current = {};
+      setStep(targetStep);
+      return;
+    }
+
+    if (error === validationError.message) {
+      scrollToErrorAnchor(validationError.anchor);
+    }
+  };
+
+  const validateStep = (s: number): StepValidationError | null => {
     switch (s) {
       case 0:
-        if (draft.categoryIds.length === 0) return 'Выберите тип жилья';
-        if (!draft.countRoom) return 'Укажите количество комнат';
+        if (draft.categoryIds.length === 0) return { message: 'Выберите тип жилья', anchor: 'category' };
+        if (!draft.countRoom) return { message: 'Укажите количество комнат', anchor: 'rooms' };
         return null;
       case 1:
-        if (draft.city.trim().length < 2) return 'Укажите город';
-        if (draft.street.trim().length < 2) return 'Укажите улицу';
-        if (draft.houseNumber.trim().length < 1) return 'Укажите номер дома';
+        if (draft.city.trim().length < 2) return { message: 'Укажите город', anchor: 'city' };
+        if (draft.street.trim().length < 2) return { message: 'Укажите улицу', anchor: 'street' };
+        if (draft.houseNumber.trim().length < 1) return { message: 'Укажите номер дома', anchor: 'house' };
         return null;
       case 2:
         if (Number(draft.area) < MIN_LISTING_AREA || Number(draft.area) > MAX_LISTING_AREA) {
-          return `Площадь должна быть от ${MIN_LISTING_AREA} до ${MAX_LISTING_AREA.toLocaleString('ru-RU')} м²`;
+          return {
+            message: `Площадь должна быть от ${MIN_LISTING_AREA} до ${MAX_LISTING_AREA.toLocaleString('ru-RU')} м²`,
+            anchor: 'area',
+          };
         }
         if (Number(draft.price) < MIN_LISTING_PRICE || Number(draft.price) > MAX_LISTING_PRICE) {
-          return `Цена должна быть от ${MIN_LISTING_PRICE} до ${MAX_LISTING_PRICE.toLocaleString('ru-RU')} ₽ за ночь`;
+          return {
+            message: `Цена должна быть от ${MIN_LISTING_PRICE} до ${MAX_LISTING_PRICE.toLocaleString('ru-RU')} ₽ за ночь`,
+            anchor: 'price',
+          };
         }
         if (draft.maxGuests !== '' && (Number(draft.maxGuests) < 1 || Number(draft.maxGuests) > MAX_LISTING_GUESTS)) {
-          return `Количество гостей должно быть от 1 до ${MAX_LISTING_GUESTS}`;
+          return {
+            message: `Количество гостей должно быть от 1 до ${MAX_LISTING_GUESTS}`,
+            anchor: 'guests',
+          };
         }
         return null;
       case 3: {
-        if (draft.description.trim().length < 10) return 'Добавьте описание (минимум 10 символов)';
+        if (draft.description.trim().length < 10) {
+          return { message: 'Добавьте описание (минимум 10 символов)', anchor: 'description' };
+        }
         const timeRegex = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
         if (draft.checkInAfter && !timeRegex.test(draft.checkInAfter)) {
-          return 'Время заезда должно быть в формате ЧЧ:ММ (например, 14:00)';
+          return {
+            message: 'Время заезда должно быть в формате ЧЧ:ММ (например, 14:00)',
+            anchor: 'checkIn',
+          };
         }
         if (draft.checkOutBefore && !timeRegex.test(draft.checkOutBefore)) {
-          return 'Время выезда должно быть в формате ЧЧ:ММ (например, 12:00)';
+          return {
+            message: 'Время выезда должно быть в формате ЧЧ:ММ (например, 12:00)',
+            anchor: 'checkOut',
+          };
         }
         return null;
       }
@@ -719,10 +804,16 @@ export default function CreateListingScreen() {
         const hasUploading = statuses.some((s) => s && !s.key && !s.error);
         const hasError = statuses.some((s) => s && s.error);
         if (hasUploading) {
-          return 'Пожалуйста, дождитесь окончания загрузки всех фотографий.';
+          return {
+            message: 'Пожалуйста, дождитесь окончания загрузки всех фотографий.',
+            anchor: 'photos',
+          };
         }
         if (hasError) {
-          return 'Некоторые фотографии не удалось загрузить. Попробуйте еще раз или удалите их.';
+          return {
+            message: 'Некоторые фотографии не удалось загрузить. Попробуйте ещё раз или удалите их.',
+            anchor: 'photos',
+          };
         }
         return null;
       }
@@ -734,7 +825,7 @@ export default function CreateListingScreen() {
   const goNext = () => {
     const err = validateStep(step);
     if (err) {
-      setError(err);
+      showValidationError(err);
       return;
     }
     setError(null);
@@ -752,8 +843,7 @@ export default function CreateListingScreen() {
     for (let candidateStep = 0; candidateStep < TOTAL_STEPS - 1; candidateStep += 1) {
       const validationError = validateStep(candidateStep);
       if (validationError) {
-        setStep(candidateStep);
-        setError(validationError);
+        showValidationError(validationError, candidateStep);
         return;
       }
     }
@@ -1001,6 +1091,7 @@ export default function CreateListingScreen() {
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
+          ref={formScrollRef}
           className="flex-1"
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 28 }}
           keyboardShouldPersistTaps="handled">
@@ -1031,7 +1122,7 @@ export default function CreateListingScreen() {
             )}
           {step === 0 && (
             <View className="gap-6">
-              <View className="gap-3">
+              <View ref={registerValidationAnchor('category')} collapsable={false} className="gap-3">
                 <Text className="text-base font-semibold text-ink">Какое жильё вы сдаёте?</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {(categories ?? []).map((c) => (
@@ -1049,7 +1140,7 @@ export default function CreateListingScreen() {
                 </Text>
               </View>
               <View className="h-px bg-line" />
-              <View className="gap-3">
+              <View ref={registerValidationAnchor('rooms')} collapsable={false} className="gap-3">
                 <Text className="text-base font-semibold text-ink">Количество комнат</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {ROOM_OPTIONS.map((r) => (
@@ -1079,7 +1170,7 @@ export default function CreateListingScreen() {
           {step === 1 && (
             <View className="gap-5">
               {/* City Input */}
-              <View className="gap-2">
+              <View ref={registerValidationAnchor('city')} collapsable={false} className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Город</Text>
                 <Input
                   icon="location-outline"
@@ -1118,7 +1209,7 @@ export default function CreateListingScreen() {
               </View>
 
               {/* Street Input */}
-              <View className="gap-2">
+              <View ref={registerValidationAnchor('street')} collapsable={false} className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Улица</Text>
                 <Input
                   icon="map-outline"
@@ -1158,7 +1249,7 @@ export default function CreateListingScreen() {
               </View>
 
               {/* House Input */}
-              <View className="gap-2">
+              <View ref={registerValidationAnchor('house')} collapsable={false} className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Дом</Text>
                 <Input
                   icon="home-outline"
@@ -1287,7 +1378,7 @@ export default function CreateListingScreen() {
                 </HintCard.Text>
               </HintCard>
               <View className="flex-row gap-3">
-                <View className="flex-1 gap-2">
+                <View ref={registerValidationAnchor('area')} collapsable={false} className="flex-1 gap-2">
                   <Text className="text-sm font-medium text-ink-secondary">Площадь, м²</Text>
                   <Input
                     icon="resize-outline"
@@ -1297,7 +1388,7 @@ export default function CreateListingScreen() {
                     onChangeText={(t) => draft.setField('area', t.replace(/[^0-9]/g, ''))}
                   />
                 </View>
-                <View className="flex-1 gap-2">
+                <View ref={registerValidationAnchor('price')} collapsable={false} className="flex-1 gap-2">
                   <Text className="text-sm font-medium text-ink-secondary">Цена за ночь, ₽</Text>
                   <Input
                     icon="cash-outline"
@@ -1308,7 +1399,7 @@ export default function CreateListingScreen() {
                   />
                 </View>
               </View>
-              <View className="gap-2">
+              <View ref={registerValidationAnchor('guests')} collapsable={false} className="gap-2">
                 <Text className="text-sm font-medium text-ink-secondary">Гостей (макс.)</Text>
                 <Input
                   icon="people-outline"
@@ -1336,7 +1427,7 @@ export default function CreateListingScreen() {
           )}
 
           {step === 3 && (
-            <View className="gap-3">
+            <View ref={registerValidationAnchor('description')} collapsable={false} className="gap-3">
               <View className="flex-row items-center justify-between">
                 <Text className="text-base font-semibold text-ink">Расскажите о жилье</Text>
                 <TouchableOpacity
@@ -1431,7 +1522,7 @@ export default function CreateListingScreen() {
                 <Text className="text-base font-semibold text-ink">Правила заселения</Text>
                 
                 <View className="flex-row gap-3">
-                  <View className="flex-1 gap-2">
+                  <View ref={registerValidationAnchor('checkIn')} collapsable={false} className="flex-1 gap-2">
                     <Text className="text-sm font-medium text-ink-secondary">Заезд после (ЧЧ:ММ)</Text>
                     <Input
                       placeholder="14:00"
@@ -1441,7 +1532,7 @@ export default function CreateListingScreen() {
                       keyboardType="number-pad"
                     />
                   </View>
-                  <View className="flex-1 gap-2">
+                  <View ref={registerValidationAnchor('checkOut')} collapsable={false} className="flex-1 gap-2">
                     <Text className="text-sm font-medium text-ink-secondary">Выезд до (ЧЧ:ММ)</Text>
                     <Input
                       placeholder="12:00"
@@ -1538,7 +1629,7 @@ export default function CreateListingScreen() {
           )}
 
           {step === 4 && (
-            <View className="gap-4">
+            <View ref={registerValidationAnchor('photos')} collapsable={false} className="gap-4">
               <HintCard title="Как сделать хорошие фотографии">
                 <HintCard.Text>
                   Качественные фотографии привлекают больше внимания и помогают быстрее сдать жильё.

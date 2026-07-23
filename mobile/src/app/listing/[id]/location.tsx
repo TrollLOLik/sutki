@@ -148,7 +148,10 @@ export default function LocationScreen() {
                 </View>
               </View>
               <View style={[styles.badge, isFuzzed ? styles.badgeFuzzed : styles.badgeExact]}>
-                <Text style={[styles.badgeText, isFuzzed ? styles.badgeTextFuzzed : styles.badgeTextExact]}>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.badgeText, isFuzzed ? styles.badgeTextFuzzed : styles.badgeTextExact]}>
                   {isFuzzed ? 'Приблизительно' : 'Точный адрес'}
                 </Text>
               </View>
