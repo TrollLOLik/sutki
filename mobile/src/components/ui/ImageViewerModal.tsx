@@ -52,12 +52,16 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 						initialIndex={initialIndex}
 						onIndexChange={setCurrentIndex}
 						onSwipeToClose={onClose}
+						maxScale={4}
+						doubleTapScale={2.5}
+						disableTransitionOnScaledImage
+						hideAdjacentImagesOnScaledImage
 						renderItem={({ item, setImageDimensions }) => (
 							<Image
 								source={{ uri: item }}
 								style={{ flex: 1 }}
 								contentFit="contain"
-								transition={150}
+								transition={0}
 								onLoad={(e) => {
 									const { width, height } = e.source;
 									setImageDimensions({ width, height });
