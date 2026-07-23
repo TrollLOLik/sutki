@@ -98,6 +98,9 @@ var (
 
 	// Chat conversation-creation limiter (1 hour window, anti-spam)
 	ChatConversationLimiter = NewSlidingWindowLimiter(time.Hour)
+	// Ephemeral typing publications. Normal clients emit at most once every
+	// two seconds, so this still leaves generous reconnect headroom.
+	ChatTypingLimiter = NewSlidingWindowLimiter(time.Minute)
 
 	ViewIdentityLimiter = NewSlidingWindowLimiter(time.Hour)
 	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)

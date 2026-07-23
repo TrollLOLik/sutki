@@ -25,6 +25,7 @@ import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
+import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
 import { Button, Chip, BottomSheet } from '@/components/ui';
@@ -39,6 +40,7 @@ import { requireAuth } from '@/lib/requireAuth';
 import { countActiveFilters, useFiltersStore, type RoomFilter } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { useTabBarStore } from '@/store/tabbar';
+import { useListingLayoutStore } from '@/store/listing-layout';
 import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -57,6 +59,8 @@ export default function SearchScreen() {
   const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
   const [query, setQuery] = useState('');
   const filters = useFiltersStore();
+  const layoutMode = useListingLayoutStore((state) => state.discovery);
+  const toggleLayoutMode = useListingLayoutStore((state) => state.toggleMode);
   const insets = useSafeAreaInsets();
 
   const [searchModalVisible, setSearchModalVisible] = useState(false);
@@ -155,6 +159,10 @@ export default function SearchScreen() {
   const { status: authStatus, user } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
   const isGuest = authStatus === 'guest';
+
+  useEffect(() => {
+    filters.applyProfileCityIfUnset(user?.city);
+  }, [filters.applyProfileCityIfUnset, user?.city]);
 
   const isFavoritesOnlyEmpty = filters.favoritesOnly && (!favoriteIds || favoriteIds.size === 0);
   const searchConstraintCount = countActiveFilters(filters);
@@ -378,6 +386,11 @@ export default function SearchScreen() {
               </Pressable>
             ) : null}
           </Pressable>
+          <ListingLayoutToggle
+            mode={layoutMode}
+            onToggle={() => toggleLayoutMode('discovery')}
+            marginRight={10}
+          />
           <Pressable
             accessibilityLabel="Фильтры"
             onPress={() =>
@@ -505,12 +518,19 @@ export default function SearchScreen() {
 
       {isLoading ? (
         <FlatList
+          key={`loading-${layoutMode}`}
           data={[0, 1, 2, 3]}
+          numColumns={layoutMode === 'grid' ? 2 : 1}
+          columnWrapperStyle={layoutMode === 'grid' ? { gap: 12 } : undefined}
           keyExtractor={(i) => String(i)}
           contentContainerClassName="px-4"
           contentContainerStyle={{ paddingTop: listPaddingTop, paddingBottom: 112 }}
           showsVerticalScrollIndicator={false}
-          renderItem={() => <ListingCardSkeleton />}
+          renderItem={() => (
+            <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+              <ListingCardSkeleton layout={layoutMode} />
+            </View>
+          )}
         />
       ) : isError ? (
         <View style={{ paddingTop: listPaddingTop }} className="flex-1 gap-4 px-4">
@@ -525,7 +545,10 @@ export default function SearchScreen() {
         </View>
       ) : similarPending ? (
         <FlatList
+          key={`similar-loading-${layoutMode}`}
           data={[0, 1, 2]}
+          numColumns={layoutMode === 'grid' ? 2 : 1}
+          columnWrapperStyle={layoutMode === 'grid' ? { gap: 12 } : undefined}
           keyExtractor={(i) => String(i)}
           contentContainerClassName="px-4"
           contentContainerStyle={{ paddingTop: listPaddingTop, paddingBottom: 112 }}
@@ -538,7 +561,11 @@ export default function SearchScreen() {
               </Text>
             </View>
           }
-          renderItem={() => <ListingCardSkeleton />}
+          renderItem={() => (
+            <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+              <ListingCardSkeleton layout={layoutMode} />
+            </View>
+          )}
         />
       ) : feedItems.length === 0 ? (
         <View style={{ paddingTop: listPaddingTop }} className="flex-1 px-4">
@@ -551,7 +578,10 @@ export default function SearchScreen() {
         </View>
       ) : (
         <FlatList
+          key={`feed-${layoutMode}`}
           data={feedItems}
+          numColumns={layoutMode === 'grid' ? 2 : 1}
+          columnWrapperStyle={layoutMode === 'grid' ? { gap: 12 } : undefined}
           keyExtractor={(item) => String(item.id)}
           contentContainerClassName="px-4"
           contentContainerStyle={{ paddingTop: listPaddingTop, paddingBottom: 112 }}
@@ -588,21 +618,24 @@ export default function SearchScreen() {
             />
           }
           renderItem={({ item }) => (
-            <ListingCard
-              listing={item}
-              onPress={() =>
-                router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
-              }
-              isFavorite={favoriteIds?.has(item.id) ?? false}
-              isOwn={user?.id === item.owner_id}
-              isViewed={user?.id !== item.owner_id && (viewedListingIds?.has(item.id) ?? false)}
-              onToggleFavorite={() =>
-                toggleFavorite.mutate({
-                  id: item.id,
-                  isFavorite: favoriteIds?.has(item.id) ?? false,
-                })
-              }
-            />
+            <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+              <ListingCard
+                listing={item}
+                layout={layoutMode}
+                onPress={() =>
+                  router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
+                }
+                isFavorite={favoriteIds?.has(item.id) ?? false}
+                isOwn={user?.id === item.owner_id}
+                isViewed={user?.id !== item.owner_id && (viewedListingIds?.has(item.id) ?? false)}
+                onToggleFavorite={() =>
+                  toggleFavorite.mutate({
+                    id: item.id,
+                    isFavorite: favoriteIds?.has(item.id) ?? false,
+                  })
+                }
+              />
+            </View>
           )}
         />
       )}

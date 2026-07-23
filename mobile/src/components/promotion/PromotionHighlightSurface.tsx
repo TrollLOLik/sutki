@@ -112,7 +112,7 @@ export function PromotionBadge({ highlighted }: PromotionBadgeProps) {
         style={styles.highlightBadge}
       >
         <Ionicons name="sparkles" size={11} color="#FFFFFF" />
-        <Text style={styles.badgeText}>Яркая карточка</Text>
+        <Text style={styles.badgeText}>ЛУЧШЕЕ</Text>
       </LinearGradient>
     );
   }
@@ -120,7 +120,7 @@ export function PromotionBadge({ highlighted }: PromotionBadgeProps) {
   return (
     <View style={styles.promotionBadge}>
       <Ionicons name="trending-up" size={11} color="#FFFFFF" />
-      <Text style={styles.badgeText}>Продвигается</Text>
+      <Text style={styles.badgeText}>ТОП</Text>
     </View>
   );
 }

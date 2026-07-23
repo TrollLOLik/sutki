@@ -57,9 +57,9 @@ function pluralize(count: number, one: string, few: string, many: string) {
 
 /**
  * Resolves the camera center on mount using a strict priority order:
- *   1. GPS coordinates (only if permission was already granted — we never prompt
+ *   1. the active search city (manual or the one-time profile default);
+ *   2. GPS coordinates (only if permission was already granted — we never prompt
  *      on mount), capped by a 3s timeout so it never blocks the start camera;
- *   2. the active search city (filters.city) or the user's profile city;
  *   3. the city detected from the client IP via the backend iplocate proxy;
  *   4. the hardcoded default (Magnitogorsk).
  *
@@ -69,7 +69,14 @@ async function resolveInitialCenter(
   hasLocationPermission: boolean,
   city: string | null,
 ): Promise<InitialRegion> {
-  // 1. GPS (no prompt — only if already granted).
+  // 1. Explicit/default city. It must not be silently replaced by GPS.
+  const cityName = (city ?? '').trim();
+  if (cityName.length > 0) {
+    const point = await safeGeocode(cityName);
+    if (point) return { lat: point.lat, lon: point.lon, zoom: DEFAULT_ZOOM };
+  }
+
+  // 2. GPS (no prompt — only if already granted).
   if (hasLocationPermission) {
     try {
       const coords = await Promise.race([
@@ -84,12 +91,8 @@ async function resolveInitialCenter(
     }
   }
 
-  // 2 & 3. City → geocode, then IP geolocation → geocode.
-  const cityName = (city ?? '').trim();
-  if (cityName.length > 0) {
-    const point = await safeGeocode(cityName);
-    if (point) return { lat: point.lat, lon: point.lon, zoom: DEFAULT_ZOOM };
-  } else {
+  // 3. IP geolocation.
+  if (cityName.length === 0) {
     const ipCity = await detectCityByIP();
     if (ipCity) {
       const point = await safeGeocode(ipCity);
@@ -142,6 +145,10 @@ export default function MapScreen() {
   const { data: favoriteIds } = useFavoriteIds();
   const { data: viewedListingIds } = useViewedListingIds();
   const filters = useFiltersStore();
+
+  useEffect(() => {
+    filters.applyProfileCityIfUnset(user?.city);
+  }, [filters.applyProfileCityIfUnset, user?.city]);
 
   // ── Loading strategy ──────────────────────────────────────────────────────
   // Mount = city-list (no bbox — camera not yet settled). After "search in this

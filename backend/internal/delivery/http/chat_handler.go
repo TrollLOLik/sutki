@@ -30,6 +30,9 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Get("/conversations/{id}/messages", h.getMessages)
 	r.Post("/conversations/{id}/messages", h.sendMessage)
 	r.Post("/conversations/{id}/read", h.readMessages)
+	r.Get("/conversations/{id}/presence", h.conversationPresence)
+	r.Post("/conversations/{id}/typing", h.typing)
+	r.Post("/presence/heartbeat", h.presenceHeartbeat)
 	r.Post("/attachments/presign", h.presignUpload)
 }
 
@@ -56,6 +59,10 @@ func (h *ChatHandler) wsTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.svc.TouchPresence(r.Context(), userID); err != nil {
+		log.Printf("chat presence heartbeat during token issue (user=%d): %v", userID, err)
+	}
+
 	token, err := h.svc.ConnectionToken(userID)
 	if err != nil {
 		writeInternalError(w, r, err, "failed to generate token")
@@ -65,6 +72,78 @@ func (h *ChatHandler) wsTokens(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"connection_token": token,
 	})
+}
+
+func (h *ChatHandler) presenceHeartbeat(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err := h.svc.TouchPresence(r.Context(), userID); err != nil {
+		writeInternalError(w, r, err, "failed to update presence")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ChatHandler) conversationPresence(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	convID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || convID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	presence, err := h.svc.ConversationPresence(r.Context(), userID, convID)
+	if err != nil {
+		if errors.Is(err, domain.ErrBookingForbidden) {
+			writeError(w, http.StatusForbidden, "not a participant of this conversation")
+			return
+		}
+		writeInternalError(w, r, err, "failed to get conversation presence")
+		return
+	}
+	writeJSON(w, http.StatusOK, presence)
+}
+
+type typingRequest struct {
+	Active bool `json:"active"`
+}
+
+func (h *ChatHandler) typing(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	convID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || convID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	if !ChatTypingLimiter.Allow(fmt.Sprintf("chat_typing_user_%d", userID), 90) {
+		writeError(w, http.StatusTooManyRequests, "too many typing updates")
+		return
+	}
+
+	var req typingRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if err := h.svc.PublishTyping(r.Context(), userID, convID, req.Active); err != nil {
+		if errors.Is(err, domain.ErrBookingForbidden) {
+			writeError(w, http.StatusForbidden, "not a participant of this conversation")
+			return
+		}
+		writeInternalError(w, r, err, "failed to publish typing state")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type subscriptionTokenRequest struct {

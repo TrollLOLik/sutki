@@ -109,6 +109,13 @@ type ConversationSummary struct {
 	HouseCoverPath         string     `json:"house_cover_path"`
 }
 
+// ConversationPresence combines live Centrifugo presence with the durable
+// heartbeat used after the other participant disconnects.
+type ConversationPresence struct {
+	Online     bool       `json:"online"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+}
+
 // HostResponseStats summarizes how quickly a host replies to guest message
 // batches in one-on-one conversations.
 type HostResponseStats struct {

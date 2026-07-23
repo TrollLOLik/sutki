@@ -512,6 +512,31 @@ func (r *ChatRepo) GetOtherParticipantID(ctx context.Context, convID int64, user
 	})
 }
 
+func (r *ChatRepo) TouchUserLastSeen(ctx context.Context, userID int32) error {
+	_, err := r.q.DB().Exec(ctx, `
+		UPDATE "user"
+		SET last_seen_at = now()
+		WHERE id = $1 AND deleted = false AND enable = true
+	`, userID)
+	return err
+}
+
+func (r *ChatRepo) GetUserLastSeen(ctx context.Context, userID int32) (*time.Time, error) {
+	var value pgtype.Timestamptz
+	if err := r.q.DB().QueryRow(ctx, `
+		SELECT last_seen_at
+		FROM "user"
+		WHERE id = $1
+	`, userID).Scan(&value); err != nil {
+		return nil, err
+	}
+	if !value.Valid {
+		return nil, nil
+	}
+	lastSeen := value.Time
+	return &lastSeen, nil
+}
+
 // GetChatEmailInfo returns the other participant's id and email plus the
 // sender's display name in a single round-trip, for the "new message" email.
 // The recipient's email is returned empty when their account is deleted or

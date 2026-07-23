@@ -46,10 +46,16 @@ export interface UploadTarget {
 	key: string;
 }
 
+export interface ConversationPresence {
+	online: boolean;
+	last_seen_at?: string;
+}
+
 export const chatKeys = {
 	all: ['chat'] as const,
 	conversations: () => [...chatKeys.all, 'conversations'] as const,
 	messages: (convID: number) => [...chatKeys.all, 'messages', convID] as const,
+	presence: (convID: number) => [...chatKeys.all, 'presence', convID] as const,
 };
 
 // 1. Fetch conversation list
@@ -90,6 +96,24 @@ export function useMessages(convID: number | undefined) {
 		},
 		enabled: convID != null && convID > 0,
 	});
+}
+
+export function fetchConversationPresence(convID: number): Promise<ConversationPresence> {
+	return api.get<ConversationPresence>(`/api/v1/chat/conversations/${convID}/presence`);
+}
+
+export function useConversationPresence(convID: number | undefined) {
+	return useQuery({
+		queryKey: chatKeys.presence(convID ?? 0),
+		queryFn: () => fetchConversationPresence(convID as number),
+		enabled: convID != null && convID > 0,
+		refetchInterval: 30_000,
+		staleTime: 10_000,
+	});
+}
+
+export function publishTyping(convID: number, active: boolean): Promise<void> {
+	return api.post<void>(`/api/v1/chat/conversations/${convID}/typing`, { active });
 }
 
 // 3. Create or find conversation

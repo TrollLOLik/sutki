@@ -28,6 +28,7 @@ import {
   type RoomFilter,
 } from '@/store/filters';
 import { appAlert as Alert } from '@/components/AppAlert';
+import { useListingLayoutStore } from '@/store/listing-layout';
 
 const SORT_OPTIONS: SortOption<ListingSort>[] = [
   { value: 'newest', label: 'Сначала новые', icon: 'arrow-down-outline' },
@@ -70,6 +71,8 @@ export default function MyListingsScreen() {
   const { data: favoriteIds } = useFavoriteIds();
   const [query, setQuery] = useState('');
   const [sortVisible, setSortVisible] = useState(false);
+  const layoutMode = useListingLayoutStore((state) => state.mine);
+  const toggleLayoutMode = useListingLayoutStore((state) => state.toggleMode);
   const filters = useMyListingFiltersStore();
   const sort = filters.sort;
   const unavailableHouseIds = useMemo(() => {
@@ -220,8 +223,11 @@ export default function MyListingsScreen() {
             sortVisible={sortVisible}
             onSortVisibleChange={setSortVisible}
             onSortChange={(value) => filters.setFilters({ sort: value })}
+            showSort={false}
             filterCount={filterCount}
             onFilterPress={() => router.push({ pathname: '/filters', params: { scope: 'mine' } })}
+            layoutMode={layoutMode}
+            onLayoutToggle={() => toggleLayoutMode('mine')}
           />
 
           <ScrollView
@@ -274,9 +280,16 @@ export default function MyListingsScreen() {
           </CollapsibleHeader>
 
         {isLoading ? (
-          <View className="flex-1 px-4 pt-1">
-            <ListingCardSkeleton />
-            <ListingCardSkeleton />
+          <View
+            className="flex-1 px-4 pt-1"
+            style={layoutMode === 'grid' ? { flexDirection: 'row', gap: 12 } : undefined}
+          >
+            <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+              <ListingCardSkeleton layout={layoutMode} />
+            </View>
+            <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+              <ListingCardSkeleton layout={layoutMode} />
+            </View>
           </View>
         ) : isError ? (
           <View 
@@ -306,7 +319,10 @@ export default function MyListingsScreen() {
           <EmptyState icon="search-outline" title="Ничего не найдено" subtitle="Измените запрос или сбросьте фильтры." />
         ) : (
           <FlatList
+            key={`my-listings-${layoutMode}`}
             data={items}
+            numColumns={layoutMode === 'grid' ? 2 : 1}
+            columnWrapperStyle={layoutMode === 'grid' ? { gap: 12 } : undefined}
             keyExtractor={(item) => String(item.id)}
             onScroll={collapsibleHeader.onScroll}
             onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
@@ -323,18 +339,21 @@ export default function MyListingsScreen() {
               />
             }
             renderItem={({ item }) => (
-              <ListingCard
-                listing={item}
-                showOwnerStats
-                onPress={() =>
-                  router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
-                }
-                onPromote={item.status !== 'rejected' && item.status !== 'unpublished'
-                  ? () => router.push({pathname:'/listing/[id]/promote' as any,params:{id:String(item.id)}})
-                  : undefined}
-                onUnpublish={item.status === 'active' ? () => changePublication(item.id, false) : undefined}
-                onPublish={item.status === 'unpublished' ? () => changePublication(item.id, true) : undefined}
-              />
+              <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+                <ListingCard
+                  listing={item}
+                  layout={layoutMode}
+                  showOwnerStats
+                  onPress={() =>
+                    router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
+                  }
+                  onPromote={item.status !== 'rejected' && item.status !== 'unpublished'
+                    ? () => router.push({pathname:'/listing/[id]/promote' as any,params:{id:String(item.id)}})
+                    : undefined}
+                  onUnpublish={item.status === 'active' ? () => changePublication(item.id, false) : undefined}
+                  onPublish={item.status === 'unpublished' ? () => changePublication(item.id, true) : undefined}
+                />
+              </View>
             )}
           />
         )}

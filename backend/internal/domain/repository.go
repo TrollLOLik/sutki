@@ -185,6 +185,8 @@ type ChatRepository interface {
 	CheckParticipantExists(ctx context.Context, convID int64, userID int32) (bool, error)
 	IsOtherParticipantDeleted(ctx context.Context, convID int64, userID int32) (bool, error)
 	GetOtherParticipantID(ctx context.Context, convID int64, userID int32) (int32, error)
+	TouchUserLastSeen(ctx context.Context, userID int32) error
+	GetUserLastSeen(ctx context.Context, userID int32) (*time.Time, error)
 	// GetChatEmailInfo returns what the email notification needs about a
 	// conversation: the other participant's id and email, plus the sender's
 	// display name. recipientEmail is empty for deleted/disabled recipients.

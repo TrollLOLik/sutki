@@ -107,6 +107,53 @@ func (s *Service) ConnectionToken(userID int32) (string, error) {
 	return token.SignedString([]byte(s.hmacSecret))
 }
 
+func (s *Service) TouchPresence(ctx context.Context, userID int32) error {
+	return s.repo.TouchUserLastSeen(ctx, userID)
+}
+
+func (s *Service) ConversationPresence(ctx context.Context, userID int32, convID int64) (domain.ConversationPresence, error) {
+	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)
+	if err != nil {
+		return domain.ConversationPresence{}, err
+	}
+	if !isParticipant {
+		return domain.ConversationPresence{}, domain.ErrBookingForbidden
+	}
+
+	otherUserID, err := s.repo.GetOtherParticipantID(ctx, convID, userID)
+	if err != nil {
+		return domain.ConversationPresence{}, err
+	}
+	lastSeenAt, err := s.repo.GetUserLastSeen(ctx, otherUserID)
+	if err != nil {
+		return domain.ConversationPresence{}, err
+	}
+
+	online, err := s.isUserOnline(otherUserID)
+	if err != nil {
+		// Last-seen remains useful if the realtime service is temporarily
+		// unavailable; presence must not break opening the dialog.
+		log.Printf("chat presence: lookup for user %d failed: %v", otherUserID, err)
+	}
+	return domain.ConversationPresence{Online: online, LastSeenAt: lastSeenAt}, nil
+}
+
+func (s *Service) PublishTyping(ctx context.Context, userID int32, convID int64, active bool) error {
+	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)
+	if err != nil {
+		return err
+	}
+	if !isParticipant {
+		return domain.ErrBookingForbidden
+	}
+
+	return s.centrifugoPublish(fmt.Sprintf("chat:conv_%d", convID), map[string]any{
+		"type":    "typing.changed",
+		"user_id": userID,
+		"active":  active,
+	})
+}
+
 // SubscriptionToken signs a subscription-JWT for a private channel
 func (s *Service) SubscriptionToken(ctx context.Context, userID int32, convID int64) (string, error) {
 	// Verify that user is a participant of the conversation

@@ -3,13 +3,34 @@ import { View, useWindowDimensions } from 'react-native';
 import { Skeleton } from '@/components/ui';
 
 /** Placeholder for a listing card while the feed loads (TZ §2 skeletons). */
-export function ListingCardSkeleton() {
+export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'grid' }) {
   const { width: screenWidth } = useWindowDimensions();
 
   // Mirrors the calculation in ListingCard
   const cardInnerWidth = screenWidth - 56;
   const imgWidth = cardInnerWidth * 0.45;
   const imgHeight = imgWidth * (3 / 4);
+
+  if (layout === 'grid') {
+    return (
+      <View style={{ flex: 1 }} className="mb-3 rounded-card border border-line bg-surface p-2">
+        <Skeleton width="100%" height={116} radius={13} />
+        <View className="gap-2 px-0.5 pb-1 pt-3">
+          <View className="flex-row items-center justify-between">
+            <Skeleton width="48%" height={20} radius={5} />
+            <Skeleton width="24%" height={13} radius={4} />
+          </View>
+          <Skeleton width="92%" height={15} radius={4} />
+          <Skeleton width="68%" height={15} radius={4} />
+          <Skeleton width="76%" height={12} radius={4} />
+          <View className="mt-1 flex-row gap-2">
+            <Skeleton width="30%" height={12} radius={4} />
+            <Skeleton width="36%" height={12} radius={4} />
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View className="mb-3 rounded-card border border-line bg-surface p-3">

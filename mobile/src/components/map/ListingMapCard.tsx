@@ -58,8 +58,14 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
                 <View style={styles.badgesRow}>
                   {promoted ? (
                     <View style={styles.promotionBadge}>
-                      <Ionicons name="sparkles" size={12} color={palette.primary} />
-                      <Text style={styles.promotionText}>Продвигается</Text>
+                      <Ionicons
+                        name={highlighted ? 'sparkles' : 'trending-up'}
+                        size={12}
+                        color={palette.primary}
+                      />
+                      <Text style={styles.promotionText}>
+                        {highlighted ? 'ЛУЧШЕЕ' : 'ТОП'}
+                      </Text>
                     </View>
                   ) : null}
                   {isOwn || isViewed ? (

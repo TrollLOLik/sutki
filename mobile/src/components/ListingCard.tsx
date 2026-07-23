@@ -19,6 +19,7 @@ import type { ListingCard as ListingCardModel } from '@/types/listing';
 
 interface ListingCardProps {
   listing: ListingCardModel;
+  layout?: 'list' | 'grid';
   onPress?: () => void;
   /** When set, a heart toggle is shown. */
   isFavorite?: boolean;
@@ -42,7 +43,19 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
   unpublished: { label: 'Снято с публикации', bg: '#EEF0F3', fg: '#606873' },
 };
 
-export function ListingCard({ listing, onPress, isFavorite, isOwn, isViewed, onToggleFavorite, onPromote, onUnpublish, onPublish, showOwnerStats = false }: ListingCardProps) {
+export function ListingCard({
+  listing,
+  layout = 'list',
+  onPress,
+  isFavorite,
+  isOwn,
+  isViewed,
+  onToggleFavorite,
+  onPromote,
+  onUnpublish,
+  onPublish,
+  showOwnerStats = false,
+}: ListingCardProps) {
   const { palette, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -80,6 +93,270 @@ export function ListingCard({ listing, onPress, isFavorite, isOwn, isViewed, onT
 
   const moderationBadge =
     listing.status && listing.status !== 'active' ? MODERATION_BADGES[listing.status] : undefined;
+
+  if (layout === 'grid') {
+    return (
+      <Animated.View style={[{ flex: 1, marginBottom: 12 }, animatedCardStyle]}>
+        <PromotionHighlightSurface active={isHighlighted} radius={19}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onPress}
+            onPressIn={() => {
+              pressScale.value = reduceMotion
+                ? 1
+                : withSpring(0.975, { damping: 22, stiffness: 340, mass: 0.6 });
+            }}
+            onPressOut={() => {
+              pressScale.value = reduceMotion
+                ? 1
+                : withSpring(1, { damping: 18, stiffness: 260, mass: 0.7 });
+            }}
+            style={{
+              minHeight: showOwnerStats ? 350 : 286,
+              borderRadius: isHighlighted ? 17.5 : 19,
+              borderWidth: isHighlighted ? 0 : 1,
+              borderColor: isHighlighted ? 'transparent' : palette.line,
+              backgroundColor: cardBackground,
+              padding: 8,
+              shadowColor: '#000000',
+              shadowOpacity: isHighlighted ? 0 : isDark ? 0.14 : 0.05,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 6 },
+              elevation: isHighlighted ? 0 : isDark ? 1 : 2,
+            }}
+          >
+            <View
+              style={{
+                width: '100%',
+                aspectRatio: 4 / 3,
+                overflow: 'hidden',
+                borderRadius: 13,
+                backgroundColor: palette.surfaceSkeleton,
+              }}
+            >
+              <ResilientImage
+                uri={listing.cover_url}
+                style={{ width: '100%', height: '100%' }}
+                fallbackSize={30}
+                transition={150}
+              />
+
+              {isPromoted ? (
+                <View style={{ position: 'absolute', top: 7, left: 7, maxWidth: '72%' }}>
+                  <PromotionBadge highlighted={isHighlighted} />
+                </View>
+              ) : null}
+
+              {onToggleFavorite ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+                  hitSlop={6}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onToggleFavorite();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 7,
+                    right: 7,
+                    width: 34,
+                    height: 34,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 17,
+                    borderWidth: 1,
+                    borderColor: palette.line,
+                    backgroundColor: palette.overlaySurface,
+                  }}
+                >
+                  <Ionicons
+                    name={isFavorite ? 'heart' : 'heart-outline'}
+                    size={19}
+                    color={isFavorite ? palette.primary : palette.inkSecondary}
+                  />
+                </Pressable>
+              ) : null}
+
+              {isOwn || isViewed ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    bottom: 7,
+                    left: 7,
+                    maxWidth: '82%',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: isOwn ? palette.primary : palette.line,
+                    backgroundColor: isOwn ? palette.primary : palette.overlaySurface,
+                    paddingHorizontal: 7,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Ionicons
+                    name={isOwn ? 'home-outline' : 'eye-outline'}
+                    size={11}
+                    color={isOwn ? '#FFFFFF' : palette.inkSecondary}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      flexShrink: 1,
+                      color: isOwn ? '#FFFFFF' : palette.inkSecondary,
+                      fontSize: 9,
+                      fontWeight: '800',
+                    }}
+                  >
+                    {isOwn ? 'Ваше' : 'Просмотрено'}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={{ flex: 1, paddingHorizontal: 2, paddingTop: 9 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{ flex: 1, color: palette.ink, fontSize: 17, fontWeight: '900' }}
+                >
+                  {formatRub(listing.price)} ₽
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                  <Ionicons name="star" size={13} color="#FFB400" />
+                  <Text style={{ color: palette.ink, fontSize: 11, fontWeight: '800' }}>
+                    {formatRating(listing.rating).replace('.', ',')}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                numberOfLines={2}
+                style={{ minHeight: 38, marginTop: 5, color: palette.ink, fontSize: 14, lineHeight: 19, fontWeight: '800' }}
+              >
+                {getCardTitle()}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{ marginTop: 3, color: palette.inkSecondary, fontSize: 11 }}
+              >
+                {listing.address}
+              </Text>
+
+              <View style={{ marginTop: 7, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Ionicons name="expand-outline" size={12} color={palette.inkMuted} />
+                  <Text style={{ color: palette.inkSecondary, fontSize: 10 }}>{listing.area} м²</Text>
+                </View>
+                <View style={{ minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Ionicons name="bed-outline" size={12} color={palette.inkMuted} />
+                  <Text numberOfLines={1} style={{ flexShrink: 1, color: palette.inkSecondary, fontSize: 10 }}>
+                    {formatRoomsPlural(listing.rooms)}
+                  </Text>
+                </View>
+              </View>
+
+              {moderationBadge ? (
+                <View
+                  style={{
+                    alignSelf: 'flex-start',
+                    maxWidth: '100%',
+                    marginTop: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    borderRadius: 999,
+                    backgroundColor: moderationBadge.bg,
+                    paddingHorizontal: 8,
+                    paddingVertical: 5,
+                  }}
+                >
+                  <Ionicons
+                    name={listing.status === 'rejected' ? 'close-circle' : listing.status === 'unpublished' ? 'eye-off-outline' : 'time-outline'}
+                    size={12}
+                    color={moderationBadge.fg}
+                  />
+                  <Text numberOfLines={1} style={{ flexShrink: 1, color: moderationBadge.fg, fontSize: 9, fontWeight: '800' }}>
+                    {moderationBadge.label}
+                  </Text>
+                </View>
+              ) : null}
+
+              {showOwnerStats && listing.views_30d != null ? (
+                <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="analytics-outline" size={13} color={palette.primary} />
+                  <Text numberOfLines={1} style={{ color: palette.inkSecondary, fontSize: 10, fontWeight: '700' }}>
+                    {listing.views_30d} за 30 дней
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {onPromote || onUnpublish || onPublish ? (
+              <View
+                style={{
+                  marginTop: 9,
+                  flexDirection: 'row',
+                  gap: 7,
+                  borderTopWidth: 1,
+                  borderTopColor: palette.line,
+                  paddingTop: 8,
+                }}
+              >
+                {onPromote ? (
+                  <Pressable
+                    accessibilityLabel="Продвигать"
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      onPromote();
+                    }}
+                    style={{
+                      flex: 1,
+                      height: 36,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 12,
+                      backgroundColor: palette.primaryLight,
+                    }}
+                  >
+                    <Ionicons name="rocket-outline" size={17} color={palette.primary} />
+                  </Pressable>
+                ) : null}
+                {onUnpublish || onPublish ? (
+                  <Pressable
+                    accessibilityLabel={onPublish ? 'Опубликовать снова' : 'Снять с публикации'}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      if (onPublish) onPublish();
+                      else onUnpublish?.();
+                    }}
+                    style={{
+                      flex: 1,
+                      height: 36,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: palette.line,
+                      backgroundColor: onPublish ? palette.primary : palette.surfaceMuted,
+                    }}
+                  >
+                    <Ionicons
+                      name={onPublish ? 'cloud-upload-outline' : 'eye-off-outline'}
+                      size={17}
+                      color={onPublish ? '#FFFFFF' : palette.inkSecondary}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+          </Pressable>
+        </PromotionHighlightSurface>
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View style={[{ marginBottom: 12 }, animatedCardStyle]}>

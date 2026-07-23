@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
 import { BottomSheet, MaterialSurface, SearchField } from '@/components/ui';
+import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
+import type { ListingLayoutMode } from '@/store/listing-layout';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface SortOption<T extends string> {
@@ -19,8 +21,11 @@ interface PersonalListToolbarProps<T extends string> {
   sortVisible: boolean;
   onSortVisibleChange: (visible: boolean) => void;
   onSortChange: (value: T) => void;
+  showSort?: boolean;
   filterCount?: number;
   onFilterPress?: () => void;
+  layoutMode?: ListingLayoutMode;
+  onLayoutToggle?: () => void;
 }
 
 export function PersonalListToolbar<T extends string>({
@@ -32,8 +37,11 @@ export function PersonalListToolbar<T extends string>({
   sortVisible,
   onSortVisibleChange,
   onSortChange,
+  showSort = true,
   filterCount = 0,
   onFilterPress,
+  layoutMode,
+  onLayoutToggle,
 }: PersonalListToolbarProps<T>) {
   const { palette } = useAppTheme();
 
@@ -55,27 +63,36 @@ export function PersonalListToolbar<T extends string>({
           placeholder={placeholder}
           containerStyle={{ flex: 1, marginRight: 10 }}
         />
-        <Pressable
-          onPress={() => onSortVisibleChange(true)}
-          style={{
-            width: 48,
-            height: 48,
-            marginRight: onFilterPress ? 10 : 0,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 24,
-            borderWidth: 1,
-            borderColor: palette.line,
-            backgroundColor: palette.surface,
-            shadowColor: '#1A1A1A',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 6,
-            elevation: 3,
-          }}
-          accessibilityLabel="Сортировка">
-          <Ionicons name="swap-vertical-outline" size={22} color={palette.primary} />
-        </Pressable>
+        {showSort ? (
+          <Pressable
+            onPress={() => onSortVisibleChange(true)}
+            style={{
+              width: 48,
+              height: 48,
+              marginRight: onFilterPress || onLayoutToggle ? 10 : 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 24,
+              borderWidth: 1,
+              borderColor: palette.line,
+              backgroundColor: palette.surface,
+              shadowColor: '#1A1A1A',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
+            accessibilityLabel="Сортировка">
+            <Ionicons name="swap-vertical-outline" size={22} color={palette.primary} />
+          </Pressable>
+        ) : null}
+        {layoutMode && onLayoutToggle ? (
+          <ListingLayoutToggle
+            mode={layoutMode}
+            onToggle={onLayoutToggle}
+            marginRight={onFilterPress ? 10 : 0}
+          />
+        ) : null}
         {onFilterPress ? (
           <Pressable
             onPress={onFilterPress}
@@ -107,7 +124,7 @@ export function PersonalListToolbar<T extends string>({
       </View>
 
       <BottomSheet
-        visible={sortVisible}
+        visible={showSort && sortVisible}
         onClose={() => onSortVisibleChange(false)}
         height={Math.min(560, 154 + sortOptions.length * 66)}>
         <View className="flex-row items-center gap-3">

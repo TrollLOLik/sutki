@@ -19,6 +19,8 @@ export const secureStorage = {
 export const SECURE_KEYS = {
   accessToken: 'sutki.accessToken',
   refreshToken: 'sutki.refreshToken',
+  searchCityPreference: 'sutki.searchCityPreference',
+  listingLayoutPreference: 'sutki.listingLayoutPreference',
   /**
    * Recent city searches (JSON string[]). Not sensitive, but stored here to
    * reuse the existing wrapper and avoid pulling in AsyncStorage as a new

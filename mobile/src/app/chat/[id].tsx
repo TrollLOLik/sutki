@@ -22,6 +22,7 @@ import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { Directory, File } from 'expo-file-system';
 import { useQueryClient, InfiniteData } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
@@ -36,6 +37,8 @@ import {
 	useReadMessages,
 	presignUpload,
 	useConversations,
+	useConversationPresence,
+	publishTyping,
 } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
@@ -58,6 +61,30 @@ const QUICK_REPLIES = [
 ];
 
 const EMOJI_OPTIONS = ['😀', '😊', '🙂', '😍', '😂', '👍', '🙏', '👌', '🔥', '❤️', '🎉', '🏠', '📍', '✅', '🙌', '☀️'];
+type ChatAttachment = NonNullable<ChatMessage['attachments']>[number];
+
+function formatLastSeen(lastSeenAt?: string) {
+	if (!lastSeenAt) return 'Не в сети';
+	const lastSeen = new Date(lastSeenAt);
+	if (Number.isNaN(lastSeen.getTime())) return 'Не в сети';
+
+	const now = new Date();
+	const sameDay =
+		now.getFullYear() === lastSeen.getFullYear() &&
+		now.getMonth() === lastSeen.getMonth() &&
+		now.getDate() === lastSeen.getDate();
+	if (sameDay) return `Сегодня в ${format(lastSeen, 'HH:mm')}`;
+
+	const yesterday = new Date(now);
+	yesterday.setDate(now.getDate() - 1);
+	const wasYesterday =
+		yesterday.getFullYear() === lastSeen.getFullYear() &&
+		yesterday.getMonth() === lastSeen.getMonth() &&
+		yesterday.getDate() === lastSeen.getDate();
+	if (wasYesterday) return `Вчера в ${format(lastSeen, 'HH:mm')}`;
+
+	return `${format(lastSeen, 'dd.MM.yyyy')} в ${format(lastSeen, 'HH:mm')}`;
+}
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
 	UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -91,6 +118,8 @@ export default function ChatDialogScreen() {
 
 	const [inputText, setInputText] = useState('');
 	const [uploading, setUploading] = useState(false);
+	const [downloadingAttachmentID, setDownloadingAttachmentID] = useState<number | null>(null);
+	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
 	const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
 	// Contextual anti-scam notice: shown in fresh dialogs (few user messages),
@@ -106,6 +135,7 @@ export default function ChatDialogScreen() {
 		isFetchingNextPage,
 		refetch,
 	} = useMessages(convID);
+	const { data: presence, refetch: refetchPresence } = useConversationPresence(convID);
 
 	// Load listing context if available
 	const { data: conversations } = useConversations();
@@ -192,11 +222,62 @@ export default function ChatDialogScreen() {
 		return list;
 	}, [messages]);
 
+	const ownTypingActiveRef = useRef(false);
+	const ownTypingLastSentAtRef = useRef(0);
+	const ownTypingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const otherTypingExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const emitTyping = React.useCallback((active: boolean) => {
+		if (!convID || ownTypingActiveRef.current === active) return;
+		ownTypingActiveRef.current = active;
+		ownTypingLastSentAtRef.current = active ? Date.now() : 0;
+		publishTyping(convID, active).catch(() => {
+			// Typing is best-effort and must never interfere with composing or
+			// sending the actual message.
+		});
+	}, [convID]);
+
+	const stopOwnTyping = React.useCallback(() => {
+		if (ownTypingStopTimerRef.current) {
+			clearTimeout(ownTypingStopTimerRef.current);
+			ownTypingStopTimerRef.current = null;
+		}
+		emitTyping(false);
+	}, [emitTyping]);
+
+	const handleInputChange = React.useCallback((value: string) => {
+		setInputText(value);
+		const hasText = value.trim().length > 0;
+		if (!hasText) {
+			stopOwnTyping();
+			return;
+		}
+
+		const now = Date.now();
+		if (!ownTypingActiveRef.current || now - ownTypingLastSentAtRef.current >= 2_000) {
+			// Refresh the remote expiry while a long message is being typed.
+			ownTypingActiveRef.current = false;
+			emitTyping(true);
+		}
+		if (ownTypingStopTimerRef.current) clearTimeout(ownTypingStopTimerRef.current);
+		ownTypingStopTimerRef.current = setTimeout(stopOwnTyping, 1_800);
+	}, [emitTyping, stopOwnTyping]);
+
 	// Mark active conversation on mount/unmount
 	useEffect(() => {
 		setActiveConversationId(convID);
-		return () => setActiveConversationId(null);
-	}, [convID]);
+		return () => {
+			setActiveConversationId(null);
+			stopOwnTyping();
+			if (otherTypingExpiryRef.current) clearTimeout(otherTypingExpiryRef.current);
+		};
+	}, [convID, setActiveConversationId, stopOwnTyping]);
+
+	useEffect(() => {
+		if (socketStatus === 'connected') {
+			refetchPresence();
+		}
+	}, [socketStatus, refetchPresence]);
 
 	// Smooth transition for keyboard layout shifts
 	useEffect(() => {
@@ -262,11 +343,34 @@ export default function ChatDialogScreen() {
 		});
 
 		sub.on('publication', (ctx) => {
-			const payload = ctx.data as { type: string; message?: ChatMessage; user_id?: number; message_id?: number };
+			const payload = ctx.data as {
+				type: string;
+				message?: ChatMessage;
+				user_id?: number;
+				message_id?: number;
+				active?: boolean;
+			};
 			console.log('[Chat] Event on channel:', channel, payload);
+
+			if (payload.type === 'typing.changed' && payload.user_id !== sessionUser?.id) {
+				if (otherTypingExpiryRef.current) clearTimeout(otherTypingExpiryRef.current);
+				setIsOtherTyping(payload.active === true);
+				if (payload.active) {
+					// A missed "stopped" packet must not leave the indicator
+					// hanging forever.
+					otherTypingExpiryRef.current = setTimeout(() => {
+						setIsOtherTyping(false);
+					}, 4_000);
+				}
+				return;
+			}
 
 			if (payload.type === 'message.new' && payload.message) {
 				const newMsg = payload.message;
+				if (newMsg.sender_id !== sessionUser?.id) {
+					if (otherTypingExpiryRef.current) clearTimeout(otherTypingExpiryRef.current);
+					setIsOtherTyping(false);
+				}
 
 				// Append new message to TanStack query cache
 				queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
@@ -319,6 +423,8 @@ export default function ChatDialogScreen() {
 
 		return () => {
 			console.log('[Chat] Unsubscribing from:', channel);
+			if (otherTypingExpiryRef.current) clearTimeout(otherTypingExpiryRef.current);
+			setIsOtherTyping(false);
 			sub.unsubscribe();
 			centrifuge.removeSubscription(sub);
 		};
@@ -328,6 +434,7 @@ export default function ChatDialogScreen() {
 		const text = inputText.trim();
 		if (!text) return;
 
+		stopOwnTyping();
 		setInputText('');
 
 		// Create optimistic message
@@ -497,6 +604,30 @@ export default function ChatDialogScreen() {
 		}
 	};
 
+	const downloadAttachment = async (attachment: ChatAttachment) => {
+		if (downloadingAttachmentID != null) return;
+		setDownloadingAttachmentID(attachment.id);
+		try {
+			const directory = await Directory.pickDirectoryAsync();
+			const safeName =
+				attachment.file_name
+					.trim()
+					.replace(/[\\/:*?"<>|]/g, '_')
+					.replace(/^\.+/, '') || `document_${attachment.id}`;
+			const destination = new File(directory, safeName);
+			await File.downloadFileAsync(attachment.url, destination, { idempotent: true });
+			Alert.alert('Файл сохранён', `${safeName} сохранён в выбранную папку.`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (!/cancel/i.test(message)) {
+				console.error('[Chat] Failed downloading attachment:', error);
+				Alert.alert('Ошибка загрузки', 'Не удалось сохранить документ. Попробуйте ещё раз.');
+			}
+		} finally {
+			setDownloadingAttachmentID(null);
+		}
+	};
+
 	const formatMessageTime = (timeStr: string) => {
 		try {
 			return format(new Date(timeStr), 'HH:mm');
@@ -587,8 +718,17 @@ export default function ChatDialogScreen() {
 							);
 						}
 						return (
-							<View key={att.id} className={`flex-row items-center p-2.5 rounded-xl mb-1.5 w-[220px] ${isMe ? 'bg-white/10' : 'bg-background/40'}`}>
-								<Ionicons name="document-text" size={24} color={isMe ? '#fff' : palette.primary} />
+							<Pressable
+								key={att.id}
+								disabled={downloadingAttachmentID != null}
+								onPress={() => downloadAttachment(att)}
+								accessibilityRole="button"
+								accessibilityLabel={`Скачать документ ${att.file_name}`}
+								className={`flex-row items-center p-2.5 rounded-xl mb-1.5 w-[238px] ${isMe ? 'bg-white/10' : 'bg-background/40'} active:opacity-75`}
+							>
+								<View className={`h-9 w-9 rounded-full items-center justify-center ${isMe ? 'bg-white/10' : 'bg-primary/10'}`}>
+									<Ionicons name="document-text" size={20} color={isMe ? '#fff' : palette.primary} />
+								</View>
 								<View className="ml-2.5 flex-1">
 									<Text numberOfLines={1} className={`text-xs ${isMe ? 'text-white' : 'text-ink'} font-semibold`}>
 										{att.file_name}
@@ -597,7 +737,12 @@ export default function ChatDialogScreen() {
 										{(att.size_bytes / 1024).toFixed(1)} КБ
 									</Text>
 								</View>
-							</View>
+								{downloadingAttachmentID === att.id ? (
+									<ActivityIndicator size="small" color={isMe ? '#fff' : palette.primary} />
+								) : (
+									<Ionicons name="download-outline" size={20} color={isMe ? '#fff' : palette.primary} />
+								)}
+							</Pressable>
 						);
 					})}
 
@@ -653,6 +798,13 @@ export default function ChatDialogScreen() {
 	const normalizedCallPhone = callPhone.replace(/[^\d+]/g, '');
 	const canCall = !!activeConv && !isDeletedUser && normalizedCallPhone.length > 0;
 	const canOpenProfile = !!activeConv?.other_user_id && !isDeletedUser;
+	const presenceLabel = isOtherTyping
+		? 'печатает…'
+		: presence
+			? presence.online
+				? 'В сети'
+				: formatLastSeen(presence.last_seen_at)
+			: '';
 
 	const handleProfilePress = () => {
 		if (!activeConv || !canOpenProfile) return;
@@ -676,7 +828,7 @@ export default function ChatDialogScreen() {
 	};
 
 	const handleEmojiPress = (emoji: string) => {
-		setInputText((text) => `${text}${emoji}`);
+		handleInputChange(`${inputText}${emoji}`);
 		setIsEmojiPickerVisible(false);
 	};
 
@@ -759,6 +911,18 @@ export default function ChatDialogScreen() {
 								<Text className="mt-1 text-[12px] font-medium text-ink-muted">
 									Профиль удален
 								</Text>
+							) : presenceLabel ? (
+								<View className="mt-1 flex-row items-center">
+									{presence?.online && !isOtherTyping ? (
+										<View className="mr-1.5 h-2 w-2 rounded-full bg-success" />
+									) : null}
+									<Text
+										numberOfLines={1}
+										className={`text-[12px] font-semibold ${isOtherTyping ? 'text-primary' : presence?.online ? 'text-success' : 'text-ink-muted'}`}
+									>
+										{presenceLabel}
+									</Text>
+								</View>
 							) : null}
 						</View>
 					</TouchableOpacity>
@@ -907,7 +1071,7 @@ export default function ChatDialogScreen() {
 							contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, gap: 8 }}
 							renderItem={({ item: reply }) => (
 								<TouchableOpacity
-									onPress={() => setInputText(reply)}
+									onPress={() => handleInputChange(reply)}
 									activeOpacity={0.7}
 									style={{ backgroundColor: chatColors.panelRaised, borderColor: chatColors.border }}
 									className="px-3.5 py-2 rounded-full border"
@@ -940,7 +1104,8 @@ export default function ChatDialogScreen() {
 								placeholder="Сообщение..."
 								placeholderTextColor={palette.inkMuted}
 								value={inputText}
-								onChangeText={setInputText}
+								onChangeText={handleInputChange}
+								onBlur={stopOwnTyping}
 								className="flex-1 pl-4 pr-1 py-2.5 text-ink max-h-24 text-[15px]"
 								multiline
 							/>

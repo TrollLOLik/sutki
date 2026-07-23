@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
+import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { ResilientImage } from '@/components/ResilientImage';
 import { Button, IconButton } from '@/components/ui';
 import { ProfileHero, ProfileMetricGrid } from '@/components/profile/ProfileOverview';
@@ -37,6 +38,7 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { requireAuth } from '@/lib/requireAuth';
 import { useSessionStore } from '@/store/session';
 import { appAlert as Alert } from '@/components/AppAlert';
+import { useListingLayoutStore } from '@/store/listing-layout';
 
 export default function PublicProfileScreen() {
   const { palette } = useAppTheme();
@@ -72,6 +74,8 @@ export default function PublicProfileScreen() {
   const { height: screenHeight } = useWindowDimensions();
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
+  const layoutMode = useListingLayoutStore((state) => state.discovery);
+  const toggleLayoutMode = useListingLayoutStore((state) => state.toggleMode);
 
   useEffect(() => {
     if (sessionUserId != null && numericId === sessionUserId) {
@@ -387,6 +391,19 @@ export default function PublicProfileScreen() {
                 </Pressable>
               )}
             </View>
+            <Animated.View
+              style={{
+                width: filtersWidth,
+                opacity: filtersOpacity,
+                overflow: 'hidden',
+                marginRight: 10,
+              }}
+            >
+              <ListingLayoutToggle
+                mode={layoutMode}
+                onToggle={() => toggleLayoutMode('discovery')}
+              />
+            </Animated.View>
             <Animated.View style={{ width: filtersWidth, opacity: filtersOpacity, overflow: 'visible' }}>
                 <Pressable
                   accessibilityLabel="Фильтры"
@@ -443,17 +460,25 @@ export default function PublicProfileScreen() {
               subtitle="Попробуйте изменить поисковый запрос или фильтры."
             />
           ) : (
-            <View className="gap-2">
+            <View
+              style={{
+                flexDirection: layoutMode === 'grid' ? 'row' : 'column',
+                flexWrap: layoutMode === 'grid' ? 'wrap' : 'nowrap',
+                gap: layoutMode === 'grid' ? 12 : 8,
+              }}
+            >
               {filteredListings.map((item) => {
                 const itemIsFavorite = favoriteIds?.has(item.id) ?? false;
                 return (
-                  <ListingCard
-                    key={item.id}
-                    listing={item}
-                    isFavorite={itemIsFavorite}
-                    onToggleFavorite={() => toggleFavorite.mutate({ id: item.id, isFavorite: itemIsFavorite })}
-                    onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })}
-                  />
+                  <View key={item.id} style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+                    <ListingCard
+                      listing={item}
+                      layout={layoutMode}
+                      isFavorite={itemIsFavorite}
+                      onToggleFavorite={() => toggleFavorite.mutate({ id: item.id, isFavorite: itemIsFavorite })}
+                      onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })}
+                    />
+                  </View>
                 );
               })}
             </View>

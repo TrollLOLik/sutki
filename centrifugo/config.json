@@ -19,7 +19,8 @@
       },
       {
         "name": "user",
-        "allow_user_limited_channels": true
+        "allow_user_limited_channels": true,
+        "presence": true
       }
     ]
   }

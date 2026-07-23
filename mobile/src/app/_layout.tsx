@@ -12,6 +12,8 @@ import * as Sentry from '@sentry/react-native';
 
 import { queryClient } from '@/lib/query';
 import { useSessionStore } from '@/store/session';
+import { useFiltersStore } from '@/store/filters';
+import { useListingLayoutStore } from '@/store/listing-layout';
 import { useThemeStore } from '@/store/theme';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { darkVars, lightVars } from '@/theme/vars';
@@ -60,6 +62,10 @@ function RootLayout() {
   const status = useSessionStore((s) => s.status);
   const hydrate = useSessionStore((s) => s.hydrate);
   const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const hydrateSearchCity = useFiltersStore((s) => s.hydrateCity);
+  const searchCityHydrated = useFiltersStore((s) => s.cityHydrated);
+  const hydrateListingLayout = useListingLayoutStore((s) => s.hydrate);
+  const listingLayoutHydrated = useListingLayoutStore((s) => s.hasHydrated);
   const themeHydrated = useThemeStore((s) => s.hasHydrated);
   const { visible, context, closeGate } = useAuthGateStore();
   const { isDark, palette } = useAppTheme();
@@ -69,10 +75,22 @@ function RootLayout() {
   useEffect(() => {
     // Theme must hydrate before the splash hides, otherwise a saved dark
     // preference would flash a light frame on cold start.
-    Promise.all([hydrate(), hydrateTheme()]).finally(() => SplashScreen.hideAsync());
-  }, [hydrate, hydrateTheme]);
+    Promise.all([
+      (async () => {
+        await hydrate();
+        await hydrateSearchCity(useSessionStore.getState().user?.city);
+      })(),
+      hydrateTheme(),
+      hydrateListingLayout(),
+    ]).finally(() => SplashScreen.hideAsync());
+  }, [hydrate, hydrateListingLayout, hydrateSearchCity, hydrateTheme]);
 
-  if (status === 'loading' || !themeHydrated) return null;
+  if (
+    status === 'loading' ||
+    !themeHydrated ||
+    !searchCityHydrated ||
+    !listingLayoutHydrated
+  ) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

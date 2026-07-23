@@ -56,6 +56,27 @@ interface UserRealtimeEvent {
 	conversation_id?: number;
 }
 
+const PRESENCE_HEARTBEAT_INTERVAL_MS = 45_000;
+let presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopPresenceHeartbeat() {
+	if (presenceHeartbeatTimer) {
+		clearInterval(presenceHeartbeatTimer);
+		presenceHeartbeatTimer = null;
+	}
+}
+
+function startPresenceHeartbeat() {
+	stopPresenceHeartbeat();
+	const heartbeat = () => {
+		api.post<void>('/api/v1/chat/presence/heartbeat').catch((error) => {
+			console.warn('[Chat] Presence heartbeat failed:', error);
+		});
+	};
+	heartbeat();
+	presenceHeartbeatTimer = setInterval(heartbeat, PRESENCE_HEARTBEAT_INTERVAL_MS);
+}
+
 function invalidateRealtimeData(payload?: UserRealtimeEvent) {
 	queryClient.invalidateQueries({ queryKey: ['activity'] });
 	if (!payload) {
@@ -122,6 +143,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 		centrifuge.on('connected', () => {
 			console.log('[Chat] Socket connected successfully! ✅');
 			set({ status: 'connected' });
+			startPresenceHeartbeat();
 
 			// Invalidate conversation list cache on reconnect to synchronize unread counts
 			invalidateRealtimeData();
@@ -129,6 +151,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
 		centrifuge.on('disconnected', () => {
 			console.log('[Chat] Socket disconnected');
+			stopPresenceHeartbeat();
 			set({ status: 'disconnected' });
 		});
 
@@ -143,6 +166,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 	},
 
 	disconnect: () => {
+		stopPresenceHeartbeat();
 		const current = get().centrifuge;
 		if (current) {
 			console.log('[Chat] Disconnecting Centrifuge client');
