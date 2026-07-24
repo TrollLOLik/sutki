@@ -25,13 +25,21 @@ import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
+import {
+  getListingOwnerActionAvailability,
+  ListingOwnerActions,
+} from '@/components/ListingOwnerActions';
 import { ResilientImage } from '@/components/ResilientImage';
+import { appAlert as Alert } from '@/components/AppAlert';
 import { Button, IconButton, MaterialSurface, Skeleton, materialSurfaceColor } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
+import { useListingPublication } from '@/lib/api/create-listing';
+import { ApiError } from '@/lib/api/client';
 import { useRememberViewedListing } from '@/lib/api/viewed-listings';
 import { listingKeys, recordListingView, useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
 import { generateSecureUUID } from '@/lib/guestId';
+import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -46,6 +54,7 @@ export default function ListingDetailScreen() {
   const queryClient = useQueryClient();
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
+  const publication = useListingPublication();
   const rememberViewedListing = useRememberViewedListing();
   const isFavorite = favoriteIds?.has(numericId) ?? false;
   const insets = useSafeAreaInsets();
@@ -94,6 +103,10 @@ export default function ListingDetailScreen() {
     if (!data || !user) return false;
     return data.owner_id === user.id;
   }, [data, user]);
+  const ownerActions = useMemo(
+    () => getListingOwnerActionAvailability(data?.status),
+    [data?.status],
+  );
 
   const rules = useMemo(() => {
     if (!data) return [];
@@ -282,6 +295,34 @@ export default function ListingDetailScreen() {
     } catch (error) {
       console.log('Error sharing listing:', error);
     }
+  };
+
+  const changePublication = (published: boolean) => {
+    if (!data) return;
+    const title = published
+      ? 'Опубликовать объявление снова?'
+      : 'Снять объявление с публикации?';
+    const message = published
+      ? 'Объявление снова появится в поиске.'
+      : 'Объявление исчезнет из поиска. Активное продвижение будет приостановлено.';
+
+    Alert.alert(title, message, [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: published ? 'Опубликовать' : 'Снять',
+        style: published ? 'default' : 'destructive',
+        onPress: async () => {
+          try {
+            await publication.mutateAsync({ id: numericId, published });
+          } catch (error) {
+            Alert.alert(
+              'Не удалось изменить статус',
+              error instanceof ApiError ? error.message : 'Попробуйте ещё раз.',
+            );
+          }
+        },
+      },
+    ]);
   };
 
   const getListingTitle = () => {
@@ -725,6 +766,7 @@ export default function ListingDetailScreen() {
                         router.navigate('/(tabs)/profile');
                         return;
                       }
+                      useNavigationHistoryStore.getState().allowForwardRevisit();
                       router.push({
                         pathname: '/profile/[id]',
                         params: {
@@ -927,6 +969,7 @@ export default function ListingDetailScreen() {
               backgroundColor: headerBackground,
               paddingHorizontal: 16,
               paddingTop: 12,
+              paddingBottom: 12,
               shadowColor: '#000',
               shadowOpacity: isDark ? 0.3 : 0.09,
               shadowRadius: 18,
@@ -934,9 +977,28 @@ export default function ListingDetailScreen() {
               elevation: 8,
             }}>
             {isOwnListing ? (
-              <Button
-                label="Редактировать"
-                onPress={() => router.push({ pathname: '/create', params: { editId: id } } as any)}
+              <ListingOwnerActions
+                primaryAction="edit"
+                onEdit={
+                  ownerActions.canEdit
+                    ? () => router.push({ pathname: '/create', params: { editId: id } } as any)
+                    : undefined
+                }
+                onPromote={
+                  ownerActions.canPromote
+                    ? () =>
+                        router.push({
+                          pathname: '/listing/[id]/promote' as any,
+                          params: { id },
+                        })
+                    : undefined
+                }
+                onUnpublish={
+                  ownerActions.canUnpublish ? () => changePublication(false) : undefined
+                }
+                onPublish={
+                  ownerActions.canPublish ? () => changePublication(true) : undefined
+                }
               />
             ) : (
               <View className="flex-row items-center" style={{ gap: 14 }}>
@@ -1112,6 +1174,7 @@ function ListingDetailSkeleton({
           backgroundColor: headerBackground,
           paddingHorizontal: 16,
           paddingTop: 12,
+          paddingBottom: 12,
         }}>
         <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <View style={{ width: 108, gap: 7 }}>

@@ -286,7 +286,7 @@ export default function MyReviewsScreen() {
           </View>
         </View>
 
-        <View className="flex-1">
+        <View className="flex-1 overflow-hidden">
         <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
         {/* Tab switch */}
         <MaterialSurface

@@ -16,6 +16,25 @@ var (
 	ErrImageModerationUnavailable = errors.New("image moderation is temporarily unavailable")
 )
 
+// UnsafeImageError preserves a validated moderation verdict without exposing
+// raw model output through the public API.
+type UnsafeImageError struct {
+	Decision string
+	Category string
+	Reason   string
+}
+
+func (e *UnsafeImageError) Error() string {
+	if e == nil || e.Reason == "" {
+		return ErrUnsafeImage.Error()
+	}
+	return ErrUnsafeImage.Error() + ": " + e.Reason
+}
+
+func (e *UnsafeImageError) Unwrap() error {
+	return ErrUnsafeImage
+}
+
 // ImageModerationResult is the validated, machine-readable model verdict.
 // Callers must treat review as unsafe until a final decision exists.
 type ImageModerationResult struct {

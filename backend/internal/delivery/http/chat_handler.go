@@ -377,7 +377,7 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
 			writeError(w, http.StatusBadRequest, "Размер вложения превышает 15 МБ.")
 		case errors.Is(err, domain.ErrUnsafeImage):
-			writeError(w, http.StatusUnprocessableEntity, "Изображение не прошло модерацию. Выберите другое фото.")
+			writeError(w, http.StatusUnprocessableEntity, unsafeImagePublicMessage(err))
 		case errors.Is(err, domain.ErrImageModerationUnavailable):
 			writeError(w, http.StatusServiceUnavailable, "Проверка изображения временно недоступна. Попробуйте ещё раз.")
 		default:

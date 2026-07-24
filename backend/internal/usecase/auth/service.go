@@ -413,7 +413,11 @@ func (s *Service) moderateAvatar(ctx context.Context, userID int32, key string) 
 		if delErr := s.storage.Delete(ctx, key); delErr != nil {
 			log.Printf("auth avatar moderation: delete rejected avatar for user %d: %v", userID, delErr)
 		}
-		return fmt.Errorf("%w: %s", domain.ErrUnsafeImage, result.Reason)
+		return &domain.UnsafeImageError{
+			Decision: result.Decision,
+			Category: result.Category,
+			Reason:   result.Reason,
+		}
 	}
 	return nil
 }

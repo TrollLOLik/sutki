@@ -75,6 +75,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id int32) (domain.User, error) {
 		CreatedAt:       row.CreatedAt.Time,
 		ListingsCount:   row.ListingsCount,
 		Rating:          row.Rating,
+		ReviewsCount:    row.ReviewsCount,
 	}, nil
 }
 

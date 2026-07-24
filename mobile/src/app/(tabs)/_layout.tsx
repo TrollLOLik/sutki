@@ -17,6 +17,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       tabBar={(props) => <CustomTabBar {...props} />}
       screenLayout={({ children, route, navigation }) => (
         <SwipeableTabScene

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Animated, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +36,7 @@ import { GuestProfile } from '@/components/profile/GuestProfile';
 import { ThemeSelector } from '@/components/profile/ThemeSelector';
 import { type ActivityScope, useActivityCounters, useMarkActivityRead } from '@/lib/api/activity';
 import { useFiltersStore } from '@/store/filters';
+import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { appAlert as Alert } from '@/components/AppAlert';
 
 type SettingsTab = 'basic' | 'security';
@@ -156,6 +157,7 @@ function PhonePickerField({ value, onPress }: { value?: string | null; onPress: 
 
 export default function ProfileScreen() {
   const { palette } = useAppTheme();
+  const tabNavigation = useNavigation();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
   const setUser = useSessionStore((s) => s.setUser);
@@ -171,6 +173,16 @@ export default function ProfileScreen() {
     markActivityRead.mutate(scope);
     router.push(path as any);
   };
+
+  const openSearchTab = useCallback(() => {
+    tabNavigation.navigate('index' as never);
+  }, [tabNavigation]);
+
+  const openFavorites = useCallback(() => {
+    useFiltersStore.setState({ favoritesOnly: true });
+    useNavigationHistoryStore.getState().allowForwardRevisit();
+    openSearchTab();
+  }, [openSearchTab]);
 
   const { data: sessionsData, refetch: refetchSessions, isLoading: sessionsLoading } = useSessions();
   const {
@@ -200,6 +212,23 @@ export default function ProfileScreen() {
           },
         },
       ]
+    );
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Выйти из аккаунта?',
+      'На этом устройстве потребуется снова войти по номеру телефона или email.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Выйти',
+          style: 'destructive',
+          onPress: () => {
+            void signOut();
+          },
+        },
+      ],
     );
   };
 
@@ -262,24 +291,6 @@ export default function ProfileScreen() {
   const [deleteSheetVisible, setDeleteSheetVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (settingsVisible) {
-      setFormName(user?.name ?? '');
-      setFormSurname(user?.surname ?? '');
-      setFormPatronymic(user?.patronymic ?? '');
-      setFormPhone(user?.phone ?? '');
-      setFormCity(user?.city ?? '');
-      setFormBirthday(user?.birthday ?? '');
-      setFormAvatarUri(user?.avatar_url || null);
-      setSaveError(null);
-      setSettingsTab('basic');
-      tabAnim.setValue(0);
-      requestAnimationFrame(() => {
-        horizontalScrollRef.current?.scrollTo({ x: 0, animated: false });
-      });
-    }
-  }, [settingsVisible, user]);
-
   const selectAvatarFromGallery = async (): Promise<string | undefined> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -331,7 +342,7 @@ export default function ProfileScreen() {
         console.error('[Profile] Error updating avatar:', err);
       }
       Alert.alert(
-        'Не удалось изменить фото',
+        err instanceof ApiError && err.status === 422 ? 'Фото не прошло модерацию' : 'Не удалось изменить фото',
         err instanceof ApiError ? err.message : 'Попробуйте выбрать фотографию ещё раз.',
       );
     } finally {
@@ -456,19 +467,23 @@ export default function ProfileScreen() {
     });
   };
 
-  useEffect(() => {
-    if (settingsVisible) {
-      // Ensure scroll view is immediately in the correct page state
-      horizontalScrollRef.current?.scrollTo({
-        x: settingsTab === 'basic' ? 0 : containerWidth,
-        animated: false,
-      });
-    }
-  }, [settingsVisible, settingsTab, containerWidth]);
+  const openSettings = useCallback((initialTab: SettingsTab = 'basic') => {
+    setFormName(user?.name ?? '');
+    setFormSurname(user?.surname ?? '');
+    setFormPatronymic(user?.patronymic ?? '');
+    setFormPhone(user?.phone ?? '');
+    setFormCity(user?.city ?? '');
+    setFormBirthday(user?.birthday ?? '');
+    setFormAvatarUri(user?.avatar_url || null);
+    setSaveError(null);
+    setSettingsTab(initialTab);
+    tabAnim.setValue(initialTab === 'basic' ? 0 : 1);
+    setSettingsVisible(true);
+  }, [tabAnim, user]);
 
-  const closeSettings = () => {
+  const closeSettings = useCallback(() => {
     setSettingsVisible(false);
-  };
+  }, []);
 
   const handleDeleteAccount = () => {
     setDeleteSheetVisible(true);
@@ -486,8 +501,7 @@ export default function ProfileScreen() {
         label: 'Добавить аватарку',
         completed: !!(user.avatar_url && user.avatar_url.trim() !== ''),
         onPress: () => {
-          setSettingsVisible(true);
-          setSettingsTab('basic');
+          openSettings('basic');
         },
       },
       {
@@ -495,8 +509,7 @@ export default function ProfileScreen() {
         label: 'Подтвердить телефон',
         completed: !!(user.phone && user.phone.trim() !== ''),
         onPress: () => {
-          setSettingsVisible(true);
-          setSettingsTab('basic');
+          openSettings('basic');
         },
       },
       {
@@ -504,12 +517,11 @@ export default function ProfileScreen() {
         label: 'Подтвердить почту',
         completed: !!(user.email && user.email.trim() !== ''),
         onPress: () => {
-          setSettingsVisible(true);
-          setSettingsTab('basic');
+          openSettings('basic');
         },
       },
     ];
-  }, [user]);
+  }, [openSettings, user]);
 
   const completion = useMemo(() => {
     if (completionItems.length === 0) return 0;
@@ -525,7 +537,7 @@ export default function ProfileScreen() {
           style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
           <NavigationBackButton
             accessibilityLabel="В поиск"
-            onPress={() => router.navigate('/')}
+            onPress={openSearchTab}
             size={48}
             variant="material"
           />
@@ -539,7 +551,7 @@ export default function ProfileScreen() {
               accessibilityLabel="Настройки профиля"
               icon="settings-outline"
               iconSize={22}
-              onPress={() => setSettingsVisible(true)}
+              onPress={() => openSettings('basic')}
               size={48}
             />
           ) : (
@@ -549,7 +561,11 @@ export default function ProfileScreen() {
       </SafeAreaView>
 
       {status === 'guest' ? (
-        <GuestProfile topInset={12} onScroll={handleScroll as any} />
+        <GuestProfile
+          topInset={12}
+          onOpenFavorites={openFavorites}
+          onScroll={handleScroll as any}
+        />
       ) : (
         <ScrollView
           style={{ backgroundColor: palette.surface }}
@@ -567,7 +583,6 @@ export default function ProfileScreen() {
             rating={user?.rating ?? 0}
             subtitle={formatMemberSince(user?.created_at)}
             uploadingAvatar={uploadingAvatar}
-            verifiedLabel={user?.phone_verified_at ? 'Номер подтверждён' : undefined}
           />
 
           <ProfileMetricGrid
@@ -601,10 +616,7 @@ export default function ProfileScreen() {
                 icon: 'heart-outline',
                 title: 'Избранное',
                 subtitle: 'Сохранённые объявления',
-                onPress: () => {
-                  useFiltersStore.setState({ favoritesOnly: true });
-                  router.navigate('/');
-                },
+                onPress: openFavorites,
               },
               {
                 icon: 'notifications-outline',
@@ -699,7 +711,12 @@ export default function ProfileScreen() {
             </View>
           </ProfileInfoPanel>
 
-          <Button label="Выйти" icon="log-out-outline" variant="secondary" onPress={signOut} />
+          <Button
+            label="Выйти"
+            icon="log-out-outline"
+            variant="secondary"
+            onPress={handleSignOut}
+          />
         </ScrollView>
       )}
 
@@ -1032,7 +1049,7 @@ export default function ProfileScreen() {
                 </ScrollView>
               </ScrollView>
 
-              <View className="flex-row gap-3">
+              <View className="mt-4 flex-row gap-3">
                 <Button label="Позже" variant="secondary" size="md" className="flex-1" onPress={closeSettings} />
                 <Button
                   label="Сохранить"
@@ -1042,9 +1059,9 @@ export default function ProfileScreen() {
                   onPress={handleSaveProfile}
                 />
               </View>
-            </SafeAreaView>
+        </SafeAreaView>
 
-            <CityPickerSheet
+        <CityPickerSheet
               visible={cityPickerVisible}
               onClose={() => setCityPickerVisible(false)}
               onSelect={(city) => {

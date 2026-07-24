@@ -50,6 +50,7 @@ type userDTO struct {
 	CreatedAt       string  `json:"created_at"`
 	ListingsCount   int32   `json:"listings_count"`
 	Rating          float64 `json:"rating"`
+	ReviewsCount    int32   `json:"reviews_count"`
 }
 
 type publicUserDTO struct {
@@ -65,6 +66,7 @@ type publicUserDTO struct {
 	CreatedAt       string  `json:"created_at"`
 	ListingsCount   int32   `json:"listings_count"`
 	Rating          float64 `json:"rating"`
+	ReviewsCount    int32   `json:"reviews_count"`
 }
 
 func toUserDTO(u domain.User) userDTO {
@@ -94,6 +96,7 @@ func toUserDTO(u domain.User) userDTO {
 		CreatedAt:       u.CreatedAt.Format(time.RFC3339),
 		ListingsCount:   u.ListingsCount,
 		Rating:          u.Rating,
+		ReviewsCount:    u.ReviewsCount,
 	}
 }
 
@@ -120,6 +123,7 @@ func toPublicUserDTO(u domain.User) publicUserDTO {
 		CreatedAt:       dto.CreatedAt,
 		ListingsCount:   dto.ListingsCount,
 		Rating:          dto.Rating,
+		ReviewsCount:    dto.ReviewsCount,
 	}
 }
 
@@ -303,7 +307,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	user, err := h.svc.UpdateProfile(r.Context(), userID, body.Name, body.Surname, body.Patronymic, body.Phone, body.City, body.AvatarURL, bday, body.VKID, body.VKIDDoNull)
 	if err != nil {
 		if errors.Is(err, domain.ErrUnsafeImage) {
-			writeError(w, http.StatusUnprocessableEntity, "Изображение не прошло модерацию. Выберите другое фото.")
+			writeError(w, http.StatusUnprocessableEntity, unsafeImagePublicMessage(err))
 			return
 		}
 		if errors.Is(err, domain.ErrImageModerationUnavailable) {

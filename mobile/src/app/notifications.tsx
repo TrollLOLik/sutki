@@ -399,7 +399,7 @@ export default function NotificationsScreen() {
         </View>
       </SafeAreaView>
 
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, overflow: 'hidden' }}>
       <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
       {hasNotifications ? (
         <View style={styles.summaryWrap}>

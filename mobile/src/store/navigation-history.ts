@@ -13,9 +13,11 @@ export interface NavigationHistoryEntry {
 
 interface NavigationHistoryState {
   entries: NavigationHistoryEntry[];
+  forwardRevisitKey: string | null;
   menuEntries: NavigationHistoryEntry[];
   menuOpen: boolean;
   selectedIndex: number | null;
+  allowForwardRevisit: (key?: string) => void;
   clear: () => void;
   closeMenu: () => void;
   openMenu: () => void;
@@ -26,29 +28,60 @@ interface NavigationHistoryState {
 
 export const useNavigationHistoryStore = create<NavigationHistoryState>((set, get) => ({
   entries: [],
+  forwardRevisitKey: null,
   menuEntries: [],
   menuOpen: false,
   selectedIndex: null,
 
-  clear: () => set({ entries: [], menuEntries: [], menuOpen: false, selectedIndex: null }),
+  allowForwardRevisit: (forwardRevisitKey) =>
+    set({ forwardRevisitKey: forwardRevisitKey ?? '*' }),
+
+  clear: () =>
+    set({
+      entries: [],
+      forwardRevisitKey: null,
+      menuEntries: [],
+      menuOpen: false,
+      selectedIndex: null,
+    }),
 
   record: (entry) => {
     const entries = get().entries;
     const current = entries.at(-1);
+    const pendingForwardKey = get().forwardRevisitKey;
+    const isForwardRevisit =
+      pendingForwardKey === '*' || pendingForwardKey === entry.key;
+
+    if (isForwardRevisit) {
+      const withoutOlderVisit = entries.filter((item) => item.key !== entry.key);
+      set({
+        entries: [...withoutOlderVisit, entry].slice(-NAVIGATION_HISTORY_LIMIT),
+        forwardRevisitKey: null,
+      });
+      return;
+    }
+
     if (current?.key === entry.key) {
       if (current.title !== entry.title) {
         set({ entries: [...entries.slice(0, -1), entry] });
       }
+      if (get().forwardRevisitKey != null) set({ forwardRevisitKey: null });
       return;
     }
 
     const existingIndex = entries.findLastIndex((item) => item.key === entry.key);
     if (existingIndex >= 0) {
-      set({ entries: [...entries.slice(0, existingIndex), entry] });
+      set({
+        entries: [...entries.slice(0, existingIndex), entry],
+        forwardRevisitKey: null,
+      });
       return;
     }
 
-    set({ entries: [...entries, entry].slice(-NAVIGATION_HISTORY_LIMIT) });
+    set({
+      entries: [...entries, entry].slice(-NAVIGATION_HISTORY_LIMIT),
+      forwardRevisitKey: null,
+    });
   },
 
   openMenu: () => {

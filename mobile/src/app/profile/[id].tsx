@@ -52,8 +52,6 @@ export default function PublicProfileScreen() {
     phone,
     avatarUrl,
     rating,
-    reviewsCount,
-    isVerified,
     city,
     listingId,
   } = useLocalSearchParams<{
@@ -64,8 +62,6 @@ export default function PublicProfileScreen() {
     phone?: string;
     avatarUrl?: string;
     rating?: string;
-    reviewsCount?: string;
-    isVerified?: string;
     city?: string;
     listingId?: string;
   }>();
@@ -131,8 +127,6 @@ export default function PublicProfileScreen() {
     [resolvedName, resolvedPatronymic, resolvedSurname].filter(Boolean).join(' ') || 'Арендодатель';
   const displayCity = publicProfile?.city || city || 'Город не указан';
   const ratingNum = publicProfile?.rating ?? (rating ? Number(rating) : 0);
-  const reviewsCountNum = reviewsCount ? Number(reviewsCount) : 0;
-  const verified = publicProfile?.is_verified ?? isVerified === 'true';
   const memberSince = formatMemberSince(publicProfile?.created_at);
 
   const getInitials = () => {
@@ -290,17 +284,7 @@ export default function PublicProfileScreen() {
           city={displayCity}
           initials={getInitials()}
           name={displayName}
-          onRatingPress={onReviewsPress}
-          rating={ratingNum}
-          reviewsCount={reviewsCountNum}
           subtitle={memberSince}
-          verifiedLabel={
-            publicProfile?.phone_verified_at || publicPhone
-              ? 'Номер подтверждён'
-              : verified
-                ? 'Профиль подтверждён'
-                : undefined
-          }
         />
 
         <ProfileMetricGrid
@@ -315,6 +299,7 @@ export default function PublicProfileScreen() {
               icon: 'star-outline',
               label: 'Рейтинг',
               value: ratingNum > 0 ? ratingNum.toFixed(1) : '—',
+              onPress: onReviewsPress,
               tone: 'neutral',
             },
             {

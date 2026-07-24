@@ -4,7 +4,6 @@ import { ScrollView, Text, View } from 'react-native';
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 
 import { Button } from '@/components/ui';
-import { useFiltersStore } from '@/store/filters';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { ThemeSelector } from '@/components/profile/ThemeSelector';
@@ -17,18 +16,15 @@ import {
 
 export function GuestProfile({
   topInset,
+  onOpenFavorites,
   onScroll,
 }: {
   topInset: number;
+  onOpenFavorites: () => void;
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) {
   const { palette } = useAppTheme();
   const router = useRouter();
-
-  const handleShowLocalFavorites = () => {
-    useFiltersStore.setState({ favoritesOnly: true });
-    router.navigate('/');
-  };
 
   const handleAuthAction = (context: 'host' | 'generic') => {
     requireAuth(context);
@@ -81,7 +77,7 @@ export function GuestProfile({
             icon: 'heart-outline',
             title: 'Избранное',
             subtitle: 'Жильё, сохранённое без аккаунта',
-            onPress: handleShowLocalFavorites,
+            onPress: onOpenFavorites,
           },
         ]}
       />

@@ -19,6 +19,7 @@ export interface ProfileMetric {
   label: string;
   value: string | number;
   loading?: boolean;
+  onPress?: () => void;
   tone?: 'primary' | 'success' | 'neutral';
 }
 
@@ -146,11 +147,16 @@ export function ProfileHero({
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={15} color={palette.inkMuted} />
             <Text numberOfLines={1} style={[styles.metaText, { color: palette.inkSecondary }]}>
-              {[city || 'Город не указан', subtitle].filter(Boolean).join(' · ')}
+              {city || 'Город не указан'}
             </Text>
           </View>
+          {subtitle ? (
+            <Text numberOfLines={1} style={[styles.subtitle, { color: palette.inkSecondary }]}>
+              {subtitle}
+            </Text>
+          ) : null}
 
-          {rating > 0 || reviewsCount > 0 ? (
+          {rating > 0 || reviewsCount > 0 || onRatingPress ? (
             <Pressable
               accessibilityRole={onRatingPress ? 'button' : undefined}
               disabled={!onRatingPress}
@@ -158,8 +164,12 @@ export function ProfileHero({
               onPress={onRatingPress}
               style={({ pressed }) => [styles.ratingRow, pressed && onRatingPress ? { opacity: 0.68 } : null]}>
               <Ionicons name="star" size={15} color={palette.star} />
-              <Text style={[styles.ratingValue, { color: palette.ink }]}>{rating > 0 ? rating.toFixed(1) : '—'}</Text>
-              <Text style={[styles.ratingCount, { color: palette.inkSecondary }]}>({reviewsCount})</Text>
+              <Text style={[styles.ratingValue, { color: palette.ink }]}>
+                {rating > 0 ? rating.toFixed(1) : 'Нет отзывов'}
+              </Text>
+              {reviewsCount > 0 ? (
+                <Text style={[styles.ratingCount, { color: palette.inkSecondary }]}>({reviewsCount})</Text>
+              ) : null}
               {onRatingPress ? <Ionicons name="chevron-forward" size={14} color={palette.inkMuted} /> : null}
             </Pressable>
           ) : null}
@@ -171,56 +181,79 @@ export function ProfileHero({
 
 export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
   const { palette } = useAppTheme();
+  const rows = metrics.reduce<ProfileMetric[][]>((result, metric, index) => {
+    const rowIndex = Math.floor(index / 2);
+    if (!result[rowIndex]) {
+      result[rowIndex] = [];
+    }
+    result[rowIndex].push(metric);
+    return result;
+  }, []);
 
   return (
     <MaterialSurface level="raised" radius={24} style={styles.metricGrid}>
-      {metrics.map((metric, index) => {
-        const row = Math.floor(index / 2);
-        const column = index % 2;
-        const toneColor =
-          metric.tone === 'success'
-            ? palette.success
-            : metric.tone === 'neutral'
-              ? palette.inkSecondary
-              : palette.primary;
-        const toneBackground =
-          metric.tone === 'success'
-            ? palette.successLight
-            : metric.tone === 'neutral'
-              ? palette.surfaceMuted
-              : palette.primaryLight;
+      {rows.map((row, rowIndex) => (
+        <View
+          key={`metric-row-${rowIndex}`}
+          style={[
+            styles.metricRow,
+            rowIndex < rows.length - 1
+              ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line }
+              : null,
+          ]}>
+          {row.map((metric, columnIndex) => {
+            const toneColor =
+              metric.tone === 'success'
+                ? palette.success
+                : metric.tone === 'neutral'
+                  ? palette.inkSecondary
+                  : palette.primary;
+            const toneBackground =
+              metric.tone === 'success'
+                ? palette.successLight
+                : metric.tone === 'neutral'
+                  ? palette.surfaceMuted
+                  : palette.primaryLight;
 
-        return (
-          <View
-            key={`${metric.label}-${index}`}
-            style={[
-              styles.metricCell,
-              column === 0 ? { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: palette.line } : null,
-              row === 0 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.line } : null,
-            ]}>
-              <View style={[styles.metricIcon, { backgroundColor: toneBackground }]}>
-                <Ionicons name={metric.icon} size={18} color={toneColor} />
-              </View>
-              <View style={styles.metricContent}>
-                {metric.loading ? (
-                  <ActivityIndicator size="small" color={toneColor} style={styles.metricLoader} />
-                ) : (
-                  <Text
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.62}
-                    maxFontSizeMultiplier={1.15}
-                    style={[styles.metricValue, { color: palette.ink }]}>
-                    {metric.value}
+            return (
+              <TouchableOpacity
+                key={`${metric.label}-${columnIndex}`}
+                accessibilityRole={metric.onPress ? 'button' : undefined}
+                activeOpacity={metric.onPress ? 0.68 : 1}
+                disabled={!metric.onPress}
+                onPress={metric.onPress}
+                style={[
+                  styles.metricCell,
+                  columnIndex === 0
+                    ? { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: palette.line }
+                    : null,
+                ]}>
+                <View style={[styles.metricIcon, { backgroundColor: toneBackground }]}>
+                  <Ionicons name={metric.icon} size={18} color={toneColor} />
+                </View>
+                <View style={styles.metricContent}>
+                  {metric.loading ? (
+                    <ActivityIndicator size="small" color={toneColor} style={styles.metricLoader} />
+                  ) : (
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.62}
+                      maxFontSizeMultiplier={1.15}
+                      style={[styles.metricValue, { color: palette.ink }]}>
+                      {metric.value}
+                    </Text>
+                  )}
+                  <Text numberOfLines={2} style={[styles.metricLabel, { color: palette.inkSecondary }]}>
+                    {metric.label}
                   </Text>
-                )}
-                <Text numberOfLines={2} style={[styles.metricLabel, { color: palette.inkSecondary }]}>
-                  {metric.label}
-                </Text>
-              </View>
-          </View>
-        );
-      })}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+          {row.length === 1 ? <View style={styles.metricCellSpacer} /> : null}
+        </View>
+      ))}
     </MaterialSurface>
   );
 }
@@ -385,6 +418,13 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
   },
+  subtitle: {
+    marginTop: 2,
+    marginLeft: 19,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+  },
   ratingRow: {
     alignSelf: 'flex-start',
     marginTop: 8,
@@ -403,19 +443,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     overflow: 'hidden',
   },
-  metricCell: {
-    width: '50%',
-    minWidth: 0,
+  metricRow: {
     minHeight: 94,
+    flexDirection: 'row',
+  },
+  metricCell: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     paddingHorizontal: 15,
-    paddingVertical: 16,
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
+    gap: 10,
+  },
+  metricCellSpacer: {
+    flex: 1,
+    flexBasis: 0,
   },
   metricIcon: {
     width: 38,

@@ -17,6 +17,7 @@ export interface User {
   created_at?: string;
   listings_count?: number;
   rating?: number;
+  reviews_count?: number;
   phone_normalized?: string;
   phone_verified_at?: string;
   vk_id?: string;
@@ -36,4 +37,5 @@ export type PublicUser = Pick<
   | 'created_at'
   | 'listings_count'
   | 'rating'
+  | 'reviews_count'
 >;

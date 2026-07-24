@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
+import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
@@ -212,8 +213,8 @@ export default function MyListingsScreen() {
           </Pressable>
         </View>
 
-        <View style={{ flex: 1, paddingTop: 8, backgroundColor: screenBackground }}>
-          <CollapsibleHeader controller={collapsibleHeader} style={{ top: 8, backgroundColor: screenBackground }}>
+        <View style={{ flex: 1, overflow: 'hidden', paddingTop: 8, backgroundColor: screenBackground }}>
+          <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
           <PersonalListToolbar
             query={query}
             onQueryChange={setQuery}
@@ -281,8 +282,11 @@ export default function MyListingsScreen() {
 
         {isLoading ? (
           <View
-            className="flex-1 px-4 pt-1"
-            style={layoutMode === 'grid' ? { flexDirection: 'row', gap: 12 } : undefined}
+            className="flex-1 px-4"
+            style={[
+              { paddingTop: collapsibleHeader.height + 4 },
+              layoutMode === 'grid' ? { flexDirection: 'row', gap: 12 } : undefined,
+            ]}
           >
             <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
               <ListingCardSkeleton layout={layoutMode} />
@@ -328,7 +332,7 @@ export default function MyListingsScreen() {
             onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
             onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: collapsibleHeader.height + 10, paddingBottom: Math.max(insets.bottom, 16) + 12 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: collapsibleHeader.height + 4, paddingBottom: Math.max(insets.bottom, 16) + 12 }}
             refreshControl={
               <RefreshControl
                 refreshing={isRefetching}
@@ -338,23 +342,29 @@ export default function MyListingsScreen() {
                 progressViewOffset={collapsibleHeader.height}
               />
             }
-            renderItem={({ item }) => (
-              <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
-                <ListingCard
-                  listing={item}
-                  layout={layoutMode}
-                  showOwnerStats
-                  onPress={() =>
-                    router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
-                  }
-                  onPromote={item.status !== 'rejected' && item.status !== 'unpublished'
-                    ? () => router.push({pathname:'/listing/[id]/promote' as any,params:{id:String(item.id)}})
-                    : undefined}
-                  onUnpublish={item.status === 'active' ? () => changePublication(item.id, false) : undefined}
-                  onPublish={item.status === 'unpublished' ? () => changePublication(item.id, true) : undefined}
-                />
-              </View>
-            )}
+            renderItem={({ item }) => {
+              const actions = getListingOwnerActionAvailability(item.status);
+              return (
+                <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+                  <ListingCard
+                    listing={item}
+                    layout={layoutMode}
+                    showOwnerStats
+                    onPress={() =>
+                      router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
+                    }
+                    onEdit={actions.canEdit
+                      ? () => router.push({ pathname: '/create', params: { editId: String(item.id) } } as any)
+                      : undefined}
+                    onPromote={actions.canPromote
+                      ? () => router.push({ pathname: '/listing/[id]/promote' as any, params: { id: String(item.id) } })
+                      : undefined}
+                    onUnpublish={actions.canUnpublish ? () => changePublication(item.id, false) : undefined}
+                    onPublish={actions.canPublish ? () => changePublication(item.id, true) : undefined}
+                  />
+                </View>
+              );
+            }}
           />
         )}
         </View>

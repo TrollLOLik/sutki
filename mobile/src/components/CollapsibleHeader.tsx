@@ -36,7 +36,7 @@ const ALWAYS_VISIBLE_OFFSET = 1;
 export function useCollapsibleHeader(): CollapsibleHeaderController {
   const progress = useRef(new Animated.Value(1)).current;
   const [expanded, setExpanded] = useState(true);
-  const [height, setHeight] = useState(140);
+  const [height, setHeight] = useState(0);
   const expandedRef = useRef(true);
   const lastOffsetRef = useRef(0);
   const directionRef = useRef<-1 | 0 | 1>(0);
@@ -154,7 +154,12 @@ export function CollapsibleHeader({ children, controller, style }: CollapsibleHe
   return (
     <Animated.View
       pointerEvents={controller.expanded ? 'auto' : 'none'}
-      style={[styles.shell, style, animatedStyle]}
+      style={[
+        styles.shell,
+        contentHeight === null ? styles.measuringShell : styles.floatingShell,
+        style,
+        animatedStyle,
+      ]}
     >
       <View
         collapsable={false}
@@ -174,12 +179,19 @@ export function CollapsibleHeader({ children, controller, style }: CollapsibleHe
 
 const styles = StyleSheet.create({
   shell: {
+    width: '100%',
+    flexShrink: 0,
+    zIndex: 20,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  measuringShell: {
+    position: 'relative',
+  },
+  floatingShell: {
     position: 'absolute',
     top: 0,
     right: 0,
     left: 0,
-    zIndex: 20,
-    elevation: 8,
-    overflow: 'hidden',
   },
 });

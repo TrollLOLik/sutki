@@ -34,8 +34,9 @@ func NewClient(baseURL, apiKey, model string, timeout time.Duration) *Client {
 }
 
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string          `json:"role"`
+	Content string          `json:"content"`
+	Refusal json.RawMessage `json:"refusal,omitempty"`
 }
 
 type ChatCompletionsRequest struct {
@@ -53,6 +54,8 @@ type Choice struct {
 type ChatCompletionsResponse struct {
 	Choices []Choice `json:"choices"`
 }
+
+const visionSafetyRejection = `{"decision":"reject","category":"other","reason":"Провайдер заблокировал изображение как небезопасное.","confidence":1}`
 
 type multimodalContent struct {
 	Type     string              `json:"type"`
@@ -114,6 +117,9 @@ func (c *Client) GenerateWithImages(ctx context.Context, systemPrompt, userPromp
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<10))
+		if isSafetyHTTPRejection(resp.StatusCode, bodyBytes) {
+			return visionSafetyRejection, nil
+		}
 		return "", fmt.Errorf("llm client: vision status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
@@ -124,15 +130,57 @@ func (c *Client) GenerateWithImages(ctx context.Context, systemPrompt, userPromp
 	if len(response.Choices) == 0 {
 		return "", fmt.Errorf("llm client: empty choices in vision response")
 	}
-	responseContent := strings.TrimSpace(response.Choices[0].Message.Content)
+	choice := response.Choices[0]
+	if hasRefusal(choice.Message.Refusal) || isSafetyFinishReason(choice.FinishReason) {
+		return visionSafetyRejection, nil
+	}
+	responseContent := strings.TrimSpace(choice.Message.Content)
 	if responseContent == "" {
-		finishReason := strings.TrimSpace(response.Choices[0].FinishReason)
+		finishReason := strings.TrimSpace(choice.FinishReason)
 		if finishReason != "" {
 			return "", fmt.Errorf("llm client: empty vision response (finish_reason=%s)", finishReason)
 		}
 		return "", fmt.Errorf("llm client: empty vision response")
 	}
 	return responseContent, nil
+}
+
+func hasRefusal(raw json.RawMessage) bool {
+	value := strings.TrimSpace(string(raw))
+	return value != "" && value != "null" && value != `""`
+}
+
+func isSafetyFinishReason(reason string) bool {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "content_filter", "content-filter", "safety", "blocked", "guardrail":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSafetyHTTPRejection(status int, body []byte) bool {
+	switch status {
+	case http.StatusBadRequest, http.StatusForbidden, http.StatusUnprocessableEntity:
+	default:
+		return false
+	}
+
+	message := strings.ToLower(string(body))
+	for _, marker := range []string{
+		"content_filter",
+		"content filter",
+		"safety violation",
+		"unsafe content",
+		"blocked by safety",
+		"moderation_blocked",
+		"moderation blocked",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Client) Generate(ctx context.Context, systemPrompt, userPrompt string, maxTokens int, temperature float64) (string, error) {

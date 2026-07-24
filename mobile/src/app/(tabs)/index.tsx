@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { parseISO, format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   Animated,
@@ -17,6 +17,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -41,6 +42,7 @@ import { countActiveFilters, useFiltersStore, type RoomFilter } from '@/store/fi
 import { useSessionStore } from '@/store/session';
 import { useTabBarStore } from '@/store/tabbar';
 import { useListingLayoutStore } from '@/store/listing-layout';
+import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -165,6 +167,31 @@ export default function SearchScreen() {
   }, [filters.applyProfileCityIfUnset, user?.city]);
 
   const isFavoritesOnlyEmpty = filters.favoritesOnly && (!favoriteIds || favoriteIds.size === 0);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        const history = useNavigationHistoryStore.getState();
+        const current = history.entries.at(-1);
+        const previous = history.entries.at(-2);
+        if (
+          !current ||
+          !previous ||
+          !previous.key.endsWith('/profile') ||
+          current.key === previous.key
+        ) {
+          return false;
+        }
+
+        history.truncateTo(previous.key);
+        router.navigate(previous.href);
+        return true;
+      });
+
+      return () => subscription.remove();
+    }, []),
+  );
+
   const searchConstraintCount = countActiveFilters(filters);
   const activeFilters = searchConstraintCount + Number(filters.showOwnListings);
   const hasSearchConstraints = searchConstraintCount > 0 || query.trim().length > 0;
@@ -622,9 +649,12 @@ export default function SearchScreen() {
               <ListingCard
                 listing={item}
                 layout={layoutMode}
-                onPress={() =>
-                  router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })
-                }
+                onPress={() => {
+                  if (useFiltersStore.getState().favoritesOnly) {
+                    useNavigationHistoryStore.getState().allowForwardRevisit();
+                  }
+                  router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } });
+                }}
                 isFavorite={favoriteIds?.has(item.id) ?? false}
                 isOwn={user?.id === item.owner_id}
                 isViewed={user?.id !== item.owner_id && (viewedListingIds?.has(item.id) ?? false)}

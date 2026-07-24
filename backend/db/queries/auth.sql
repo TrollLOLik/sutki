@@ -46,7 +46,13 @@ SELECT
     FROM review rv
     JOIN house h ON h.id = rv.house_id
     WHERE h.owner_id = u.id AND rv.status = 'active'
-  ), 0.0)::float8 AS rating
+  ), 0.0)::float8 AS rating,
+  (
+    SELECT count(*)::int
+    FROM review rv
+    JOIN house h ON h.id = rv.house_id
+    WHERE h.owner_id = u.id AND rv.status = 'active'
+  ) AS reviews_count
 FROM "user" u
 WHERE u.id = $1 AND u.deleted = false;
 

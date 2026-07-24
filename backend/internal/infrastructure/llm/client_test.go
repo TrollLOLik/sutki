@@ -73,6 +73,55 @@ func TestGenerateWithImagesIncludesFinishReasonForEmptyContent(t *testing.T) {
 	}
 }
 
+func TestGenerateWithImagesConvertsProviderRefusalToRejection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":null,"refusal":"unsafe image"}}]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "key", "vision-model", time.Second)
+	answer, err := client.GenerateWithImages(context.Background(), "system", "user", []string{"data:image/png;base64,AA=="}, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(answer, `"decision":"reject"`) {
+		t.Fatalf("answer=%q", answer)
+	}
+}
+
+func TestGenerateWithImagesConvertsSafetyFinishReasonToRejection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"content_filter","message":{"role":"assistant","content":null}}]}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "key", "vision-model", time.Second)
+	answer, err := client.GenerateWithImages(context.Background(), "system", "user", []string{"data:image/png;base64,AA=="}, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(answer, `"decision":"reject"`) {
+		t.Fatalf("answer=%q", answer)
+	}
+}
+
+func TestGenerateWithImagesConvertsSafetyHTTPErrorToRejection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"code":"content_filter","message":"unsafe content"}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "key", "vision-model", time.Second)
+	answer, err := client.GenerateWithImages(context.Background(), "system", "user", []string{"data:image/png;base64,AA=="}, 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(answer, `"decision":"reject"`) {
+		t.Fatalf("answer=%q", answer)
+	}
+}
+
 func TestGenerateIncludesFinishReasonForEmptyContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"length","message":{"role":"assistant","content":null}}]}`))

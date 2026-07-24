@@ -13,7 +13,7 @@ export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'gr
 
   if (layout === 'grid') {
     return (
-      <View style={{ flex: 1 }} className="mb-3 rounded-card border border-line bg-surface p-2">
+      <View style={{ width: '100%' }} className="mb-3 rounded-card border border-line bg-surface p-2">
         <Skeleton width="100%" height={116} radius={13} />
         <View className="gap-2 px-0.5 pb-1 pt-3">
           <View className="flex-row items-center justify-between">

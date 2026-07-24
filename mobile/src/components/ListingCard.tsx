@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ResilientImage } from '@/components/ResilientImage';
+import { ListingOwnerActions } from '@/components/ListingOwnerActions';
 import {
   PromotionBadge,
   PromotionHighlightSurface,
@@ -26,6 +27,7 @@ interface ListingCardProps {
   isOwn?: boolean;
   isViewed?: boolean;
   onToggleFavorite?: () => void;
+  onEdit?: () => void;
   onPromote?: () => void;
   onUnpublish?: () => void;
   onPublish?: () => void;
@@ -51,6 +53,7 @@ export function ListingCard({
   isOwn,
   isViewed,
   onToggleFavorite,
+  onEdit,
   onPromote,
   onUnpublish,
   onPublish,
@@ -294,64 +297,14 @@ export function ListingCard({
               ) : null}
             </View>
 
-            {onPromote || onUnpublish || onPublish ? (
-              <View
-                style={{
-                  marginTop: 9,
-                  flexDirection: 'row',
-                  gap: 7,
-                  borderTopWidth: 1,
-                  borderTopColor: palette.line,
-                  paddingTop: 8,
-                }}
-              >
-                {onPromote ? (
-                  <Pressable
-                    accessibilityLabel="Продвигать"
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      onPromote();
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 36,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 12,
-                      backgroundColor: palette.primaryLight,
-                    }}
-                  >
-                    <Ionicons name="rocket-outline" size={17} color={palette.primary} />
-                  </Pressable>
-                ) : null}
-                {onUnpublish || onPublish ? (
-                  <Pressable
-                    accessibilityLabel={onPublish ? 'Опубликовать снова' : 'Снять с публикации'}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      if (onPublish) onPublish();
-                      else onUnpublish?.();
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 36,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: palette.line,
-                      backgroundColor: onPublish ? palette.primary : palette.surfaceMuted,
-                    }}
-                  >
-                    <Ionicons
-                      name={onPublish ? 'cloud-upload-outline' : 'eye-off-outline'}
-                      size={17}
-                      color={onPublish ? '#FFFFFF' : palette.inkSecondary}
-                    />
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
+            <ListingOwnerActions
+              compact
+              onEdit={onEdit}
+              onPromote={onPromote}
+              onPublish={onPublish}
+              onUnpublish={onUnpublish}
+              style={{ marginTop: 9 }}
+            />
           </Pressable>
         </PromotionHighlightSurface>
       </Animated.View>
@@ -559,21 +512,13 @@ export function ListingCard({
           <Ionicons name="chevron-forward" size={16} color={palette.primary} />
         </Pressable>
       </View>
-      {onPromote ? (
-        <Pressable onPress={(event)=>{event.stopPropagation();onPromote();}} className="mt-3 h-10 flex-row items-center justify-center gap-2 rounded-field bg-primary-light active:opacity-85">
-          <Ionicons name="rocket-outline" size={17} color={palette.primary}/><Text className="text-sm font-bold text-primary">Продвигать</Text>
-        </Pressable>
-      ) : null}
-      {onUnpublish ? (
-        <Pressable onPress={(event)=>{event.stopPropagation();onUnpublish();}} className="mt-2 h-10 flex-row items-center justify-center gap-2 rounded-field border border-line bg-surface-muted active:opacity-85">
-          <Ionicons name="eye-off-outline" size={17} color={palette.inkSecondary}/><Text className="text-sm font-bold text-ink-secondary">Снять с публикации</Text>
-        </Pressable>
-      ) : null}
-      {onPublish ? (
-        <Pressable onPress={(event)=>{event.stopPropagation();onPublish();}} className="mt-2 h-10 flex-row items-center justify-center gap-2 rounded-field bg-primary active:opacity-85">
-          <Ionicons name="cloud-upload-outline" size={17} color="#fff"/><Text className="text-sm font-bold text-white">Опубликовать снова</Text>
-        </Pressable>
-      ) : null}
+      <ListingOwnerActions
+        onEdit={onEdit}
+        onPromote={onPromote}
+        onPublish={onPublish}
+        onUnpublish={onUnpublish}
+        style={{ marginTop: 10 }}
+      />
         </Pressable>
       </PromotionHighlightSurface>
     </Animated.View>

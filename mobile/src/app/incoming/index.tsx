@@ -187,7 +187,7 @@ export default function IncomingBookingsScreen() {
           <View className="h-12 w-12" />
         </View>
 
-        <View className="flex-1">
+        <View className="flex-1 overflow-hidden">
         <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
         <View
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}

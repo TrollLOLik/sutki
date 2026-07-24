@@ -23,6 +23,7 @@ type User struct {
 	CreatedAt       time.Time
 	ListingsCount   int32
 	Rating          float64
+	ReviewsCount    int32
 	VKID            string
 }
 

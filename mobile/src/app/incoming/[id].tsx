@@ -317,7 +317,16 @@ export default function IncomingBookingDetailScreen() {
             </View>
           </ScrollView>
 
-          <SafeAreaView edges={['bottom']} style={[styles.footer, { backgroundColor: palette.surface, borderTopColor: palette.line }]}>
+          <SafeAreaView
+            edges={['bottom']}
+            style={[
+              styles.footer,
+              {
+                backgroundColor: palette.surface,
+                borderTopColor: palette.line,
+                paddingBottom: 12,
+              },
+            ]}>
             <Button
               label="Открыть чат"
               icon="chatbubble-outline"

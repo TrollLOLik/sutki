@@ -350,7 +350,11 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 					log.Printf("[Chat] Failed to delete rejected image %q: %v", key, delErr)
 				}
 			}
-			return domain.Message{}, fmt.Errorf("%w: %s", domain.ErrUnsafeImage, result.Reason)
+			return domain.Message{}, &domain.UnsafeImageError{
+				Decision: result.Decision,
+				Category: result.Category,
+				Reason:   result.Reason,
+			}
 		}
 	}
 

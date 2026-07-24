@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { appAlert as Alert } from '@/components/AppAlert';
 import { EmptyState } from '@/components/EmptyState';
@@ -65,7 +65,6 @@ export default function BookingDetailScreen() {
   const bookingId = Number(id);
   const { data, isLoading, isError, refetch } = useBooking(bookingId);
   const cancel = useCancelBooking();
-  const insets = useSafeAreaInsets();
   const eligibility = useMyReviewEligibility();
   const elig = eligibility.data?.items?.find((item) => item.request_id === bookingId);
   const canReview = elig?.can_review === true;
@@ -370,13 +369,14 @@ export default function BookingDetailScreen() {
             ) : null}
           </ScrollView>
 
-          <View
+          <SafeAreaView
+            edges={['bottom']}
             style={[
               styles.footer,
               {
                 backgroundColor: palette.surface,
                 borderTopColor: palette.line,
-                paddingBottom: insets.bottom > 0 ? insets.bottom : 14,
+                paddingBottom: 12,
                 shadowOpacity: isDark ? 0.28 : 0.08,
               },
             ]}>
@@ -406,7 +406,7 @@ export default function BookingDetailScreen() {
                 </Text>
               </TouchableOpacity>
             ) : null}
-          </View>
+          </SafeAreaView>
         </>
       )}
     </View>
