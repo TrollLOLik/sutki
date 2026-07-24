@@ -171,20 +171,19 @@ export default function SearchScreen() {
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        const history = useNavigationHistoryStore.getState();
-        const current = history.entries.at(-1);
-        const previous = history.entries.at(-2);
-        if (
-          !current ||
-          !previous ||
-          !previous.key.endsWith('/profile') ||
-          current.key === previous.key
-        ) {
+        if (!useNavigationHistoryStore.getState().consumeFavoritesReturnToProfile()) {
           return false;
         }
 
-        history.truncateTo(previous.key);
-        router.navigate(previous.href);
+        const history = useNavigationHistoryStore.getState();
+        const current = history.entries.at(-1);
+        const previous = history.entries.at(-2);
+        if (previous && previous.key.endsWith('/profile') && current?.key !== previous.key) {
+          history.truncateTo(previous.key);
+          router.navigate(previous.href);
+        } else {
+          router.navigate('/profile');
+        }
         return true;
       });
 

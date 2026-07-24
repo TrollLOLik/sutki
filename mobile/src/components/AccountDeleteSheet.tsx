@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, TextInput, View, ScrollView, ActivityIndicator } from 'react-native';
 
-import { Button } from '@/components/ui';
+import { BottomSheet, Button } from '@/components/ui';
 import {
   useCheckDeleteMe,
   useRequestDeleteMeCode,
@@ -11,7 +11,6 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useSessionStore } from '@/store/session';
-import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 const CODE_LENGTH = 6;
@@ -66,12 +65,9 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
   const requestCode = useRequestDeleteMeCode();
   const confirmDelete = useConfirmDeleteMe();
 
-  // Animation values
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(600)).current;
-
   // Input refs for automatic focus
   const hiddenInputRef = useRef<TextInput>(null);
+  const wasVisibleRef = useRef(false);
 
   // Timer countdown
   useEffect(() => {
@@ -96,44 +92,20 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
     }
   };
 
-  // Open/Reset animations and values
-  useLayoutEffect(() => {
-    if (visible) {
-      // Only reset the session if the previous deletion completed successfully or was blocked.
-      if (step === 'success' || step === 'active_bookings_blocked') {
-        setStep('checking');
-        setCode('');
-        setDevCode(null);
-        setSeconds(0);
-        setCodeSent(false);
-        setError(null);
-      }
-
-      fade.stopAnimation();
-      slide.stopAnimation();
-      fade.setValue(0);
-      slide.setValue(600);
+  // Start a clean deletion flow once per opening. Keeping this outside the
+  // native modal's onShow prevents stale step content from flashing behind it.
+  useEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      setStep('checking');
+      setCode('');
+      setDevCode(null);
+      setSeconds(0);
+      setCodeSent(false);
+      setError(null);
+      void handleStartCheck();
     }
+    wasVisibleRef.current = visible;
   }, [visible]);
-
-  const handleShow = () => {
-    requestAnimationFrame(() => {
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-        Animated.spring(slide, {
-          toValue: 0,
-          damping: 26,
-          stiffness: 260,
-          mass: 1,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        if (step === 'checking' || step === 'success' || step === 'active_bookings_blocked') {
-          handleStartCheck();
-        }
-      });
-    });
-  };
 
   // Auto-focus input on verify step
   useEffect(() => {
@@ -145,17 +117,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
   }, [step, visible]);
 
   const handleClose = () => {
-    fade.stopAnimation();
-    slide.stopAnimation();
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(slide, {
-        toValue: 600,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => onClose());
+    onClose();
   };
 
   const handleRequestCode = async () => {
@@ -179,8 +141,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
       await confirmDelete.mutateAsync(enteredCode);
       setStep('success');
       setTimeout(() => {
-        handleClose();
-        signOut();
+        void signOut().finally(handleClose);
       }, 2000);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Неверный код подтверждения.');
@@ -196,58 +157,67 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
     handleStartCheck();
   };
 
-  if (!visible) return null;
+  const header = {
+    checking: {
+      title: 'Проверка аккаунта',
+      subtitle: 'Проверяем, можно ли удалить профиль',
+      icon: 'shield-checkmark-outline' as const,
+      color: palette.primary,
+      backgroundColor: palette.primaryLight,
+    },
+    active_bookings_blocked: {
+      title: 'Удаление невозможно',
+      subtitle: 'Сначала завершите активные действия',
+      icon: 'alert-circle-outline' as const,
+      color: palette.danger,
+      backgroundColor: palette.dangerLight,
+    },
+    confirm_warning: {
+      title: 'Удаление аккаунта',
+      subtitle: 'Проверьте последствия перед продолжением',
+      icon: 'trash-outline' as const,
+      color: palette.danger,
+      backgroundColor: palette.dangerLight,
+    },
+    verify_code: {
+      title: 'Подтверждение удаления',
+      subtitle: 'Введите код подтверждения',
+      icon: 'key-outline' as const,
+      color: palette.primary,
+      backgroundColor: palette.primaryLight,
+    },
+    success: {
+      title: 'Аккаунт удалён',
+      subtitle: 'Удаление профиля завершено',
+      icon: 'checkmark-circle-outline' as const,
+      color: palette.success,
+      backgroundColor: palette.successLight,
+    },
+  }[step];
 
   return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-      hardwareAccelerated
-      onShow={handleShow}
-      onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-end"
-      >
-        {/* Backdrop */}
-        <Animated.View
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'black', opacity: fade }}
-        >
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
-        </Animated.View>
+    <BottomSheet visible={visible} onClose={handleClose} height="78%">
+      <View className="flex-row items-center gap-3 pb-4">
+        <View
+          className="h-12 w-12 items-center justify-center rounded-full"
+          style={{ backgroundColor: header.backgroundColor }}>
+          <Ionicons name={header.icon} size={23} color={header.color} />
+        </View>
+        <View className="min-w-0 flex-1">
+          <Text className="text-xl font-extrabold text-ink">{header.title}</Text>
+          <Text className="mt-0.5 text-sm leading-5 text-ink-secondary">{header.subtitle}</Text>
+        </View>
+      </View>
 
-        {/* Content Sheet */}
-        <Animated.View
-          style={{
-            transform: [{ translateY: slide }],
-            backgroundColor: palette.surface,
-            borderTopLeftRadius: radii.card,
-            borderTopRightRadius: radii.card,
-            height: '75%', // Fixed tall height to prevent squishing
-          }}
-          className="px-4 pb-8 pt-4"
-        >
-          {/* Top handle and title */}
-          <View className="items-center pb-4">
-            <View className="h-1 w-12 rounded-full bg-line mb-3" />
-            <Text className="text-lg font-extrabold text-ink">
-              {step === 'checking' && 'Проверка аккаунта'}
-              {step === 'active_bookings_blocked' && 'Удаление невозможно'}
-              {step === 'confirm_warning' && 'Удаление аккаунта'}
-              {step === 'verify_code' && 'Подтверждение удаления'}
-              {step === 'success' && 'Успешно'}
-            </Text>
-          </View>
-
-          {/* Errors display */}
-          {error ? (
-            <Text className="mb-4 text-center text-sm font-semibold text-danger px-4 leading-5">
-              {translateError(error)}
-            </Text>
-          ) : null}
+      {/* Errors display */}
+      {error ? (
+        <View className="mb-4 flex-row items-start gap-2 rounded-field border border-danger/20 bg-danger-light px-3 py-3">
+          <Ionicons name="alert-circle-outline" size={18} color={palette.danger} />
+          <Text className="min-w-0 flex-1 text-sm font-semibold leading-5 text-danger">
+            {translateError(error)}
+          </Text>
+        </View>
+      ) : null}
 
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -466,8 +436,6 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
               </>
             ) : null}
           </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheet>
   );
 }

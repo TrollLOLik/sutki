@@ -14,10 +14,14 @@ export interface NavigationHistoryEntry {
 interface NavigationHistoryState {
   entries: NavigationHistoryEntry[];
   forwardRevisitKey: string | null;
+  favoritesReturnToProfile: boolean;
   menuEntries: NavigationHistoryEntry[];
   menuOpen: boolean;
   selectedIndex: number | null;
   allowForwardRevisit: (key?: string) => void;
+  markFavoritesReturnToProfile: () => void;
+  consumeFavoritesReturnToProfile: () => boolean;
+  clearFavoritesReturnToProfile: () => void;
   clear: () => void;
   closeMenu: () => void;
   openMenu: () => void;
@@ -29,17 +33,26 @@ interface NavigationHistoryState {
 export const useNavigationHistoryStore = create<NavigationHistoryState>((set, get) => ({
   entries: [],
   forwardRevisitKey: null,
+  favoritesReturnToProfile: false,
   menuEntries: [],
   menuOpen: false,
   selectedIndex: null,
 
   allowForwardRevisit: (forwardRevisitKey) =>
     set({ forwardRevisitKey: forwardRevisitKey ?? '*' }),
+  markFavoritesReturnToProfile: () => set({ favoritesReturnToProfile: true }),
+  clearFavoritesReturnToProfile: () => set({ favoritesReturnToProfile: false }),
+  consumeFavoritesReturnToProfile: () => {
+    if (!get().favoritesReturnToProfile) return false;
+    set({ favoritesReturnToProfile: false });
+    return true;
+  },
 
   clear: () =>
     set({
       entries: [],
       forwardRevisitKey: null,
+      favoritesReturnToProfile: false,
       menuEntries: [],
       menuOpen: false,
       selectedIndex: null,

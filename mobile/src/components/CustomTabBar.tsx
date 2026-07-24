@@ -18,6 +18,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabBarStore } from '@/store/tabbar';
+import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { requireAuth } from '@/lib/requireAuth';
 import { useActivityCounters } from '@/lib/api/activity';
@@ -247,6 +248,9 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
     const badge = name === 'messages' ? activity?.messages ?? 0 : name === 'profile' ? activity?.notifications ?? 0 : 0;
 
     const onPress = () => {
+      if (name !== 'index') {
+        useNavigationHistoryStore.getState().clearFavoritesReturnToProfile();
+      }
       const event = navigation.emit({
         type: 'tabPress',
         target: route.key,

@@ -180,6 +180,7 @@ export default function ProfileScreen() {
 
   const openFavorites = useCallback(() => {
     useFiltersStore.setState({ favoritesOnly: true });
+    useNavigationHistoryStore.getState().markFavoritesReturnToProfile();
     useNavigationHistoryStore.getState().allowForwardRevisit();
     openSearchTab();
   }, [openSearchTab]);
@@ -290,7 +291,6 @@ export default function ProfileScreen() {
   const [phoneChangeVisible, setPhoneChangeVisible] = useState(false);
   const [deleteSheetVisible, setDeleteSheetVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
   const selectAvatarFromGallery = async (): Promise<string | undefined> => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -486,8 +486,14 @@ export default function ProfileScreen() {
   }, []);
 
   const handleDeleteAccount = () => {
+    // Keep profile settings mounted underneath the deletion flow so opening
+    // the confirmation does not close the editor or lose the current tab.
     setDeleteSheetVisible(true);
   };
+
+  const handleCloseDeleteAccount = useCallback(() => {
+    setDeleteSheetVisible(false);
+  }, []);
 
   const displayName = user
     ? [user.name, user.patronymic, user.surname].filter(Boolean).join(' ')
@@ -1087,11 +1093,11 @@ export default function ProfileScreen() {
               visible={phoneChangeVisible}
               onClose={() => setPhoneChangeVisible(false)}
             />
-            <AccountDeleteSheet
-              visible={deleteSheetVisible}
-              onClose={() => setDeleteSheetVisible(false)}
-            />
       </Modal>
+      <AccountDeleteSheet
+        visible={deleteSheetVisible}
+        onClose={handleCloseDeleteAccount}
+      />
     </View>
   );
 }

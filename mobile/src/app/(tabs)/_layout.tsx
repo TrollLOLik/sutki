@@ -17,7 +17,8 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      backBehavior="history"
+      backBehavior="none"
+      detachInactiveScreens={false}
       tabBar={(props) => <CustomTabBar {...props} />}
       screenLayout={({ children, route, navigation }) => (
         <SwipeableTabScene
@@ -28,6 +29,7 @@ export default function TabsLayout() {
       )}
       screenOptions={{
         animation: 'shift',
+        freezeOnBlur: false,
         headerShown: false,
         sceneStyle: { backgroundColor: palette.surface },
         tabBarStyle: { position: 'absolute' },
