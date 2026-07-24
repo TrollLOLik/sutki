@@ -6,12 +6,7 @@ import {
 	TextInput,
 	TouchableOpacity,
 	ActivityIndicator,
-	KeyboardAvoidingView,
-	Platform,
 	Pressable,
-	Keyboard,
-	LayoutAnimation,
-	UIManager,
 	Linking,
 	StyleSheet,
 } from 'react-native';
@@ -48,9 +43,17 @@ import { api, ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { formatRooms } from '@/lib/format';
-import { Button, BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
+import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, {
+	Easing,
+	FadeIn,
+	FadeInDown,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from 'react-native-reanimated';
+import { useKeyboardHandler } from 'react-native-keyboard-controller';
 
 /** Canned owner replies shown as chips above the input. Client-only. */
 const QUICK_REPLIES = [
@@ -60,7 +63,6 @@ const QUICK_REPLIES = [
 	'Напишу вам чуть позже',
 ];
 
-const EMOJI_OPTIONS = ['😀', '😊', '🙂', '😍', '😂', '👍', '🙏', '👌', '🔥', '❤️', '🎉', '🏠', '📍', '✅', '🙌', '☀️'];
 type ChatAttachment = NonNullable<ChatMessage['attachments']>[number];
 
 function formatLastSeen(lastSeenAt?: string) {
@@ -84,10 +86,6 @@ function formatLastSeen(lastSeenAt?: string) {
 	if (wasYesterday) return `Вчера в ${format(lastSeen, 'HH:mm')}`;
 
 	return `${format(lastSeen, 'dd.MM.yyyy')} в ${format(lastSeen, 'HH:mm')}`;
-}
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-	UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export default function ChatDialogScreen() {
@@ -121,7 +119,65 @@ export default function ChatDialogScreen() {
 	const [downloadingAttachmentID, setDownloadingAttachmentID] = useState<number | null>(null);
 	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
-	const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
+	const keyboardHeight = useSharedValue(0);
+	const keyboardIsResizing = useSharedValue(false);
+
+	useKeyboardHandler(
+		{
+			onStart: (event) => {
+				'worklet';
+
+				// Opening and closing stay synchronized with the native IME.
+				// Only smooth an in-place height change, such as switching
+				// from Gboard's letters to its taller emoji panel.
+				keyboardIsResizing.value = keyboardHeight.value > 0 && event.height > 0;
+				if (keyboardIsResizing.value) {
+					keyboardHeight.value = withTiming(event.height, {
+						duration: 120,
+						easing: Easing.out(Easing.cubic),
+					});
+				}
+			},
+			onMove: (event) => {
+				'worklet';
+
+				if (!keyboardIsResizing.value) {
+					keyboardHeight.value = event.height;
+				}
+			},
+			onInteractive: (event) => {
+				'worklet';
+
+				keyboardIsResizing.value = false;
+				keyboardHeight.value = event.height;
+			},
+			onEnd: (event) => {
+				'worklet';
+
+				if (keyboardIsResizing.value) {
+					keyboardHeight.value = withTiming(event.height, {
+						duration: 80,
+						easing: Easing.out(Easing.cubic),
+					});
+				} else {
+					keyboardHeight.value = event.height;
+				}
+				keyboardIsResizing.value = false;
+			},
+		},
+		[],
+	);
+
+	const keyboardStickyStyle = useAnimatedStyle(
+		() => ({
+			transform: [
+				{
+					translateY: -Math.max(0, keyboardHeight.value - insets.bottom),
+				},
+			],
+		}),
+		[insets.bottom],
+	);
 	// Contextual anti-scam notice: shown in fresh dialogs (few user messages),
 	// dismissible for the rest of the session. Not a chat message — it never
 	// pollutes history or unread counters.
@@ -278,27 +334,6 @@ export default function ChatDialogScreen() {
 			refetchPresence();
 		}
 	}, [socketStatus, refetchPresence]);
-
-	// Smooth transition for keyboard layout shifts
-	useEffect(() => {
-		const showSub = Keyboard.addListener(
-			Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-			() => {
-				LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-			}
-		);
-		const hideSub = Keyboard.addListener(
-			Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-			() => {
-				LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-			}
-		);
-
-		return () => {
-			showSub.remove();
-			hideSub.remove();
-		};
-	}, []);
 
 	// Track last read message to prevent infinite read loops
 	const lastReadIdRef = useRef<number | null>(null);
@@ -834,11 +869,6 @@ export default function ChatDialogScreen() {
 		});
 	};
 
-	const handleEmojiPress = (emoji: string) => {
-		handleInputChange(`${inputText}${emoji}`);
-		setIsEmojiPickerVisible(false);
-	};
-
 	// Fresh dialog = fewer than 3 human messages so far. Once the parties are
 	// clearly talking, the safety notice retires on its own.
 	const userMessageCount = messages.filter((m) => !m.kind || m.kind === 'user').length;
@@ -852,11 +882,7 @@ export default function ChatDialogScreen() {
 		<View style={{ flex: 1, backgroundColor: chatColors.background }}>
 			<Stack.Screen options={{ headerShown: false }} />
 
-			<KeyboardAvoidingView
-				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-				style={{ flex: 1 }}
-				keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-			>
+			<View style={{ flex: 1 }}>
 
 			{/* Floating conversation chrome */}
 			<Animated.View
@@ -1046,6 +1072,7 @@ export default function ChatDialogScreen() {
 			)}
 
 
+				<Animated.View style={keyboardStickyStyle}>
 				{isDeletedUser ? (
 					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }} className="px-4 py-4 border-t border-line/30 bg-surface items-center justify-center">
 						<View className="rounded-card border p-4 w-full" style={{ borderRadius: 16, backgroundColor: palette.dangerLight, borderColor: 'rgba(229, 72, 77, 0.2)' }}>
@@ -1116,14 +1143,6 @@ export default function ChatDialogScreen() {
 								className="flex-1 pl-4 pr-1 py-2.5 text-ink max-h-24 text-[15px]"
 								multiline
 							/>
-							<IconButton
-								icon="happy-outline"
-								iconSize={21}
-								size={40}
-								onPress={() => setIsEmojiPickerVisible(true)}
-								accessibilityLabel="Выбрать смайлик"
-								style={{ marginRight: 2, borderWidth: 0, backgroundColor: 'transparent' }}
-							/>
 						</View>
 
 						{/* Send Button */}
@@ -1141,97 +1160,50 @@ export default function ChatDialogScreen() {
 					</View>
 					</Animated.View>
 				)}
-			</KeyboardAvoidingView>
+				</Animated.View>
+			</View>
 
-			<BottomSheet visible={isEmojiPickerVisible} onClose={() => setIsEmojiPickerVisible(false)}>
-				<View className="py-2">
-					<Text className="text-lg font-bold text-ink text-center mb-5">
-						Смайлик
-					</Text>
-					<View className="flex-row flex-wrap justify-center gap-3 px-2 pb-2">
-						{EMOJI_OPTIONS.map((emoji) => (
+			{/* Attachments bottom sheet */}
+			<BottomSheet visible={isAttachMenuVisible} onClose={() => setIsAttachMenuVisible(false)}>
+				<View className="pt-1 pb-2">
+					<View className="mb-4 flex-row items-center justify-between">
+						<View className="min-w-0 flex-1">
+							<Text className="text-xl font-extrabold text-ink">Добавить в сообщение</Text>
+							<Text className="mt-1 text-sm text-ink-secondary">Выберите тип вложения</Text>
+						</View>
+						<IconButton
+							icon="close"
+							size={40}
+							iconSize={20}
+							onPress={() => setIsAttachMenuVisible(false)}
+							accessibilityLabel="Закрыть вложения"
+						/>
+					</View>
+					<View className="overflow-hidden rounded-[22px] border border-line bg-surface-muted">
+						{[
+							{ icon: 'camera-outline' as const, title: 'Камера', subtitle: 'Сделать снимок сейчас', action: takePhoto },
+							{ icon: 'image-outline' as const, title: 'Фото и видео', subtitle: 'Выбрать из галереи', action: pickImage },
+							{ icon: 'document-text-outline' as const, title: 'Документ', subtitle: 'PDF, DOC, XLS и другие файлы', action: pickDocument },
+						].map((item, index) => (
 							<TouchableOpacity
-								key={emoji}
-								onPress={() => handleEmojiPress(emoji)}
-								activeOpacity={0.75}
-								className="w-12 h-12 rounded-2xl bg-surfaceMuted items-center justify-center active:bg-line/40"
-								accessibilityRole="button"
-								accessibilityLabel={`Добавить ${emoji}`}
-							>
-								<Text className="text-2xl">{emoji}</Text>
+								key={item.title}
+								onPress={() => {
+									setIsAttachMenuVisible(false);
+									setTimeout(item.action, 220);
+								}}
+								activeOpacity={0.72}
+								className={`flex-row items-center px-4 py-4 ${index > 0 ? 'border-t border-line' : ''}`}>
+								<View className="h-11 w-11 items-center justify-center rounded-2xl bg-primary-light">
+									<Ionicons name={item.icon} size={21} color={palette.primary} />
+								</View>
+								<View className="ml-3 flex-1">
+									<Text className="text-[15px] font-extrabold text-ink">{item.title}</Text>
+									<Text className="mt-0.5 text-sm text-ink-secondary">{item.subtitle}</Text>
+								</View>
+								<Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
 							</TouchableOpacity>
 						))}
 					</View>
-				</View>
-			</BottomSheet>
-
-			{/* Premium Bottom Sheet for Attachments */}
-			<BottomSheet visible={isAttachMenuVisible} onClose={() => setIsAttachMenuVisible(false)}>
-				<View className="py-2">
-					<Text className="text-lg font-bold text-ink text-center mb-6">
-						Отправить вложение
-					</Text>
-
-					<TouchableOpacity
-						onPress={() => {
-							setIsAttachMenuVisible(false);
-							setTimeout(takePhoto, 300);
-						}}
-						activeOpacity={0.7}
-						className="flex-row items-center py-4 px-3 bg-surfaceMuted rounded-2xl mb-3 active:bg-line/40"
-					>
-						<View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center mr-4">
-							<Ionicons name="camera-outline" size={20} color={palette.primary} />
-						</View>
-						<View className="flex-1">
-							<Text className="text-[15px] font-bold text-ink">Камера</Text>
-							<Text className="text-xs text-ink-secondary mt-0.5">Сделать снимок сейчас</Text>
-						</View>
-						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
-					</TouchableOpacity>
-
-					<TouchableOpacity
-						onPress={() => {
-							setIsAttachMenuVisible(false);
-							setTimeout(pickImage, 300);
-						}}
-						activeOpacity={0.7}
-						className="flex-row items-center py-4 px-3 bg-surfaceMuted rounded-2xl mb-3 active:bg-line/40"
-					>
-						<View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center mr-4">
-							<Ionicons name="image-outline" size={20} color={palette.primary} />
-						</View>
-						<View className="flex-1">
-							<Text className="text-[15px] font-bold text-ink">Галерея</Text>
-							<Text className="text-xs text-ink-secondary mt-0.5">Выбрать из галереи устройства</Text>
-						</View>
-						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
-					</TouchableOpacity>
-
-					<TouchableOpacity
-						onPress={() => {
-							setIsAttachMenuVisible(false);
-							setTimeout(pickDocument, 300);
-						}}
-						activeOpacity={0.7}
-						className="flex-row items-center py-4 px-3 bg-surfaceMuted rounded-2xl mb-6 active:bg-line/40"
-					>
-						<View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center mr-4">
-							<Ionicons name="document-text-outline" size={20} color={palette.primary} />
-						</View>
-						<View className="flex-1">
-							<Text className="text-[15px] font-bold text-ink">Документ</Text>
-							<Text className="text-xs text-ink-secondary mt-0.5">PDF, TXT, DOC, DOCX, XLS или XLSX</Text>
-						</View>
-						<Ionicons name="chevron-forward" size={16} color={palette.inkMuted} />
-					</TouchableOpacity>
-
-					<Button
-						label="Отмена"
-						variant="secondary"
-						onPress={() => setIsAttachMenuVisible(false)}
-						className="w-full"
-					/>
 				</View>
 			</BottomSheet>
 

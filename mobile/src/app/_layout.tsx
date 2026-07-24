@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
 
@@ -94,63 +95,68 @@ function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Root theme scope: applies the CSS variable set that every Tailwind
-          color class resolves against (NativeWind native theming). */}
-      <View style={[{ flex: 1 }, isDark ? darkVars : lightVars]}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <StatusBar style={isDark ? 'light' : 'dark'} />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: palette.surface },
-              animation: 'slide_from_right',
-              gestureEnabled: true,
-              gestureDirection: 'horizontal',
-              fullScreenGestureEnabled: true,
-            }}>
-            <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
-              <Stack.Screen name="listing/[id]/location" />
-              <Stack.Screen name="listing/[id]/promote" />
-              <Stack.Screen name="profile/[id]" />
-              <Stack.Screen name="chat/[id]" />
-              <Stack.Screen name="reviews/[id]" />
-              <Stack.Screen name="review/[id]" />
-              <Stack.Screen name="my-reviews" />
-              <Stack.Screen name="filters" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-              <Stack.Screen name="booking/[id]" />
-              <Stack.Screen name="bookings/index" />
-              <Stack.Screen name="bookings/[id]" />
-              <Stack.Screen name="incoming/index" />
-              <Stack.Screen name="incoming/[id]" />
-              <Stack.Screen name="create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-              <Stack.Screen name="my-listings/index" />
-              <Stack.Screen name="notifications" />
-              <Stack.Screen name="payments/checkout" />
-              <Stack.Screen name="payments/return" />
-            </Stack.Protected>
-            {/* Tokens are set but the profile is incomplete: the (auth) stack is
-                unmounted and only profile-setup is reachable until onboarding
-                completes. This also covers a cold start mid-onboarding. */}
-            <Stack.Protected guard={status === 'onboarding'}>
-              <Stack.Screen name="profile-setup" />
-            </Stack.Protected>
-            <Stack.Protected guard={status === 'unauthenticated' || status === 'guest'}>
-              <Stack.Screen name="(auth)" />
-            </Stack.Protected>
-          </Stack>
-          <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
-          <AppAlertHost />
-          <NetworkStatusBanner />
-        </QueryClientProvider>
-        <NavigationHistoryOverlay />
-      </SafeAreaProvider>
-      </View>
-      {/* Circular-reveal overlay: above everything including tab bar and status
-          bar. pointerEvents="none" so it never blocks touches. */}
-      <ThemeTransitionOverlay />
+      <KeyboardProvider
+        preserveEdgeToEdge
+        statusBarTranslucent
+        navigationBarTranslucent>
+        {/* Root theme scope: applies the CSS variable set that every Tailwind
+            color class resolves against (NativeWind native theming). */}
+        <View style={[{ flex: 1 }, isDark ? darkVars : lightVars]}>
+          <SafeAreaProvider>
+            <QueryClientProvider client={queryClient}>
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: palette.surface },
+                  animation: 'slide_from_right',
+                  gestureEnabled: true,
+                  gestureDirection: 'horizontal',
+                  fullScreenGestureEnabled: true,
+                }}>
+                <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
+                  <Stack.Screen name="listing/[id]/location" />
+                  <Stack.Screen name="listing/[id]/promote" />
+                  <Stack.Screen name="profile/[id]" />
+                  <Stack.Screen name="chat/[id]" />
+                  <Stack.Screen name="reviews/[id]" />
+                  <Stack.Screen name="review/[id]" />
+                  <Stack.Screen name="my-reviews" />
+                  <Stack.Screen name="filters" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                  <Stack.Screen name="booking/[id]" />
+                  <Stack.Screen name="bookings/index" />
+                  <Stack.Screen name="bookings/[id]" />
+                  <Stack.Screen name="incoming/index" />
+                  <Stack.Screen name="incoming/[id]" />
+                  <Stack.Screen name="create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                  <Stack.Screen name="my-listings/index" />
+                  <Stack.Screen name="notifications" />
+                  <Stack.Screen name="payments/checkout" />
+                  <Stack.Screen name="payments/return" />
+                </Stack.Protected>
+                {/* Tokens are set but the profile is incomplete: the (auth) stack is
+                    unmounted and only profile-setup is reachable until onboarding
+                    completes. This also covers a cold start mid-onboarding. */}
+                <Stack.Protected guard={status === 'onboarding'}>
+                  <Stack.Screen name="profile-setup" />
+                </Stack.Protected>
+                <Stack.Protected guard={status === 'unauthenticated' || status === 'guest'}>
+                  <Stack.Screen name="(auth)" />
+                </Stack.Protected>
+              </Stack>
+              <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
+              <AppAlertHost />
+              <NetworkStatusBanner />
+            </QueryClientProvider>
+            <NavigationHistoryOverlay />
+          </SafeAreaProvider>
+        </View>
+        {/* Circular-reveal overlay: above everything including tab bar and status
+            bar. pointerEvents="none" so it never blocks touches. */}
+        <ThemeTransitionOverlay />
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

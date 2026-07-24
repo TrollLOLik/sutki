@@ -24,6 +24,9 @@ module.exports = {
       },
     },
     android: {
+      // Keep the chat composer above keyboards of different heights,
+      // including Gboard's emoji panel.
+      softwareKeyboardLayoutMode: "resize",
       adaptiveIcon: {
         backgroundColor: "#FF5A1F",
         foregroundImage: "./assets/images/android-icon-foreground.png",
