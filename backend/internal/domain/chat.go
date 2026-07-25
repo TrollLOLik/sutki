@@ -21,6 +21,19 @@ const (
 	BookingEventCancelled = "cancelled"
 )
 
+// Editing and deletion windows for user messages.
+//
+// Editing is deliberately the shorter of the two and additionally forbidden
+// once the recipient has read the message (see chat.ErrMessageAlreadyRead).
+// This is a booking conversation: silently rewriting an agreed "5000 ₽" into
+// "7000 ₽" after the other party read it must not be possible. Deletion has a
+// longer window because it destroys the text instead of substituting it, and
+// the recipient always sees that something was removed.
+const (
+	MessageEditWindow   = 15 * time.Minute
+	MessageDeleteWindow = 60 * time.Minute
+)
+
 // BookingStatusPayload is the machine-readable content of a booking_status
 // system message. Address is only populated for the confirmed event (the
 // exact apartment number stays private until the owner approves).
@@ -71,6 +84,62 @@ type MessageAttachment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// MessageQuote is the compact form of a quoted message, embedded into every
+// reply the API returns.
+//
+// Replies carry their quote pre-hydrated instead of letting the client look the
+// parent up in its own cache: history is paginated (20 messages per page), so
+// the parent of a reply is frequently outside the loaded window. Resolving it
+// client-side would either render an empty quote or force an extra round trip
+// per reply.
+//
+// BodyPreview is truncated server-side (see MessageQuotePreviewLimit) — a quote
+// renders as one or two lines, so shipping a 4000-character body would waste
+// bandwidth on every page of history.
+type MessageQuote struct {
+	ID       int64  `json:"id"`
+	SenderID *int32 `json:"sender_id,omitempty"`
+	Kind     string `json:"kind"`
+	// BodyPreview is empty when the quoted message carries only attachments.
+	BodyPreview string `json:"body_preview"`
+	// AttachmentCount lets the client render "3 фото" without shipping every
+	// attachment of the parent.
+	AttachmentCount int32 `json:"attachment_count"`
+	// FirstAttachmentURL is a presigned thumbnail of the first attachment,
+	// populated only when that attachment is an image.
+	FirstAttachmentURL string `json:"first_attachment_url,omitempty"`
+	// Deleted marks a quote whose parent was soft-deleted. The client shows
+	// "Сообщение удалено" instead of stale text.
+	Deleted bool `json:"deleted"`
+}
+
+// MessageQuotePreviewLimit caps the quoted body length in runes.
+const MessageQuotePreviewLimit = 120
+
+// MessageMutationInfo is what authorizing an edit or a delete needs, gathered
+// in a single query so a rejected request costs one round trip instead of three.
+type MessageMutationInfo struct {
+	ID              int64
+	ConversationID  int64
+	SenderID        *int32
+	Kind            string
+	Body            *string
+	CreatedAt       time.Time
+	EditedAt        *time.Time
+	DeletedAt       *time.Time
+	AttachmentCount int64
+	// OtherLastReadMessageID is the read cursor of the other participant, or 0
+	// when they have read nothing. Editing is refused once this reaches the
+	// message being edited.
+	OtherLastReadMessageID int64
+}
+
+// IsReadByOther reports whether the other participant has already read this
+// message.
+func (m MessageMutationInfo) IsReadByOther() bool {
+	return m.OtherLastReadMessageID >= m.ID
+}
+
 // Message represents a text message optionally containing S3 attachments.
 // SenderID is nil for system messages (kind != "user"); Payload carries the
 // machine-readable card data for system kinds.
@@ -83,6 +152,18 @@ type Message struct {
 	Body           *string             `json:"body,omitempty"`
 	CreatedAt      time.Time           `json:"created_at"`
 	Attachments    []MessageAttachment `json:"attachments,omitempty"`
+	// ReplyToMessageID is set when this message answers another one in the same
+	// conversation. It survives deletion of the parent (ON DELETE SET NULL
+	// clears it only if the row is hard-deleted, which we never do).
+	ReplyToMessageID *int64 `json:"reply_to_message_id,omitempty"`
+	// ReplyTo is the hydrated quote for ReplyToMessageID. Nil when the message
+	// is not a reply.
+	ReplyTo *MessageQuote `json:"reply_to,omitempty"`
+	// EditedAt is non-nil once the body was edited; the client renders "(ред.)".
+	EditedAt *time.Time `json:"edited_at,omitempty"`
+	// DeletedAt marks a soft-deleted message. Body and attachments are cleared,
+	// but the row stays so replies keep their quote and read cursors stay valid.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // ConversationSummary represents a conversation list item with unread counts and last message preview

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
@@ -54,11 +55,42 @@ var (
 	// ErrFileTypeNotAllowed is returned by PresignUpload for non-whitelisted
 	// content types.
 	ErrFileTypeNotAllowed = errors.New("file type not allowed")
+	// ErrTooManyAttachments is returned when a single message carries more than
+	// maxAttachmentsPerMessage files.
+	ErrTooManyAttachments = errors.New("too many attachments in one message")
+	// ErrReplyTargetNotFound is returned when the quoted message does not exist
+	// or belongs to another conversation.
+	ErrReplyTargetNotFound = errors.New("reply target not found in this conversation")
+	// ErrMessageNotFound is returned when the message to edit or delete does not
+	// exist.
+	ErrMessageNotFound = errors.New("message not found")
+	// ErrMessageNotEditable is returned for system cards and for messages whose
+	// body cannot be rewritten (attachment-only messages).
+	ErrMessageNotEditable = errors.New("message cannot be edited")
+	// ErrEditWindowExpired is returned once MessageEditWindow has passed.
+	ErrEditWindowExpired = errors.New("edit window expired")
+	// ErrDeleteWindowExpired is returned once MessageDeleteWindow has passed.
+	ErrDeleteWindowExpired = errors.New("delete window expired")
+	// ErrMessageAlreadyRead is returned when the recipient has already read the
+	// message the author wants to edit. Rewriting agreed terms after the other
+	// party saw them is not acceptable in a booking conversation.
+	ErrMessageAlreadyRead = errors.New("message already read by recipient")
+	// ErrMessageAlreadyDeleted is returned when the message is already deleted.
+	ErrMessageAlreadyDeleted = errors.New("message already deleted")
 )
 
 // maxAttachmentBytes is the maximum accepted size for a chat attachment,
 // enforced server-side against the actual uploaded object.
 const maxAttachmentBytes = 15 * 1024 * 1024
+
+// maxAttachmentsPerMessage caps how many files one message may carry.
+//
+// Without this bound a client could reference an arbitrary number of keys and
+// make the server perform that many StatObject calls plus one vision-moderation
+// request per image — the moderation loop is sequential by design (providers
+// only inspect the first image of a multi-image prompt), so an unbounded batch
+// is an easy way to tie up a worker. Matches the picker limit on the client.
+const maxAttachmentsPerMessage = 10
 
 // Config holds settings for the chat service and Centrifugo
 type Config struct {
@@ -246,6 +278,35 @@ func (s *Service) presignAttachment(ctx context.Context, att domain.MessageAttac
 	return att
 }
 
+// presignQuote turns the raw storage key of a quote thumbnail into a signed URL.
+// Mutates through the pointer because the quote hangs off the message. Nil
+// quotes (non-reply messages) are a no-op.
+func (s *Service) presignQuote(ctx context.Context, quote *domain.MessageQuote) {
+	if quote == nil || quote.FirstAttachmentURL == "" {
+		return
+	}
+	signed := s.presignAttachment(ctx, domain.MessageAttachment{URL: quote.FirstAttachmentURL})
+	quote.FirstAttachmentURL = signed.URL
+}
+
+// hydrateAndPresignQuote resolves the quote of a single message and signs its
+// thumbnail. Used for freshly created messages, where the reply target has not
+// been hydrated yet.
+func (s *Service) hydrateAndPresignQuote(ctx context.Context, msg *domain.Message) {
+	if msg.ReplyToMessageID == nil {
+		return
+	}
+	batch := []domain.Message{*msg}
+	if err := s.repo.HydrateReplyQuotes(ctx, batch); err != nil {
+		// A missing quote must not fail the send: the message is already
+		// persisted, and the client refetches history on reconnect.
+		log.Printf("[Chat] Failed to hydrate reply quote for message %d: %v", msg.ID, err)
+		return
+	}
+	msg.ReplyTo = batch[0].ReplyTo
+	s.presignQuote(ctx, msg.ReplyTo)
+}
+
 func (s *Service) GetConversationMessages(ctx context.Context, userID int32, convID int64, cursorMessageID int64, limit int32) ([]domain.Message, error) {
 	// Verify participation
 	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)
@@ -268,17 +329,24 @@ func (s *Service) GetConversationMessages(ctx context.Context, userID int32, con
 		return nil, err
 	}
 
+	// Hydrate reply quotes server-side: history is paginated, so the quoted
+	// message is frequently outside the page the client just received.
+	if err := s.repo.HydrateReplyQuotes(ctx, msgs); err != nil {
+		return nil, err
+	}
+
 	// Presign attachment URLs for delivery to client
 	for i := range msgs {
 		for j := range msgs[i].Attachments {
 			msgs[i].Attachments[j] = s.presignAttachment(ctx, msgs[i].Attachments[j])
 		}
+		s.presignQuote(ctx, msgs[i].ReplyTo)
 	}
 
 	return msgs, nil
 }
 
-func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, body *string, attachments []domain.MessageAttachment) (domain.Message, error) {
+func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, body *string, replyToMessageID *int64, attachments []domain.MessageAttachment) (domain.Message, error) {
 	// Verify participation
 	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)
 	if err != nil {
@@ -301,6 +369,25 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	hasBody := body != nil && strings.TrimSpace(*body) != ""
 	if !hasBody && len(attachments) == 0 {
 		return domain.Message{}, ErrEmptyMessage
+	}
+	if len(attachments) > maxAttachmentsPerMessage {
+		return domain.Message{}, ErrTooManyAttachments
+	}
+
+	// A reply may only quote a message from the same conversation. Without this
+	// check a participant could quote a message from an unrelated dialog and
+	// have the server hydrate its text into a conversation they can read.
+	if replyToMessageID != nil {
+		parentConvID, err := s.repo.GetMessageConversation(ctx, *replyToMessageID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.Message{}, ErrReplyTargetNotFound
+			}
+			return domain.Message{}, err
+		}
+		if parentConvID != convID {
+			return domain.Message{}, ErrReplyTargetNotFound
+		}
 	}
 
 	// Verify S3 attachments (stat check)
@@ -358,7 +445,7 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		}
 	}
 
-	msg, err := s.repo.CreateMessage(ctx, convID, userID, body, attachments)
+	msg, err := s.repo.CreateMessage(ctx, convID, userID, body, replyToMessageID, attachments)
 	if err != nil {
 		return domain.Message{}, err
 	}
@@ -367,6 +454,11 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	for i := range msg.Attachments {
 		msg.Attachments[i] = s.presignAttachment(ctx, msg.Attachments[i])
 	}
+
+	// Hydrate the quote before publishing, so the realtime copy carries the same
+	// data as the HTTP response. Otherwise the recipient's bubble would render
+	// without a quote and only gain it after a refetch.
+	s.hydrateAndPresignQuote(ctx, &msg)
 
 	// Publish to Centrifugo in background (use detached context since HTTP ctx is cancelled after response)
 	go s.publishMessage(context.Background(), msg)
@@ -599,6 +691,171 @@ func (s *Service) ReadMessages(ctx context.Context, userID int32, convID int64, 
 	}
 
 	return nil
+}
+
+// EditMessage rewrites the body of the caller's own message.
+//
+// Allowed only while all of the following hold: the caller is the author, the
+// message is a user message (never a booking card), it is not deleted, it
+// carries a text body, MessageEditWindow has not elapsed, and the recipient has
+// not read it yet. The read check is the important one for a booking
+// conversation — quietly turning an agreed "5000 ₽" into "7000 ₽" after the
+// other party saw it must not be possible.
+//
+// Attachments are deliberately immutable: swapping a photo after the fact
+// changes what the message means, and the recipient has no way to notice.
+func (s *Service) EditMessage(ctx context.Context, userID int32, messageID int64, body string) (domain.Message, error) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return domain.Message{}, ErrEmptyMessage
+	}
+
+	info, err := s.repo.GetMessageForMutation(ctx, messageID, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Message{}, ErrMessageNotFound
+		}
+		return domain.Message{}, err
+	}
+
+	// Membership is implied by authorship, which is checked next; a non-author
+	// gets the same "forbidden" answer whether or not they are a participant.
+	if info.SenderID == nil || *info.SenderID != userID {
+		return domain.Message{}, domain.ErrBookingForbidden
+	}
+	if info.DeletedAt != nil {
+		return domain.Message{}, ErrMessageAlreadyDeleted
+	}
+	if info.Kind != domain.MessageKindUser {
+		return domain.Message{}, ErrMessageNotEditable
+	}
+	// An attachment-only message has no text to rewrite. Letting an edit add a
+	// body would turn a photo into a photo-with-caption after delivery.
+	if info.Body == nil || strings.TrimSpace(*info.Body) == "" {
+		return domain.Message{}, ErrMessageNotEditable
+	}
+	if info.IsReadByOther() {
+		return domain.Message{}, ErrMessageAlreadyRead
+	}
+	if time.Since(info.CreatedAt) > domain.MessageEditWindow {
+		return domain.Message{}, ErrEditWindowExpired
+	}
+
+	msg, ok, err := s.repo.EditMessageBody(ctx, messageID, userID, body, domain.MessageEditWindow)
+	if err != nil {
+		return domain.Message{}, err
+	}
+	if !ok {
+		// The SQL guards repeat the checks above, so losing here means a
+		// concurrent request won: the window closed or the row was deleted
+		// between our read and the update.
+		return domain.Message{}, ErrEditWindowExpired
+	}
+
+	// An edit leaves attachments alone, but the client swaps in the whole
+	// message object from this response — so a caption edit must not drop the
+	// photos it belongs to. The repository reloads them; here we only sign them.
+	for i := range msg.Attachments {
+		msg.Attachments[i] = s.presignAttachment(ctx, msg.Attachments[i])
+	}
+
+	s.hydrateAndPresignQuote(ctx, &msg)
+	go s.publishMessageMutation(context.Background(), msg, "message.edited")
+
+	return msg, nil
+}
+
+// DeleteMessage soft-deletes the caller's own message.
+//
+// The row survives: hard deletion would blank the quote of every reply pointing
+// at it (ON DELETE SET NULL) and could leave last_read_message_id referencing a
+// missing id. The body is cleared and attachment objects are removed from
+// storage, so nothing recoverable stays behind — the client renders a
+// "Сообщение удалено" placeholder in place of the bubble.
+//
+// Unlike editing, deletion stays allowed after the recipient has read the
+// message: they already saw it, and removing it does not misrepresent what was
+// said.
+func (s *Service) DeleteMessage(ctx context.Context, userID int32, messageID int64) (domain.Message, error) {
+	info, err := s.repo.GetMessageForMutation(ctx, messageID, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Message{}, ErrMessageNotFound
+		}
+		return domain.Message{}, err
+	}
+
+	if info.SenderID == nil || *info.SenderID != userID {
+		return domain.Message{}, domain.ErrBookingForbidden
+	}
+	if info.DeletedAt != nil {
+		return domain.Message{}, ErrMessageAlreadyDeleted
+	}
+	if info.Kind != domain.MessageKindUser {
+		// Booking cards are the audit trail of the deal; a participant must not
+		// be able to erase them.
+		return domain.Message{}, ErrMessageNotEditable
+	}
+	if time.Since(info.CreatedAt) > domain.MessageDeleteWindow {
+		return domain.Message{}, ErrDeleteWindowExpired
+	}
+
+	msg, attachmentKeys, ok, err := s.repo.SoftDeleteMessage(ctx, messageID, userID, domain.MessageDeleteWindow)
+	if err != nil {
+		return domain.Message{}, err
+	}
+	if !ok {
+		return domain.Message{}, ErrDeleteWindowExpired
+	}
+
+	// Drop the objects only after the row is committed. Doing it earlier would
+	// risk deleting files for a message that still renders if the transaction
+	// rolled back. Failures are logged, not surfaced: the message is already
+	// gone from the user's perspective, and an orphaned object is a
+	// housekeeping problem rather than a user-facing one.
+	if len(attachmentKeys) > 0 {
+		go func(keys []string) {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			for _, key := range keys {
+				if err := s.storage.Delete(cleanupCtx, key); err != nil {
+					log.Printf("[Chat] Failed to delete attachment %q of deleted message %d: %v", key, messageID, err)
+				}
+			}
+		}(attachmentKeys)
+	}
+
+	go s.publishMessageMutation(context.Background(), msg, "message.deleted")
+
+	return msg, nil
+}
+
+// publishMessageMutation broadcasts an edit or delete to the conversation
+// channel and refreshes both participants' conversation lists.
+//
+// The conversation preview shows the last message, so editing or deleting it
+// has to invalidate that list as well — otherwise the messages screen keeps
+// showing text that no longer exists.
+func (s *Service) publishMessageMutation(ctx context.Context, msg domain.Message, eventType string) {
+	_ = s.centrifugoPublish(fmt.Sprintf("chat:conv_%d", msg.ConversationID), map[string]any{
+		"type":    eventType,
+		"message": msg,
+	})
+
+	if msg.SenderID == nil {
+		return
+	}
+	recipientID, err := s.repo.GetOtherParticipantID(ctx, msg.ConversationID, *msg.SenderID)
+	if err != nil {
+		log.Printf("chat: failed to get recipient for mutation notification: %v", err)
+		return
+	}
+	payload := map[string]any{
+		"type":            "unread_update",
+		"conversation_id": msg.ConversationID,
+	}
+	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", recipientID), payload)
+	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", *msg.SenderID), payload)
 }
 
 func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName string, size int64, contentType string) (domain.UploadTarget, error) {

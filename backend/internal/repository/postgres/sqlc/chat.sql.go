@@ -115,36 +115,72 @@ func (q *Queries) CreateConversation(ctx context.Context, houseID *int32) (Conve
 }
 
 const createMessage = `-- name: CreateMessage :one
-INSERT INTO message (conversation_id, sender_id, body, created_at)
-VALUES ($1, $2, $3, now())
-RETURNING id, conversation_id, sender_id, body, created_at
+INSERT INTO message (conversation_id, sender_id, body, reply_to_message_id, created_at)
+VALUES ($1, $2, $3, $4, now())
+RETURNING id, conversation_id, sender_id, body, reply_to_message_id, created_at
 `
 
 type CreateMessageParams struct {
-	ConversationID int64
-	SenderID       *int32
-	Body           *string
+	ConversationID   int64
+	SenderID         *int32
+	Body             *string
+	ReplyToMessageID *int64
 }
 
 type CreateMessageRow struct {
-	ID             int64
-	ConversationID int64
-	SenderID       *int32
-	Body           *string
-	CreatedAt      pgtype.Timestamptz
+	ID               int64
+	ConversationID   int64
+	SenderID         *int32
+	Body             *string
+	ReplyToMessageID *int64
+	CreatedAt        pgtype.Timestamptz
 }
 
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (CreateMessageRow, error) {
-	row := q.db.QueryRow(ctx, createMessage, arg.ConversationID, arg.SenderID, arg.Body)
+	row := q.db.QueryRow(ctx, createMessage,
+		arg.ConversationID,
+		arg.SenderID,
+		arg.Body,
+		arg.ReplyToMessageID,
+	)
 	var i CreateMessageRow
 	err := row.Scan(
 		&i.ID,
 		&i.ConversationID,
 		&i.SenderID,
 		&i.Body,
+		&i.ReplyToMessageID,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteMessageAttachments = `-- name: DeleteMessageAttachments :many
+DELETE FROM message_attachment
+WHERE message_id = $1
+RETURNING url
+`
+
+// Удаляет вложения удалённого сообщения и возвращает их ключи, чтобы usecase
+// убрал объекты из S3.
+func (q *Queries) DeleteMessageAttachments(ctx context.Context, messageID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, deleteMessageAttachments, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, err
+		}
+		items = append(items, url)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getConversationByParticipantsAndHouse = `-- name: GetConversationByParticipantsAndHouse :one
@@ -199,7 +235,7 @@ func (q *Queries) GetConversationByParticipantsGeneral(ctx context.Context, arg 
 }
 
 const getConversationMessages = `-- name: GetConversationMessages :many
-SELECT id, conversation_id, sender_id, body, created_at
+SELECT id, conversation_id, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at
 FROM message
 WHERE conversation_id = $1
   AND ($2::bigint = 0 OR id < $2)
@@ -214,11 +250,14 @@ type GetConversationMessagesParams struct {
 }
 
 type GetConversationMessagesRow struct {
-	ID             int64
-	ConversationID int64
-	SenderID       *int32
-	Body           *string
-	CreatedAt      pgtype.Timestamptz
+	ID               int64
+	ConversationID   int64
+	SenderID         *int32
+	Body             *string
+	ReplyToMessageID *int64
+	EditedAt         pgtype.Timestamptz
+	DeletedAt        pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
 }
 
 func (q *Queries) GetConversationMessages(ctx context.Context, arg GetConversationMessagesParams) ([]GetConversationMessagesRow, error) {
@@ -235,6 +274,9 @@ func (q *Queries) GetConversationMessages(ctx context.Context, arg GetConversati
 			&i.ConversationID,
 			&i.SenderID,
 			&i.Body,
+			&i.ReplyToMessageID,
+			&i.EditedAt,
+			&i.DeletedAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -293,6 +335,147 @@ func (q *Queries) GetMessageAttachments(ctx context.Context, dollar_1 []int64) (
 	return items, nil
 }
 
+const getMessageConversation = `-- name: GetMessageConversation :one
+SELECT conversation_id FROM message WHERE id = $1
+`
+
+// Беседа процитированного сообщения — для проверки, что реплай не ссылается на
+// чужой диалог.
+func (q *Queries) GetMessageConversation(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getMessageConversation, id)
+	var conversation_id int64
+	err := row.Scan(&conversation_id)
+	return conversation_id, err
+}
+
+const getMessageForMutation = `-- name: GetMessageForMutation :one
+SELECT
+    m.id,
+    m.conversation_id,
+    m.sender_id,
+    m.kind,
+    m.body,
+    m.created_at,
+    m.edited_at,
+    m.deleted_at,
+    (SELECT COUNT(*) FROM message_attachment ma WHERE ma.message_id = m.id) AS attachment_count,
+    COALESCE((
+        SELECT MAX(cp.last_read_message_id)
+        FROM conversation_participant cp
+        WHERE cp.conversation_id = m.conversation_id
+          AND cp.user_id <> $1::int
+    ), 0)::bigint AS other_last_read_message_id
+FROM message m
+WHERE m.id = $2
+`
+
+type GetMessageForMutationParams struct {
+	UserID    int32
+	MessageID int64
+}
+
+type GetMessageForMutationRow struct {
+	ID                     int64
+	ConversationID         int64
+	SenderID               *int32
+	Kind                   string
+	Body                   *string
+	CreatedAt              pgtype.Timestamptz
+	EditedAt               pgtype.Timestamptz
+	DeletedAt              pgtype.Timestamptz
+	AttachmentCount        int64
+	OtherLastReadMessageID int64
+}
+
+// Сообщение с данными, нужными для проверки прав на правку и удаление:
+// автор, время создания, наличие вложений и позиция курсора прочтения у
+// собеседника. Всё одним запросом, чтобы не гонять три round trip перед
+// отказом.
+func (q *Queries) GetMessageForMutation(ctx context.Context, arg GetMessageForMutationParams) (GetMessageForMutationRow, error) {
+	row := q.db.QueryRow(ctx, getMessageForMutation, arg.UserID, arg.MessageID)
+	var i GetMessageForMutationRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.SenderID,
+		&i.Kind,
+		&i.Body,
+		&i.CreatedAt,
+		&i.EditedAt,
+		&i.DeletedAt,
+		&i.AttachmentCount,
+		&i.OtherLastReadMessageID,
+	)
+	return i, err
+}
+
+const getMessageQuotes = `-- name: GetMessageQuotes :many
+SELECT
+    m.id,
+    m.sender_id,
+    m.kind,
+    m.deleted_at,
+    LEFT(COALESCE(m.body, ''), $1::int)::text AS body_preview,
+    (SELECT COUNT(*) FROM message_attachment ma WHERE ma.message_id = m.id) AS attachment_count,
+    (
+        SELECT ma.url
+        FROM message_attachment ma
+        WHERE ma.message_id = m.id AND ma.mime_type LIKE 'image/%'
+        ORDER BY ma.id
+        LIMIT 1
+    )::text AS first_image_url
+FROM message m
+WHERE m.id = ANY($2::bigint[])
+`
+
+type GetMessageQuotesParams struct {
+	PreviewLimit int32
+	Ids          []int64
+}
+
+type GetMessageQuotesRow struct {
+	ID              int64
+	SenderID        *int32
+	Kind            string
+	DeletedAt       pgtype.Timestamptz
+	BodyPreview     string
+	AttachmentCount int64
+	FirstImageUrl   string
+}
+
+// Компактные данные процитированных сообщений для гидрации реплаев.
+// Тело обрезается в SQL: цитата рендерится одной-двумя строками, и тащить
+// полные 4000 символов на каждую страницу истории незачем.
+// Первое вложение берётся коррелированным подзапросом по возрастанию id —
+// нужен только превью-URL, а не весь список.
+func (q *Queries) GetMessageQuotes(ctx context.Context, arg GetMessageQuotesParams) ([]GetMessageQuotesRow, error) {
+	rows, err := q.db.Query(ctx, getMessageQuotes, arg.PreviewLimit, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMessageQuotesRow
+	for rows.Next() {
+		var i GetMessageQuotesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SenderID,
+			&i.Kind,
+			&i.DeletedAt,
+			&i.BodyPreview,
+			&i.AttachmentCount,
+			&i.FirstImageUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOtherParticipantID = `-- name: GetOtherParticipantID :one
 SELECT user_id::int FROM conversation_participant
 WHERE conversation_id = $1 AND user_id <> $2
@@ -340,15 +523,22 @@ SELECT
     other_cp.last_read_message_id AS other_last_read_message_id,
     (SELECT COUNT(*) FROM message m WHERE m.conversation_id = c.id AND m.id > cp.last_read_message_id) AS unread_count,
     m.id AS last_message_id,
-    COALESCE(m.body, (
-        SELECT CASE 
-            WHEN mime_type LIKE 'image/%' THEN '[Изображение]'
-            ELSE '[Документ]: ' || file_name 
-        END 
-        FROM message_attachment 
-        WHERE message_id = m.id 
-        LIMIT 1
-    ), '')::text AS last_message_body,
+    CASE
+        WHEN m.deleted_at IS NOT NULL THEN 'Сообщение удалено'
+        ELSE COALESCE(m.body, (
+            SELECT CASE
+                -- Альбом: показываем количество, а не «[Изображение]» —
+                -- иначе отправка десяти фото в списке выглядит как одно.
+                WHEN COUNT(*) FILTER (WHERE ma.mime_type LIKE 'image/%') > 1
+                    THEN '[Фото: ' || COUNT(*) FILTER (WHERE ma.mime_type LIKE 'image/%') || ']'
+                WHEN COUNT(*) FILTER (WHERE ma.mime_type LIKE 'image/%') = 1
+                    THEN '[Изображение]'
+                ELSE '[Документ]: ' || COALESCE(MIN(ma.file_name), '')
+            END
+            FROM message_attachment ma
+            WHERE ma.message_id = m.id
+        ), '')
+    END::text AS last_message_body,
     m.sender_id AS last_message_sender_id,
     m.created_at AS last_message_created_at,
     other_u.id AS other_user_id,
@@ -447,6 +637,53 @@ func (q *Queries) ListUserConversations(ctx context.Context, userID int32) ([]Li
 	return items, nil
 }
 
+const softDeleteMessage = `-- name: SoftDeleteMessage :one
+UPDATE message
+SET deleted_at = now(), body = NULL
+WHERE id = $1
+  AND sender_id = $2::int
+  AND kind = 'user'
+  AND deleted_at IS NULL
+  AND created_at > now() - $3::interval
+RETURNING id, conversation_id, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at
+`
+
+type SoftDeleteMessageParams struct {
+	MessageID    int64
+	UserID       int32
+	DeleteWindow pgtype.Interval
+}
+
+type SoftDeleteMessageRow struct {
+	ID               int64
+	ConversationID   int64
+	SenderID         *int32
+	Body             *string
+	ReplyToMessageID *int64
+	EditedAt         pgtype.Timestamptz
+	DeletedAt        pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+}
+
+// Мягкое удаление: строка остаётся (иначе порвутся цитаты в ответах и
+// разъедется last_read_message_id), но тело обнуляется, чтобы удалённый текст
+// не оставался в базе.
+func (q *Queries) SoftDeleteMessage(ctx context.Context, arg SoftDeleteMessageParams) (SoftDeleteMessageRow, error) {
+	row := q.db.QueryRow(ctx, softDeleteMessage, arg.MessageID, arg.UserID, arg.DeleteWindow)
+	var i SoftDeleteMessageRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.SenderID,
+		&i.Body,
+		&i.ReplyToMessageID,
+		&i.EditedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateConversationTimestamp = `-- name: UpdateConversationTimestamp :exec
 UPDATE conversation
 SET updated_at = now()
@@ -473,4 +710,56 @@ type UpdateLastReadMessageParams struct {
 func (q *Queries) UpdateLastReadMessage(ctx context.Context, arg UpdateLastReadMessageParams) error {
 	_, err := q.db.Exec(ctx, updateLastReadMessage, arg.LastReadMessageID, arg.ConversationID, arg.UserID)
 	return err
+}
+
+const updateMessageBody = `-- name: UpdateMessageBody :one
+UPDATE message
+SET body = $1, edited_at = now()
+WHERE id = $2
+  AND sender_id = $3::int
+  AND kind = 'user'
+  AND deleted_at IS NULL
+  AND created_at > now() - $4::interval
+RETURNING id, conversation_id, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at
+`
+
+type UpdateMessageBodyParams struct {
+	Body       *string
+	MessageID  int64
+	UserID     int32
+	EditWindow pgtype.Interval
+}
+
+type UpdateMessageBodyRow struct {
+	ID               int64
+	ConversationID   int64
+	SenderID         *int32
+	Body             *string
+	ReplyToMessageID *int64
+	EditedAt         pgtype.Timestamptz
+	DeletedAt        pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+}
+
+// Правка тела. Условия в WHERE, а не только в Go: параллельный запрос не должен
+// проскочить между проверкой и записью. Пустой результат = правка не разрешена.
+func (q *Queries) UpdateMessageBody(ctx context.Context, arg UpdateMessageBodyParams) (UpdateMessageBodyRow, error) {
+	row := q.db.QueryRow(ctx, updateMessageBody,
+		arg.Body,
+		arg.MessageID,
+		arg.UserID,
+		arg.EditWindow,
+	)
+	var i UpdateMessageBodyRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.SenderID,
+		&i.Body,
+		&i.ReplyToMessageID,
+		&i.EditedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
