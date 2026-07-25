@@ -598,6 +598,8 @@ func (h *ChatHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, chat.ErrFileTooLarge):
 			writeError(w, http.StatusBadRequest, "Размер файла превышает 15 МБ.")
+		case errors.Is(err, chat.ErrMotionMediaNotAllowed):
+			writeError(w, http.StatusForbidden, "Отправка видео доступна после подтверждения номера телефона.")
 		case errors.Is(err, chat.ErrFileTypeNotAllowed):
 			writeError(w, http.StatusBadRequest, "Этот тип файла не поддерживается. Выберите PDF, TXT, DOC, DOCX, XLS или XLSX.")
 		default:

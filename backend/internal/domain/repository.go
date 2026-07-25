@@ -177,6 +177,13 @@ type ChatRepository interface {
 	// to generate reply suggestions. recentLimit caps how many messages are
 	// returned.
 	GetSuggestionContext(ctx context.Context, convID int64, recentLimit int32) (SuggestionContext, error)
+	// GetUserMediaStanding returns phone verification and account age, used to
+	// gate video and animated uploads.
+	GetUserMediaStanding(ctx context.Context, userID int32) (UserMediaStanding, error)
+	// GetMessageByID loads one message with its attachments. Used by the
+	// attachment moderation worker to publish a message that was withheld while
+	// its media was being checked.
+	GetMessageByID(ctx context.Context, messageID int64) (Message, error)
 	// GetMessageConversation returns the conversation a message belongs to.
 	// Used to reject a reply that quotes a message from another dialog.
 	GetMessageConversation(ctx context.Context, messageID int64) (int64, error)

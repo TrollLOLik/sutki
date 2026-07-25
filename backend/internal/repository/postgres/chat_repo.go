@@ -215,27 +215,40 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 			sizeBytes = &att.SizeBytes
 		}
 
+		// Каждое вложение приходит с уже вычисленным статусом модерации: медиа
+		// уходит в pending и проверяется воркером, документы одобрены сразу.
+		status := att.ModerationStatus
+		if status == "" {
+			status = domain.AttachmentModerationApproved
+		}
+
 		row, err := qtx.CreateAttachment(ctx, sqlc.CreateAttachmentParams{
-			MessageID: msg.ID,
-			Url:       att.URL,
-			FileName:  fileName,
-			MimeType:  mimeType,
-			SizeBytes: sizeBytes,
-			Width:     att.Width,
-			Height:    att.Height,
+			MessageID:        msg.ID,
+			Url:              att.URL,
+			FileName:         fileName,
+			MimeType:         mimeType,
+			SizeBytes:        sizeBytes,
+			Width:            att.Width,
+			Height:           att.Height,
+			ModerationStatus: status,
+			DurationSeconds:  att.DurationSeconds,
+			ThumbnailUrl:     strPtrOrNil(att.ThumbnailURL),
 		})
 		if err != nil {
 			return domain.Message{}, fmt.Errorf("failed to save attachment: %w", err)
 		}
 		dbAttachments = append(dbAttachments, domain.MessageAttachment{
-			ID:        row.ID,
-			MessageID: row.MessageID,
-			URL:       row.Url,
-			FileName:  derefString(row.FileName),
-			MimeType:  derefString(row.MimeType),
-			SizeBytes: derefInt64(row.SizeBytes),
-			Width:     row.Width,
-			Height:    row.Height,
+			ID:               row.ID,
+			MessageID:        row.MessageID,
+			URL:              row.Url,
+			FileName:         derefString(row.FileName),
+			MimeType:         derefString(row.MimeType),
+			SizeBytes:        derefInt64(row.SizeBytes),
+			Width:            row.Width,
+			Height:           row.Height,
+			ModerationStatus: row.ModerationStatus,
+			DurationSeconds:  row.DurationSeconds,
+			ThumbnailURL:     derefString(row.ThumbnailUrl),
 		})
 	}
 
@@ -459,16 +472,7 @@ LIMIT $3`
 
 	attMap := make(map[int64][]domain.MessageAttachment)
 	for _, att := range attRows {
-		attMap[att.MessageID] = append(attMap[att.MessageID], domain.MessageAttachment{
-			ID:        att.ID,
-			MessageID: att.MessageID,
-			URL:       att.Url,
-			FileName:  derefString(att.FileName),
-			MimeType:  derefString(att.MimeType),
-			SizeBytes: derefInt64(att.SizeBytes),
-			Width:     att.Width,
-			Height:    att.Height,
-		})
+		attMap[att.MessageID] = append(attMap[att.MessageID], toDomainAttachment(att))
 	}
 
 	messages := make([]domain.Message, len(rows))
@@ -491,6 +495,25 @@ LIMIT $3`
 	return messages, nil
 }
 
+// toDomainAttachment maps a GetMessageAttachments row to the domain type.
+// Shared by the paged history read and the single-message read so the two cannot
+// drift apart on a newly added column.
+func toDomainAttachment(att sqlc.GetMessageAttachmentsRow) domain.MessageAttachment {
+	return domain.MessageAttachment{
+		ID:               att.ID,
+		MessageID:        att.MessageID,
+		URL:              att.Url,
+		FileName:         derefString(att.FileName),
+		MimeType:         derefString(att.MimeType),
+		SizeBytes:        derefInt64(att.SizeBytes),
+		Width:            att.Width,
+		Height:           att.Height,
+		ModerationStatus: att.ModerationStatus,
+		DurationSeconds:  att.DurationSeconds,
+		ThumbnailURL:     derefString(att.ThumbnailUrl),
+	}
+}
+
 // timestamptzPtr converts a nullable timestamp into *time.Time, keeping nil for
 // SQL NULL — edited_at and deleted_at are meaningful precisely by their absence.
 // Named apart from toTimePtr in user_repo.go, which converts pgtype.Date.
@@ -500,6 +523,49 @@ func timestamptzPtr(ts pgtype.Timestamptz) *time.Time {
 	}
 	t := ts.Time
 	return &t
+}
+
+// GetUserMediaStanding returns phone verification state and account age.
+func (r *ChatRepo) GetUserMediaStanding(ctx context.Context, userID int32) (domain.UserMediaStanding, error) {
+	row, err := r.q.GetUserMediaStanding(ctx, userID)
+	if err != nil {
+		return domain.UserMediaStanding{}, err
+	}
+	return domain.UserMediaStanding{
+		PhoneVerifiedAt: timestamptzPtr(row.PhoneVerifiedAt),
+		CreatedAt:       toTime(row.CreatedAt),
+	}, nil
+}
+
+// GetMessageByID loads one message with its attachments.
+func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID int64) (domain.Message, error) {
+	row, err := r.q.GetMessageByID(ctx, messageID)
+	if err != nil {
+		return domain.Message{}, err
+	}
+
+	msg := domain.Message{
+		ID:               row.ID,
+		ConversationID:   row.ConversationID,
+		SenderID:         row.SenderID,
+		Kind:             row.Kind,
+		Payload:          row.Payload,
+		Body:             row.Body,
+		CreatedAt:        toTime(row.CreatedAt),
+		ReplyToMessageID: row.ReplyToMessageID,
+		EditedAt:         timestamptzPtr(row.EditedAt),
+		DeletedAt:        timestamptzPtr(row.DeletedAt),
+	}
+
+	attRows, err := r.q.GetMessageAttachments(ctx, []int64{messageID})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return domain.Message{}, err
+	}
+	for _, att := range attRows {
+		msg.Attachments = append(msg.Attachments, toDomainAttachment(att))
+	}
+
+	return msg, nil
 }
 
 // GetMessageConversation returns the conversation a message belongs to.
@@ -690,16 +756,7 @@ func (r *ChatRepo) EditMessageBody(ctx context.Context, messageID int64, userID 
 		return domain.Message{}, false, err
 	}
 	for _, att := range attRows {
-		msg.Attachments = append(msg.Attachments, domain.MessageAttachment{
-			ID:        att.ID,
-			MessageID: att.MessageID,
-			URL:       att.Url,
-			FileName:  derefString(att.FileName),
-			MimeType:  derefString(att.MimeType),
-			SizeBytes: derefInt64(att.SizeBytes),
-			Width:     att.Width,
-			Height:    att.Height,
-		})
+		msg.Attachments = append(msg.Attachments, toDomainAttachment(att))
 	}
 
 	return msg, true, nil
