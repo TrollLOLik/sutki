@@ -26,6 +26,8 @@ import {
 	useMessages,
 	useSendMessage,
 	useReadMessages,
+	useEditMessage,
+	useDeleteMessage,
 	useConversations,
 	useConversationPresence,
 	publishTyping,
@@ -45,10 +47,16 @@ import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
 import { StagedAttachmentsBar } from '@/components/chat/StagedAttachmentsBar';
+import { EditPreviewBar } from '@/components/chat/EditPreviewBar';
+import {
+	MessageActionsSheet,
+	getMessageActions,
+} from '@/components/chat/MessageActionsSheet';
 import { useChatColors } from '@/components/chat/useChatColors';
 import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
 import { useChatUploads, MAX_ATTACHMENTS_PER_MESSAGE } from '@/hooks/useChatUploads';
-import { hapticTapLight } from '@/lib/haptics';
+import { hapticTapLight, hapticTapMedium, hapticSuccess } from '@/lib/haptics';
+import * as Clipboard from 'expo-clipboard';
 import Animated, {
 	Easing,
 	FadeIn,
@@ -182,6 +190,8 @@ export default function ChatDialogScreen() {
 
 	const { mutateAsync: performSendMessage } = useSendMessage(convID);
 	const { mutate: performReadMessages } = useReadMessages(convID);
+	const { mutateAsync: performEditMessage, isPending: isSavingEdit } = useEditMessage(convID);
+	const { mutate: performDeleteMessage } = useDeleteMessage(convID);
 
 	const messages = data?.pages.flat().filter(Boolean) ?? [];
 
@@ -271,7 +281,14 @@ export default function ChatDialogScreen() {
 	const listRef = useRef<FlatList<ChatMessage>>(null);
 	const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+	// Панель действий по долгому нажатию и режим правки.
+	const [actionsTarget, setActionsTarget] = useState<ChatMessage | null>(null);
+	const [editing, setEditing] = useState<ChatMessage | null>(null);
+
 	const startReply = React.useCallback((message: ChatMessage) => {
+		// Ответ и правка — взаимоисключающие состояния композера: в правке поле
+		// содержит старый текст, и добавлять к нему цитату бессмысленно.
+		setEditing(null);
 		setReplyTo(message);
 		hapticTapLight();
 	}, []);
@@ -328,6 +345,88 @@ export default function ChatDialogScreen() {
 			if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
 		},
 		[],
+	);
+
+	// --- Действия с сообщением -------------------------------------------
+
+	const openActions = React.useCallback((message: ChatMessage) => {
+		setActionsTarget(message);
+		hapticTapMedium();
+	}, []);
+
+	const closeActions = React.useCallback(() => setActionsTarget(null), []);
+
+	const actionsAvailability = React.useMemo(
+		() =>
+			actionsTarget
+				? getMessageActions(actionsTarget, sessionUser?.id, activeConv?.other_last_read_message_id)
+				: { canReply: false, canCopy: false, canEdit: false, canDelete: false },
+		[actionsTarget, activeConv?.other_last_read_message_id, sessionUser?.id],
+	);
+
+	const handleActionReply = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			startReply(message);
+		},
+		[closeActions, startReply],
+	);
+
+	const handleActionCopy = React.useCallback(
+		async (message: ChatMessage) => {
+			closeActions();
+			if (!message.body) return;
+			await Clipboard.setStringAsync(message.body);
+			hapticSuccess();
+		},
+		[closeActions],
+	);
+
+	const startEditing = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			// Правка и ответ не сочетаются: поле уже занято старым текстом.
+			setReplyTo(null);
+			setEditing(message);
+			setInputText(message.body ?? '');
+		},
+		[closeActions],
+	);
+
+	const cancelEditing = React.useCallback(() => {
+		setEditing(null);
+		setInputText('');
+	}, []);
+
+	const handleActionDelete = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			Alert.alert('Удалить сообщение?', 'Оно исчезнет и у собеседника.', [
+				{ text: 'Отмена', style: 'cancel' },
+				{
+					text: 'Удалить',
+					style: 'destructive',
+					onPress: () => {
+						// Если удаляем то, что правим или цитируем, — сбрасываем
+						// композер: и то и другое ссылается на исчезающий текст.
+						setEditing((current) => (current?.id === message.id ? null : current));
+						setReplyTo((current) => (current?.id === message.id ? null : current));
+						performDeleteMessage(message.id, {
+							onError: (err) => {
+								console.error('[Chat] Failed to delete message:', err);
+								Alert.alert(
+									'Не удалось удалить',
+									err instanceof ApiError
+										? err.message
+										: 'Попробуйте ещё раз.',
+								);
+							},
+						});
+					},
+				},
+			]);
+		},
+		[closeActions, performDeleteMessage],
 	);
 
 	const ownTypingActiveRef = useRef(false);
@@ -512,10 +611,24 @@ export default function ChatDialogScreen() {
 				const updated = payload.message;
 				replaceMessageInCache(queryClient, convID, updated);
 
-				// Ответ на сообщение, которое только что удалили, оставлять в
-				// композере нельзя: цитата уже недействительна.
+				// Композер не должен ссылаться на исчезнувшее сообщение: цитата
+				// становится недействительной, а сохранение правки упрётся в отказ
+				// сервера. Панель действий для него тоже закрываем.
 				if (payload.type === 'message.deleted') {
 					setReplyTo((current) => (current?.id === updated.id ? null : current));
+					setEditing((current) => {
+						if (current?.id !== updated.id) return current;
+						setInputText('');
+						return null;
+					});
+					setActionsTarget((current) => (current?.id === updated.id ? null : current));
+				}
+
+				// Сообщение могли изменить с другого устройства, пока оно открыто
+				// на правку здесь. Обновляем цель, чтобы полоса показывала актуальный
+				// исходный текст.
+				if (payload.type === 'message.edited') {
+					setEditing((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
 				}
 			}
 		});
@@ -550,6 +663,32 @@ export default function ChatDialogScreen() {
 		if (!text && !hasAttachments) return;
 
 		stopOwnTyping();
+
+		// В режиме правки та же кнопка сохраняет изменения, а не отправляет новое
+		// сообщение. Отдельная кнопка «сохранить» рядом с «отправить» приводила бы
+		// к отправке правки новым сообщением по привычке.
+		if (editing) {
+			const target = editing;
+			// Текст не изменился — молча выходим из режима, не тратя запрос.
+			if (text === (target.body ?? '').trim()) {
+				cancelEditing();
+				return;
+			}
+			try {
+				await performEditMessage({ messageID: target.id, body: text });
+				cancelEditing();
+				hapticSuccess();
+			} catch (err) {
+				console.error('[Chat] Failed to edit message:', err);
+				// Текст остаётся в поле: сервер мог отказать из-за прочтения или
+				// истёкшего окна, и терять набранное из-за этого нельзя.
+				Alert.alert(
+					'Не удалось изменить',
+					err instanceof ApiError ? err.message : 'Попробуйте ещё раз.',
+				);
+			}
+			return;
+		}
 
 		// Снимки состояния: поля сбрасываются сразу, а отправка асинхронная,
 		// поэтому к моменту запроса состояние может уже смениться.
@@ -766,6 +905,7 @@ export default function ChatDialogScreen() {
 				quoteAuthorName={resolveAuthorName}
 				onReply={startReply}
 				onQuotePress={scrollToMessage}
+				onLongPress={openActions}
 				highlighted={highlightedMessageID === item.id}
 			/>
 		);
@@ -773,8 +913,11 @@ export default function ChatDialogScreen() {
 
 	const isInputEmpty = !inputText.trim();
 	// Отправлять можно и одни вложения без подписи, поэтому кнопка смотрит на
-	// оба источника, а не только на текст.
-	const canSend = (!isInputEmpty || staged.length > 0) && !uploading;
+	// оба источника. В режиме правки вложения не при чём — правится только текст,
+	// и пустым его оставлять нельзя (сервер вернёт ErrEmptyMessage).
+	const canSend = editing
+		? !isInputEmpty && !isSavingEdit
+		: (!isInputEmpty || staged.length > 0) && !uploading;
 	const isDeletedUser = !!activeConv?.other_user_deleted;
 	const conversationTitle = activeConv
 		? [activeConv.other_user_name, activeConv.other_user_surname]
@@ -822,7 +965,10 @@ export default function ChatDialogScreen() {
 
 	// Quick replies: shown to the listing owner in a fresh dialog while the
 	// input is empty — one tap prefills a typical answer.
-	const showQuickReplies = isListingOwner && !isDeletedUser && isInputEmpty && userMessageCount < 3;
+	// В режиме правки подсказки не показываем: тап по чипу затёр бы правимый
+	// текст, а сама подсказка к чужой уже отправленной фразе не относится.
+	const showQuickReplies =
+		isListingOwner && !isDeletedUser && isInputEmpty && !editing && userMessageCount < 3;
 
 	return (
 		<View style={{ flex: 1, backgroundColor: chatColors.background }}>
@@ -1053,14 +1199,16 @@ export default function ChatDialogScreen() {
 					>
 					{/* Quick replies for the owner in fresh dialogs */}
 					<StagedAttachmentsBar
-						files={staged}
+						files={editing ? [] : staged}
 						uploading={uploading}
 						onRemove={removeStaged}
 						onAddMore={handlePickMedia}
 						canAddMore={staged.length < MAX_ATTACHMENTS_PER_MESSAGE}
 					/>
 
-					{replyTo ? (
+					{editing ? (
+						<EditPreviewBar message={editing} onCancel={cancelEditing} />
+					) : replyTo ? (
 						<ReplyPreviewBar
 							message={replyTo}
 							authorName={resolveAuthorName(replyTo.sender_id)}
@@ -1092,7 +1240,7 @@ export default function ChatDialogScreen() {
 						{/* Add Attachment Button */}
 						<TouchableOpacity
 							onPress={handlePickMedia}
-							disabled={uploading}
+							disabled={uploading || !!editing}
 							style={{ backgroundColor: chatColors.panelRaised }}
 							className="w-11 h-11 rounded-full items-center justify-center mr-2"
 							activeOpacity={0.7}
@@ -1117,15 +1265,17 @@ export default function ChatDialogScreen() {
 							/>
 						</View>
 
-						{/* Send Button */}
+						{/* Send Button. В режиме правки — галочка: та же кнопка
+						    сохраняет изменения, и иконка должна об этом говорить. */}
 						<IconButton
-							icon="arrow-up"
+							icon={editing ? 'checkmark' : 'arrow-up'}
 							iconSize={20}
 							size={44}
 							tone={canSend ? 'primary' : 'neutral'}
 							filled={canSend}
 							onPress={handleSend}
 							disabled={!canSend}
+							accessibilityLabel={editing ? 'Сохранить изменения' : 'Отправить сообщение'}
 							style={{ marginLeft: 8 }}
 						/>
 						</MaterialSurface>
@@ -1178,6 +1328,16 @@ export default function ChatDialogScreen() {
 					</View>
 				</View>
 			</BottomSheet>
+
+			<MessageActionsSheet
+				message={actionsTarget}
+				actions={actionsAvailability}
+				onClose={closeActions}
+				onReply={handleActionReply}
+				onCopy={handleActionCopy}
+				onEdit={startEditing}
+				onDelete={handleActionDelete}
+			/>
 
 			<ImageViewerModal
 				visible={galleryVisible}
