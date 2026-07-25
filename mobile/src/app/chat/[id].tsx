@@ -6,7 +6,6 @@ import {
 	TextInput,
 	TouchableOpacity,
 	ActivityIndicator,
-	Pressable,
 	Linking,
 	StyleSheet,
 } from 'react-native';
@@ -15,11 +14,8 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File } from 'expo-file-system';
 import { useQueryClient, InfiniteData } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { appAlert as Alert } from '@/components/AppAlert';
 
@@ -45,6 +41,10 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { formatRooms } from '@/lib/format';
 import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
+import { MessageBubble } from '@/components/chat/MessageBubble';
+import { useChatColors } from '@/components/chat/useChatColors';
+import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
+import { useChatUploads, type PickedFile } from '@/hooks/useChatUploads';
 import Animated, {
 	Easing,
 	FadeIn,
@@ -63,45 +63,9 @@ const QUICK_REPLIES = [
 	'Напишу вам чуть позже',
 ];
 
-type ChatAttachment = NonNullable<ChatMessage['attachments']>[number];
-
-function formatLastSeen(lastSeenAt?: string) {
-	if (!lastSeenAt) return 'Не в сети';
-	const lastSeen = new Date(lastSeenAt);
-	if (Number.isNaN(lastSeen.getTime())) return 'Не в сети';
-
-	const now = new Date();
-	const sameDay =
-		now.getFullYear() === lastSeen.getFullYear() &&
-		now.getMonth() === lastSeen.getMonth() &&
-		now.getDate() === lastSeen.getDate();
-	if (sameDay) return `Сегодня в ${format(lastSeen, 'HH:mm')}`;
-
-	const yesterday = new Date(now);
-	yesterday.setDate(now.getDate() - 1);
-	const wasYesterday =
-		yesterday.getFullYear() === lastSeen.getFullYear() &&
-		yesterday.getMonth() === lastSeen.getMonth() &&
-		yesterday.getDate() === lastSeen.getDate();
-	if (wasYesterday) return `Вчера в ${format(lastSeen, 'HH:mm')}`;
-
-	return `${format(lastSeen, 'dd.MM.yyyy')} в ${format(lastSeen, 'HH:mm')}`;
-}
-
 export default function ChatDialogScreen() {
 	const { palette, isDark } = useAppTheme();
-	const chatColors = React.useMemo(
-		() => ({
-			background: isDark ? '#0D0F12' : '#F4F5F7',
-			chrome: isDark ? 'rgba(20, 22, 27, 0.97)' : 'rgba(255, 255, 255, 0.97)',
-			panel: isDark ? '#181A1F' : '#FFFFFF',
-			panelRaised: isDark ? '#202329' : '#F0F1F3',
-			incoming: isDark ? '#1B1E23' : '#FFFFFF',
-			border: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(18,24,32,0.09)',
-			softBorder: isDark ? 'rgba(255,255,255,0.055)' : 'rgba(18,24,32,0.06)',
-		}),
-		[isDark],
-	);
+	const chatColors = useChatColors();
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id: string; title?: string; otherUserId?: string; houseId?: string }>();
 	const convID = parseInt(params.id ?? '0', 10);
@@ -115,8 +79,17 @@ export default function ChatDialogScreen() {
 	const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
 
 	const [inputText, setInputText] = useState('');
-	const [uploading, setUploading] = useState(false);
 	const [downloadingAttachmentID, setDownloadingAttachmentID] = useState<number | null>(null);
+
+	// Выбор и загрузка вложений живут в хуке: экрану остаётся только решить,
+	// что делать с готовыми метаданными (сейчас — отправить сообщением).
+	const {
+		uploading,
+		pickImages,
+		takePhoto: takePhotoFromCamera,
+		pickDocument: pickDocumentFile,
+		uploadSingle,
+	} = useChatUploads();
 	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
 	const keyboardHeight = useSharedValue(0);
@@ -523,127 +496,41 @@ export default function ChatDialogScreen() {
 		setIsAttachMenuVisible(true);
 	};
 
-	const pickImage = async () => {
-		const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-		if (!permission.granted) {
-			Alert.alert('Доступ запрещен', 'Для выбора фото разрешите доступ к галерее в настройках.');
-			return;
+	/**
+	 * Загружает файл и отправляет его отдельным сообщением.
+	 *
+	 * Текущее поведение: один файл — одно сообщение, отправка сразу после
+	 * выбора. Альбомы со стадией подготовки и подписью добавляет этап A3.
+	 */
+	const uploadAndSendFile = async (file: PickedFile) => {
+		const attachment = await uploadSingle(file);
+		if (!attachment) return;
+		try {
+			await performSendMessage({ attachments: [attachment] });
+		} catch (err) {
+			console.error('[Chat] Failed to send attachment message:', err);
+			Alert.alert(
+				'Ошибка отправки',
+				err instanceof ApiError
+					? err.message
+					: 'Файл загружен, но сообщение не отправлено. Попробуйте ещё раз.',
+			);
 		}
+	};
 
-		const result = await ImagePicker.launchImageLibraryAsync({
-			mediaTypes: 'images',
-			quality: 0.8,
-			allowsMultipleSelection: false,
-		});
-
-		if (result.canceled || !result.assets?.[0]) return;
-		const asset = result.assets[0];
-
-		await uploadAndSendFile(
-			asset.uri,
-			asset.fileName || `photo_${Date.now()}.jpg`,
-			asset.mimeType || 'image/jpeg',
-			asset.fileSize || 0,
-			asset.width,
-			asset.height
-		);
+	const pickImage = async () => {
+		const [file] = await pickImages();
+		if (file) await uploadAndSendFile(file);
 	};
 
 	const takePhoto = async () => {
-		const permission = await ImagePicker.requestCameraPermissionsAsync();
-		if (!permission.granted) {
-			Alert.alert('Доступ запрещен', 'Для создания фото разрешите доступ к камере в настройках.');
-			return;
-		}
-
-		const result = await ImagePicker.launchCameraAsync({
-			mediaTypes: 'images',
-			quality: 0.8,
-		});
-
-		if (result.canceled || !result.assets?.[0]) return;
-		const asset = result.assets[0];
-
-		await uploadAndSendFile(
-			asset.uri,
-			asset.fileName || `photo_${Date.now()}.jpg`,
-			asset.mimeType || 'image/jpeg',
-			asset.fileSize || 0,
-			asset.width,
-			asset.height
-		);
+		const [file] = await takePhotoFromCamera();
+		if (file) await uploadAndSendFile(file);
 	};
 
 	const pickDocument = async () => {
-		const result = await DocumentPicker.getDocumentAsync({
-			type: [
-				'application/pdf',
-				'text/plain',
-				'application/msword',
-				'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-				'application/vnd.ms-excel',
-				'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			],
-			copyToCacheDirectory: true,
-		});
-
-		if (result.canceled || !result.assets?.[0]) return;
-		const asset = result.assets[0];
-
-		await uploadAndSendFile(
-			asset.uri,
-			asset.name,
-			asset.mimeType || 'application/octet-stream',
-			asset.size || 0
-		);
-	};
-
-	const uploadAndSendFile = async (
-		uri: string,
-		fileName: string,
-		mimeType: string,
-		size: number,
-		width?: number,
-		height?: number
-	) => {
-		if (size > 15 * 1024 * 1024) {
-			Alert.alert('Ошибка', 'Размер файла превышает лимит 15 МБ.');
-			return;
-		}
-
-		setUploading(true);
-		try {
-			// 1. Get presigned POST upload parameters from Go API
-			const target = await presignUpload(fileName, size, mimeType);
-
-			// 2. Upload file directly to S3 / MinIO via presigned POST.
-			// The POST policy enforces the size limit on the storage side.
-			await uploadToS3(uri, target, fileName, mimeType);
-
-			// 3. Send message with the attachment metadata referencing S3 key
-			await performSendMessage({
-				attachments: [
-					{
-						url: target.key, // Backend will check existence on S3 via StatObject
-						file_name: fileName,
-						mime_type: mimeType,
-						size_bytes: size,
-						width,
-						height,
-					},
-				],
-			});
-		} catch (err) {
-			console.error('[Chat] Failed uploading file:', err);
-			Alert.alert(
-				'Ошибка загрузки',
-				err instanceof ApiError
-					? err.message
-					: 'Не удалось загрузить и отправить файл. Попробуйте ещё раз.',
-			);
-		} finally {
-			setUploading(false);
-		}
+		const [file] = await pickDocumentFile();
+		if (file) await uploadAndSendFile(file);
 	};
 
 	const downloadAttachment = async (attachment: ChatAttachment) => {
@@ -670,13 +557,16 @@ export default function ChatDialogScreen() {
 		}
 	};
 
-	const formatMessageTime = (timeStr: string) => {
-		try {
-			return format(new Date(timeStr), 'HH:mm');
-		} catch {
-			return '';
-		}
-	};
+	const openImageViewer = React.useCallback(
+		(attachment: ChatAttachment) => {
+			const index = chatImages.indexOf(attachment.url);
+			if (index >= 0) {
+				setSelectedImageIndex(index);
+				setGalleryVisible(true);
+			}
+		},
+		[chatImages],
+	);
 
 	const renderMessage = ({ item }: { item: ChatMessage }) => {
 		// System booking card: centered, no bubble, optional owner actions.
@@ -706,125 +596,16 @@ export default function ChatDialogScreen() {
 		}
 
 		const isMe = item.sender_id != null && item.sender_id === sessionUser?.id;
-		const isPending = item.pending;
-		const isFailed = item.failed;
-		const hasAttachments = !!item.attachments?.length;
-		const isImageOnly =
-			hasAttachments &&
-			!item.body &&
-			item.attachments!.every((attachment) => attachment.mime_type.startsWith('image/'));
 
 		return (
-			<View className={`flex-row my-1.5 px-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
-				<View
-					style={[
-						styles.messageBubble,
-						{
-							backgroundColor: isImageOnly
-								? 'transparent'
-								: isMe
-									? palette.primary
-									: chatColors.incoming,
-							borderColor: isImageOnly || isMe ? 'transparent' : chatColors.softBorder,
-							paddingHorizontal: isImageOnly ? 0 : 15,
-							paddingVertical: isImageOnly ? 0 : 11,
-						},
-					]}
-				>
-					{/* Render attachments */}
-					{item.attachments && item.attachments.map((att) => {
-						const isImg = att.mime_type.startsWith('image/');
-						if (isImg) {
-							return (
-								<TouchableOpacity
-									key={att.id}
-									activeOpacity={0.9}
-									onPress={() => {
-										const index = chatImages.indexOf(att.url);
-										if (index >= 0) {
-											setSelectedImageIndex(index);
-											setGalleryVisible(true);
-										}
-									}}
-									style={styles.imageAttachment}
-								>
-									<Image
-										source={{ uri: att.url }}
-										style={{
-											width: 210,
-											height: att.height && att.width ? (att.height / att.width) * 210 : 150,
-										}}
-										contentFit="cover"
-									/>
-								</TouchableOpacity>
-							);
-						}
-						return (
-							<Pressable
-								key={att.id}
-								disabled={downloadingAttachmentID != null}
-								onPress={() => downloadAttachment(att)}
-								accessibilityRole="button"
-								accessibilityLabel={`Скачать документ ${att.file_name}`}
-								className={`flex-row items-center p-2.5 rounded-xl mb-1.5 w-[238px] ${isMe ? 'bg-white/10' : 'bg-background/40'} active:opacity-75`}
-							>
-								<View className={`h-9 w-9 rounded-full items-center justify-center ${isMe ? 'bg-white/10' : 'bg-primary/10'}`}>
-									<Ionicons name="document-text" size={20} color={isMe ? '#fff' : palette.primary} />
-								</View>
-								<View className="ml-2.5 flex-1">
-									<Text numberOfLines={1} className={`text-xs ${isMe ? 'text-white' : 'text-ink'} font-semibold`}>
-										{att.file_name}
-									</Text>
-									<Text className={`text-[10px] ${isMe ? 'text-white/70' : 'text-ink-muted'} mt-0.5`}>
-										{(att.size_bytes / 1024).toFixed(1)} КБ
-									</Text>
-								</View>
-								{downloadingAttachmentID === att.id ? (
-									<ActivityIndicator size="small" color={isMe ? '#fff' : palette.primary} />
-								) : (
-									<Ionicons name="download-outline" size={20} color={isMe ? '#fff' : palette.primary} />
-								)}
-							</Pressable>
-						);
-					})}
-
-					{/* Render text body */}
-					{item.body ? (
-						<Text className={`text-[15px] leading-[20px] ${isMe ? 'text-white' : 'text-ink'}`}>
-							{item.body}
-						</Text>
-					) : null}
-
-					{/* Time & Sent Status Info */}
-					<View
-						className="flex-row justify-end items-center mt-1 self-end"
-						style={isImageOnly ? styles.imageTimestamp : undefined}
-					>
-						<Text
-							className={`text-[10px] ${isMe || isImageOnly ? 'text-white/80' : 'text-ink-muted'} mr-1`}
-						>
-							{formatMessageTime(item.created_at)}
-						</Text>
-						{isMe && (
-							<>
-								{isPending && (
-									<Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.6)" />
-								)}
-								{isFailed && (
-									<Ionicons name="alert-circle-outline" size={11} color="#EF4444" />
-								)}
-								{!isPending && !isFailed && (
-									activeConv?.other_last_read_message_id && item.id <= activeConv.other_last_read_message_id ? (
-										<Ionicons name="checkmark-done" size={12} color="rgba(255,255,255,0.9)" />
-									) : (
-										<Ionicons name="checkmark" size={12} color="rgba(255,255,255,0.6)" />
-									)
-								)}
-							</>
-						)}
-					</View>
-				</View>
-			</View>
+			<MessageBubble
+				message={item}
+				isMine={isMe}
+				otherLastReadMessageID={activeConv?.other_last_read_message_id}
+				downloadingAttachmentID={downloadingAttachmentID}
+				onImagePress={openImageViewer}
+				onDocumentPress={downloadAttachment}
+			/>
 		);
 	};
 
@@ -1252,25 +1033,6 @@ const styles = StyleSheet.create({
 		width: 64,
 		height: 64,
 		borderRadius: 13,
-	},
-	messageBubble: {
-		maxWidth: '82%',
-		borderRadius: 21,
-		borderWidth: StyleSheet.hairlineWidth,
-	},
-	imageAttachment: {
-		marginBottom: 2,
-		borderRadius: 18,
-		overflow: 'hidden',
-	},
-	imageTimestamp: {
-		position: 'absolute',
-		right: 8,
-		bottom: 7,
-		backgroundColor: 'rgba(0,0,0,0.52)',
-		borderRadius: 10,
-		paddingHorizontal: 6,
-		paddingVertical: 3,
 	},
 	composer: {
 		minHeight: 58,
