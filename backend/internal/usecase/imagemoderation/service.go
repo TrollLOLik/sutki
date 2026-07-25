@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
@@ -81,9 +84,23 @@ func (s *Service) ModerateImages(ctx context.Context, imageURLs []string, usage 
 	}, nil
 }
 
+// moderationConcurrency caps how many images are inspected at once.
+//
+// Each image costs its own vision request (see below), so a 10-photo album
+// checked sequentially would take ten round trips — with LLM_TIMEOUT at 15s the
+// worst case is minutes, and the sender is left staring at a spinner. Four in
+// flight keeps the wall-clock cost near a quarter of that without turning a
+// single album into a burst of provider load.
+const moderationConcurrency = 4
+
 // ModerateStoredImages reads trusted object keys through the backend and sends
 // data URLs to Cloud.ru. The provider cannot resolve arbitrary external URLs,
 // and sending presigned URLs also exposes temporary storage credentials.
+//
+// Images are inspected in bounded parallel, but the verdict is deterministic:
+// a single reject rejects the whole batch, otherwise a single review marks it
+// for review. The result therefore does not depend on which request happened to
+// finish first.
 func ModerateStoredImages(ctx context.Context, moderator domain.ImageModerator, storage domain.FileStorage, keys []string, usage string, maxObjectBytes int64) (domain.ImageModerationResult, error) {
 	if len(keys) == 0 {
 		return domain.ImageModerationResult{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 1}, nil
@@ -92,24 +109,45 @@ func ModerateStoredImages(ctx context.Context, moderator domain.ImageModerator, 
 		return domain.ImageModerationResult{}, domain.ErrImageModerationUnavailable
 	}
 
-	final := domain.ImageModerationResult{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 1}
-	for _, key := range keys {
-		object, err := storage.ReadObject(ctx, key, maxObjectBytes)
-		if err != nil {
-			return domain.ImageModerationResult{}, fmt.Errorf("%w: read image %q: %v", domain.ErrImageModerationUnavailable, key, err)
-		}
-		dataURL, err := imageDataURL(object)
-		if err != nil {
-			return domain.ImageModerationResult{Decision: domain.ImageModerationReject, Category: "invalid_image", Reason: err.Error(), Confidence: 1}, nil
-		}
+	// Single image: skip the goroutine machinery entirely. Avatars and listing
+	// previews always take this path.
+	if len(keys) == 1 {
+		return moderateOne(ctx, moderator, storage, keys[0], usage, maxObjectBytes)
+	}
 
-		// Moderate every object in an independent vision request. Some OpenAI-
-		// compatible vision providers inspect only the first image in a multipart
-		// prompt, which allowed an unsafe non-cover photo to be missed.
-		result, err := moderator.ModerateImages(ctx, []string{dataURL}, usage)
-		if err != nil {
-			return domain.ImageModerationResult{}, err
-		}
+	// Cancel the remaining requests as soon as one image is rejected — there is
+	// nothing left to learn, and the caller discards the whole batch anyway.
+	groupCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	group, groupCtx := errgroup.WithContext(groupCtx)
+	group.SetLimit(moderationConcurrency)
+
+	// Results are written by index rather than appended, so the verdict is
+	// reproducible regardless of completion order.
+	results := make([]domain.ImageModerationResult, len(keys))
+	for i, key := range keys {
+		i, key := i, key
+		group.Go(func() error {
+			result, err := moderateOne(groupCtx, moderator, storage, key, usage, maxObjectBytes)
+			if err != nil {
+				return err
+			}
+			results[i] = result
+			if result.Decision == domain.ImageModerationReject {
+				// Stops the siblings via groupCtx; the sentinel is unwrapped below.
+				return errRejected
+			}
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil && !errors.Is(err, errRejected) {
+		return domain.ImageModerationResult{}, err
+	}
+
+	final := domain.ImageModerationResult{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 1}
+	for _, result := range results {
 		if result.Decision == domain.ImageModerationReject {
 			return result, nil
 		}
@@ -118,6 +156,32 @@ func ModerateStoredImages(ctx context.Context, moderator domain.ImageModerator, 
 		}
 	}
 	return final, nil
+}
+
+// errRejected unwinds the group when an image is rejected. It never reaches the
+// caller: a reject is a normal verdict, not a failure.
+var errRejected = errors.New("image rejected")
+
+// moderateOne inspects a single stored object.
+//
+// Every image goes in its own vision request on purpose: some OpenAI-compatible
+// providers only look at the first image of a multi-image prompt, which once let
+// an unsafe non-cover photo through.
+func moderateOne(ctx context.Context, moderator domain.ImageModerator, storage domain.FileStorage, key, usage string, maxObjectBytes int64) (domain.ImageModerationResult, error) {
+	object, err := storage.ReadObject(ctx, key, maxObjectBytes)
+	if err != nil {
+		return domain.ImageModerationResult{}, fmt.Errorf("%w: read image %q: %v", domain.ErrImageModerationUnavailable, key, err)
+	}
+	dataURL, err := imageDataURL(object)
+	if err != nil {
+		return domain.ImageModerationResult{Decision: domain.ImageModerationReject, Category: "invalid_image", Reason: err.Error(), Confidence: 1}, nil
+	}
+
+	result, err := moderator.ModerateImages(ctx, []string{dataURL}, usage)
+	if err != nil {
+		return domain.ImageModerationResult{}, err
+	}
+	return result, nil
 }
 
 func imageDataURL(object domain.ObjectData) (string, error) {
