@@ -168,7 +168,7 @@ func (r *ChatRepo) FindOrCreateConversation(ctx context.Context, houseID *int32,
 	return conv.ID, nil
 }
 
-func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, attachments []domain.MessageAttachment) (domain.Message, error) {
+func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, replyToMessageID *int64, attachments []domain.MessageAttachment) (domain.Message, error) {
 	type TxBeginner interface {
 		Begin(ctx context.Context) (pgx.Tx, error)
 	}
@@ -190,9 +190,10 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 	// Create message (sender_id is nullable in the schema for system
 	// messages; user messages always carry a concrete sender).
 	msg, err := qtx.CreateMessage(ctx, sqlc.CreateMessageParams{
-		ConversationID: convID,
-		SenderID:       &senderID,
-		Body:           body,
+		ConversationID:   convID,
+		SenderID:         &senderID,
+		Body:             body,
+		ReplyToMessageID: replyToMessageID,
 	})
 	if err != nil {
 		return domain.Message{}, err
@@ -257,13 +258,14 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 	}
 
 	return domain.Message{
-		ID:             msg.ID,
-		ConversationID: msg.ConversationID,
-		SenderID:       &senderID,
-		Kind:           domain.MessageKindUser,
-		Body:           msg.Body,
-		CreatedAt:      toTime(msg.CreatedAt),
-		Attachments:    dbAttachments,
+		ID:               msg.ID,
+		ConversationID:   msg.ConversationID,
+		SenderID:         &senderID,
+		Kind:             domain.MessageKindUser,
+		Body:             msg.Body,
+		CreatedAt:        toTime(msg.CreatedAt),
+		Attachments:      dbAttachments,
+		ReplyToMessageID: msg.ReplyToMessageID,
 	}, nil
 }
 
@@ -398,7 +400,8 @@ WHERE host_at IS NOT NULL`
 func (r *ChatRepo) GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]domain.Message, error) {
 	// Raw SQL (not sqlc) so system-message columns kind/payload are included.
 	const q = `
-SELECT id, conversation_id, sender_id, kind, payload, body, created_at
+SELECT id, conversation_id, sender_id, kind, payload, body,
+       reply_to_message_id, edited_at, deleted_at, created_at
 FROM message
 WHERE conversation_id = $1
   AND ($2::bigint = 0 OR id < $2)
@@ -412,19 +415,25 @@ LIMIT $3`
 	defer dbRows.Close()
 
 	type msgRow struct {
-		ID             int64
-		ConversationID int64
-		SenderID       *int32
-		Kind           string
-		Payload        []byte
-		Body           *string
-		CreatedAt      pgtype.Timestamptz
+		ID               int64
+		ConversationID   int64
+		SenderID         *int32
+		Kind             string
+		Payload          []byte
+		Body             *string
+		ReplyToMessageID *int64
+		EditedAt         pgtype.Timestamptz
+		DeletedAt        pgtype.Timestamptz
+		CreatedAt        pgtype.Timestamptz
 	}
 
 	var rows []msgRow
 	for dbRows.Next() {
 		var row msgRow
-		if err := dbRows.Scan(&row.ID, &row.ConversationID, &row.SenderID, &row.Kind, &row.Payload, &row.Body, &row.CreatedAt); err != nil {
+		if err := dbRows.Scan(
+			&row.ID, &row.ConversationID, &row.SenderID, &row.Kind, &row.Payload, &row.Body,
+			&row.ReplyToMessageID, &row.EditedAt, &row.DeletedAt, &row.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		rows = append(rows, row)
@@ -465,18 +474,298 @@ LIMIT $3`
 	messages := make([]domain.Message, len(rows))
 	for i, row := range rows {
 		messages[i] = domain.Message{
-			ID:             row.ID,
-			ConversationID: row.ConversationID,
-			SenderID:       row.SenderID,
-			Kind:           row.Kind,
-			Payload:        row.Payload,
-			Body:           row.Body,
-			CreatedAt:      toTime(row.CreatedAt),
-			Attachments:    attMap[row.ID],
+			ID:               row.ID,
+			ConversationID:   row.ConversationID,
+			SenderID:         row.SenderID,
+			Kind:             row.Kind,
+			Payload:          row.Payload,
+			Body:             row.Body,
+			CreatedAt:        toTime(row.CreatedAt),
+			Attachments:      attMap[row.ID],
+			ReplyToMessageID: row.ReplyToMessageID,
+			EditedAt:         timestamptzPtr(row.EditedAt),
+			DeletedAt:        timestamptzPtr(row.DeletedAt),
 		}
 	}
 
 	return messages, nil
+}
+
+// timestamptzPtr converts a nullable timestamp into *time.Time, keeping nil for
+// SQL NULL — edited_at and deleted_at are meaningful precisely by their absence.
+// Named apart from toTimePtr in user_repo.go, which converts pgtype.Date.
+func timestamptzPtr(ts pgtype.Timestamptz) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time
+	return &t
+}
+
+// GetMessageConversation returns the conversation a message belongs to.
+func (r *ChatRepo) GetMessageConversation(ctx context.Context, messageID int64) (int64, error) {
+	return r.q.GetMessageConversation(ctx, messageID)
+}
+
+// GetSuggestionContext loads the listing details and dialog tail used to build
+// the reply-suggestion prompt.
+func (r *ChatRepo) GetSuggestionContext(ctx context.Context, convID int64, recentLimit int32) (domain.SuggestionContext, error) {
+	row, err := r.q.GetSuggestionContext(ctx, convID)
+	if err != nil {
+		return domain.SuggestionContext{}, err
+	}
+
+	out := domain.SuggestionContext{
+		HouseID:        row.HouseID,
+		OwnerID:        row.OwnerID,
+		City:           row.City,
+		Street:         row.Street,
+		CountRoom:      row.CountRoom,
+		Price:          row.Price,
+		MaxGuests:      row.MaxGuests,
+		CheckInAfter:   row.CheckInAfter,
+		CheckOutBefore: row.CheckOutBefore,
+		LastMessageID:  row.LastMessageID,
+	}
+
+	// A general conversation has no listing to talk about, so the caller skips
+	// generation entirely — no point paying for the message query.
+	if out.HouseID == nil {
+		return out, nil
+	}
+
+	msgs, err := r.q.GetRecentMessagesForSuggestions(ctx, sqlc.GetRecentMessagesForSuggestionsParams{
+		ConversationID: convID,
+		Limit:          recentLimit,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return domain.SuggestionContext{}, err
+	}
+
+	// The query returns newest first (it needs ORDER BY id DESC to apply LIMIT
+	// to the tail); the prompt reads better chronologically, so reverse.
+	out.Messages = make([]domain.SuggestionMessage, 0, len(msgs))
+	for i := len(msgs) - 1; i >= 0; i-- {
+		out.Messages = append(out.Messages, domain.SuggestionMessage{
+			SenderID: msgs[i].SenderID,
+			Kind:     msgs[i].Kind,
+			Body:     msgs[i].Body,
+		})
+	}
+
+	return out, nil
+}
+
+// HydrateReplyQuotes fills ReplyTo for every reply in the slice.
+//
+// Parents are fetched in one batched query rather than per message: a page of
+// 20 messages can easily be 20 replies, and N+1 here would be the dominant cost
+// of loading history. Parents already present in the page are still fetched
+// from the database, because the page holds only what fits the cursor window
+// while a quote may point anywhere in the conversation.
+func (r *ChatRepo) HydrateReplyQuotes(ctx context.Context, messages []domain.Message) error {
+	ids := make([]int64, 0, len(messages))
+	seen := make(map[int64]struct{}, len(messages))
+	for _, m := range messages {
+		if m.ReplyToMessageID == nil {
+			continue
+		}
+		id := *m.ReplyToMessageID
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	rows, err := r.q.GetMessageQuotes(ctx, sqlc.GetMessageQuotesParams{
+		PreviewLimit: domain.MessageQuotePreviewLimit,
+		Ids:          ids,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+
+	quotes := make(map[int64]domain.MessageQuote, len(rows))
+	for _, row := range rows {
+		deleted := row.DeletedAt.Valid
+		quote := domain.MessageQuote{
+			ID:              row.ID,
+			SenderID:        row.SenderID,
+			Kind:            row.Kind,
+			AttachmentCount: int32(row.AttachmentCount),
+			Deleted:         deleted,
+		}
+		// A deleted parent must not leak its old text or thumbnail: the body is
+		// already NULL in the database, but attachments of messages deleted
+		// before this feature shipped may still be around.
+		if !deleted {
+			quote.BodyPreview = row.BodyPreview
+			quote.FirstAttachmentURL = row.FirstImageUrl
+		} else {
+			quote.AttachmentCount = 0
+		}
+		quotes[row.ID] = quote
+	}
+
+	for i := range messages {
+		if messages[i].ReplyToMessageID == nil {
+			continue
+		}
+		quote, ok := quotes[*messages[i].ReplyToMessageID]
+		if !ok {
+			// The parent row is gone entirely (hard delete via conversation
+			// cascade). Show the same placeholder as for a soft delete rather
+			// than dropping the quote silently.
+			quote = domain.MessageQuote{ID: *messages[i].ReplyToMessageID, Deleted: true}
+		}
+		q := quote
+		messages[i].ReplyTo = &q
+	}
+
+	return nil
+}
+
+// GetMessageForMutation loads author, age, attachment count and the other
+// participant's read cursor in a single query.
+func (r *ChatRepo) GetMessageForMutation(ctx context.Context, messageID int64, userID int32) (domain.MessageMutationInfo, error) {
+	row, err := r.q.GetMessageForMutation(ctx, sqlc.GetMessageForMutationParams{
+		UserID:    userID,
+		MessageID: messageID,
+	})
+	if err != nil {
+		return domain.MessageMutationInfo{}, err
+	}
+	return domain.MessageMutationInfo{
+		ID:                     row.ID,
+		ConversationID:         row.ConversationID,
+		SenderID:               row.SenderID,
+		Kind:                   row.Kind,
+		Body:                   row.Body,
+		CreatedAt:              toTime(row.CreatedAt),
+		EditedAt:               timestamptzPtr(row.EditedAt),
+		DeletedAt:              timestamptzPtr(row.DeletedAt),
+		AttachmentCount:        row.AttachmentCount,
+		OtherLastReadMessageID: row.OtherLastReadMessageID,
+	}, nil
+}
+
+// EditMessageBody rewrites a user message body inside the allowed window.
+func (r *ChatRepo) EditMessageBody(ctx context.Context, messageID int64, userID int32, body string, window time.Duration) (domain.Message, bool, error) {
+	row, err := r.q.UpdateMessageBody(ctx, sqlc.UpdateMessageBodyParams{
+		Body:       &body,
+		MessageID:  messageID,
+		UserID:     userID,
+		EditWindow: durationToInterval(window),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The guards live in the WHERE clause, so "no row" means the edit was
+		// not permitted rather than an infrastructure failure.
+		return domain.Message{}, false, nil
+	}
+	if err != nil {
+		return domain.Message{}, false, err
+	}
+
+	msg := domain.Message{
+		ID:               row.ID,
+		ConversationID:   row.ConversationID,
+		SenderID:         row.SenderID,
+		Kind:             domain.MessageKindUser,
+		Body:             row.Body,
+		CreatedAt:        toTime(row.CreatedAt),
+		ReplyToMessageID: row.ReplyToMessageID,
+		EditedAt:         timestamptzPtr(row.EditedAt),
+		DeletedAt:        timestamptzPtr(row.DeletedAt),
+	}
+
+	// Reload attachments: an edit only rewrites the body, but the client
+	// replaces the whole message object with this response, so editing a caption
+	// must not make its photos disappear.
+	attRows, err := r.q.GetMessageAttachments(ctx, []int64{messageID})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return domain.Message{}, false, err
+	}
+	for _, att := range attRows {
+		msg.Attachments = append(msg.Attachments, domain.MessageAttachment{
+			ID:        att.ID,
+			MessageID: att.MessageID,
+			URL:       att.Url,
+			FileName:  derefString(att.FileName),
+			MimeType:  derefString(att.MimeType),
+			SizeBytes: derefInt64(att.SizeBytes),
+			Width:     att.Width,
+			Height:    att.Height,
+		})
+	}
+
+	return msg, true, nil
+}
+
+// SoftDeleteMessage stamps deleted_at, clears the body and removes attachment
+// rows, returning their storage keys so the caller can delete the objects.
+//
+// Runs in a transaction: a message whose attachment rows were dropped but which
+// is still marked visible would render as an empty bubble.
+func (r *ChatRepo) SoftDeleteMessage(ctx context.Context, messageID int64, userID int32, window time.Duration) (domain.Message, []string, bool, error) {
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	txb, ok := r.q.DB().(TxBeginner)
+	if !ok {
+		return domain.Message{}, nil, false, errors.New("underlying database connection does not support transactions")
+	}
+
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return domain.Message{}, nil, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.q.WithTx(tx)
+
+	row, err := qtx.SoftDeleteMessage(ctx, sqlc.SoftDeleteMessageParams{
+		MessageID:    messageID,
+		UserID:       userID,
+		DeleteWindow: durationToInterval(window),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Message{}, nil, false, nil
+	}
+	if err != nil {
+		return domain.Message{}, nil, false, err
+	}
+
+	keys, err := qtx.DeleteMessageAttachments(ctx, messageID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return domain.Message{}, nil, false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Message{}, nil, false, err
+	}
+
+	return domain.Message{
+		ID:               row.ID,
+		ConversationID:   row.ConversationID,
+		SenderID:         row.SenderID,
+		Kind:             domain.MessageKindUser,
+		Body:             row.Body,
+		CreatedAt:        toTime(row.CreatedAt),
+		ReplyToMessageID: row.ReplyToMessageID,
+		EditedAt:         timestamptzPtr(row.EditedAt),
+		DeletedAt:        timestamptzPtr(row.DeletedAt),
+	}, keys, true, nil
+}
+
+// durationToInterval renders a Go duration as a Postgres interval for the
+// window guards in the edit/delete statements.
+func durationToInterval(d time.Duration) pgtype.Interval {
+	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
 }
 
 func (r *ChatRepo) UpdateLastReadMessage(ctx context.Context, messageID int64, convID int64, userID int32) error {

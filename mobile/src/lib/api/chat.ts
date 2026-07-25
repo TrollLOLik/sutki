@@ -1,4 +1,10 @@
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import {
+	useQuery,
+	useMutation,
+	useQueryClient,
+	useInfiniteQuery,
+	type InfiniteData,
+} from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { activityKeys } from '@/lib/api/activity';
 import type { ChatMessage } from '@/store/chatStore';
@@ -38,6 +44,8 @@ export interface AttachmentInput {
 export interface SendMessageBody {
 	body?: string;
 	attachments?: AttachmentInput[];
+	/** id процитированного сообщения. Должно быть из той же беседы. */
+	reply_to_message_id?: number;
 }
 
 export interface UploadTarget {
@@ -51,11 +59,24 @@ export interface ConversationPresence {
 	last_seen_at?: string;
 }
 
+export interface ChatSuggestions {
+	suggestions: string[];
+	/** true — подсказки сгенерированы моделью, false — статичный набор. */
+	generated: boolean;
+}
+
 export const chatKeys = {
 	all: ['chat'] as const,
 	conversations: () => [...chatKeys.all, 'conversations'] as const,
 	messages: (convID: number) => [...chatKeys.all, 'messages', convID] as const,
 	presence: (convID: number) => [...chatKeys.all, 'presence', convID] as const,
+	/**
+	 * Ключ включает id последнего сообщения: подсказки относятся к конкретному
+	 * состоянию беседы, и с приходом нового сообщения запрос должен уйти заново.
+	 * Ровно та же логика инвалидации, что в серверном кэше.
+	 */
+	suggestions: (convID: number, lastMessageID: number) =>
+		[...chatKeys.all, 'suggestions', convID, lastMessageID] as const,
 };
 
 // 1. Fetch conversation list
@@ -182,5 +203,112 @@ export function presignUpload(
 		file_name: fileName,
 		size: size,
 		content_type: contentType,
+	});
+}
+
+/**
+ * ИИ-подсказки ответа для беседы.
+ *
+ * Сервер всегда отвечает 200: при недоступной модели он отдаёт статичный набор,
+ * поэтому у клиента нет ветки «подсказок нет». Запрос идёт только когда экран
+ * реально их показывает — включённый флаг enabled экономит и вызовы модели, и
+ * лимит запросов пользователя.
+ */
+export function fetchSuggestions(convID: number): Promise<ChatSuggestions> {
+	return api.get<ChatSuggestions>(`/api/v1/chat/conversations/${convID}/suggestions`);
+}
+
+export function useChatSuggestions(
+	convID: number | undefined,
+	lastMessageID: number,
+	enabled: boolean,
+) {
+	return useQuery({
+		queryKey: chatKeys.suggestions(convID ?? 0, lastMessageID),
+		queryFn: () => fetchSuggestions(convID as number),
+		enabled: enabled && convID != null && convID > 0,
+		// Пока беседа не изменилась, ключ тот же — данные считаем свежими и не
+		// перезапрашиваем при возврате на экран.
+		staleTime: 5 * 60 * 1000,
+		// Подсказки — украшение: молча остаёмся на прежних, а не показываем ошибку.
+		retry: false,
+	});
+}
+
+// 7. Правка и удаление сообщения.
+//
+// Адресуются по id сообщения без беседы: id глобально уникален, а права
+// проверяются по авторству. Сервер возвращает обновлённое сообщение целиком —
+// клиент подменяет им запись в кэше.
+//
+// Окна: правка 15 минут и только пока получатель не прочитал, удаление 60 минут.
+// Отказы приходят как 4xx с готовым текстом в поле message, поэтому экран может
+// показать ошибку сервера напрямую, не дублируя правила на клиенте.
+
+export function editMessage(messageID: number, body: string): Promise<ChatMessage> {
+	return api.patch<ChatMessage>(`/api/v1/chat/messages/${messageID}`, { body });
+}
+
+export function deleteMessage(messageID: number): Promise<ChatMessage> {
+	return api.delete<ChatMessage>(`/api/v1/chat/messages/${messageID}`);
+}
+
+/**
+ * Заменяет сообщение в постраничном кэше беседы.
+ *
+ * Используется и правкой с удалением, и обработчиками realtime-событий, чтобы
+ * оба пути обновляли кэш одинаково.
+ */
+export function replaceMessageInCache(
+	queryClient: ReturnType<typeof useQueryClient>,
+	convID: number,
+	updated: ChatMessage,
+) {
+	queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
+		if (!old) return old;
+		return {
+			...old,
+			pages: old.pages.map((page) =>
+				page.map((m) => {
+					if (m.id !== updated.id) return m;
+					const merged = { ...m, ...updated };
+					// Сервер опускает пустые поля (omitempty), поэтому у удалённого
+					// сообщения ключей body и attachments в JSON просто нет — при
+					// поверхностном слиянии они бы уцелели от старой версии. Тогда
+					// галерея продолжала бы держать ссылки на уже удалённые из
+					// хранилища файлы. Чистим явно.
+					if (updated.deleted_at) {
+						merged.body = undefined;
+						merged.attachments = undefined;
+					}
+					return merged;
+				}),
+			),
+		};
+	});
+}
+
+export function useEditMessage(convID: number) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (params: { messageID: number; body: string }) =>
+			editMessage(params.messageID, params.body),
+		onSuccess: (updated) => {
+			replaceMessageInCache(queryClient, convID, updated);
+			// Превью в списке диалогов показывает последнее сообщение, поэтому
+			// правка последнего сообщения делает список устаревшим.
+			queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+		},
+	});
+}
+
+export function useDeleteMessage(convID: number) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (messageID: number) => deleteMessage(messageID),
+		onSuccess: (updated) => {
+			replaceMessageInCache(queryClient, convID, updated);
+			queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+		},
 	});
 }

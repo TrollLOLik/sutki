@@ -6,7 +6,6 @@ import {
 	TextInput,
 	TouchableOpacity,
 	ActivityIndicator,
-	Pressable,
 	Linking,
 	StyleSheet,
 } from 'react-native';
@@ -15,11 +14,8 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File } from 'expo-file-system';
 import { useQueryClient, InfiniteData } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { appAlert as Alert } from '@/components/AppAlert';
 
@@ -30,10 +26,14 @@ import {
 	useMessages,
 	useSendMessage,
 	useReadMessages,
-	presignUpload,
+	useEditMessage,
+	useDeleteMessage,
 	useConversations,
 	useConversationPresence,
+	useChatSuggestions,
 	publishTyping,
+	replaceMessageInCache,
+	type AttachmentInput,
 } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
@@ -45,6 +45,20 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { formatRooms } from '@/lib/format';
 import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
+import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
+import { StagedAttachmentsBar } from '@/components/chat/StagedAttachmentsBar';
+import { SuggestionChips } from '@/components/chat/SuggestionChips';
+import { EditPreviewBar } from '@/components/chat/EditPreviewBar';
+import {
+	MessageActionsSheet,
+	getMessageActions,
+} from '@/components/chat/MessageActionsSheet';
+import { useChatColors } from '@/components/chat/useChatColors';
+import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
+import { useChatUploads, MAX_ATTACHMENTS_PER_MESSAGE } from '@/hooks/useChatUploads';
+import { hapticTapLight, hapticTapMedium, hapticSuccess } from '@/lib/haptics';
+import * as Clipboard from 'expo-clipboard';
 import Animated, {
 	Easing,
 	FadeIn,
@@ -55,53 +69,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
 
-/** Canned owner replies shown as chips above the input. Client-only. */
-const QUICK_REPLIES = [
-	'Здравствуйте! Даты свободны',
-	'Уточните, пожалуйста, даты заезда и выезда',
-	'Заселение после 14:00, выезд до 12:00',
-	'Напишу вам чуть позже',
-];
-
-type ChatAttachment = NonNullable<ChatMessage['attachments']>[number];
-
-function formatLastSeen(lastSeenAt?: string) {
-	if (!lastSeenAt) return 'Не в сети';
-	const lastSeen = new Date(lastSeenAt);
-	if (Number.isNaN(lastSeen.getTime())) return 'Не в сети';
-
-	const now = new Date();
-	const sameDay =
-		now.getFullYear() === lastSeen.getFullYear() &&
-		now.getMonth() === lastSeen.getMonth() &&
-		now.getDate() === lastSeen.getDate();
-	if (sameDay) return `Сегодня в ${format(lastSeen, 'HH:mm')}`;
-
-	const yesterday = new Date(now);
-	yesterday.setDate(now.getDate() - 1);
-	const wasYesterday =
-		yesterday.getFullYear() === lastSeen.getFullYear() &&
-		yesterday.getMonth() === lastSeen.getMonth() &&
-		yesterday.getDate() === lastSeen.getDate();
-	if (wasYesterday) return `Вчера в ${format(lastSeen, 'HH:mm')}`;
-
-	return `${format(lastSeen, 'dd.MM.yyyy')} в ${format(lastSeen, 'HH:mm')}`;
-}
-
 export default function ChatDialogScreen() {
 	const { palette, isDark } = useAppTheme();
-	const chatColors = React.useMemo(
-		() => ({
-			background: isDark ? '#0D0F12' : '#F4F5F7',
-			chrome: isDark ? 'rgba(20, 22, 27, 0.97)' : 'rgba(255, 255, 255, 0.97)',
-			panel: isDark ? '#181A1F' : '#FFFFFF',
-			panelRaised: isDark ? '#202329' : '#F0F1F3',
-			incoming: isDark ? '#1B1E23' : '#FFFFFF',
-			border: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(18,24,32,0.09)',
-			softBorder: isDark ? 'rgba(255,255,255,0.055)' : 'rgba(18,24,32,0.06)',
-		}),
-		[isDark],
-	);
+	const chatColors = useChatColors();
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id: string; title?: string; otherUserId?: string; houseId?: string }>();
 	const convID = parseInt(params.id ?? '0', 10);
@@ -115,8 +85,21 @@ export default function ChatDialogScreen() {
 	const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
 
 	const [inputText, setInputText] = useState('');
-	const [uploading, setUploading] = useState(false);
 	const [downloadingAttachmentID, setDownloadingAttachmentID] = useState<number | null>(null);
+
+	// Выбор и загрузка вложений живут в хуке: экрану остаётся только решить,
+	// что делать с готовыми метаданными (сейчас — отправить сообщением).
+	const {
+		uploading,
+		staged,
+		addStaged,
+		removeStaged,
+		clearStaged,
+		uploadStaged,
+		pickImages,
+		takePhoto: takePhotoFromCamera,
+		pickDocument: pickDocumentFile,
+	} = useChatUploads();
 	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
 	const keyboardHeight = useSharedValue(0);
@@ -201,6 +184,8 @@ export default function ChatDialogScreen() {
 
 	const { mutateAsync: performSendMessage } = useSendMessage(convID);
 	const { mutate: performReadMessages } = useReadMessages(convID);
+	const { mutateAsync: performEditMessage, isPending: isSavingEdit } = useEditMessage(convID);
+	const { mutate: performDeleteMessage } = useDeleteMessage(convID);
 
 	const messages = data?.pages.flat().filter(Boolean) ?? [];
 
@@ -269,6 +254,9 @@ export default function ChatDialogScreen() {
 	const chatImages = React.useMemo(() => {
 		const list: string[] = [];
 		for (let i = messages.length - 1; i >= 0; i--) {
+			// Удалённое сообщение пропускаем: его файлы уже убраны из хранилища,
+			// и попав в этот список они сдвинули бы индексы просмотрщика.
+			if (messages[i].deleted_at) continue;
 			messages[i].attachments?.forEach((att) => {
 				if (att.mime_type.startsWith('image/')) {
 					list.push(att.url);
@@ -277,6 +265,171 @@ export default function ChatDialogScreen() {
 		}
 		return list;
 	}, [messages]);
+
+	// Ответ на сообщение: хранится целиком, а не только id — блок над полем
+	// ввода показывает текст и миниатюру, а они уже есть в ленте.
+	const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+	// Подсветка после перехода к оригиналу: короткая вспышка, чтобы глаз нашёл
+	// сообщение в ленте.
+	const [highlightedMessageID, setHighlightedMessageID] = useState<number | null>(null);
+	const listRef = useRef<FlatList<ChatMessage>>(null);
+	const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	/**
+	 * Всегда указывает на актуальный handleSend.
+	 *
+	 * Отправка по долгому нажатию на подсказку сначала пишет текст в состояние, а
+	 * отправляет следующим тиком — к этому моменту handleSend уже пересоздан, и
+	 * замыкание на старую версию отправило бы пустое сообщение.
+	 */
+	const sendRef = useRef<(() => void) | null>(null);
+
+	// Панель действий по долгому нажатию и режим правки.
+	const [actionsTarget, setActionsTarget] = useState<ChatMessage | null>(null);
+	const [editing, setEditing] = useState<ChatMessage | null>(null);
+
+	const startReply = React.useCallback((message: ChatMessage) => {
+		// Ответ и правка — взаимоисключающие состояния композера: в правке поле
+		// содержит старый текст, и добавлять к нему цитату бессмысленно.
+		setEditing(null);
+		setReplyTo(message);
+		hapticTapLight();
+	}, []);
+
+	const cancelReply = React.useCallback(() => setReplyTo(null), []);
+
+	/**
+	 * Имя автора для шапки цитаты.
+	 *
+	 * В беседе всего два участника, поэтому достаточно различить «я» и
+	 * собеседник — отдельный запрос профиля не нужен. sender_id === null бывает
+	 * у системных карточек брони.
+	 */
+	const resolveAuthorName = React.useCallback(
+		(senderID?: number | null) => {
+			if (senderID == null) return 'Бронирование';
+			if (senderID === sessionUser?.id) return 'Вы';
+			return activeConv?.other_user_name?.trim() || 'Собеседник';
+		},
+		[activeConv?.other_user_name, sessionUser?.id],
+	);
+
+	/**
+	 * Переход к процитированному сообщению.
+	 *
+	 * Оригинал может лежать за пределами загруженных страниц: история тянется
+	 * по 20 сообщений, а цитата ссылается куда угодно. Если сообщения нет в
+	 * ленте — подгружаем следующую страницу и говорим об этом, вместо того
+	 * чтобы молча ничего не делать.
+	 */
+	const scrollToMessage = React.useCallback(
+		(messageID: number) => {
+			const index = messages.findIndex((m) => m.id === messageID);
+			if (index < 0) {
+				if (hasNextPage && !isFetchingNextPage) {
+					fetchNextPage();
+					Alert.alert('Загружаем историю', 'Сообщение выше — подгружаем и попробуйте ещё раз.');
+				} else {
+					Alert.alert('Сообщение недоступно', 'Не удалось найти исходное сообщение в переписке.');
+				}
+				return;
+			}
+
+			listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+			setHighlightedMessageID(messageID);
+			if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+			highlightTimerRef.current = setTimeout(() => setHighlightedMessageID(null), 1200);
+		},
+		[fetchNextPage, hasNextPage, isFetchingNextPage, messages],
+	);
+
+	useEffect(
+		() => () => {
+			if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+		},
+		[],
+	);
+
+	// --- Действия с сообщением -------------------------------------------
+
+	const openActions = React.useCallback((message: ChatMessage) => {
+		setActionsTarget(message);
+		hapticTapMedium();
+	}, []);
+
+	const closeActions = React.useCallback(() => setActionsTarget(null), []);
+
+	const actionsAvailability = React.useMemo(
+		() =>
+			actionsTarget
+				? getMessageActions(actionsTarget, sessionUser?.id, activeConv?.other_last_read_message_id)
+				: { canReply: false, canCopy: false, canEdit: false, canDelete: false },
+		[actionsTarget, activeConv?.other_last_read_message_id, sessionUser?.id],
+	);
+
+	const handleActionReply = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			startReply(message);
+		},
+		[closeActions, startReply],
+	);
+
+	const handleActionCopy = React.useCallback(
+		async (message: ChatMessage) => {
+			closeActions();
+			if (!message.body) return;
+			await Clipboard.setStringAsync(message.body);
+			hapticSuccess();
+		},
+		[closeActions],
+	);
+
+	const startEditing = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			// Правка и ответ не сочетаются: поле уже занято старым текстом.
+			setReplyTo(null);
+			setEditing(message);
+			setInputText(message.body ?? '');
+		},
+		[closeActions],
+	);
+
+	const cancelEditing = React.useCallback(() => {
+		setEditing(null);
+		setInputText('');
+	}, []);
+
+	const handleActionDelete = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			Alert.alert('Удалить сообщение?', 'Оно исчезнет и у собеседника.', [
+				{ text: 'Отмена', style: 'cancel' },
+				{
+					text: 'Удалить',
+					style: 'destructive',
+					onPress: () => {
+						// Если удаляем то, что правим или цитируем, — сбрасываем
+						// композер: и то и другое ссылается на исчезающий текст.
+						setEditing((current) => (current?.id === message.id ? null : current));
+						setReplyTo((current) => (current?.id === message.id ? null : current));
+						performDeleteMessage(message.id, {
+							onError: (err) => {
+								console.error('[Chat] Failed to delete message:', err);
+								Alert.alert(
+									'Не удалось удалить',
+									err instanceof ApiError
+										? err.message
+										: 'Попробуйте ещё раз.',
+								);
+							},
+						});
+					},
+				},
+			]);
+		},
+		[closeActions, performDeleteMessage],
+	);
 
 	const ownTypingActiveRef = useRef(false);
 	const ownTypingLastSentAtRef = useRef(0);
@@ -446,6 +599,39 @@ export default function ChatDialogScreen() {
 				if (newMsg.sender_id !== sessionUser?.id) {
 					performReadMessages(newMsg.id);
 				}
+				return;
+			}
+
+			// Правка и удаление приходят одним и тем же способом: сервер
+			// присылает сообщение целиком, клиент подменяет запись в кэше. Так
+			// удалённое сообщение превращается в плашку, а исправленное меняет
+			// текст и получает метку «ред.» — без перезагрузки истории.
+			if (
+				(payload.type === 'message.edited' || payload.type === 'message.deleted') &&
+				payload.message
+			) {
+				const updated = payload.message;
+				replaceMessageInCache(queryClient, convID, updated);
+
+				// Композер не должен ссылаться на исчезнувшее сообщение: цитата
+				// становится недействительной, а сохранение правки упрётся в отказ
+				// сервера. Панель действий для него тоже закрываем.
+				if (payload.type === 'message.deleted') {
+					setReplyTo((current) => (current?.id === updated.id ? null : current));
+					setEditing((current) => {
+						if (current?.id !== updated.id) return current;
+						setInputText('');
+						return null;
+					});
+					setActionsTarget((current) => (current?.id === updated.id ? null : current));
+				}
+
+				// Сообщение могли изменить с другого устройства, пока оно открыто
+				// на правку здесь. Обновляем цель, чтобы полоса показывала актуальный
+				// исходный текст.
+				if (payload.type === 'message.edited') {
+					setEditing((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+				}
 			}
 		});
 
@@ -465,22 +651,109 @@ export default function ChatDialogScreen() {
 		};
 	}, [centrifuge, socketStatus, convID]);
 
+	/**
+	 * Отправка сообщения: текст, альбом вложений или и то и другое.
+	 *
+	 * Раньше это были два независимых пути — текст уходил отсюда, а файл
+	 * отправлялся отдельным сообщением сразу после выбора в галерее. Теперь путь
+	 * один, поэтому подпись к фото это просто body того же сообщения: отдельное
+	 * поле в схеме не понадобилось.
+	 */
 	const handleSend = async () => {
 		const text = inputText.trim();
-		if (!text) return;
+		const hasAttachments = staged.length > 0;
+		if (!text && !hasAttachments) return;
 
 		stopOwnTyping();
-		setInputText('');
 
-		// Create optimistic message
+		// В режиме правки та же кнопка сохраняет изменения, а не отправляет новое
+		// сообщение. Отдельная кнопка «сохранить» рядом с «отправить» приводила бы
+		// к отправке правки новым сообщением по привычке.
+		if (editing) {
+			const target = editing;
+			// Текст не изменился — молча выходим из режима, не тратя запрос.
+			if (text === (target.body ?? '').trim()) {
+				cancelEditing();
+				return;
+			}
+			try {
+				await performEditMessage({ messageID: target.id, body: text });
+				cancelEditing();
+				hapticSuccess();
+			} catch (err) {
+				console.error('[Chat] Failed to edit message:', err);
+				// Текст остаётся в поле: сервер мог отказать из-за прочтения или
+				// истёкшего окна, и терять набранное из-за этого нельзя.
+				Alert.alert(
+					'Не удалось изменить',
+					err instanceof ApiError ? err.message : 'Попробуйте ещё раз.',
+				);
+			}
+			return;
+		}
+
+		// Снимки состояния: поля сбрасываются сразу, а отправка асинхронная,
+		// поэтому к моменту запроса состояние может уже смениться.
+		const replyTarget = replyTo;
+		const stagedSnapshot = staged;
+
+		// Вложения сначала загружаем и только потом чистим композер: при сбое
+		// пачка должна остаться на месте, чтобы её можно было отправить снова.
+		let attachments: AttachmentInput[] = [];
+		if (hasAttachments) {
+			const uploaded = await uploadStaged();
+			if (!uploaded) return; // сообщение об ошибке показал сам хук
+			attachments = uploaded;
+		}
+
+		setInputText('');
+		setReplyTo(null);
+		clearStaged();
+
+		// Оптимистичное сообщение: показываем локальные превью до ответа сервера,
+		// иначе альбом появлялся бы в ленте только после загрузки всех файлов.
 		const tempId = -Date.now();
 		const optimisticMsg: ChatMessage = {
 			id: tempId,
 			conversation_id: convID,
 			sender_id: sessionUser?.id ?? 0,
-			body: text,
+			body: text || undefined,
 			created_at: new Date().toISOString(),
 			pending: true,
+			...(hasAttachments
+				? {
+						attachments: stagedSnapshot.map((file, index) => ({
+							// Отрицательные id не пересекаются с серверными и служат
+							// только ключами списка до подмены реальным сообщением.
+							id: -(index + 1),
+							message_id: tempId,
+							url: file.uri,
+							file_name: file.fileName,
+							mime_type: file.mimeType,
+							size_bytes: file.size,
+							width: file.width,
+							height: file.height,
+						})),
+					}
+				: {}),
+			// Цитату собираем локально из уже загруженного сообщения: сервер
+			// пришлёт свою версию в ответе, но пузырь должен показать её сразу.
+			...(replyTarget
+				? {
+						reply_to_message_id: replyTarget.id,
+						reply_to: {
+							id: replyTarget.id,
+							sender_id: replyTarget.sender_id,
+							kind: replyTarget.kind ?? 'user',
+							body_preview: (replyTarget.body ?? '').slice(0, 120),
+							attachment_count: replyTarget.attachments?.length ?? 0,
+							first_attachment_url: replyTarget.attachments?.find((a) =>
+								a.mime_type.startsWith('image/'),
+							)?.url,
+							deleted: false,
+						},
+					}
+				: {}),
 		};
 
 		// Push optimistic message to cache
@@ -492,7 +765,11 @@ export default function ChatDialogScreen() {
 		});
 
 		try {
-			const saved = await performSendMessage({ body: text });
+			const saved = await performSendMessage({
+				body: text || undefined,
+				reply_to_message_id: replyTarget?.id,
+				attachments: hasAttachments ? attachments : undefined,
+			});
 
 			// Replace optimistic message in cache with real database response
 			queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
@@ -516,134 +793,47 @@ export default function ChatDialogScreen() {
 					),
 				};
 			});
+
+			// Модерация могла отклонить всю пачку целиком. Возвращаем файлы в
+			// композер, чтобы выбор пользователя не пропал вместе с ошибкой.
+			if (hasAttachments) {
+				Alert.alert(
+					'Сообщение не отправлено',
+					err instanceof ApiError
+						? err.message
+						: 'Не удалось отправить вложения. Попробуйте ещё раз.',
+				);
+			}
 		}
 	};
+
+	// Держим ref в синхроне на каждом рендере: отложенная отправка по долгому
+	// нажатию на подсказку должна вызвать актуальную версию, а не замыкание.
+	sendRef.current = handleSend;
 
 	const handlePickMedia = () => {
 		setIsAttachMenuVisible(true);
 	};
 
+	// Выбранные файлы попадают в стадию подготовки, а не улетают сразу: только
+	// так к ним можно добавить подпись и собрать из них альбом. Отправка — по
+	// кнопке в композере, общая с текстом.
+
+	const remainingSlots = MAX_ATTACHMENTS_PER_MESSAGE - staged.length;
+
 	const pickImage = async () => {
-		const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-		if (!permission.granted) {
-			Alert.alert('Доступ запрещен', 'Для выбора фото разрешите доступ к галерее в настройках.');
-			return;
-		}
-
-		const result = await ImagePicker.launchImageLibraryAsync({
-			mediaTypes: 'images',
-			quality: 0.8,
-			allowsMultipleSelection: false,
-		});
-
-		if (result.canceled || !result.assets?.[0]) return;
-		const asset = result.assets[0];
-
-		await uploadAndSendFile(
-			asset.uri,
-			asset.fileName || `photo_${Date.now()}.jpg`,
-			asset.mimeType || 'image/jpeg',
-			asset.fileSize || 0,
-			asset.width,
-			asset.height
-		);
+		if (remainingSlots <= 0) return;
+		addStaged(await pickImages(remainingSlots));
 	};
 
 	const takePhoto = async () => {
-		const permission = await ImagePicker.requestCameraPermissionsAsync();
-		if (!permission.granted) {
-			Alert.alert('Доступ запрещен', 'Для создания фото разрешите доступ к камере в настройках.');
-			return;
-		}
-
-		const result = await ImagePicker.launchCameraAsync({
-			mediaTypes: 'images',
-			quality: 0.8,
-		});
-
-		if (result.canceled || !result.assets?.[0]) return;
-		const asset = result.assets[0];
-
-		await uploadAndSendFile(
-			asset.uri,
-			asset.fileName || `photo_${Date.now()}.jpg`,
-			asset.mimeType || 'image/jpeg',
-			asset.fileSize || 0,
-			asset.width,
-			asset.height
-		);
+		if (remainingSlots <= 0) return;
+		addStaged(await takePhotoFromCamera());
 	};
 
 	const pickDocument = async () => {
-		const result = await DocumentPicker.getDocumentAsync({
-			type: [
-				'application/pdf',
-				'text/plain',
-				'application/msword',
-				'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-				'application/vnd.ms-excel',
-				'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			],
-			copyToCacheDirectory: true,
-		});
-
-		if (result.canceled || !result.assets?.[0]) return;
-		const asset = result.assets[0];
-
-		await uploadAndSendFile(
-			asset.uri,
-			asset.name,
-			asset.mimeType || 'application/octet-stream',
-			asset.size || 0
-		);
-	};
-
-	const uploadAndSendFile = async (
-		uri: string,
-		fileName: string,
-		mimeType: string,
-		size: number,
-		width?: number,
-		height?: number
-	) => {
-		if (size > 15 * 1024 * 1024) {
-			Alert.alert('Ошибка', 'Размер файла превышает лимит 15 МБ.');
-			return;
-		}
-
-		setUploading(true);
-		try {
-			// 1. Get presigned POST upload parameters from Go API
-			const target = await presignUpload(fileName, size, mimeType);
-
-			// 2. Upload file directly to S3 / MinIO via presigned POST.
-			// The POST policy enforces the size limit on the storage side.
-			await uploadToS3(uri, target, fileName, mimeType);
-
-			// 3. Send message with the attachment metadata referencing S3 key
-			await performSendMessage({
-				attachments: [
-					{
-						url: target.key, // Backend will check existence on S3 via StatObject
-						file_name: fileName,
-						mime_type: mimeType,
-						size_bytes: size,
-						width,
-						height,
-					},
-				],
-			});
-		} catch (err) {
-			console.error('[Chat] Failed uploading file:', err);
-			Alert.alert(
-				'Ошибка загрузки',
-				err instanceof ApiError
-					? err.message
-					: 'Не удалось загрузить и отправить файл. Попробуйте ещё раз.',
-			);
-		} finally {
-			setUploading(false);
-		}
+		if (remainingSlots <= 0) return;
+		addStaged(await pickDocumentFile());
 	};
 
 	const downloadAttachment = async (attachment: ChatAttachment) => {
@@ -670,13 +860,16 @@ export default function ChatDialogScreen() {
 		}
 	};
 
-	const formatMessageTime = (timeStr: string) => {
-		try {
-			return format(new Date(timeStr), 'HH:mm');
-		} catch {
-			return '';
-		}
-	};
+	const openImageViewer = React.useCallback(
+		(attachment: ChatAttachment) => {
+			const index = chatImages.indexOf(attachment.url);
+			if (index >= 0) {
+				setSelectedImageIndex(index);
+				setGalleryVisible(true);
+			}
+		},
+		[chatImages],
+	);
 
 	const renderMessage = ({ item }: { item: ChatMessage }) => {
 		// System booking card: centered, no bubble, optional owner actions.
@@ -706,129 +899,31 @@ export default function ChatDialogScreen() {
 		}
 
 		const isMe = item.sender_id != null && item.sender_id === sessionUser?.id;
-		const isPending = item.pending;
-		const isFailed = item.failed;
-		const hasAttachments = !!item.attachments?.length;
-		const isImageOnly =
-			hasAttachments &&
-			!item.body &&
-			item.attachments!.every((attachment) => attachment.mime_type.startsWith('image/'));
 
 		return (
-			<View className={`flex-row my-1.5 px-4 ${isMe ? 'justify-end' : 'justify-start'}`}>
-				<View
-					style={[
-						styles.messageBubble,
-						{
-							backgroundColor: isImageOnly
-								? 'transparent'
-								: isMe
-									? palette.primary
-									: chatColors.incoming,
-							borderColor: isImageOnly || isMe ? 'transparent' : chatColors.softBorder,
-							paddingHorizontal: isImageOnly ? 0 : 15,
-							paddingVertical: isImageOnly ? 0 : 11,
-						},
-					]}
-				>
-					{/* Render attachments */}
-					{item.attachments && item.attachments.map((att) => {
-						const isImg = att.mime_type.startsWith('image/');
-						if (isImg) {
-							return (
-								<TouchableOpacity
-									key={att.id}
-									activeOpacity={0.9}
-									onPress={() => {
-										const index = chatImages.indexOf(att.url);
-										if (index >= 0) {
-											setSelectedImageIndex(index);
-											setGalleryVisible(true);
-										}
-									}}
-									style={styles.imageAttachment}
-								>
-									<Image
-										source={{ uri: att.url }}
-										style={{
-											width: 210,
-											height: att.height && att.width ? (att.height / att.width) * 210 : 150,
-										}}
-										contentFit="cover"
-									/>
-								</TouchableOpacity>
-							);
-						}
-						return (
-							<Pressable
-								key={att.id}
-								disabled={downloadingAttachmentID != null}
-								onPress={() => downloadAttachment(att)}
-								accessibilityRole="button"
-								accessibilityLabel={`Скачать документ ${att.file_name}`}
-								className={`flex-row items-center p-2.5 rounded-xl mb-1.5 w-[238px] ${isMe ? 'bg-white/10' : 'bg-background/40'} active:opacity-75`}
-							>
-								<View className={`h-9 w-9 rounded-full items-center justify-center ${isMe ? 'bg-white/10' : 'bg-primary/10'}`}>
-									<Ionicons name="document-text" size={20} color={isMe ? '#fff' : palette.primary} />
-								</View>
-								<View className="ml-2.5 flex-1">
-									<Text numberOfLines={1} className={`text-xs ${isMe ? 'text-white' : 'text-ink'} font-semibold`}>
-										{att.file_name}
-									</Text>
-									<Text className={`text-[10px] ${isMe ? 'text-white/70' : 'text-ink-muted'} mt-0.5`}>
-										{(att.size_bytes / 1024).toFixed(1)} КБ
-									</Text>
-								</View>
-								{downloadingAttachmentID === att.id ? (
-									<ActivityIndicator size="small" color={isMe ? '#fff' : palette.primary} />
-								) : (
-									<Ionicons name="download-outline" size={20} color={isMe ? '#fff' : palette.primary} />
-								)}
-							</Pressable>
-						);
-					})}
-
-					{/* Render text body */}
-					{item.body ? (
-						<Text className={`text-[15px] leading-[20px] ${isMe ? 'text-white' : 'text-ink'}`}>
-							{item.body}
-						</Text>
-					) : null}
-
-					{/* Time & Sent Status Info */}
-					<View
-						className="flex-row justify-end items-center mt-1 self-end"
-						style={isImageOnly ? styles.imageTimestamp : undefined}
-					>
-						<Text
-							className={`text-[10px] ${isMe || isImageOnly ? 'text-white/80' : 'text-ink-muted'} mr-1`}
-						>
-							{formatMessageTime(item.created_at)}
-						</Text>
-						{isMe && (
-							<>
-								{isPending && (
-									<Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.6)" />
-								)}
-								{isFailed && (
-									<Ionicons name="alert-circle-outline" size={11} color="#EF4444" />
-								)}
-								{!isPending && !isFailed && (
-									activeConv?.other_last_read_message_id && item.id <= activeConv.other_last_read_message_id ? (
-										<Ionicons name="checkmark-done" size={12} color="rgba(255,255,255,0.9)" />
-									) : (
-										<Ionicons name="checkmark" size={12} color="rgba(255,255,255,0.6)" />
-									)
-								)}
-							</>
-						)}
-					</View>
-				</View>
-			</View>
+			<MessageBubble
+				message={item}
+				isMine={isMe}
+				otherLastReadMessageID={activeConv?.other_last_read_message_id}
+				downloadingAttachmentID={downloadingAttachmentID}
+				onImagePress={openImageViewer}
+				onDocumentPress={downloadAttachment}
+				quoteAuthorName={resolveAuthorName}
+				onReply={startReply}
+				onQuotePress={scrollToMessage}
+				onLongPress={openActions}
+				highlighted={highlightedMessageID === item.id}
+			/>
 		);
 	};
 
 	const isInputEmpty = !inputText.trim();
+	// Отправлять можно и одни вложения без подписи, поэтому кнопка смотрит на
+	// оба источника. В режиме правки вложения не при чём — правится только текст,
+	// и пустым его оставлять нельзя (сервер вернёт ErrEmptyMessage).
+	const canSend = editing
+		? !isInputEmpty && !isSavingEdit
+		: (!isInputEmpty || staged.length > 0) && !uploading;
 	const isDeletedUser = !!activeConv?.other_user_deleted;
 	const conversationTitle = activeConv
 		? [activeConv.other_user_name, activeConv.other_user_surname]
@@ -874,9 +969,48 @@ export default function ChatDialogScreen() {
 	const userMessageCount = messages.filter((m) => !m.kind || m.kind === 'user').length;
 	const showSafetyNotice = !isLoading && !safetyNoticeDismissed && !isDeletedUser && userMessageCount < 3;
 
-	// Quick replies: shown to the listing owner in a fresh dialog while the
-	// input is empty — one tap prefills a typical answer.
-	const showQuickReplies = isListingOwner && !isDeletedUser && isInputEmpty && userMessageCount < 3;
+	/**
+	 * Подсказки ответа.
+	 *
+	 * Показываем обеим сторонам (раньше — только владельцу) и только в беседе по
+	 * объявлению: в общем диалоге нет контекста брони, и советовать там нечего.
+	 *
+	 * Условия показа держим узкими, потому что каждый запрос может стоить вызова
+	 * модели: поле ввода пусто, вложения не выбраны, режим правки не активен,
+	 * собеседник существует. Ограничения «первые N сообщений» тут нет — подсказки
+	 * полезны и в середине переписки, где как раз надо ответить на вопрос.
+	 */
+	const suggestionsEnabled =
+		!isLoading &&
+		!isDeletedUser &&
+		!editing &&
+		isInputEmpty &&
+		staged.length === 0 &&
+		!!activeConv?.house_id;
+
+	// Ключ запроса привязан к последнему сообщению: пришло новое — подсказки
+	// перегенерируются под него.
+	const lastMessageID = messages.length > 0 ? messages[0].id : 0;
+	const { data: suggestionsData, isLoading: suggestionsLoading } = useChatSuggestions(
+		convID,
+		lastMessageID,
+		suggestionsEnabled,
+	);
+	const showSuggestions = suggestionsEnabled && (suggestionsLoading || !!suggestionsData?.suggestions.length);
+
+	// Долгое нажатие по чипу — отправить сразу, без правки.
+	const handleSuggestionSendNow = React.useCallback(
+		(text: string) => {
+			hapticTapMedium();
+			setInputText(text);
+			// Отправку запускаем следующим тиком: handleSend читает inputText из
+			// состояния, а оно обновится только после ре-рендера.
+			setTimeout(() => {
+				sendRef.current?.();
+			}, 0);
+		},
+		[],
+	);
 
 	return (
 		<View style={{ flex: 1, backgroundColor: chatColors.background }}>
@@ -1051,8 +1185,18 @@ export default function ChatDialogScreen() {
 				</View>
 			) : (
 				<FlatList
+					ref={listRef}
 					data={messages}
 					keyExtractor={(item) => String(item.id)}
+					// Высоты сообщений разные, поэтому FlatList не всегда может
+					// сразу доскроллить к индексу. Без этого обработчика переход
+					// к цитате роняет список исключением.
+					onScrollToIndexFailed={({ index, averageItemLength }) => {
+						listRef.current?.scrollToOffset({
+							offset: index * Math.max(averageItemLength, 1),
+							animated: true,
+						});
+					}}
 					renderItem={renderMessage}
 					inverted
 					onEndReached={() => {
@@ -1096,31 +1240,39 @@ export default function ChatDialogScreen() {
 						className="border-t"
 					>
 					{/* Quick replies for the owner in fresh dialogs */}
-					{showQuickReplies && (
-						<FlatList
-							horizontal
-							data={QUICK_REPLIES}
-							keyExtractor={(text) => text}
-							showsHorizontalScrollIndicator={false}
-							contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, gap: 8 }}
-							renderItem={({ item: reply }) => (
-								<TouchableOpacity
-									onPress={() => handleInputChange(reply)}
-									activeOpacity={0.7}
-									style={{ backgroundColor: chatColors.panelRaised, borderColor: chatColors.border }}
-									className="px-3.5 py-2 rounded-full border"
-								>
-									<Text className="text-[12px] text-ink-secondary font-medium">{reply}</Text>
-								</TouchableOpacity>
-							)}
+					<StagedAttachmentsBar
+						files={editing ? [] : staged}
+						uploading={uploading}
+						onRemove={removeStaged}
+						onAddMore={handlePickMedia}
+						canAddMore={staged.length < MAX_ATTACHMENTS_PER_MESSAGE}
+					/>
+
+					{editing ? (
+						<EditPreviewBar message={editing} onCancel={cancelEditing} />
+					) : replyTo ? (
+						<ReplyPreviewBar
+							message={replyTo}
+							authorName={resolveAuthorName(replyTo.sender_id)}
+							onCancel={cancelReply}
 						/>
-					)}
+					) : null}
+
+					{showSuggestions ? (
+						<SuggestionChips
+							suggestions={suggestionsData?.suggestions ?? []}
+							generated={suggestionsData?.generated ?? false}
+							loading={suggestionsLoading}
+							onPick={handleInputChange}
+							onSendNow={handleSuggestionSendNow}
+						/>
+					) : null}
 					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 12 }} className="px-3 py-2.5">
 						<MaterialSurface level="base" radius={29} style={styles.composer}>
 						{/* Add Attachment Button */}
 						<TouchableOpacity
 							onPress={handlePickMedia}
-							disabled={uploading}
+							disabled={uploading || !!editing}
 							style={{ backgroundColor: chatColors.panelRaised }}
 							className="w-11 h-11 rounded-full items-center justify-center mr-2"
 							activeOpacity={0.7}
@@ -1135,7 +1287,7 @@ export default function ChatDialogScreen() {
 						{/* Input and emoji share one continuous material. */}
 						<View style={{ backgroundColor: chatColors.panelRaised }} className="flex-1 flex-row items-center rounded-[22px] min-h-11">
 							<TextInput
-								placeholder="Сообщение..."
+								placeholder={staged.length > 0 ? 'Добавьте подпись...' : 'Сообщение...'}
 								placeholderTextColor={palette.inkMuted}
 								value={inputText}
 								onChangeText={handleInputChange}
@@ -1145,15 +1297,17 @@ export default function ChatDialogScreen() {
 							/>
 						</View>
 
-						{/* Send Button */}
+						{/* Send Button. В режиме правки — галочка: та же кнопка
+						    сохраняет изменения, и иконка должна об этом говорить. */}
 						<IconButton
-							icon="arrow-up"
+							icon={editing ? 'checkmark' : 'arrow-up'}
 							iconSize={20}
 							size={44}
-							tone={isInputEmpty ? 'neutral' : 'primary'}
-							filled={!isInputEmpty}
+							tone={canSend ? 'primary' : 'neutral'}
+							filled={canSend}
 							onPress={handleSend}
-							disabled={isInputEmpty}
+							disabled={!canSend}
+							accessibilityLabel={editing ? 'Сохранить изменения' : 'Отправить сообщение'}
 							style={{ marginLeft: 8 }}
 						/>
 						</MaterialSurface>
@@ -1207,6 +1361,16 @@ export default function ChatDialogScreen() {
 				</View>
 			</BottomSheet>
 
+			<MessageActionsSheet
+				message={actionsTarget}
+				actions={actionsAvailability}
+				onClose={closeActions}
+				onReply={handleActionReply}
+				onCopy={handleActionCopy}
+				onEdit={startEditing}
+				onDelete={handleActionDelete}
+			/>
+
 			<ImageViewerModal
 				visible={galleryVisible}
 				images={chatImages}
@@ -1252,25 +1416,6 @@ const styles = StyleSheet.create({
 		width: 64,
 		height: 64,
 		borderRadius: 13,
-	},
-	messageBubble: {
-		maxWidth: '82%',
-		borderRadius: 21,
-		borderWidth: StyleSheet.hairlineWidth,
-	},
-	imageAttachment: {
-		marginBottom: 2,
-		borderRadius: 18,
-		overflow: 'hidden',
-	},
-	imageTimestamp: {
-		position: 'absolute',
-		right: 8,
-		bottom: 7,
-		backgroundColor: 'rgba(0,0,0,0.52)',
-		borderRadius: 10,
-		paddingHorizontal: 6,
-		paddingVertical: 3,
 	},
 	composer: {
 		minHeight: 58,

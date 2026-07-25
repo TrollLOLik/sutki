@@ -138,7 +138,7 @@ type House struct {
 	Deleted         bool
 	CountRoom       string
 	Status          string
-	Country         string
+	City            string
 	CreatedAt       pgtype.Timestamp
 	UpdatedAt       pgtype.Timestamp
 	Views           int32
@@ -240,13 +240,16 @@ type LocationSummaryJob struct {
 }
 
 type Message struct {
-	ID             int64
-	ConversationID int64
-	SenderID       *int32
-	Body           *string
-	CreatedAt      pgtype.Timestamptz
-	Kind           string
-	Payload        []byte
+	ID               int64
+	ConversationID   int64
+	SenderID         *int32
+	Body             *string
+	CreatedAt        pgtype.Timestamptz
+	Kind             string
+	Payload          []byte
+	ReplyToMessageID *int64
+	EditedAt         pgtype.Timestamptz
+	DeletedAt        pgtype.Timestamptz
 }
 
 type MessageAttachment struct {

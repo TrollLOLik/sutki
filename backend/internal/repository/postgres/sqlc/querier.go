@@ -46,6 +46,9 @@ type Querier interface {
 	DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
 	DeleteHouseServices(ctx context.Context, houseID int32) error
+	// Удаляет вложения удалённого сообщения и возвращает их ключи, чтобы usecase
+	// убрал объекты из S3.
+	DeleteMessageAttachments(ctx context.Context, messageID int64) ([]string, error)
 	DeleteUser(ctx context.Context, id int32) error
 	DeleteUserDeviceTokens(ctx context.Context, userID int32) error
 	DeleteUserFavorites(ctx context.Context, userID int32) error
@@ -59,11 +62,32 @@ type Querier interface {
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
 	GetMessageAttachments(ctx context.Context, dollar_1 []int64) ([]GetMessageAttachmentsRow, error)
+	// Беседа процитированного сообщения — для проверки, что реплай не ссылается на
+	// чужой диалог.
+	GetMessageConversation(ctx context.Context, id int64) (int64, error)
+	// Сообщение с данными, нужными для проверки прав на правку и удаление:
+	// автор, время создания, наличие вложений и позиция курсора прочтения у
+	// собеседника. Всё одним запросом, чтобы не гонять три round trip перед
+	// отказом.
+	GetMessageForMutation(ctx context.Context, arg GetMessageForMutationParams) (GetMessageForMutationRow, error)
+	// Компактные данные процитированных сообщений для гидрации реплаев.
+	// Тело обрезается в SQL: цитата рендерится одной-двумя строками, и тащить
+	// полные 4000 символов на каждую страницу истории незачем.
+	// Первое вложение берётся коррелированным подзапросом по возрастанию id —
+	// нужен только превью-URL, а не весь список.
+	GetMessageQuotes(ctx context.Context, arg GetMessageQuotesParams) ([]GetMessageQuotesRow, error)
 	GetOtherParticipantID(ctx context.Context, arg GetOtherParticipantIDParams) (int32, error)
+	// Последние сообщения беседы для промпта. Удалённые пропускаем: их текста уже
+	// нет, а подсказка по пустому сообщению смысла не имеет.
+	GetRecentMessagesForSuggestions(ctx context.Context, arg GetRecentMessagesForSuggestionsParams) ([]GetRecentMessagesForSuggestionsRow, error)
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error)
 	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
 	GetReviewByID(ctx context.Context, id int32) (GetReviewByIDRow, error)
+	// Контекст беседы для ИИ-подсказок: объявление, роль запрашивающего и курсор
+	// последнего сообщения. Один запрос вместо трёх — подсказки запрашиваются при
+	// каждом открытии чата, и лишние round trip тут заметны.
+	GetSuggestionContext(ctx context.Context, id int64) (GetSuggestionContextRow, error)
 	GetUserByEmail(ctx context.Context, email *string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserByPhone(ctx context.Context, phoneNormalized *string) (GetUserByPhoneRow, error)
@@ -108,6 +132,10 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
 	SoftDeleteHousePhotos(ctx context.Context, houseID *int32) error
+	// Мягкое удаление: строка остаётся (иначе порвутся цитаты в ответах и
+	// разъедется last_read_message_id), но тело обнуляется, чтобы удалённый текст
+	// не оставался в базе.
+	SoftDeleteMessage(ctx context.Context, arg SoftDeleteMessageParams) (SoftDeleteMessageRow, error)
 	SoftDeleteUserHouses(ctx context.Context, ownerID int32) error
 	// Atomic owner-facing publication transition. The expected source status in
 	// the WHERE clause prevents concurrent requests from reviving/re-hiding a
@@ -120,6 +148,9 @@ type Querier interface {
 	UpdateHouseLocationSummary(ctx context.Context, arg UpdateHouseLocationSummaryParams) error
 	UpdateHouseReviewsSummary(ctx context.Context, arg UpdateHouseReviewsSummaryParams) error
 	UpdateLastReadMessage(ctx context.Context, arg UpdateLastReadMessageParams) error
+	// Правка тела. Условия в WHERE, а не только в Go: параллельный запрос не должен
+	// проскочить между проверкой и записью. Пустой результат = правка не разрешена.
+	UpdateMessageBody(ctx context.Context, arg UpdateMessageBodyParams) (UpdateMessageBodyRow, error)
 	UpdateRefreshTokenActiveTime(ctx context.Context, arg UpdateRefreshTokenActiveTimeParams) error
 	UpdateRefreshTokenLocation(ctx context.Context, arg UpdateRefreshTokenLocationParams) error
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)

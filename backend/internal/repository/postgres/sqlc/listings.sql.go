@@ -97,9 +97,9 @@ WHERE h.deleted = false
     OR h.street ILIKE '%' || $3 || '%'
     OR h.house_number ILIKE '%' || $3 || '%'
     OR h.description ILIKE '%' || $3 || '%'
-    OR h.country ILIKE '%' || $3 || '%'
+    OR h.city ILIKE '%' || $3 || '%'
   )
-  AND ($4::text IS NULL OR h.country = $4)
+  AND ($4::text IS NULL OR h.city = $4)
   AND ($5::int IS NULL OR h.price >= $5)
   AND ($6::int IS NULL OR h.price <= $6)
   AND ($7::int IS NULL OR h.area >= $7)
@@ -216,7 +216,7 @@ func (q *Queries) CountHousesFiltered(ctx context.Context, arg CountHousesFilter
 const createHouse = `-- name: CreateHouse :one
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
-  area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
+  area, city, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
   check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
   created_at, updated_at, pois
 ) VALUES (
@@ -239,7 +239,7 @@ type CreateHouseParams struct {
 	CountRoom       string
 	NumberRoom      *string
 	Area            int32
-	Country         string
+	City            string
 	Lat             *float64
 	Lng             *float64
 	QcGeo           *int32
@@ -266,7 +266,7 @@ func (q *Queries) CreateHouse(ctx context.Context, arg CreateHouseParams) (int32
 		arg.CountRoom,
 		arg.NumberRoom,
 		arg.Area,
-		arg.Country,
+		arg.City,
 		arg.Lat,
 		arg.Lng,
 		arg.QcGeo,
@@ -313,7 +313,7 @@ SELECT
   h.count_room,
   h.number_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.rejection_reason,
   h.max_guests,
@@ -388,7 +388,7 @@ type GetHouseByIDRow struct {
 	CountRoom          string
 	NumberRoom         *string
 	Area               int32
-	Country            string
+	City               string
 	Status             string
 	RejectionReason    *string
 	MaxGuests          *int32
@@ -436,7 +436,7 @@ func (q *Queries) GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, 
 		&i.CountRoom,
 		&i.NumberRoom,
 		&i.Area,
-		&i.Country,
+		&i.City,
 		&i.Status,
 		&i.RejectionReason,
 		&i.MaxGuests,
@@ -651,7 +651,7 @@ SELECT
   h.price,
   h.count_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.rejection_reason,
   h.max_guests,
@@ -721,7 +721,7 @@ type ListHousesByOwnerRow struct {
 	Price              int32
 	CountRoom          string
 	Area               int32
-	Country            string
+	City               string
 	Status             string
 	RejectionReason    *string
 	MaxGuests          *int32
@@ -763,7 +763,7 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 			&i.Price,
 			&i.CountRoom,
 			&i.Area,
-			&i.Country,
+			&i.City,
 			&i.Status,
 			&i.RejectionReason,
 			&i.MaxGuests,
@@ -799,13 +799,13 @@ func (q *Queries) ListHousesByOwner(ctx context.Context, arg ListHousesByOwnerPa
 
 const listHousesFiltered = `-- name: ListHousesFiltered :many
 WITH filtered AS MATERIALIZED (
-  SELECT h.id, h.owner_id, h.street, h.description, h.price, h.deleted, h.count_room, h.status, h.country, h.created_at, h.updated_at, h.views, h.last_date_view, h.views_current_day, h.date_top, h.pay, h.house_number, h.area, h.number_room, h.rejection_reason, h.lat, h.lng, h.max_guests, h.check_in_after, h.check_out_before, h.smoking_allowed, h.pets_allowed, h.children_allowed, h.events_allowed, h.reviews_summary, h.location_summary, h.pois, h.qc_geo FROM house h
+  SELECT h.id, h.owner_id, h.street, h.description, h.price, h.deleted, h.count_room, h.status, h.city, h.created_at, h.updated_at, h.views, h.last_date_view, h.views_current_day, h.date_top, h.pay, h.house_number, h.area, h.number_room, h.rejection_reason, h.lat, h.lng, h.max_guests, h.check_in_after, h.check_out_before, h.smoking_allowed, h.pets_allowed, h.children_allowed, h.events_allowed, h.reviews_summary, h.location_summary, h.pois, h.qc_geo FROM house h
   WHERE h.deleted = false
     AND h.status = 'active'
     AND (cardinality($4::int[]) = 0 OR h.id = ANY($4::int[]))
     AND ($5::int IS NULL OR h.owner_id = $5)
-    AND ($6::text IS NULL OR h.street ILIKE '%' || $6 || '%' OR h.house_number ILIKE '%' || $6 || '%' OR h.description ILIKE '%' || $6 || '%' OR h.country ILIKE '%' || $6 || '%')
-    AND ($7::text IS NULL OR h.country = $7)
+    AND ($6::text IS NULL OR h.street ILIKE '%' || $6 || '%' OR h.house_number ILIKE '%' || $6 || '%' OR h.description ILIKE '%' || $6 || '%' OR h.city ILIKE '%' || $6 || '%')
+    AND ($7::text IS NULL OR h.city = $7)
     AND ($8::int IS NULL OR h.price >= $8)
     AND ($9::int IS NULL OR h.price <= $9)
     AND ($10::int IS NULL OR h.area >= $10)
@@ -848,7 +848,7 @@ SELECT
   h.price,
   h.count_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.max_guests,
   h.lat,
@@ -938,7 +938,7 @@ type ListHousesFilteredRow struct {
 	Price              int32
 	CountRoom          string
 	Area               int32
-	Country            string
+	City               string
 	Status             string
 	MaxGuests          *int32
 	Lat                *float64
@@ -1004,7 +1004,7 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 			&i.Price,
 			&i.CountRoom,
 			&i.Area,
-			&i.Country,
+			&i.City,
 			&i.Status,
 			&i.MaxGuests,
 			&i.Lat,
@@ -1035,7 +1035,7 @@ func (q *Queries) ListHousesFiltered(ctx context.Context, arg ListHousesFiltered
 }
 
 const listMapClusters = `-- name: ListMapClusters :many
-SELECT btrim(h.country)::text AS city,
+SELECT btrim(h.city)::text AS city,
        avg(h.lat)::double precision AS lat,
        avg(h.lng)::double precision AS lng,
        count(*)::integer AS listing_count
@@ -1044,8 +1044,8 @@ WHERE h.status = 'active'
   AND h.deleted = false
   AND h.lat IS NOT NULL
   AND h.lng IS NOT NULL
-  AND btrim(h.country) <> ''
-GROUP BY btrim(h.country)
+  AND btrim(h.city) <> ''
+GROUP BY btrim(h.city)
 ORDER BY listing_count DESC, city
 `
 
@@ -1167,7 +1167,7 @@ SET street = $1,
     count_room = $5,
     number_room = $6,
     area = $7,
-    country = $8,
+    city = $8,
     lat = $9,
     lng = $10,
     qc_geo = $11,
@@ -1191,7 +1191,7 @@ type UpdateHouseParams struct {
 	CountRoom       string
 	NumberRoom      *string
 	Area            int32
-	Country         string
+	City            string
 	Lat             *float64
 	Lng             *float64
 	QcGeo           *int32
@@ -1218,7 +1218,7 @@ func (q *Queries) UpdateHouse(ctx context.Context, arg UpdateHouseParams) (int64
 		arg.CountRoom,
 		arg.NumberRoom,
 		arg.Area,
-		arg.Country,
+		arg.City,
 		arg.Lat,
 		arg.Lng,
 		arg.QcGeo,

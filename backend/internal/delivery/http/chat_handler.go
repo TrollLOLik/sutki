@@ -29,7 +29,12 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Post("/conversations", h.findOrCreateConversation)
 	r.Get("/conversations/{id}/messages", h.getMessages)
 	r.Post("/conversations/{id}/messages", h.sendMessage)
+	// Message mutations are addressed by message id alone: the id is globally
+	// unique, and authorization is by authorship rather than by conversation.
+	r.Patch("/messages/{messageID}", h.editMessage)
+	r.Delete("/messages/{messageID}", h.deleteMessage)
 	r.Post("/conversations/{id}/read", h.readMessages)
+	r.Get("/conversations/{id}/suggestions", h.suggestions)
 	r.Get("/conversations/{id}/presence", h.conversationPresence)
 	r.Post("/conversations/{id}/typing", h.typing)
 	r.Post("/presence/heartbeat", h.presenceHeartbeat)
@@ -343,6 +348,8 @@ func (h *ChatHandler) getMessages(w http.ResponseWriter, r *http.Request) {
 type sendMessageRequest struct {
 	Body        *string                    `json:"body"`
 	Attachments []domain.MessageAttachment `json:"attachments"`
+	// ReplyToMessageID quotes another message from the same conversation.
+	ReplyToMessageID *int64 `json:"reply_to_message_id"`
 }
 
 func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
@@ -363,7 +370,7 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := h.svc.SendMessage(r.Context(), userID, convID, req.Body, req.Attachments)
+	msg, err := h.svc.SendMessage(r.Context(), userID, convID, req.Body, req.ReplyToMessageID, req.Attachments)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrBookingForbidden):
@@ -376,6 +383,10 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Некорректное вложение. Выберите файл ещё раз.")
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
 			writeError(w, http.StatusBadRequest, "Размер вложения превышает 15 МБ.")
+		case errors.Is(err, chat.ErrTooManyAttachments):
+			writeError(w, http.StatusBadRequest, "За раз можно отправить не больше 10 файлов.")
+		case errors.Is(err, chat.ErrReplyTargetNotFound):
+			writeError(w, http.StatusBadRequest, "Сообщение, на которое вы отвечаете, недоступно.")
 		case errors.Is(err, domain.ErrUnsafeImage):
 			writeError(w, http.StatusUnprocessableEntity, unsafeImagePublicMessage(err))
 		case errors.Is(err, domain.ErrImageModerationUnavailable):
@@ -388,6 +399,135 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, msg)
+}
+
+type editMessageRequest struct {
+	Body string `json:"body"`
+}
+
+// editMessage rewrites the body of the caller's own message within the allowed
+// window. See chat.Service.EditMessage for the full set of conditions.
+func (h *ChatHandler) editMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	messageID, err := strconv.ParseInt(chi.URLParam(r, "messageID"), 10, 64)
+	if err != nil || messageID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid message id")
+		return
+	}
+
+	var req editMessageRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	msg, err := h.svc.EditMessage(r.Context(), userID, messageID, req.Body)
+	if err != nil {
+		writeMessageMutationError(w, r, userID, messageID, "EditMessage", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, msg)
+}
+
+// deleteMessage soft-deletes the caller's own message: the row stays so replies
+// keep their quote, but the body and attachments are removed.
+func (h *ChatHandler) deleteMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	messageID, err := strconv.ParseInt(chi.URLParam(r, "messageID"), 10, 64)
+	if err != nil || messageID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid message id")
+		return
+	}
+
+	msg, err := h.svc.DeleteMessage(r.Context(), userID, messageID)
+	if err != nil {
+		writeMessageMutationError(w, r, userID, messageID, "DeleteMessage", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, msg)
+}
+
+// writeMessageMutationError maps edit/delete failures to curated messages.
+// Shared by both handlers because the two operations reject for largely the
+// same reasons, and the wording has to stay consistent between them.
+func writeMessageMutationError(w http.ResponseWriter, r *http.Request, userID int32, messageID int64, op string, err error) {
+	switch {
+	case errors.Is(err, chat.ErrMessageNotFound):
+		writeError(w, http.StatusNotFound, "Сообщение не найдено.")
+	case errors.Is(err, domain.ErrBookingForbidden):
+		// Deliberately the same wording as a missing message: telling a
+		// non-author that the message exists but is not theirs leaks activity
+		// from conversations they cannot see.
+		writeError(w, http.StatusNotFound, "Сообщение не найдено.")
+	case errors.Is(err, chat.ErrMessageAlreadyDeleted):
+		writeError(w, http.StatusConflict, "Сообщение уже удалено.")
+	case errors.Is(err, chat.ErrMessageNotEditable):
+		writeError(w, http.StatusUnprocessableEntity, "Это сообщение нельзя изменить.")
+	case errors.Is(err, chat.ErrMessageAlreadyRead):
+		writeError(w, http.StatusConflict, "Собеседник уже прочитал сообщение — изменить его нельзя.")
+	case errors.Is(err, chat.ErrEditWindowExpired):
+		writeError(w, http.StatusUnprocessableEntity, "Изменить сообщение можно в течение 15 минут после отправки.")
+	case errors.Is(err, chat.ErrDeleteWindowExpired):
+		writeError(w, http.StatusUnprocessableEntity, "Удалить сообщение можно в течение часа после отправки.")
+	case errors.Is(err, chat.ErrEmptyMessage):
+		writeError(w, http.StatusBadRequest, "Сообщение не может быть пустым.")
+	default:
+		log.Printf("[Chat] %s error (user=%d, message=%d): %v", op, userID, messageID, err)
+		writeInternalError(w, r, err, "internal error")
+	}
+}
+
+// suggestions returns quick reply chips for a conversation.
+//
+// Always answers 200: when the model is unavailable the service degrades to the
+// canned set, and a failed suggestion must never look like a broken chat. The
+// `generated` flag in the body tells the client which it got.
+func (h *ChatHandler) suggestions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	convID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	// Suggestions are fetched whenever a chat opens, so an idle user flipping
+	// between dialogs would otherwise bill a paid model repeatedly. Cache hits
+	// still count against the limit — the point is to bound how often one user
+	// can trigger work, and a hit costs a request either way.
+	if !ChatSuggestionLimiter.Allow(fmt.Sprintf("chat_suggest_user_%d", userID), chat.SuggestionRateLimit) {
+		writeError(w, http.StatusTooManyRequests, "Слишком часто. Попробуйте чуть позже.")
+		return
+	}
+
+	result, err := h.svc.Suggestions(r.Context(), userID, convID)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrBookingForbidden):
+			writeError(w, http.StatusForbidden, "У вас нет доступа к этому диалогу.")
+		default:
+			log.Printf("[Chat] Suggestions error (user=%d, conv=%d): %v", userID, convID, err)
+			writeInternalError(w, r, err, "internal error")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 type readMessagesRequest struct {

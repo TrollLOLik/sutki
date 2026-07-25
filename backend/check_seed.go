@@ -21,7 +21,7 @@ func main() {
 	defer db.Close()
 
 	// 1. Get 2 active house IDs
-	rows, err := db.Query("SELECT id, street, country FROM house ORDER BY id DESC LIMIT 2")
+	rows, err := db.Query("SELECT id, street, city FROM house ORDER BY id DESC LIMIT 2")
 	if err != nil {
 		log.Fatalf("Error querying houses: %v", err)
 	}

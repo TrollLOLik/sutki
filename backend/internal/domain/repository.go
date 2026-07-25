@@ -172,7 +172,30 @@ type ChatRepository interface {
 	// listing contact (targetID owns houseID), or a booking relationship in
 	// either direction.
 	CanContact(ctx context.Context, houseID *int32, initiatorID, targetID int32) (bool, error)
-	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, attachments []MessageAttachment) (Message, error)
+	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, replyToMessageID *int64, attachments []MessageAttachment) (Message, error)
+	// GetSuggestionContext loads the listing details and recent messages needed
+	// to generate reply suggestions. recentLimit caps how many messages are
+	// returned.
+	GetSuggestionContext(ctx context.Context, convID int64, recentLimit int32) (SuggestionContext, error)
+	// GetMessageConversation returns the conversation a message belongs to.
+	// Used to reject a reply that quotes a message from another dialog.
+	GetMessageConversation(ctx context.Context, messageID int64) (int64, error)
+	// HydrateReplyQuotes fills ReplyTo on every message that is a reply. Quotes
+	// are resolved server-side because paginated history frequently does not
+	// contain the parent message.
+	HydrateReplyQuotes(ctx context.Context, messages []Message) error
+	// GetMessageForMutation loads what authorizing an edit or delete needs:
+	// author, age, attachment count and the other participant's read cursor.
+	GetMessageForMutation(ctx context.Context, messageID int64, userID int32) (MessageMutationInfo, error)
+	// EditMessageBody rewrites the body of a user message. Authorship and the
+	// time window are enforced in SQL too, so a concurrent request cannot slip
+	// between check and write. ok=false means the update matched no row.
+	EditMessageBody(ctx context.Context, messageID int64, userID int32, body string, window time.Duration) (msg Message, ok bool, err error)
+	// SoftDeleteMessage clears the body and stamps deleted_at, keeping the row
+	// so replies keep their quote and read cursors stay valid. Returns the
+	// storage keys of the removed attachments so the caller can drop the
+	// objects from S3.
+	SoftDeleteMessage(ctx context.Context, messageID int64, userID int32, window time.Duration) (msg Message, attachmentKeys []string, ok bool, err error)
 	// CreateSystemMessage inserts a server-generated message (sender_id NULL)
 	// with the given kind/payload and a human-readable fallback body. Returns
 	// created=false without error when the unique (conversation, request,

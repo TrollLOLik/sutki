@@ -96,6 +96,7 @@ type Config struct {
 	LLMModerationModel       string
 	LLMReviewModerationModel string
 	LLMImageModerationModel  string
+	LLMChatSuggestModel      string
 	LLMTimeout               time.Duration
 
 	// Centrifugo config
@@ -171,7 +172,11 @@ func Load() (Config, error) {
 		LLMModerationModel:       getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
 		LLMReviewModerationModel: getEnv("LLM_REVIEW_MODERATION_MODEL", getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b"))),
 		LLMImageModerationModel:  getEnv("LLM_IMAGE_MODERATION_MODEL", "moonshotai/Kimi-K2.6"),
-		LLMTimeout:               getDuration("LLM_TIMEOUT", 15*time.Second),
+		// Отдельная модель под подсказки в чате: это самый частый и самый
+		// дешёвый по объёму вызов, и менять её не должно тянуть за собой
+		// генерацию описаний. Фоллбэк — общая LLM_MODEL.
+		LLMChatSuggestModel: getEnv("LLM_CHAT_SUGGEST_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
+		LLMTimeout:          getDuration("LLM_TIMEOUT", 15*time.Second),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
 		CentrifugoKey:        os.Getenv("CENTRIFUGO_API_KEY"),

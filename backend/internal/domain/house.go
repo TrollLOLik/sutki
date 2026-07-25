@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// House is a rental listing. It maps onto the legacy `house` table; `City`
-// comes from the legacy `country` column, and Lat/Lng are mobile additions.
+// House is a rental listing. It maps onto the legacy `house` table; Lat/Lng are
+// mobile additions.
 type House struct {
 	ID                 int32
 	OwnerID            int32

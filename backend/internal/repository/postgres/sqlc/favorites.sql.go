@@ -65,7 +65,7 @@ SELECT
   h.price,
   h.count_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.lat,
   h.lng,
@@ -111,7 +111,7 @@ type ListFavoriteHousesRow struct {
 	Price        int32
 	CountRoom    string
 	Area         int32
-	Country      string
+	City         string
 	Status       string
 	Lat          *float64
 	Lng          *float64
@@ -139,7 +139,7 @@ func (q *Queries) ListFavoriteHouses(ctx context.Context, arg ListFavoriteHouses
 			&i.Price,
 			&i.CountRoom,
 			&i.Area,
-			&i.Country,
+			&i.City,
 			&i.Status,
 			&i.Lat,
 			&i.Lng,
