@@ -194,6 +194,36 @@ DELETE FROM message_attachment
 WHERE message_id = sqlc.arg(message_id)
 RETURNING url;
 
+-- name: GetSuggestionContext :one
+-- Контекст беседы для ИИ-подсказок: объявление, роль запрашивающего и курсор
+-- последнего сообщения. Один запрос вместо трёх — подсказки запрашиваются при
+-- каждом открытии чата, и лишние round trip тут заметны.
+SELECT
+    c.house_id,
+    COALESCE(h.owner_id, 0)::int AS owner_id,
+    -- Города в house нет (он живёт у пользователя), поэтому локацию описываем
+    -- улицей — это то, что реально хранится у объявления.
+    COALESCE(h.street, '')::text AS street,
+    COALESCE(h.count_room, '')::text AS count_room,
+    COALESCE(h.price, 0)::int AS price,
+    COALESCE(h.max_guests, 0)::int AS max_guests,
+    to_char(h.check_in_after, 'HH24:MI') AS check_in_after,
+    to_char(h.check_out_before, 'HH24:MI') AS check_out_before,
+    COALESCE((SELECT MAX(m.id) FROM message m WHERE m.conversation_id = c.id), 0)::bigint AS last_message_id
+FROM conversation c
+LEFT JOIN house h ON h.id = c.house_id
+WHERE c.id = $1;
+
+-- name: GetRecentMessagesForSuggestions :many
+-- Последние сообщения беседы для промпта. Удалённые пропускаем: их текста уже
+-- нет, а подсказка по пустому сообщению смысла не имеет.
+SELECT sender_id, kind, COALESCE(body, '')::text AS body
+FROM message
+WHERE conversation_id = $1
+  AND deleted_at IS NULL
+ORDER BY id DESC
+LIMIT $2;
+
 -- name: GetMessageConversation :one
 -- Беседа процитированного сообщения — для проверки, что реплай не ссылается на
 -- чужой диалог.

@@ -115,18 +115,24 @@ type Service struct {
 	notifier       domain.EmailNotifier
 	userEvents     domain.UserEventPublisher
 	imageModerator domain.ImageModerator
+	// Reply suggestions are optional: with no generator wired the service
+	// serves the canned fallback sets (see suggestions.go).
+	suggestionGen   SuggestionGenerator
+	suggestionDebug bool
+	suggestionCache *suggestionCache
 }
 
 func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Service {
 	return &Service{
-		repo:           repo,
-		storage:        storage,
-		centrifugoURL:  cfg.CentrifugoURL,
-		centrifugoKey:  cfg.CentrifugoKey,
-		hmacSecret:     cfg.HMACSecret,
-		notifier:       cfg.Notifier,
-		userEvents:     cfg.UserEvents,
-		imageModerator: cfg.ImageModerator,
+		repo:            repo,
+		storage:         storage,
+		centrifugoURL:   cfg.CentrifugoURL,
+		centrifugoKey:   cfg.CentrifugoKey,
+		hmacSecret:      cfg.HMACSecret,
+		notifier:        cfg.Notifier,
+		userEvents:      cfg.UserEvents,
+		imageModerator:  cfg.ImageModerator,
+		suggestionCache: newSuggestionCache(),
 	}
 }
 

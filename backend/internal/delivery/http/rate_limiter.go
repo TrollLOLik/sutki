@@ -101,6 +101,9 @@ var (
 	// Ephemeral typing publications. Normal clients emit at most once every
 	// two seconds, so this still leaves generous reconnect headroom.
 	ChatTypingLimiter = NewSlidingWindowLimiter(time.Minute)
+	// AI reply suggestions. Bounds how often one user can trigger a paid model
+	// call by opening chats.
+	ChatSuggestionLimiter = NewSlidingWindowLimiter(time.Hour)
 
 	ViewIdentityLimiter = NewSlidingWindowLimiter(time.Hour)
 	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)

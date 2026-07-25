@@ -197,6 +197,35 @@ type ConversationPresence struct {
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 }
 
+// SuggestionContext is what generating reply suggestions needs about a
+// conversation: the listing behind it, who owns that listing, and the current
+// tail of the dialog.
+//
+// HouseID is nil for general conversations — suggestions are only generated for
+// listing-scoped dialogs, where there is something concrete to suggest about.
+type SuggestionContext struct {
+	HouseID        *int32
+	OwnerID        int32
+	Street         string
+	CountRoom      string
+	Price          int32
+	MaxGuests      int32
+	CheckInAfter   string
+	CheckOutBefore string
+	// LastMessageID doubles as the cache key: while it does not change, the
+	// conversation has not moved and the previous suggestions still apply.
+	LastMessageID int64
+	// Messages is the tail of the dialog, oldest first.
+	Messages []SuggestionMessage
+}
+
+// SuggestionMessage is one dialog line handed to the model.
+type SuggestionMessage struct {
+	SenderID *int32
+	Kind     string
+	Body     string
+}
+
 // HostResponseStats summarizes how quickly a host replies to guest message
 // batches in one-on-one conversations.
 type HostResponseStats struct {

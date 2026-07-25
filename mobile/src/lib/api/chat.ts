@@ -59,11 +59,24 @@ export interface ConversationPresence {
 	last_seen_at?: string;
 }
 
+export interface ChatSuggestions {
+	suggestions: string[];
+	/** true — подсказки сгенерированы моделью, false — статичный набор. */
+	generated: boolean;
+}
+
 export const chatKeys = {
 	all: ['chat'] as const,
 	conversations: () => [...chatKeys.all, 'conversations'] as const,
 	messages: (convID: number) => [...chatKeys.all, 'messages', convID] as const,
 	presence: (convID: number) => [...chatKeys.all, 'presence', convID] as const,
+	/**
+	 * Ключ включает id последнего сообщения: подсказки относятся к конкретному
+	 * состоянию беседы, и с приходом нового сообщения запрос должен уйти заново.
+	 * Ровно та же логика инвалидации, что в серверном кэше.
+	 */
+	suggestions: (convID: number, lastMessageID: number) =>
+		[...chatKeys.all, 'suggestions', convID, lastMessageID] as const,
 };
 
 // 1. Fetch conversation list
@@ -190,6 +203,35 @@ export function presignUpload(
 		file_name: fileName,
 		size: size,
 		content_type: contentType,
+	});
+}
+
+/**
+ * ИИ-подсказки ответа для беседы.
+ *
+ * Сервер всегда отвечает 200: при недоступной модели он отдаёт статичный набор,
+ * поэтому у клиента нет ветки «подсказок нет». Запрос идёт только когда экран
+ * реально их показывает — включённый флаг enabled экономит и вызовы модели, и
+ * лимит запросов пользователя.
+ */
+export function fetchSuggestions(convID: number): Promise<ChatSuggestions> {
+	return api.get<ChatSuggestions>(`/api/v1/chat/conversations/${convID}/suggestions`);
+}
+
+export function useChatSuggestions(
+	convID: number | undefined,
+	lastMessageID: number,
+	enabled: boolean,
+) {
+	return useQuery({
+		queryKey: chatKeys.suggestions(convID ?? 0, lastMessageID),
+		queryFn: () => fetchSuggestions(convID as number),
+		enabled: enabled && convID != null && convID > 0,
+		// Пока беседа не изменилась, ключ тот же — данные считаем свежими и не
+		// перезапрашиваем при возврате на экран.
+		staleTime: 5 * 60 * 1000,
+		// Подсказки — украшение: молча остаёмся на прежних, а не показываем ошибку.
+		retry: false,
 	});
 }
 

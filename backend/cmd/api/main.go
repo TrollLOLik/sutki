@@ -222,6 +222,17 @@ func main() {
 		UserEvents:     userEvents,
 		ImageModerator: imageModerator,
 	})
+	// Reply suggestions run on their own model so switching them (the most
+	// frequent LLM call in the app) does not affect description generation.
+	// With no API key configured the service serves canned fallbacks.
+	if cfg.LLMAPIKey != "" {
+		chatSvc.SetSuggestionGenerator(
+			llm.NewClient(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMChatSuggestModel, cfg.LLMTimeout),
+			// Prompts carry conversation text, so they are only logged outside
+			// production.
+			cfg.AppEnvironment != "production",
+		)
+	}
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 
 	bookingRepo := postgres.NewBookingRepo(queries)

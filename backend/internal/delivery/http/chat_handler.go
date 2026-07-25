@@ -34,6 +34,7 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Patch("/messages/{messageID}", h.editMessage)
 	r.Delete("/messages/{messageID}", h.deleteMessage)
 	r.Post("/conversations/{id}/read", h.readMessages)
+	r.Get("/conversations/{id}/suggestions", h.suggestions)
 	r.Get("/conversations/{id}/presence", h.conversationPresence)
 	r.Post("/conversations/{id}/typing", h.typing)
 	r.Post("/presence/heartbeat", h.presenceHeartbeat)
@@ -485,6 +486,48 @@ func writeMessageMutationError(w http.ResponseWriter, r *http.Request, userID in
 		log.Printf("[Chat] %s error (user=%d, message=%d): %v", op, userID, messageID, err)
 		writeInternalError(w, r, err, "internal error")
 	}
+}
+
+// suggestions returns quick reply chips for a conversation.
+//
+// Always answers 200: when the model is unavailable the service degrades to the
+// canned set, and a failed suggestion must never look like a broken chat. The
+// `generated` flag in the body tells the client which it got.
+func (h *ChatHandler) suggestions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	convID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	// Suggestions are fetched whenever a chat opens, so an idle user flipping
+	// between dialogs would otherwise bill a paid model repeatedly. Cache hits
+	// still count against the limit — the point is to bound how often one user
+	// can trigger work, and a hit costs a request either way.
+	if !ChatSuggestionLimiter.Allow(fmt.Sprintf("chat_suggest_user_%d", userID), chat.SuggestionRateLimit) {
+		writeError(w, http.StatusTooManyRequests, "Слишком часто. Попробуйте чуть позже.")
+		return
+	}
+
+	result, err := h.svc.Suggestions(r.Context(), userID, convID)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrBookingForbidden):
+			writeError(w, http.StatusForbidden, "У вас нет доступа к этому диалогу.")
+		default:
+			log.Printf("[Chat] Suggestions error (user=%d, conv=%d): %v", userID, convID, err)
+			writeInternalError(w, r, err, "internal error")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 type readMessagesRequest struct {

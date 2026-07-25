@@ -507,6 +507,54 @@ func (r *ChatRepo) GetMessageConversation(ctx context.Context, messageID int64) 
 	return r.q.GetMessageConversation(ctx, messageID)
 }
 
+// GetSuggestionContext loads the listing details and dialog tail used to build
+// the reply-suggestion prompt.
+func (r *ChatRepo) GetSuggestionContext(ctx context.Context, convID int64, recentLimit int32) (domain.SuggestionContext, error) {
+	row, err := r.q.GetSuggestionContext(ctx, convID)
+	if err != nil {
+		return domain.SuggestionContext{}, err
+	}
+
+	out := domain.SuggestionContext{
+		HouseID:        row.HouseID,
+		OwnerID:        row.OwnerID,
+		Street:         row.Street,
+		CountRoom:      row.CountRoom,
+		Price:          row.Price,
+		MaxGuests:      row.MaxGuests,
+		CheckInAfter:   row.CheckInAfter,
+		CheckOutBefore: row.CheckOutBefore,
+		LastMessageID:  row.LastMessageID,
+	}
+
+	// A general conversation has no listing to talk about, so the caller skips
+	// generation entirely — no point paying for the message query.
+	if out.HouseID == nil {
+		return out, nil
+	}
+
+	msgs, err := r.q.GetRecentMessagesForSuggestions(ctx, sqlc.GetRecentMessagesForSuggestionsParams{
+		ConversationID: convID,
+		Limit:          recentLimit,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return domain.SuggestionContext{}, err
+	}
+
+	// The query returns newest first (it needs ORDER BY id DESC to apply LIMIT
+	// to the tail); the prompt reads better chronologically, so reverse.
+	out.Messages = make([]domain.SuggestionMessage, 0, len(msgs))
+	for i := len(msgs) - 1; i >= 0; i-- {
+		out.Messages = append(out.Messages, domain.SuggestionMessage{
+			SenderID: msgs[i].SenderID,
+			Kind:     msgs[i].Kind,
+			Body:     msgs[i].Body,
+		})
+	}
+
+	return out, nil
+}
+
 // HydrateReplyQuotes fills ReplyTo for every reply in the slice.
 //
 // Parents are fetched in one batched query rather than per message: a page of

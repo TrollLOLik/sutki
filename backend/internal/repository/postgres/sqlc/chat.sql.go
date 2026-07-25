@@ -494,6 +494,98 @@ func (q *Queries) GetOtherParticipantID(ctx context.Context, arg GetOtherPartici
 	return user_id, err
 }
 
+const getRecentMessagesForSuggestions = `-- name: GetRecentMessagesForSuggestions :many
+SELECT sender_id, kind, COALESCE(body, '')::text AS body
+FROM message
+WHERE conversation_id = $1
+  AND deleted_at IS NULL
+ORDER BY id DESC
+LIMIT $2
+`
+
+type GetRecentMessagesForSuggestionsParams struct {
+	ConversationID int64
+	Limit          int32
+}
+
+type GetRecentMessagesForSuggestionsRow struct {
+	SenderID *int32
+	Kind     string
+	Body     string
+}
+
+// Последние сообщения беседы для промпта. Удалённые пропускаем: их текста уже
+// нет, а подсказка по пустому сообщению смысла не имеет.
+func (q *Queries) GetRecentMessagesForSuggestions(ctx context.Context, arg GetRecentMessagesForSuggestionsParams) ([]GetRecentMessagesForSuggestionsRow, error) {
+	rows, err := q.db.Query(ctx, getRecentMessagesForSuggestions, arg.ConversationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentMessagesForSuggestionsRow
+	for rows.Next() {
+		var i GetRecentMessagesForSuggestionsRow
+		if err := rows.Scan(&i.SenderID, &i.Kind, &i.Body); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSuggestionContext = `-- name: GetSuggestionContext :one
+SELECT
+    c.house_id,
+    COALESCE(h.owner_id, 0)::int AS owner_id,
+    -- Города в house нет (он живёт у пользователя), поэтому локацию описываем
+    -- улицей — это то, что реально хранится у объявления.
+    COALESCE(h.street, '')::text AS street,
+    COALESCE(h.count_room, '')::text AS count_room,
+    COALESCE(h.price, 0)::int AS price,
+    COALESCE(h.max_guests, 0)::int AS max_guests,
+    to_char(h.check_in_after, 'HH24:MI') AS check_in_after,
+    to_char(h.check_out_before, 'HH24:MI') AS check_out_before,
+    COALESCE((SELECT MAX(m.id) FROM message m WHERE m.conversation_id = c.id), 0)::bigint AS last_message_id
+FROM conversation c
+LEFT JOIN house h ON h.id = c.house_id
+WHERE c.id = $1
+`
+
+type GetSuggestionContextRow struct {
+	HouseID        *int32
+	OwnerID        int32
+	Street         string
+	CountRoom      string
+	Price          int32
+	MaxGuests      int32
+	CheckInAfter   string
+	CheckOutBefore string
+	LastMessageID  int64
+}
+
+// Контекст беседы для ИИ-подсказок: объявление, роль запрашивающего и курсор
+// последнего сообщения. Один запрос вместо трёх — подсказки запрашиваются при
+// каждом открытии чата, и лишние round trip тут заметны.
+func (q *Queries) GetSuggestionContext(ctx context.Context, id int64) (GetSuggestionContextRow, error) {
+	row := q.db.QueryRow(ctx, getSuggestionContext, id)
+	var i GetSuggestionContextRow
+	err := row.Scan(
+		&i.HouseID,
+		&i.OwnerID,
+		&i.Street,
+		&i.CountRoom,
+		&i.Price,
+		&i.MaxGuests,
+		&i.CheckInAfter,
+		&i.CheckOutBefore,
+		&i.LastMessageID,
+	)
+	return i, err
+}
+
 const isOtherParticipantDeleted = `-- name: IsOtherParticipantDeleted :one
 SELECT COALESCE(u.deleted, false)::boolean
 FROM conversation_participant cp

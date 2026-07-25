@@ -173,6 +173,10 @@ type ChatRepository interface {
 	// either direction.
 	CanContact(ctx context.Context, houseID *int32, initiatorID, targetID int32) (bool, error)
 	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, replyToMessageID *int64, attachments []MessageAttachment) (Message, error)
+	// GetSuggestionContext loads the listing details and recent messages needed
+	// to generate reply suggestions. recentLimit caps how many messages are
+	// returned.
+	GetSuggestionContext(ctx context.Context, convID int64, recentLimit int32) (SuggestionContext, error)
 	// GetMessageConversation returns the conversation a message belongs to.
 	// Used to reject a reply that quotes a message from another dialog.
 	GetMessageConversation(ctx context.Context, messageID int64) (int64, error)

@@ -30,6 +30,7 @@ import {
 	useDeleteMessage,
 	useConversations,
 	useConversationPresence,
+	useChatSuggestions,
 	publishTyping,
 	replaceMessageInCache,
 	type AttachmentInput,
@@ -47,6 +48,7 @@ import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
 import { StagedAttachmentsBar } from '@/components/chat/StagedAttachmentsBar';
+import { SuggestionChips } from '@/components/chat/SuggestionChips';
 import { EditPreviewBar } from '@/components/chat/EditPreviewBar';
 import {
 	MessageActionsSheet,
@@ -66,14 +68,6 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
-
-/** Canned owner replies shown as chips above the input. Client-only. */
-const QUICK_REPLIES = [
-	'Здравствуйте! Даты свободны',
-	'Уточните, пожалуйста, даты заезда и выезда',
-	'Заселение после 14:00, выезд до 12:00',
-	'Напишу вам чуть позже',
-];
 
 export default function ChatDialogScreen() {
 	const { palette, isDark } = useAppTheme();
@@ -280,6 +274,14 @@ export default function ChatDialogScreen() {
 	const [highlightedMessageID, setHighlightedMessageID] = useState<number | null>(null);
 	const listRef = useRef<FlatList<ChatMessage>>(null);
 	const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	/**
+	 * Всегда указывает на актуальный handleSend.
+	 *
+	 * Отправка по долгому нажатию на подсказку сначала пишет текст в состояние, а
+	 * отправляет следующим тиком — к этому моменту handleSend уже пересоздан, и
+	 * замыкание на старую версию отправило бы пустое сообщение.
+	 */
+	const sendRef = useRef<(() => void) | null>(null);
 
 	// Панель действий по долгому нажатию и режим правки.
 	const [actionsTarget, setActionsTarget] = useState<ChatMessage | null>(null);
@@ -805,6 +807,10 @@ export default function ChatDialogScreen() {
 		}
 	};
 
+	// Держим ref в синхроне на каждом рендере: отложенная отправка по долгому
+	// нажатию на подсказку должна вызвать актуальную версию, а не замыкание.
+	sendRef.current = handleSend;
+
 	const handlePickMedia = () => {
 		setIsAttachMenuVisible(true);
 	};
@@ -963,12 +969,48 @@ export default function ChatDialogScreen() {
 	const userMessageCount = messages.filter((m) => !m.kind || m.kind === 'user').length;
 	const showSafetyNotice = !isLoading && !safetyNoticeDismissed && !isDeletedUser && userMessageCount < 3;
 
-	// Quick replies: shown to the listing owner in a fresh dialog while the
-	// input is empty — one tap prefills a typical answer.
-	// В режиме правки подсказки не показываем: тап по чипу затёр бы правимый
-	// текст, а сама подсказка к чужой уже отправленной фразе не относится.
-	const showQuickReplies =
-		isListingOwner && !isDeletedUser && isInputEmpty && !editing && userMessageCount < 3;
+	/**
+	 * Подсказки ответа.
+	 *
+	 * Показываем обеим сторонам (раньше — только владельцу) и только в беседе по
+	 * объявлению: в общем диалоге нет контекста брони, и советовать там нечего.
+	 *
+	 * Условия показа держим узкими, потому что каждый запрос может стоить вызова
+	 * модели: поле ввода пусто, вложения не выбраны, режим правки не активен,
+	 * собеседник существует. Ограничения «первые N сообщений» тут нет — подсказки
+	 * полезны и в середине переписки, где как раз надо ответить на вопрос.
+	 */
+	const suggestionsEnabled =
+		!isLoading &&
+		!isDeletedUser &&
+		!editing &&
+		isInputEmpty &&
+		staged.length === 0 &&
+		!!activeConv?.house_id;
+
+	// Ключ запроса привязан к последнему сообщению: пришло новое — подсказки
+	// перегенерируются под него.
+	const lastMessageID = messages.length > 0 ? messages[0].id : 0;
+	const { data: suggestionsData, isLoading: suggestionsLoading } = useChatSuggestions(
+		convID,
+		lastMessageID,
+		suggestionsEnabled,
+	);
+	const showSuggestions = suggestionsEnabled && (suggestionsLoading || !!suggestionsData?.suggestions.length);
+
+	// Долгое нажатие по чипу — отправить сразу, без правки.
+	const handleSuggestionSendNow = React.useCallback(
+		(text: string) => {
+			hapticTapMedium();
+			setInputText(text);
+			// Отправку запускаем следующим тиком: handleSend читает inputText из
+			// состояния, а оно обновится только после ре-рендера.
+			setTimeout(() => {
+				sendRef.current?.();
+			}, 0);
+		},
+		[],
+	);
 
 	return (
 		<View style={{ flex: 1, backgroundColor: chatColors.background }}>
@@ -1216,25 +1258,15 @@ export default function ChatDialogScreen() {
 						/>
 					) : null}
 
-					{showQuickReplies && (
-						<FlatList
-							horizontal
-							data={QUICK_REPLIES}
-							keyExtractor={(text) => text}
-							showsHorizontalScrollIndicator={false}
-							contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, gap: 8 }}
-							renderItem={({ item: reply }) => (
-								<TouchableOpacity
-									onPress={() => handleInputChange(reply)}
-									activeOpacity={0.7}
-									style={{ backgroundColor: chatColors.panelRaised, borderColor: chatColors.border }}
-									className="px-3.5 py-2 rounded-full border"
-								>
-									<Text className="text-[12px] text-ink-secondary font-medium">{reply}</Text>
-								</TouchableOpacity>
-							)}
+					{showSuggestions ? (
+						<SuggestionChips
+							suggestions={suggestionsData?.suggestions ?? []}
+							generated={suggestionsData?.generated ?? false}
+							loading={suggestionsLoading}
+							onPick={handleInputChange}
+							onSendNow={handleSuggestionSendNow}
 						/>
-					)}
+					) : null}
 					<View style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 12 }} className="px-3 py-2.5">
 						<MaterialSurface level="base" radius={29} style={styles.composer}>
 						{/* Add Attachment Button */}

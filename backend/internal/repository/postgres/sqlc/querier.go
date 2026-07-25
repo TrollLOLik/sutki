@@ -77,10 +77,17 @@ type Querier interface {
 	// нужен только превью-URL, а не весь список.
 	GetMessageQuotes(ctx context.Context, arg GetMessageQuotesParams) ([]GetMessageQuotesRow, error)
 	GetOtherParticipantID(ctx context.Context, arg GetOtherParticipantIDParams) (int32, error)
+	// Последние сообщения беседы для промпта. Удалённые пропускаем: их текста уже
+	// нет, а подсказка по пустому сообщению смысла не имеет.
+	GetRecentMessagesForSuggestions(ctx context.Context, arg GetRecentMessagesForSuggestionsParams) ([]GetRecentMessagesForSuggestionsRow, error)
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error)
 	GetRequestByID(ctx context.Context, id int32) (GetRequestByIDRow, error)
 	GetReviewByID(ctx context.Context, id int32) (GetReviewByIDRow, error)
+	// Контекст беседы для ИИ-подсказок: объявление, роль запрашивающего и курсор
+	// последнего сообщения. Один запрос вместо трёх — подсказки запрашиваются при
+	// каждом открытии чата, и лишние round trip тут заметны.
+	GetSuggestionContext(ctx context.Context, id int64) (GetSuggestionContextRow, error)
 	GetUserByEmail(ctx context.Context, email *string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserByPhone(ctx context.Context, phoneNormalized *string) (GetUserByPhoneRow, error)
