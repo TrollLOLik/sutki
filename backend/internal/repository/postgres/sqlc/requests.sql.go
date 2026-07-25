@@ -342,7 +342,7 @@ SELECT
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
   COALESCE(h.number_room, '')::text AS house_number_room,
-  h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
+  h.city AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path,
   -- guest profile from user table
   COALESCE(u.name, '')::text       AS guest_name,
@@ -579,7 +579,7 @@ SELECT
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
   COALESCE(h.number_room, '')::text AS house_number_room,
-  h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
+  h.city AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM request r
 JOIN house h ON h.id = r.house_id
@@ -697,7 +697,7 @@ SELECT
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
   COALESCE(h.number_room, '')::text AS house_number_room,
-  h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
+  h.city AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path
 FROM request r
 JOIN house h ON h.id = r.house_id
@@ -814,7 +814,7 @@ SELECT
   r.confirmed_at, r.rejection_reason,
   h.street AS house_street, h.house_number AS house_number,
   COALESCE(h.number_room, '')::text AS house_number_room,
-  h.country AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
+  h.city AS house_city, h.price AS house_price, h.owner_id AS house_owner_id,
   COALESCE((SELECT f.path FROM file f WHERE f.house_id = h.id AND f.deleted = false ORDER BY f.position LIMIT 1), '')::text AS house_cover_path,
   -- guest profile from user table
   COALESCE(u.name, '')::text       AS guest_name,

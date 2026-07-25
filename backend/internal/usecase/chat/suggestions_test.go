@@ -129,6 +129,7 @@ func TestSuggestionCacheRespectsTTL(t *testing.T) {
 func TestBuildSuggestionPromptFencesAndScrubsDialog(t *testing.T) {
 	senderID := int32(42)
 	sctx := domain.SuggestionContext{
+		City:      "Казань",
 		Street:    "Баумана",
 		CountRoom: "2",
 		Price:     4200,
@@ -156,7 +157,7 @@ func TestBuildSuggestionPromptFencesAndScrubsDialog(t *testing.T) {
 	if !strings.Contains(prompt, "Система:") {
 		t.Fatal("expected booking card to be labelled as system")
 	}
-	if !strings.Contains(prompt, "Баумана") || !strings.Contains(prompt, "4200") {
+	if !strings.Contains(prompt, "Казань") || !strings.Contains(prompt, "Баумана") || !strings.Contains(prompt, "4200") {
 		t.Fatal("expected listing facts in the prompt")
 	}
 }

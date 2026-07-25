@@ -206,6 +206,7 @@ type ConversationPresence struct {
 type SuggestionContext struct {
 	HouseID        *int32
 	OwnerID        int32
+	City           string
 	Street         string
 	CountRoom      string
 	Price          int32

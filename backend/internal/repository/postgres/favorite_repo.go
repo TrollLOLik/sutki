@@ -47,7 +47,7 @@ func (r *FavoriteRepo) ListHouses(ctx context.Context, userID, limit, offset int
 			Price:        row.Price,
 			CountRoom:    row.CountRoom,
 			Area:         row.Area,
-			City:         row.Country,
+			City:         row.City,
 			Status:       row.Status,
 			Lat:          row.Lat,
 			Lng:          row.Lng,

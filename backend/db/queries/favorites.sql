@@ -21,7 +21,7 @@ SELECT
   h.price,
   h.count_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.lat,
   h.lng,

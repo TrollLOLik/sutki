@@ -5,8 +5,8 @@ WITH filtered AS MATERIALIZED (
     AND h.status = 'active'
     AND (cardinality(@house_ids::int[]) = 0 OR h.id = ANY(@house_ids::int[]))
     AND (sqlc.narg('owner_id')::int IS NULL OR h.owner_id = sqlc.narg('owner_id'))
-    AND (sqlc.narg('query')::text IS NULL OR h.street ILIKE '%' || sqlc.narg('query') || '%' OR h.house_number ILIKE '%' || sqlc.narg('query') || '%' OR h.description ILIKE '%' || sqlc.narg('query') || '%' OR h.country ILIKE '%' || sqlc.narg('query') || '%')
-    AND (sqlc.narg('city')::text IS NULL OR h.country = sqlc.narg('city'))
+    AND (sqlc.narg('query')::text IS NULL OR h.street ILIKE '%' || sqlc.narg('query') || '%' OR h.house_number ILIKE '%' || sqlc.narg('query') || '%' OR h.description ILIKE '%' || sqlc.narg('query') || '%' OR h.city ILIKE '%' || sqlc.narg('query') || '%')
+    AND (sqlc.narg('city')::text IS NULL OR h.city = sqlc.narg('city'))
     AND (sqlc.narg('price_min')::int IS NULL OR h.price >= sqlc.narg('price_min'))
     AND (sqlc.narg('price_max')::int IS NULL OR h.price <= sqlc.narg('price_max'))
     AND (sqlc.narg('area_min')::int IS NULL OR h.area >= sqlc.narg('area_min'))
@@ -49,7 +49,7 @@ SELECT
   h.price,
   h.count_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.max_guests,
   h.lat,
@@ -101,7 +101,7 @@ ORDER BY
 LIMIT @result_limit OFFSET @result_offset;
 
 -- name: ListMapClusters :many
-SELECT btrim(h.country)::text AS city,
+SELECT btrim(h.city)::text AS city,
        avg(h.lat)::double precision AS lat,
        avg(h.lng)::double precision AS lng,
        count(*)::integer AS listing_count
@@ -110,8 +110,8 @@ WHERE h.status = 'active'
   AND h.deleted = false
   AND h.lat IS NOT NULL
   AND h.lng IS NOT NULL
-  AND btrim(h.country) <> ''
-GROUP BY btrim(h.country)
+  AND btrim(h.city) <> ''
+GROUP BY btrim(h.city)
 ORDER BY listing_count DESC, city;
 
 -- name: CountHousesFiltered :one
@@ -129,9 +129,9 @@ WHERE h.deleted = false
     OR h.street ILIKE '%' || sqlc.narg('query') || '%'
     OR h.house_number ILIKE '%' || sqlc.narg('query') || '%'
     OR h.description ILIKE '%' || sqlc.narg('query') || '%'
-    OR h.country ILIKE '%' || sqlc.narg('query') || '%'
+    OR h.city ILIKE '%' || sqlc.narg('query') || '%'
   )
-  AND (sqlc.narg('city')::text IS NULL OR h.country = sqlc.narg('city'))
+  AND (sqlc.narg('city')::text IS NULL OR h.city = sqlc.narg('city'))
   AND (sqlc.narg('price_min')::int IS NULL OR h.price >= sqlc.narg('price_min'))
   AND (sqlc.narg('price_max')::int IS NULL OR h.price <= sqlc.narg('price_max'))
   AND (sqlc.narg('area_min')::int IS NULL OR h.area >= sqlc.narg('area_min'))
@@ -198,7 +198,7 @@ SELECT
   h.count_room,
   h.number_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.rejection_reason,
   h.max_guests,
@@ -300,12 +300,12 @@ ORDER BY name;
 -- flips them to 'active' / 'moderation_review' / 'rejected'.
 INSERT INTO house (
   owner_id, street, house_number, description, price, count_room, number_room,
-  area, country, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
+  area, city, status, deleted, pay, views, lat, lng, qc_geo, max_guests,
   check_in_after, check_out_before, smoking_allowed, pets_allowed, children_allowed, events_allowed,
   created_at, updated_at, pois
 ) VALUES (
   @owner_id, @street, @house_number, @description, @price, @count_room,
-  sqlc.narg('number_room'), @area, @country, 'pending_moderation', false, false, 0,
+  sqlc.narg('number_room'), @area, @city, 'pending_moderation', false, false, 0,
   sqlc.narg('lat'), sqlc.narg('lng'), sqlc.narg('qc_geo'), sqlc.narg('max_guests'),
   sqlc.narg('check_in_after'), sqlc.narg('check_out_before'), sqlc.narg('smoking_allowed'),
   sqlc.narg('pets_allowed'), sqlc.narg('children_allowed'), sqlc.narg('events_allowed'),
@@ -324,7 +324,7 @@ SET street = @street,
     count_room = @count_room,
     number_room = sqlc.narg('number_room'),
     area = @area,
-    country = @country,
+    city = @city,
     lat = sqlc.narg('lat'),
     lng = sqlc.narg('lng'),
     qc_geo = sqlc.narg('qc_geo'),
@@ -377,7 +377,7 @@ SELECT
   h.price,
   h.count_room,
   h.area,
-  h.country,
+  h.city,
   h.status,
   h.rejection_reason,
   h.max_guests,

@@ -138,7 +138,7 @@ type House struct {
 	Deleted         bool
 	CountRoom       string
 	Status          string
-	Country         string
+	City            string
 	CreatedAt       pgtype.Timestamp
 	UpdatedAt       pgtype.Timestamp
 	Views           int32

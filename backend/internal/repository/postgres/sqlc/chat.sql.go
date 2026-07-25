@@ -540,8 +540,7 @@ const getSuggestionContext = `-- name: GetSuggestionContext :one
 SELECT
     c.house_id,
     COALESCE(h.owner_id, 0)::int AS owner_id,
-    -- Города в house нет (он живёт у пользователя), поэтому локацию описываем
-    -- улицей — это то, что реально хранится у объявления.
+    COALESCE(h.city, '')::text AS city,
     COALESCE(h.street, '')::text AS street,
     COALESCE(h.count_room, '')::text AS count_room,
     COALESCE(h.price, 0)::int AS price,
@@ -557,6 +556,7 @@ WHERE c.id = $1
 type GetSuggestionContextRow struct {
 	HouseID        *int32
 	OwnerID        int32
+	City           string
 	Street         string
 	CountRoom      string
 	Price          int32
@@ -575,6 +575,7 @@ func (q *Queries) GetSuggestionContext(ctx context.Context, id int64) (GetSugges
 	err := row.Scan(
 		&i.HouseID,
 		&i.OwnerID,
+		&i.City,
 		&i.Street,
 		&i.CountRoom,
 		&i.Price,

@@ -722,7 +722,7 @@ export default function SearchScreen() {
       <SearchModal
         visible={searchModalVisible}
         onSelectCity={(city) => {
-          // Exact city filter (backend matches h.country = city). Remembered.
+          // Exact city filter (backend matches h.city = city). Remembered.
           filters.setFilters({ city });
           setQuery('');
           void addRecentSearch(city).catch(() => undefined);

@@ -518,6 +518,7 @@ func (r *ChatRepo) GetSuggestionContext(ctx context.Context, convID int64, recen
 	out := domain.SuggestionContext{
 		HouseID:        row.HouseID,
 		OwnerID:        row.OwnerID,
+		City:           row.City,
 		Street:         row.Street,
 		CountRoom:      row.CountRoom,
 		Price:          row.Price,

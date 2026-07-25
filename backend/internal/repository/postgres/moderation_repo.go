@@ -301,7 +301,7 @@ func (r *ModerationRepo) GetHouseForModeration(ctx context.Context, houseID int3
 	var poisBytes []byte
 	err := r.pool.QueryRow(ctx, `
 		SELECT h.id, h.owner_id, COALESCE(u.email, ''), h.status,
-		       COALESCE(h.country, ''), h.street, h.house_number, COALESCE(h.number_room, ''),
+		       COALESCE(h.city, ''), h.street, h.house_number, COALESCE(h.number_room, ''),
 		       COALESCE(h.description, ''), h.price,
 		       COALESCE(h.count_room, ''), h.area, h.max_guests,
 		       COALESCE(h.smoking_allowed, ''), COALESCE(h.pets_allowed, ''),

@@ -249,6 +249,9 @@ func suggestionSystemPrompt(role SuggestionRole) string {
 // fenced.
 func buildSuggestionPrompt(userID int32, sctx domain.SuggestionContext) string {
 	var facts strings.Builder
+	if sctx.City != "" {
+		facts.WriteString(fmt.Sprintf("- Город: %s\n", sctx.City))
+	}
 	if sctx.Street != "" {
 		facts.WriteString(fmt.Sprintf("- Улица: %s\n", sctx.Street))
 	}

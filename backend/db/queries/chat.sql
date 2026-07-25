@@ -201,8 +201,7 @@ RETURNING url;
 SELECT
     c.house_id,
     COALESCE(h.owner_id, 0)::int AS owner_id,
-    -- Города в house нет (он живёт у пользователя), поэтому локацию описываем
-    -- улицей — это то, что реально хранится у объявления.
+    COALESCE(h.city, '')::text AS city,
     COALESCE(h.street, '')::text AS street,
     COALESCE(h.count_room, '')::text AS count_room,
     COALESCE(h.price, 0)::int AS price,
