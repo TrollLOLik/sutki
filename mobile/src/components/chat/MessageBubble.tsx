@@ -11,6 +11,7 @@ import { SwipeToReply } from './SwipeToReply';
 import {
 	type ChatAttachment,
 	isImageAttachment,
+	isVideoAttachment,
 	isImageOnlyMessage,
 	formatMessageTime,
 } from './types';
@@ -27,6 +28,9 @@ interface MessageBubbleProps {
 	downloadingAttachmentID: number | null;
 	onImagePress: (attachment: ChatAttachment) => void;
 	onDocumentPress: (attachment: ChatAttachment) => void;
+	onVideoPress: (attachment: ChatAttachment) => void;
+	/** Локальные обложки видео по id вложения, до появления серверных. */
+	localThumbnails?: Record<number, string>;
 	/** Имя автора процитированного сообщения, для шапки цитаты. */
 	quoteAuthorName: (senderID?: number | null) => string;
 	/** Свайп по пузырю — ответить на это сообщение. */
@@ -56,6 +60,8 @@ export const MessageBubble = React.memo(function MessageBubble({
 	downloadingAttachmentID,
 	onImagePress,
 	onDocumentPress,
+	onVideoPress,
+	localThumbnails,
 	quoteAuthorName,
 	onReply,
 	onQuotePress,
@@ -77,7 +83,8 @@ export const MessageBubble = React.memo(function MessageBubble({
 	 * сетка оказывается в рамке из фона пузыря и выглядит вставленной, а не
 	 * частью сообщения.
 	 */
-	const mediaEdgeToEdge = !isDeleted && !!message.attachments?.some(isImageAttachment);
+	const mediaEdgeToEdge =
+		!isDeleted && !!message.attachments?.some((att) => isImageAttachment(att) || isVideoAttachment(att));
 	const isRead = otherLastReadMessageID != null && message.id <= otherLastReadMessageID;
 
 	const handleReply = React.useCallback(() => onReply(message), [message, onReply]);
@@ -142,6 +149,8 @@ export const MessageBubble = React.memo(function MessageBubble({
 						downloadingAttachmentID={downloadingAttachmentID}
 						onImagePress={onImagePress}
 						onDocumentPress={onDocumentPress}
+						onVideoPress={onVideoPress}
+						localThumbnails={localThumbnails}
 					/>
 				) : null}
 

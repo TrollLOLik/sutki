@@ -27,9 +27,11 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/storage"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/telegram"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/ucaller"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/videoframes"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/attachmentmoderation"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
@@ -233,6 +235,27 @@ func main() {
 			cfg.AppEnvironment != "production",
 		)
 	}
+	// Attachment moderation runs out of band: video needs frame extraction plus a
+	// vision call per frame, which cannot happen inside the send request. Without
+	// ffmpeg the worker still handles images; video jobs retry and log loudly.
+	attachmentModerationRepo := postgres.NewAttachmentModerationRepo(queries)
+	frameExtractor := videoframes.New(videoframes.Config{
+		FFmpegPath:  cfg.FFmpegPath,
+		FFprobePath: cfg.FFprobePath,
+		Timeout:     cfg.FFmpegTimeout,
+	})
+	attachmentModerator := attachmentmoderation.New(attachmentmoderation.Config{
+		Repo:            attachmentModerationRepo,
+		Storage:         privateStorage,
+		Extractor:       frameExtractor,
+		Moderator:       attachmentmoderation.NewStoredKeyModerator(imageModerator, privateStorage, 0),
+		Notifier:        chatSvc,
+		WorkDir:         cfg.MediaWorkDir,
+		MaxVideoSeconds: cfg.MaxVideoSeconds,
+	})
+	chatSvc.SetAttachmentModerationQueue(attachmentModerationRepo, attachmentModerator)
+	attachmentModerator.StartWorker(ctx)
+
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 
 	bookingRepo := postgres.NewBookingRepo(queries)

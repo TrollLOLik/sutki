@@ -37,9 +37,13 @@ VALUES ($1, $2, $3, $4, now())
 RETURNING id, conversation_id, sender_id, body, reply_to_message_id, created_at;
 
 -- name: CreateAttachment :one
-INSERT INTO message_attachment (message_id, url, file_name, mime_type, size_bytes, width, height)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, message_id, url, file_name, mime_type, size_bytes, width, height;
+INSERT INTO message_attachment (
+  message_id, url, file_name, mime_type, size_bytes, width, height,
+  moderation_status, duration_seconds, thumbnail_url
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, message_id, url, file_name, mime_type, size_bytes, width, height,
+          moderation_status, duration_seconds, thumbnail_url;
 
 -- name: UpdateConversationTimestamp :exec
 UPDATE conversation
@@ -111,7 +115,8 @@ ORDER BY id DESC
 LIMIT $3;
 
 -- name: GetMessageAttachments :many
-SELECT id, message_id, url, file_name, mime_type, size_bytes, width, height
+SELECT id, message_id, url, file_name, mime_type, size_bytes, width, height,
+       moderation_status, duration_seconds, thumbnail_url
 FROM message_attachment
 WHERE message_id = ANY($1::bigint[]);
 
@@ -193,6 +198,106 @@ RETURNING id, conversation_id, sender_id, body, reply_to_message_id, edited_at, 
 DELETE FROM message_attachment
 WHERE message_id = sqlc.arg(message_id)
 RETURNING url;
+
+-- name: GetUserMediaStanding :one
+-- Данные аккаунта для гейта на видео: подтверждён ли телефон и когда создан.
+-- created_at в таблице user хранится без таймзоны — приводим к timestamptz,
+-- иначе сравнение возраста аккаунта зависит от таймзоны сессии.
+SELECT phone_verified_at, created_at::timestamptz AS created_at
+FROM "user"
+WHERE id = $1;
+
+-- name: GetMessageByID :one
+-- Одно сообщение целиком. Нужно воркеру модерации: после вердикта он публикует
+-- сообщение, которое при отправке было скрыто от получателя.
+SELECT id, conversation_id, sender_id, kind, payload, body,
+       reply_to_message_id, edited_at, deleted_at, created_at
+FROM message
+WHERE id = $1;
+
+-- name: EnqueueAttachmentModeration :exec
+-- Ставит вложение в очередь проверки. Повторная постановка того же вложения —
+-- не ошибка (UNIQUE по attachment_id), а no-op: сообщение могли переотправить.
+INSERT INTO attachment_moderation_job (
+  attachment_id, message_id, conversation_id, object_key, mime_type, kind
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (attachment_id) DO NOTHING;
+
+-- name: ReleaseStaleAttachmentJobs :exec
+-- Возвращает в очередь задачи, которые воркер взял и не завершил: процесс мог
+-- умереть посреди нарезки кадров. Без этого задача залипает в processing
+-- навсегда, а вложение — в pending, то есть получатель его никогда не увидит.
+UPDATE attachment_moderation_job
+SET status = 'queued',
+    last_error = 'processing lease expired',
+    updated_at = now()
+WHERE status = 'processing'
+  AND updated_at < now() - sqlc.arg(lease)::interval;
+
+-- name: ClaimAttachmentModerationJobs :many
+-- Отбор пачки задач. FOR UPDATE SKIP LOCKED — чтобы несколько воркеров могли
+-- работать параллельно, не разбирая одну задачу дважды.
+WITH due AS (
+  SELECT id FROM attachment_moderation_job
+  WHERE status = 'queued' AND next_attempt_at <= now()
+  ORDER BY id
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg(batch_size)
+)
+UPDATE attachment_moderation_job j
+SET status = 'processing', attempts = attempts + 1, updated_at = now()
+FROM due
+WHERE j.id = due.id
+RETURNING j.id, j.attachment_id, j.message_id, j.conversation_id,
+          j.object_key, j.mime_type, j.kind, j.attempts;
+
+-- name: CompleteAttachmentModeration :exec
+UPDATE attachment_moderation_job
+SET status = 'done',
+    decision = sqlc.arg(decision),
+    category = sqlc.arg(category),
+    reason = sqlc.arg(reason),
+    confidence = sqlc.arg(confidence),
+    frames_checked = sqlc.arg(frames_checked),
+    last_error = NULL,
+    updated_at = now()
+WHERE id = sqlc.arg(job_id);
+
+-- name: RetryAttachmentModeration :exec
+-- Инфраструктурный сбой (модель недоступна, ffmpeg упал): задача возвращается в
+-- очередь с отложенной попыткой. Вложение остаётся pending, то есть не
+-- публикуется — при недоступной проверке безопаснее задержать, чем пропустить.
+UPDATE attachment_moderation_job
+SET status = 'queued',
+    next_attempt_at = sqlc.arg(next_attempt_at),
+    last_error = sqlc.arg(last_error),
+    updated_at = now()
+WHERE id = sqlc.arg(job_id);
+
+-- name: SetAttachmentModerationStatus :exec
+UPDATE message_attachment
+SET moderation_status = sqlc.arg(moderation_status)
+WHERE id = sqlc.arg(attachment_id);
+
+-- name: SetAttachmentVideoMeta :exec
+-- Длительность и обложка становятся известны только после probe на сервере:
+-- заявленным клиентом значениям доверять нельзя.
+UPDATE message_attachment
+SET duration_seconds = sqlc.arg(duration_seconds),
+    thumbnail_url = sqlc.arg(thumbnail_url)
+WHERE id = sqlc.arg(attachment_id);
+
+-- name: DeleteAttachment :exec
+-- Забракованное вложение удаляется целиком: держать строку незачем, а объект из
+-- хранилища убирает usecase по ключу из задачи.
+DELETE FROM message_attachment WHERE id = $1;
+
+-- name: CountPendingAttachments :one
+-- Сколько вложений сообщения ещё проверяется. Ноль означает, что сообщение
+-- можно доставлять получателю.
+SELECT COUNT(*)::bigint FROM message_attachment
+WHERE message_id = $1 AND moderation_status = 'pending';
 
 -- name: GetSuggestionContext :one
 -- Контекст беседы для ИИ-подсказок: объявление, роль запрашивающего и курсор

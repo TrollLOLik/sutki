@@ -19,7 +19,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
-	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 )
 
 // attachmentKeyPattern is the only S3 object-key shape accepted for chat
@@ -77,11 +76,47 @@ var (
 	ErrMessageAlreadyRead = errors.New("message already read by recipient")
 	// ErrMessageAlreadyDeleted is returned when the message is already deleted.
 	ErrMessageAlreadyDeleted = errors.New("message already deleted")
+	// ErrMotionMediaNotAllowed is returned when a new or unverified account tries
+	// to upload video or animation.
+	ErrMotionMediaNotAllowed = errors.New("video uploads require a verified account")
 )
 
 // maxAttachmentBytes is the maximum accepted size for a chat attachment,
 // enforced server-side against the actual uploaded object.
 const maxAttachmentBytes = 15 * 1024 * 1024
+
+// maxVideoBytes is the size ceiling for video, separate from the 15 MB used for
+// photos and documents: a 30-60 second 720p clip lands well above that, and
+// forcing it lower would mean visibly worse compression on the device.
+const maxVideoBytes = 50 * 1024 * 1024
+
+// motionMediaMinAccountAge is how old an account must be before it may upload
+// video or animation. Short on purpose: the goal is to stop bots that register
+// and immediately spam, not to make legitimate new owners wait.
+const motionMediaMinAccountAge = 24 * time.Hour
+
+// allowedUploadTypes is the whitelist for chat attachments.
+//
+// Video is restricted to MP4/QuickTime: both are what phone cameras produce, and
+// both are formats ffmpeg reads without extra codecs in the worker image. Adding
+// a container we cannot probe would mean accepting files we cannot moderate.
+var allowedUploadTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+	// GIF stays allowed, but is now sampled frame by frame like video instead of
+	// being handed to the model as a single still — that first-frame-only check
+	// was how "safe cover, violation at second three" used to pass.
+	"image/gif":          true,
+	"video/mp4":          true,
+	"video/quicktime":    true,
+	"application/pdf":    true,
+	"text/plain":         true,
+	"application/msword": true,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	"application/vnd.ms-excel": true,
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+}
 
 // maxAttachmentsPerMessage caps how many files one message may carry.
 //
@@ -120,6 +155,50 @@ type Service struct {
 	suggestionGen   SuggestionGenerator
 	suggestionDebug bool
 	suggestionCache *suggestionCache
+	// attachmentQueue schedules asynchronous media checks. Nil disables the
+	// pipeline: attachments are then approved on insert, which is the pre-video
+	// behaviour and keeps dev environments usable without a worker.
+	attachmentQueue AttachmentModerationQueue
+	attachmentWaker AttachmentModerationWaker
+}
+
+// AttachmentModerationQueue schedules an attachment for background checking.
+type AttachmentModerationQueue interface {
+	Enqueue(ctx context.Context, job domain.AttachmentModerationJob) error
+}
+
+// AttachmentModerationWaker lets the service nudge the worker so a freshly
+// uploaded file is checked in about a second instead of at the next tick.
+type AttachmentModerationWaker interface {
+	Wake()
+}
+
+// SetAttachmentModerationQueue wires the asynchronous media pipeline.
+func (s *Service) SetAttachmentModerationQueue(queue AttachmentModerationQueue, waker AttachmentModerationWaker) {
+	s.attachmentQueue = queue
+	s.attachmentWaker = waker
+}
+
+// moderationKind maps a verified content type to how it must be inspected, or
+// "" when no media check applies (documents).
+//
+// The content type comes from StatObject — what the bytes actually are — not
+// from the client's claim.
+func moderationKind(contentType string) string {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	switch {
+	case strings.HasPrefix(ct, "video/"):
+		return domain.AttachmentKindVideo
+	case ct == "image/gif":
+		// A GIF is usually animated, and a vision model shown one effectively
+		// sees only its first frame. Sampling it as video closes the "safe
+		// cover, violation at second three" gap.
+		return domain.AttachmentKindAnimated
+	case strings.HasPrefix(ct, "image/"):
+		return domain.AttachmentKindImage
+	default:
+		return ""
+	}
 }
 
 func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Service {
@@ -284,6 +363,74 @@ func (s *Service) presignAttachment(ctx context.Context, att domain.MessageAttac
 	return att
 }
 
+// enqueueAttachmentModeration queues a check for every attachment that needs one.
+//
+// Runs after the message is stored, because a job references the attachment id.
+// Failures are logged rather than surfaced: the message is already persisted, and
+// the attachment stays pending — visible to its sender as "Проверяется" — so
+// nothing unchecked reaches the recipient. The stale-lease sweep will pick it up.
+func (s *Service) enqueueAttachmentModeration(ctx context.Context, msg domain.Message, kinds map[string]string) {
+	if s.attachmentQueue == nil || len(kinds) == 0 {
+		return
+	}
+
+	queued := 0
+	for _, att := range msg.Attachments {
+		kind, ok := kinds[att.URL]
+		if !ok {
+			continue
+		}
+		job := domain.AttachmentModerationJob{
+			AttachmentID:   att.ID,
+			MessageID:      msg.ID,
+			ConversationID: msg.ConversationID,
+			ObjectKey:      att.URL,
+			MimeType:       att.MimeType,
+			Kind:           kind,
+		}
+		if err := s.attachmentQueue.Enqueue(ctx, job); err != nil {
+			log.Printf("[Chat] Failed to queue moderation for attachment %d: %v", att.ID, err)
+			continue
+		}
+		queued++
+	}
+
+	if queued > 0 && s.attachmentWaker != nil {
+		s.attachmentWaker.Wake()
+	}
+}
+
+// hasPendingAttachments reports whether any attachment is still unverified.
+func hasPendingAttachments(msg domain.Message) bool {
+	for _, att := range msg.Attachments {
+		if att.IsPendingModeration() {
+			return true
+		}
+	}
+	return false
+}
+
+// visibleAttachments strips attachments the viewer must not see yet.
+//
+// A pending attachment is shown to its own sender (as a "Проверяется"
+// placeholder) but hidden from the recipient: the whole point of post-moderation
+// is that unverified media is not delivered. Filtering here, in one place, means
+// every read path — history, realtime publish, edit response — inherits it.
+func visibleAttachments(msg domain.Message, viewerID int32) []domain.MessageAttachment {
+	if len(msg.Attachments) == 0 {
+		return msg.Attachments
+	}
+	isSender := msg.SenderID != nil && *msg.SenderID == viewerID
+	out := make([]domain.MessageAttachment, 0, len(msg.Attachments))
+	for _, att := range msg.Attachments {
+		if att.IsPendingModeration() && !isSender {
+			continue
+		}
+		out = append(out, att)
+	}
+	return out
+}
+
 // presignQuote turns the raw storage key of a quote thumbnail into a signed URL.
 // Mutates through the pointer because the quote hangs off the message. Nil
 // quotes (non-reply messages) are a no-op.
@@ -341,8 +488,10 @@ func (s *Service) GetConversationMessages(ctx context.Context, userID int32, con
 		return nil, err
 	}
 
-	// Presign attachment URLs for delivery to client
+	// Presign attachment URLs for delivery to client, hiding attachments that are
+	// still being checked from anyone but their sender.
 	for i := range msgs {
+		msgs[i].Attachments = visibleAttachments(msgs[i], userID)
 		for j := range msgs[i].Attachments {
 			msgs[i].Attachments[j] = s.presignAttachment(ctx, msgs[i].Attachments[j])
 		}
@@ -396,8 +545,10 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		}
 	}
 
-	// Verify S3 attachments (stat check)
-	imageKeys := make([]string, 0, len(attachments))
+	// Verify S3 attachments (stat check). moderationKinds collects which of them
+	// need an asynchronous media check, keyed by object key — attachment ids do
+	// not exist until the message row is written.
+	moderationKinds := make(map[string]string, len(attachments))
 	for i, att := range attachments {
 		// att.URL holds the S3 object key on incoming request. Reject anything
 		// that does not match a key this service minted via PresignUpload,
@@ -426,35 +577,27 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		attachments[i].URL = att.URL
 		attachments[i].SizeBytes = info.SizeBytes
 		attachments[i].MimeType = info.ContentType
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(info.ContentType)), "image/") {
-			imageKeys = append(imageKeys, att.URL)
+
+		// Media is checked after the message is stored, not inside this request.
+		// Video needs frame sampling plus a vision call per frame — tens of
+		// seconds — so it cannot be held open here. Documents carry no imagery
+		// to moderate and are approved on the spot.
+		kind := moderationKind(info.ContentType)
+		if kind == "" || s.attachmentQueue == nil {
+			attachments[i].ModerationStatus = domain.AttachmentModerationApproved
+			continue
 		}
-	}
-	if len(imageKeys) > 0 && s.imageModerator != nil {
-		result, err := imagemoderation.ModerateStoredImages(ctx, s.imageModerator, s.storage, imageKeys, "chat", maxAttachmentBytes)
-		if err != nil {
-			log.Printf("[Chat] Image moderation failed (user=%d, conv=%d): %v", userID, convID, err)
-			return domain.Message{}, err
-		}
-		if result.Decision != domain.ImageModerationApprove {
-			log.Printf("[Chat] Image moderation rejected upload (user=%d, conv=%d, category=%s)", userID, convID, result.Category)
-			for _, key := range imageKeys {
-				if delErr := s.storage.Delete(ctx, key); delErr != nil {
-					log.Printf("[Chat] Failed to delete rejected image %q: %v", key, delErr)
-				}
-			}
-			return domain.Message{}, &domain.UnsafeImageError{
-				Decision: result.Decision,
-				Category: result.Category,
-				Reason:   result.Reason,
-			}
-		}
+		attachments[i].ModerationStatus = domain.AttachmentModerationPending
+		moderationKinds[att.URL] = kind
 	}
 
 	msg, err := s.repo.CreateMessage(ctx, convID, userID, body, replyToMessageID, attachments)
 	if err != nil {
 		return domain.Message{}, err
 	}
+
+	// Queue the checks now that attachment rows exist and have ids.
+	s.enqueueAttachmentModeration(ctx, msg, moderationKinds)
 
 	// Presign attachment URLs for delivery to client (including Centrifugo publish)
 	for i := range msg.Attachments {
@@ -865,31 +1008,40 @@ func (s *Service) publishMessageMutation(ctx context.Context, msg domain.Message
 }
 
 func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName string, size int64, contentType string) (domain.UploadTarget, error) {
-	// 1. Size check (15MB)
-	if size > maxAttachmentBytes {
-		return domain.UploadTarget{}, ErrFileTooLarge
-	}
-
-	// 2. MIME whitelist check
-	allowed := false
 	contentType = strings.ToLower(strings.TrimSpace(contentType))
-	allowedTypes := []string{
-		"image/jpeg", "image/png", "image/webp", "image/gif",
-		"application/pdf", "text/plain",
-		"application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		"application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	}
-	for _, t := range allowedTypes {
-		if contentType == t {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
+
+	// 1. MIME whitelist check
+	if !allowedUploadTypes[contentType] {
 		return domain.UploadTarget{}, ErrFileTypeNotAllowed
 	}
 
-	// 3. Generate secure random key path
+	isMotion := isVideoType(contentType) || contentType == "image/gif"
+
+	// 2. Video and animated uploads are gated on account standing. A brand-new
+	// or unverified account sending video is overwhelmingly a spam bot, and each
+	// such upload costs frame extraction plus a vision call per frame — the most
+	// expensive thing an anonymous actor can make this server do.
+	if isMotion {
+		allowed, err := s.canSendMotionMedia(ctx, userID)
+		if err != nil {
+			return domain.UploadTarget{}, err
+		}
+		if !allowed {
+			return domain.UploadTarget{}, ErrMotionMediaNotAllowed
+		}
+	}
+
+	// 3. Size check. Video gets its own, larger ceiling: even a 30-second 720p
+	// clip does not fit the 15 MB used for photos and documents.
+	limit := int64(maxAttachmentBytes)
+	if isVideoType(contentType) {
+		limit = maxVideoBytes
+	}
+	if size > limit {
+		return domain.UploadTarget{}, ErrFileTooLarge
+	}
+
+	// 4. Generate secure random key path
 	uuid, err := generateRandomHex(16)
 	if err != nil {
 		return domain.UploadTarget{}, err
@@ -897,13 +1049,45 @@ func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName stri
 	ext := filepath.Ext(fileName)
 	key := fmt.Sprintf("chat/uploads/%s%s", uuid, ext)
 
-	// 4. Generate presigned POST params. Pass the server-side limit (not the
+	// 5. Generate presigned POST params. Pass the server-side limit (not the
 	// client-claimed size) as the content-length-range upper bound: picker
 	// sizes are unreliable, and S3 enforces this bound authoritatively.
-	return s.storage.PresignUpload(ctx, key, maxAttachmentBytes, contentType)
+	return s.storage.PresignUpload(ctx, key, limit, contentType)
+}
+
+// canSendMotionMedia reports whether the account may upload video or animation.
+//
+// Two conditions, both cheap: the phone must be verified, and the account must
+// be older than motionMediaMinAccountAge. The age floor is deliberately short —
+// a legitimate owner wanting to send a room tour on their first day is a real
+// case, so the bar is "not registered seconds ago", not "established user".
+func (s *Service) canSendMotionMedia(ctx context.Context, userID int32) (bool, error) {
+	standing, err := s.repo.GetUserMediaStanding(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	if standing.PhoneVerifiedAt == nil {
+		return false, nil
+	}
+	return time.Since(standing.CreatedAt) >= motionMediaMinAccountAge, nil
+}
+
+// isVideoType reports whether the content type is a whitelisted video format.
+func isVideoType(contentType string) bool {
+	return strings.HasPrefix(contentType, "video/")
 }
 
 func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
+	// A message whose media is still being checked must not reach the recipient
+	// yet, and the conversation channel is shared by both participants. So while
+	// anything is pending the broadcast is suppressed entirely; the worker
+	// publishes the message once every attachment has passed
+	// (see PublishApprovedMessage). The sender already has it from the HTTP
+	// response, so nothing is lost for them.
+	if hasPendingAttachments(msg) {
+		return
+	}
+
 	// 1. Publish to conversation channel (for users with chat open)
 	channel := fmt.Sprintf("chat:conv_%d", msg.ConversationID)
 	payload := map[string]any{

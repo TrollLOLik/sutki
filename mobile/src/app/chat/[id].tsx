@@ -49,6 +49,7 @@ import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
 import { StagedAttachmentsBar } from '@/components/chat/StagedAttachmentsBar';
 import { SuggestionChips } from '@/components/chat/SuggestionChips';
+import { VideoPlayerModal } from '@/components/chat/VideoPlayerModal';
 import { EditPreviewBar } from '@/components/chat/EditPreviewBar';
 import {
 	MessageActionsSheet,
@@ -57,6 +58,7 @@ import {
 import { useChatColors } from '@/components/chat/useChatColors';
 import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
 import { useChatUploads, MAX_ATTACHMENTS_PER_MESSAGE } from '@/hooks/useChatUploads';
+import { MAX_VIDEO_SECONDS } from '@/lib/video';
 import { hapticTapLight, hapticTapMedium, hapticSuccess } from '@/lib/haptics';
 import * as Clipboard from 'expo-clipboard';
 import Animated, {
@@ -97,9 +99,18 @@ export default function ChatDialogScreen() {
 		clearStaged,
 		uploadStaged,
 		pickImages,
+		pickVideo: pickVideoFile,
 		takePhoto: takePhotoFromCamera,
 		pickDocument: pickDocumentFile,
 	} = useChatUploads();
+	/**
+	 * Локальные обложки видео по id вложения.
+	 *
+	 * Серверная обложка появляется только после модерации, поэтому первые
+	 * несколько секунд показываем снятую на устройстве. Ключ — серверный id
+	 * вложения, известный лишь после ответа на отправку.
+	 */
+	const [localVideoThumbnails, setLocalVideoThumbnails] = useState<Record<number, string>>({});
 	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
 	const keyboardHeight = useSharedValue(0);
@@ -250,6 +261,9 @@ export default function ChatDialogScreen() {
 
 	const [galleryVisible, setGalleryVisible] = useState(false);
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+	// Плеер открывается только по тапу на обложку: в ленте видео живёт статичной
+	// картинкой, иначе несколько декодеров на экране рвут скролл.
+	const [playingVideoUri, setPlayingVideoUri] = useState<string | null>(null);
 
 	const chatImages = React.useMemo(() => {
 		const list: string[] = [];
@@ -258,7 +272,10 @@ export default function ChatDialogScreen() {
 			// и попав в этот список они сдвинули бы индексы просмотрщика.
 			if (messages[i].deleted_at) continue;
 			messages[i].attachments?.forEach((att) => {
-				if (att.mime_type.startsWith('image/')) {
+				// Видео сюда не идёт — у него свой плеер. Непроверенное фото тоже:
+				// оно ещё может быть отклонено, а его присутствие в списке сдвинуло
+				// бы индексы уже одобренных снимков.
+				if (att.mime_type.startsWith('image/') && att.moderation_status !== 'pending') {
 					list.push(att.url);
 				}
 			});
@@ -537,6 +554,8 @@ export default function ChatDialogScreen() {
 				user_id?: number;
 				message_id?: number;
 				active?: boolean;
+				/** Причина отказа модерации — показывается отправителю. */
+				reason?: string;
 			};
 			console.log('[Chat] Event on channel:', channel, payload);
 
@@ -632,6 +651,26 @@ export default function ChatDialogScreen() {
 				if (payload.type === 'message.edited') {
 					setEditing((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
 				}
+				return;
+			}
+
+			// Вложение не прошло модерацию. Приходит только отправителю (получатель
+			// его и не видел), поэтому здесь достаточно обновить своё сообщение и
+			// сказать, почему файл исчез.
+			if (payload.type === 'attachment.rejected') {
+				if (payload.reason) {
+					Alert.alert('Вложение не отправлено', payload.reason);
+				}
+				// Перезапрашиваем историю: сервер уже удалил вложение, и подменять
+				// сообщение вручную здесь пришлось бы дублированием его логики.
+				refetch();
+				return;
+			}
+
+			// Соседнее устройство или получатель: у сообщения убрали вложение.
+			// Обновляем ленту, чтобы пузырь не показывал то, чего уже нет.
+			if (payload.type === 'message.attachment_rejected') {
+				refetch();
 			}
 		});
 
@@ -733,6 +772,16 @@ export default function ChatDialogScreen() {
 							size_bytes: file.size,
 							width: file.width,
 							height: file.height,
+							duration_seconds: file.durationSeconds,
+							// Локальный путь: до ответа сервера это единственная обложка.
+							thumbnail_url: file.thumbnailUri,
+							// Медиа уходит на асинхронную проверку, поэтому сразу
+							// показываем «Проверяется», а не кнопку Play: файл ещё не
+							// одобрен, и тап по нему был бы обманом. Документы
+							// проверять нечего — они одобрены сразу.
+							moderation_status: file.mimeType.startsWith('image/') || file.mimeType.startsWith('video/')
+								? ('pending' as const)
+								: ('approved' as const),
 						})),
 					}
 				: {}),
@@ -770,6 +819,23 @@ export default function ChatDialogScreen() {
 				reply_to_message_id: replyTarget?.id,
 				attachments: hasAttachments ? attachments : undefined,
 			});
+
+			// Перевешиваем локальные обложки видео с временных ключей на серверные
+			// id: сервер сгенерирует свою обложку только после модерации, а до тех
+			// пор в пузыре надо что-то показывать. Сопоставляем по порядку — он
+			// сохранён, потому что загрузка пишет результаты по индексу.
+			if (hasAttachments && saved.attachments?.length) {
+				const thumbs: Record<number, string> = {};
+				saved.attachments.forEach((att, index) => {
+					const local = stagedSnapshot[index];
+					if (local?.thumbnailUri && att.mime_type.startsWith('video/')) {
+						thumbs[att.id] = local.thumbnailUri;
+					}
+				});
+				if (Object.keys(thumbs).length > 0) {
+					setLocalVideoThumbnails((current) => ({ ...current, ...thumbs }));
+				}
+			}
 
 			// Replace optimistic message in cache with real database response
 			queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
@@ -826,6 +892,13 @@ export default function ChatDialogScreen() {
 		addStaged(await pickImages(remainingSlots));
 	};
 
+	const pickVideo = async () => {
+		if (remainingSlots <= 0) return;
+		// Сжатие занимает секунды, поэтому меню закрывается сразу, а прогресс
+		// показывается в полосе вложений.
+		addStaged(await pickVideoFile());
+	};
+
 	const takePhoto = async () => {
 		if (remainingSlots <= 0) return;
 		addStaged(await takePhotoFromCamera());
@@ -859,6 +932,10 @@ export default function ChatDialogScreen() {
 			setDownloadingAttachmentID(null);
 		}
 	};
+
+	const openVideoPlayer = React.useCallback((attachment: ChatAttachment) => {
+		setPlayingVideoUri(attachment.url);
+	}, []);
 
 	const openImageViewer = React.useCallback(
 		(attachment: ChatAttachment) => {
@@ -908,6 +985,8 @@ export default function ChatDialogScreen() {
 				downloadingAttachmentID={downloadingAttachmentID}
 				onImagePress={openImageViewer}
 				onDocumentPress={downloadAttachment}
+				onVideoPress={openVideoPlayer}
+				localThumbnails={localVideoThumbnails}
 				quoteAuthorName={resolveAuthorName}
 				onReply={startReply}
 				onQuotePress={scrollToMessage}
@@ -1336,7 +1415,8 @@ export default function ChatDialogScreen() {
 					<View className="overflow-hidden rounded-[22px] border border-line bg-surface-muted">
 						{[
 							{ icon: 'camera-outline' as const, title: 'Камера', subtitle: 'Сделать снимок сейчас', action: takePhoto },
-							{ icon: 'image-outline' as const, title: 'Фото и видео', subtitle: 'Выбрать из галереи', action: pickImage },
+							{ icon: 'image-outline' as const, title: 'Фото', subtitle: 'Выбрать из галереи', action: pickImage },
+						{ icon: 'videocam-outline' as const, title: 'Видео', subtitle: `До ${MAX_VIDEO_SECONDS} секунд, сжимается автоматически`, action: pickVideo },
 							{ icon: 'document-text-outline' as const, title: 'Документ', subtitle: 'PDF, DOC, XLS и другие файлы', action: pickDocument },
 						].map((item, index) => (
 							<TouchableOpacity
@@ -1370,6 +1450,8 @@ export default function ChatDialogScreen() {
 				onEdit={startEditing}
 				onDelete={handleActionDelete}
 			/>
+
+			<VideoPlayerModal uri={playingVideoUri} onClose={() => setPlayingVideoUri(null)} />
 
 			<ImageViewerModal
 				visible={galleryVisible}

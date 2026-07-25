@@ -45,31 +45,147 @@ func (q *Queries) CheckParticipantExists(ctx context.Context, arg CheckParticipa
 	return column_1, err
 }
 
+const claimAttachmentModerationJobs = `-- name: ClaimAttachmentModerationJobs :many
+WITH due AS (
+  SELECT id FROM attachment_moderation_job
+  WHERE status = 'queued' AND next_attempt_at <= now()
+  ORDER BY id
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+UPDATE attachment_moderation_job j
+SET status = 'processing', attempts = attempts + 1, updated_at = now()
+FROM due
+WHERE j.id = due.id
+RETURNING j.id, j.attachment_id, j.message_id, j.conversation_id,
+          j.object_key, j.mime_type, j.kind, j.attempts
+`
+
+type ClaimAttachmentModerationJobsRow struct {
+	ID             int64
+	AttachmentID   int64
+	MessageID      int64
+	ConversationID int64
+	ObjectKey      string
+	MimeType       string
+	Kind           string
+	Attempts       int32
+}
+
+// Отбор пачки задач. FOR UPDATE SKIP LOCKED — чтобы несколько воркеров могли
+// работать параллельно, не разбирая одну задачу дважды.
+func (q *Queries) ClaimAttachmentModerationJobs(ctx context.Context, batchSize int32) ([]ClaimAttachmentModerationJobsRow, error) {
+	rows, err := q.db.Query(ctx, claimAttachmentModerationJobs, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimAttachmentModerationJobsRow
+	for rows.Next() {
+		var i ClaimAttachmentModerationJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AttachmentID,
+			&i.MessageID,
+			&i.ConversationID,
+			&i.ObjectKey,
+			&i.MimeType,
+			&i.Kind,
+			&i.Attempts,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const completeAttachmentModeration = `-- name: CompleteAttachmentModeration :exec
+UPDATE attachment_moderation_job
+SET status = 'done',
+    decision = $1,
+    category = $2,
+    reason = $3,
+    confidence = $4,
+    frames_checked = $5,
+    last_error = NULL,
+    updated_at = now()
+WHERE id = $6
+`
+
+type CompleteAttachmentModerationParams struct {
+	Decision      *string
+	Category      *string
+	Reason        *string
+	Confidence    *float32
+	FramesChecked *int32
+	JobID         int64
+}
+
+func (q *Queries) CompleteAttachmentModeration(ctx context.Context, arg CompleteAttachmentModerationParams) error {
+	_, err := q.db.Exec(ctx, completeAttachmentModeration,
+		arg.Decision,
+		arg.Category,
+		arg.Reason,
+		arg.Confidence,
+		arg.FramesChecked,
+		arg.JobID,
+	)
+	return err
+}
+
+const countPendingAttachments = `-- name: CountPendingAttachments :one
+SELECT COUNT(*)::bigint FROM message_attachment
+WHERE message_id = $1 AND moderation_status = 'pending'
+`
+
+// Сколько вложений сообщения ещё проверяется. Ноль означает, что сообщение
+// можно доставлять получателю.
+func (q *Queries) CountPendingAttachments(ctx context.Context, messageID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingAttachments, messageID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createAttachment = `-- name: CreateAttachment :one
-INSERT INTO message_attachment (message_id, url, file_name, mime_type, size_bytes, width, height)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, message_id, url, file_name, mime_type, size_bytes, width, height
+INSERT INTO message_attachment (
+  message_id, url, file_name, mime_type, size_bytes, width, height,
+  moderation_status, duration_seconds, thumbnail_url
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, message_id, url, file_name, mime_type, size_bytes, width, height,
+          moderation_status, duration_seconds, thumbnail_url
 `
 
 type CreateAttachmentParams struct {
-	MessageID int64
-	Url       string
-	FileName  *string
-	MimeType  *string
-	SizeBytes *int64
-	Width     *int32
-	Height    *int32
+	MessageID        int64
+	Url              string
+	FileName         *string
+	MimeType         *string
+	SizeBytes        *int64
+	Width            *int32
+	Height           *int32
+	ModerationStatus string
+	DurationSeconds  *int32
+	ThumbnailUrl     *string
 }
 
 type CreateAttachmentRow struct {
-	ID        int64
-	MessageID int64
-	Url       string
-	FileName  *string
-	MimeType  *string
-	SizeBytes *int64
-	Width     *int32
-	Height    *int32
+	ID               int64
+	MessageID        int64
+	Url              string
+	FileName         *string
+	MimeType         *string
+	SizeBytes        *int64
+	Width            *int32
+	Height           *int32
+	ModerationStatus string
+	DurationSeconds  *int32
+	ThumbnailUrl     *string
 }
 
 func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (CreateAttachmentRow, error) {
@@ -81,6 +197,9 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		arg.SizeBytes,
 		arg.Width,
 		arg.Height,
+		arg.ModerationStatus,
+		arg.DurationSeconds,
+		arg.ThumbnailUrl,
 	)
 	var i CreateAttachmentRow
 	err := row.Scan(
@@ -92,6 +211,9 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		&i.SizeBytes,
 		&i.Width,
 		&i.Height,
+		&i.ModerationStatus,
+		&i.DurationSeconds,
+		&i.ThumbnailUrl,
 	)
 	return i, err
 }
@@ -155,6 +277,17 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (C
 	return i, err
 }
 
+const deleteAttachment = `-- name: DeleteAttachment :exec
+DELETE FROM message_attachment WHERE id = $1
+`
+
+// Забракованное вложение удаляется целиком: держать строку незачем, а объект из
+// хранилища убирает usecase по ключу из задачи.
+func (q *Queries) DeleteAttachment(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteAttachment, id)
+	return err
+}
+
 const deleteMessageAttachments = `-- name: DeleteMessageAttachments :many
 DELETE FROM message_attachment
 WHERE message_id = $1
@@ -181,6 +314,37 @@ func (q *Queries) DeleteMessageAttachments(ctx context.Context, messageID int64)
 		return nil, err
 	}
 	return items, nil
+}
+
+const enqueueAttachmentModeration = `-- name: EnqueueAttachmentModeration :exec
+INSERT INTO attachment_moderation_job (
+  attachment_id, message_id, conversation_id, object_key, mime_type, kind
+)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (attachment_id) DO NOTHING
+`
+
+type EnqueueAttachmentModerationParams struct {
+	AttachmentID   int64
+	MessageID      int64
+	ConversationID int64
+	ObjectKey      string
+	MimeType       string
+	Kind           string
+}
+
+// Ставит вложение в очередь проверки. Повторная постановка того же вложения —
+// не ошибка (UNIQUE по attachment_id), а no-op: сообщение могли переотправить.
+func (q *Queries) EnqueueAttachmentModeration(ctx context.Context, arg EnqueueAttachmentModerationParams) error {
+	_, err := q.db.Exec(ctx, enqueueAttachmentModeration,
+		arg.AttachmentID,
+		arg.MessageID,
+		arg.ConversationID,
+		arg.ObjectKey,
+		arg.MimeType,
+		arg.Kind,
+	)
+	return err
 }
 
 const getConversationByParticipantsAndHouse = `-- name: GetConversationByParticipantsAndHouse :one
@@ -290,20 +454,24 @@ func (q *Queries) GetConversationMessages(ctx context.Context, arg GetConversati
 }
 
 const getMessageAttachments = `-- name: GetMessageAttachments :many
-SELECT id, message_id, url, file_name, mime_type, size_bytes, width, height
+SELECT id, message_id, url, file_name, mime_type, size_bytes, width, height,
+       moderation_status, duration_seconds, thumbnail_url
 FROM message_attachment
 WHERE message_id = ANY($1::bigint[])
 `
 
 type GetMessageAttachmentsRow struct {
-	ID        int64
-	MessageID int64
-	Url       string
-	FileName  *string
-	MimeType  *string
-	SizeBytes *int64
-	Width     *int32
-	Height    *int32
+	ID               int64
+	MessageID        int64
+	Url              string
+	FileName         *string
+	MimeType         *string
+	SizeBytes        *int64
+	Width            *int32
+	Height           *int32
+	ModerationStatus string
+	DurationSeconds  *int32
+	ThumbnailUrl     *string
 }
 
 func (q *Queries) GetMessageAttachments(ctx context.Context, dollar_1 []int64) ([]GetMessageAttachmentsRow, error) {
@@ -324,6 +492,9 @@ func (q *Queries) GetMessageAttachments(ctx context.Context, dollar_1 []int64) (
 			&i.SizeBytes,
 			&i.Width,
 			&i.Height,
+			&i.ModerationStatus,
+			&i.DurationSeconds,
+			&i.ThumbnailUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -333,6 +504,46 @@ func (q *Queries) GetMessageAttachments(ctx context.Context, dollar_1 []int64) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const getMessageByID = `-- name: GetMessageByID :one
+SELECT id, conversation_id, sender_id, kind, payload, body,
+       reply_to_message_id, edited_at, deleted_at, created_at
+FROM message
+WHERE id = $1
+`
+
+type GetMessageByIDRow struct {
+	ID               int64
+	ConversationID   int64
+	SenderID         *int32
+	Kind             string
+	Payload          []byte
+	Body             *string
+	ReplyToMessageID *int64
+	EditedAt         pgtype.Timestamptz
+	DeletedAt        pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+}
+
+// Одно сообщение целиком. Нужно воркеру модерации: после вердикта он публикует
+// сообщение, которое при отправке было скрыто от получателя.
+func (q *Queries) GetMessageByID(ctx context.Context, id int64) (GetMessageByIDRow, error) {
+	row := q.db.QueryRow(ctx, getMessageByID, id)
+	var i GetMessageByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.SenderID,
+		&i.Kind,
+		&i.Payload,
+		&i.Body,
+		&i.ReplyToMessageID,
+		&i.EditedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getMessageConversation = `-- name: GetMessageConversation :one
@@ -587,6 +798,27 @@ func (q *Queries) GetSuggestionContext(ctx context.Context, id int64) (GetSugges
 	return i, err
 }
 
+const getUserMediaStanding = `-- name: GetUserMediaStanding :one
+SELECT phone_verified_at, created_at::timestamptz AS created_at
+FROM "user"
+WHERE id = $1
+`
+
+type GetUserMediaStandingRow struct {
+	PhoneVerifiedAt pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+}
+
+// Данные аккаунта для гейта на видео: подтверждён ли телефон и когда создан.
+// created_at в таблице user хранится без таймзоны — приводим к timestamptz,
+// иначе сравнение возраста аккаунта зависит от таймзоны сессии.
+func (q *Queries) GetUserMediaStanding(ctx context.Context, id int32) (GetUserMediaStandingRow, error) {
+	row := q.db.QueryRow(ctx, getUserMediaStanding, id)
+	var i GetUserMediaStandingRow
+	err := row.Scan(&i.PhoneVerifiedAt, &i.CreatedAt)
+	return i, err
+}
+
 const isOtherParticipantDeleted = `-- name: IsOtherParticipantDeleted :one
 SELECT COALESCE(u.deleted, false)::boolean
 FROM conversation_participant cp
@@ -728,6 +960,82 @@ func (q *Queries) ListUserConversations(ctx context.Context, userID int32) ([]Li
 		return nil, err
 	}
 	return items, nil
+}
+
+const releaseStaleAttachmentJobs = `-- name: ReleaseStaleAttachmentJobs :exec
+UPDATE attachment_moderation_job
+SET status = 'queued',
+    last_error = 'processing lease expired',
+    updated_at = now()
+WHERE status = 'processing'
+  AND updated_at < now() - $1::interval
+`
+
+// Возвращает в очередь задачи, которые воркер взял и не завершил: процесс мог
+// умереть посреди нарезки кадров. Без этого задача залипает в processing
+// навсегда, а вложение — в pending, то есть получатель его никогда не увидит.
+func (q *Queries) ReleaseStaleAttachmentJobs(ctx context.Context, lease pgtype.Interval) error {
+	_, err := q.db.Exec(ctx, releaseStaleAttachmentJobs, lease)
+	return err
+}
+
+const retryAttachmentModeration = `-- name: RetryAttachmentModeration :exec
+UPDATE attachment_moderation_job
+SET status = 'queued',
+    next_attempt_at = $1,
+    last_error = $2,
+    updated_at = now()
+WHERE id = $3
+`
+
+type RetryAttachmentModerationParams struct {
+	NextAttemptAt pgtype.Timestamptz
+	LastError     *string
+	JobID         int64
+}
+
+// Инфраструктурный сбой (модель недоступна, ffmpeg упал): задача возвращается в
+// очередь с отложенной попыткой. Вложение остаётся pending, то есть не
+// публикуется — при недоступной проверке безопаснее задержать, чем пропустить.
+func (q *Queries) RetryAttachmentModeration(ctx context.Context, arg RetryAttachmentModerationParams) error {
+	_, err := q.db.Exec(ctx, retryAttachmentModeration, arg.NextAttemptAt, arg.LastError, arg.JobID)
+	return err
+}
+
+const setAttachmentModerationStatus = `-- name: SetAttachmentModerationStatus :exec
+UPDATE message_attachment
+SET moderation_status = $1
+WHERE id = $2
+`
+
+type SetAttachmentModerationStatusParams struct {
+	ModerationStatus string
+	AttachmentID     int64
+}
+
+func (q *Queries) SetAttachmentModerationStatus(ctx context.Context, arg SetAttachmentModerationStatusParams) error {
+	_, err := q.db.Exec(ctx, setAttachmentModerationStatus, arg.ModerationStatus, arg.AttachmentID)
+	return err
+}
+
+const setAttachmentVideoMeta = `-- name: SetAttachmentVideoMeta :exec
+UPDATE message_attachment
+SET duration_seconds = $1,
+    thumbnail_url = $2
+WHERE id = $3
+`
+
+type SetAttachmentVideoMetaParams struct {
+	DurationSeconds *int32
+	ThumbnailUrl    *string
+	AttachmentID    int64
+}
+
+// Длительность и обложка становятся известны только после probe на сервере:
+// заявленным клиентом значениям доверять нельзя.
+func (q *Queries) SetAttachmentVideoMeta(ctx context.Context, arg SetAttachmentVideoMetaParams) error {
+	_, err := q.db.Exec(ctx, setAttachmentVideoMeta, arg.DurationSeconds, arg.ThumbnailUrl, arg.AttachmentID)
+	return err
 }
 
 const softDeleteMessage = `-- name: SoftDeleteMessage :one

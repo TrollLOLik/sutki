@@ -55,6 +55,15 @@ interface ChatMessage {
 		size_bytes: number;
 		width?: number;
 		height?: number;
+		/**
+		 * pending — вложение ещё проверяется. Своё видно как «Проверяется»,
+		 * чужое сервер вообще не отдаёт до вердикта.
+		 */
+		moderation_status?: 'pending' | 'approved' | 'rejected';
+		/** Длительность видео в секундах. */
+		duration_seconds?: number;
+		/** Подписанная обложка видео: в ленте показываем её, а не плеер. */
+		thumbnail_url?: string;
 	}>;
 	/** id процитированного сообщения, если это ответ. */
 	reply_to_message_id?: number | null;

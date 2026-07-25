@@ -31,6 +31,9 @@ func (s *listingMediaStorageStub) StatObject(_ context.Context, key string) (dom
 func (s *listingMediaStorageStub) ReadObject(context.Context, string, int64) (domain.ObjectData, error) {
 	return domain.ObjectData{}, nil
 }
+func (s *listingMediaStorageStub) PutObject(context.Context, string, []byte, string) error {
+	return nil
+}
 func (s *listingMediaStorageStub) PublicURL(key string) string          { return "https://media.test/" + key }
 func (s *listingMediaStorageStub) Delete(context.Context, string) error { return nil }
 

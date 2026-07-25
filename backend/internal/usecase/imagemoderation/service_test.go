@@ -52,6 +52,9 @@ func (f *fakeStorage) PresignGet(context.Context, string, time.Duration) (string
 func (f *fakeStorage) StatObject(context.Context, string) (domain.ObjectInfo, error) {
 	return domain.ObjectInfo{}, errors.New("not implemented")
 }
+func (f *fakeStorage) PutObject(context.Context, string, []byte, string) error {
+	return errors.New("not implemented")
+}
 func (f *fakeStorage) PublicURL(key string) string          { return "https://example.invalid/" + key }
 func (f *fakeStorage) Delete(context.Context, string) error { return nil }
 

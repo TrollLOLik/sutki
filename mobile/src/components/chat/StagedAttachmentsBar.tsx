@@ -30,12 +30,32 @@ function StagedTile({ file, uploading, onRemove }: TileProps) {
 	const { palette } = useAppTheme();
 	const chatColors = useChatColors();
 	const isImage = file.mimeType.startsWith('image/');
+	const isVideo = file.mimeType.startsWith('video/');
 
 	return (
 		<View style={styles.tileWrap}>
 			<View style={[styles.tile, { backgroundColor: chatColors.panelRaised }]}>
 				{isImage ? (
 					<Image source={{ uri: file.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+				) : isVideo ? (
+					// У видео уже есть снятая на устройстве обложка — показываем её,
+					// иначе плитка выглядела бы как безымянный файл.
+					<>
+						{file.thumbnailUri ? (
+							<Image
+								source={{ uri: file.thumbnailUri }}
+								style={StyleSheet.absoluteFill}
+								contentFit="cover"
+							/>
+						) : (
+							<View style={styles.docTile}>
+								<Ionicons name="videocam" size={22} color={palette.primary} />
+							</View>
+						)}
+						<View style={styles.videoBadge}>
+							<Ionicons name="play" size={10} color="#fff" />
+						</View>
+					</>
 				) : (
 					<View style={styles.docTile}>
 						<Ionicons name="document-text" size={22} color={palette.primary} />
@@ -44,6 +64,19 @@ function StagedTile({ file, uploading, onRemove }: TileProps) {
 						</Text>
 					</View>
 				)}
+
+				{/* Сжатие идёт до загрузки: это два разных ожидания подряд, и
+				    показывать их одним индикатором было бы обманом. */}
+				{file.compressing ? (
+					<View style={[styles.progressVeil, { opacity: 0.7 }]}>
+						<Text style={styles.progressText}>
+							{file.compressProgress != null
+								? `${Math.round(file.compressProgress * 100)}%`
+								: '…'}
+						</Text>
+						<Text style={styles.compressLabel}>сжатие</Text>
+					</View>
+				) : null}
 
 				{/* Прогресс: затемнение убывает по мере загрузки, поэтому видно,
 				    какие файлы уже ушли, а какие ещё в очереди. */}
@@ -169,6 +202,22 @@ const styles = StyleSheet.create({
 		color: '#fff',
 		fontSize: 11,
 		fontWeight: '700',
+	},
+	compressLabel: {
+		color: 'rgba(255,255,255,0.85)',
+		fontSize: 8,
+		marginTop: 1,
+	},
+	videoBadge: {
+		position: 'absolute',
+		left: 4,
+		bottom: 4,
+		width: 18,
+		height: 18,
+		borderRadius: 9,
+		backgroundColor: 'rgba(0,0,0,0.6)',
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	removeButton: {
 		position: 'absolute',

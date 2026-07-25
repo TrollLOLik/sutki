@@ -18,6 +18,27 @@ type AdminStory struct {
 	UserID     *int32
 }
 
+type AttachmentModerationJob struct {
+	ID             int64
+	AttachmentID   int64
+	MessageID      int64
+	ConversationID int64
+	ObjectKey      string
+	MimeType       string
+	Kind           string
+	Status         string
+	Attempts       int32
+	NextAttemptAt  pgtype.Timestamptz
+	Decision       *string
+	Category       *string
+	Reason         *string
+	Confidence     *float32
+	FramesChecked  *int32
+	LastError      *string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type AuthCode struct {
 	Channel          string
 	Target           string
@@ -253,15 +274,18 @@ type Message struct {
 }
 
 type MessageAttachment struct {
-	ID        int64
-	MessageID int64
-	Url       string
-	FileName  *string
-	MimeType  *string
-	SizeBytes *int64
-	Width     *int32
-	Height    *int32
-	CreatedAt pgtype.Timestamptz
+	ID               int64
+	MessageID        int64
+	Url              string
+	FileName         *string
+	MimeType         *string
+	SizeBytes        *int64
+	Width            *int32
+	Height           *int32
+	CreatedAt        pgtype.Timestamptz
+	ModerationStatus string
+	DurationSeconds  *int32
+	ThumbnailUrl     *string
 }
 
 type ModerationVerdict struct {

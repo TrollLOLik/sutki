@@ -71,6 +71,30 @@ type ConversationParticipant struct {
 	LastReadMessageID int64
 }
 
+// Attachment moderation states.
+//
+// Video cannot be checked inside the send request: sampling frames plus a vision
+// call per frame takes tens of seconds. So an attachment is stored first and
+// verified after — the sender sees "Проверяется", the recipient sees nothing
+// until the verdict lands.
+const (
+	AttachmentModerationPending  = "pending"
+	AttachmentModerationApproved = "approved"
+	AttachmentModerationRejected = "rejected"
+)
+
+// Attachment kinds for the moderation queue: how the file has to be inspected.
+//
+// An image goes to the model as-is. Video and animated images are sampled into
+// frames first — a vision model shown an animated GIF effectively looks at its
+// first frame only, which is exactly how "safe cover, violation at second three"
+// used to slip through.
+const (
+	AttachmentKindImage    = "image"
+	AttachmentKindVideo    = "video"
+	AttachmentKindAnimated = "animated"
+)
+
 // MessageAttachment represents a file or image attachment linked to a message
 type MessageAttachment struct {
 	ID        int64     `json:"id"`
@@ -82,6 +106,41 @@ type MessageAttachment struct {
 	Width     *int32    `json:"width,omitempty"`
 	Height    *int32    `json:"height,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// ModerationStatus is pending/approved/rejected. Clients render a
+	// "Проверяется" placeholder for pending attachments of their own messages.
+	ModerationStatus string `json:"moderation_status"`
+	// DurationSeconds is set for video only.
+	DurationSeconds *int32 `json:"duration_seconds,omitempty"`
+	// ThumbnailURL is a presigned cover image for video. The feed shows this
+	// still with a play button; the player opens on tap. Rendering video inline
+	// would put several decoders on screen and destroy scrolling.
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+}
+
+// IsPendingModeration reports whether the attachment is still being checked.
+func (a MessageAttachment) IsPendingModeration() bool {
+	return a.ModerationStatus == AttachmentModerationPending
+}
+
+// UserMediaStanding is the account data behind the video upload gate.
+type UserMediaStanding struct {
+	PhoneVerifiedAt *time.Time
+	CreatedAt       time.Time
+}
+
+// AttachmentModerationJob is one queued attachment check.
+//
+// One job per attachment rather than per message: in a ten-photo album each
+// check is independent, and one failure must not retry the other nine.
+type AttachmentModerationJob struct {
+	ID             int64
+	AttachmentID   int64
+	MessageID      int64
+	ConversationID int64
+	ObjectKey      string
+	MimeType       string
+	Kind           string
+	Attempts       int32
 }
 
 // MessageQuote is the compact form of a quoted message, embedded into every

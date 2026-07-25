@@ -72,6 +72,9 @@ module.exports = {
         },
       ],
       "expo-secure-store",
+      // Сжатие видео на устройстве перед отправкой в чат. Плагин нужен, чтобы
+      // нативная часть попала в сборку: без него compress падает в рантайме.
+      "react-native-compressor",
       [
         "expo-build-properties",
         {

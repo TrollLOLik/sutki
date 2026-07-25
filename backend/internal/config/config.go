@@ -99,6 +99,14 @@ type Config struct {
 	LLMChatSuggestModel      string
 	LLMTimeout               time.Duration
 
+	// Media processing for chat attachments. FFmpeg lives in the worker image
+	// only: the API image is distroless and cannot host it.
+	FFmpegPath      string
+	FFprobePath     string
+	FFmpegTimeout   time.Duration
+	MediaWorkDir    string
+	MaxVideoSeconds int
+
 	// Centrifugo config
 	CentrifugoURL        string
 	CentrifugoKey        string
@@ -177,6 +185,17 @@ func Load() (Config, error) {
 		// генерацию описаний. Фоллбэк — общая LLM_MODEL.
 		LLMChatSuggestModel: getEnv("LLM_CHAT_SUGGEST_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
 		LLMTimeout:          getDuration("LLM_TIMEOUT", 15*time.Second),
+
+		FFmpegPath:  getEnv("FFMPEG_PATH", "ffmpeg"),
+		FFprobePath: getEnv("FFPROBE_PATH", "ffprobe"),
+		// One ffmpeg invocation. Measured cost on a 30s 720p clip is ~0.5s, so a
+		// minute is a generous ceiling that still stops a malformed file from
+		// pinning a core on a two-core box.
+		FFmpegTimeout: getDuration("FFMPEG_TIMEOUT", 60*time.Second),
+		// Should point at a size-capped tmpfs: frames and downloaded videos are
+		// transient, and a burst must not be able to fill the disk.
+		MediaWorkDir:    getEnv("MEDIA_WORK_DIR", ""),
+		MaxVideoSeconds: getInt("MAX_VIDEO_SECONDS", 60),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
 		CentrifugoKey:        os.Getenv("CENTRIFUGO_API_KEY"),

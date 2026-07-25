@@ -20,10 +20,17 @@ type Querier interface {
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
 	CheckParticipantExists(ctx context.Context, arg CheckParticipantExistsParams) (bool, error)
 	CheckUserActiveBookings(ctx context.Context, userID *int32) (int64, error)
+	// Отбор пачки задач. FOR UPDATE SKIP LOCKED — чтобы несколько воркеров могли
+	// работать параллельно, не разбирая одну задачу дважды.
+	ClaimAttachmentModerationJobs(ctx context.Context, batchSize int32) ([]ClaimAttachmentModerationJobsRow, error)
+	CompleteAttachmentModeration(ctx context.Context, arg CompleteAttachmentModerationParams) error
 	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
 	CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
+	// Сколько вложений сообщения ещё проверяется. Ноль означает, что сообщение
+	// можно доставлять получателю.
+	CountPendingAttachments(ctx context.Context, messageID int64) (int64, error)
 	CountRequestsByGuest(ctx context.Context, arg CountRequestsByGuestParams) (int64, error)
 	CountRequestsByUser(ctx context.Context, arg CountRequestsByUserParams) (int64, error)
 	CountRequestsForOwner(ctx context.Context, ownerID int32) (int64, error)
@@ -42,6 +49,9 @@ type Querier interface {
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	// Забракованное вложение удаляется целиком: держать строку незачем, а объект из
+	// хранилища убирает usecase по ключу из задачи.
+	DeleteAttachment(ctx context.Context, id int64) error
 	DeleteAuthCode(ctx context.Context, arg DeleteAuthCodeParams) error
 	DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
@@ -53,6 +63,9 @@ type Querier interface {
 	DeleteUserDeviceTokens(ctx context.Context, userID int32) error
 	DeleteUserFavorites(ctx context.Context, userID int32) error
 	DeleteUserRefreshTokens(ctx context.Context, userID int32) error
+	// Ставит вложение в очередь проверки. Повторная постановка того же вложения —
+	// не ошибка (UNIQUE по attachment_id), а no-op: сообщение могли переотправить.
+	EnqueueAttachmentModeration(ctx context.Context, arg EnqueueAttachmentModerationParams) error
 	GetAuthCode(ctx context.Context, arg GetAuthCodeParams) (AuthCode, error)
 	// 1. Поиск диалога привязанного к объекту (house_id IS NOT NULL)
 	GetConversationByParticipantsAndHouse(ctx context.Context, arg GetConversationByParticipantsAndHouseParams) (int64, error)
@@ -62,6 +75,9 @@ type Querier interface {
 	GetHouseByID(ctx context.Context, id int32) (GetHouseByIDRow, error)
 	GetHouseForBooking(ctx context.Context, id int32) (GetHouseForBookingRow, error)
 	GetMessageAttachments(ctx context.Context, dollar_1 []int64) ([]GetMessageAttachmentsRow, error)
+	// Одно сообщение целиком. Нужно воркеру модерации: после вердикта он публикует
+	// сообщение, которое при отправке было скрыто от получателя.
+	GetMessageByID(ctx context.Context, id int64) (GetMessageByIDRow, error)
 	// Беседа процитированного сообщения — для проверки, что реплай не ссылается на
 	// чужой диалог.
 	GetMessageConversation(ctx context.Context, id int64) (int64, error)
@@ -91,6 +107,10 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email *string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error)
 	GetUserByPhone(ctx context.Context, phoneNormalized *string) (GetUserByPhoneRow, error)
+	// Данные аккаунта для гейта на видео: подтверждён ли телефон и когда создан.
+	// created_at в таблице user хранится без таймзоны — приводим к timestamptz,
+	// иначе сравнение возраста аккаунта зависит от таймзоны сессии.
+	GetUserMediaStanding(ctx context.Context, id int32) (GetUserMediaStandingRow, error)
 	HouseExists(ctx context.Context, id int32) (bool, error)
 	// Reports whether the house already has a confirmed or active request overlapping
 	// the requested [range_start, range_end) date range (half-open: end_date = checkout,
@@ -125,12 +145,24 @@ type Querier interface {
 	// Тянет последнее сообщение с Фолбэком для медиа-вложений (превью в списке диалогов)
 	ListUserConversations(ctx context.Context, userID int32) ([]ListUserConversationsRow, error)
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
+	// Возвращает в очередь задачи, которые воркер взял и не завершил: процесс мог
+	// умереть посреди нарезки кадров. Без этого задача залипает в processing
+	// навсегда, а вложение — в pending, то есть получатель его никогда не увидит.
+	ReleaseStaleAttachmentJobs(ctx context.Context, lease pgtype.Interval) error
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
+	// Инфраструктурный сбой (модель недоступна, ffmpeg упал): задача возвращается в
+	// очередь с отложенной попыткой. Вложение остаётся pending, то есть не
+	// публикуется — при недоступной проверке безопаснее задержать, чем пропустить.
+	RetryAttachmentModeration(ctx context.Context, arg RetryAttachmentModerationParams) error
 	ReviewSummaryByHouse(ctx context.Context, houseID int32) (ReviewSummaryByHouseRow, error)
 	ReviewSummaryForHost(ctx context.Context, ownerID int32) (ReviewSummaryForHostRow, error)
 	RevokeAllOtherRefreshTokens(ctx context.Context, arg RevokeAllOtherRefreshTokensParams) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
+	SetAttachmentModerationStatus(ctx context.Context, arg SetAttachmentModerationStatusParams) error
+	// Длительность и обложка становятся известны только после probe на сервере:
+	// заявленным клиентом значениям доверять нельзя.
+	SetAttachmentVideoMeta(ctx context.Context, arg SetAttachmentVideoMetaParams) error
 	SoftDeleteHousePhotos(ctx context.Context, houseID *int32) error
 	// Мягкое удаление: строка остаётся (иначе порвутся цитаты в ответах и
 	// разъедется last_read_message_id), но тело обнуляется, чтобы удалённый текст

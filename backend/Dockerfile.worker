@@ -1,0 +1,45 @@
+# Media worker image: the same binary as the API, but on a base that can host
+# ffmpeg.
+#
+# Why a separate image at all: the API runs on distroless/static, which has no
+# package manager and no shell, so ffmpeg cannot be installed there. Rather than
+# giving the whole API a fatter base (and a larger attack surface) just for frame
+# extraction, only this image carries the tooling.
+#
+# The worker shares the API's entrypoint on purpose: the moderation loop starts
+# from the same main and is idempotent thanks to FOR UPDATE SKIP LOCKED, so
+# running it alongside the API needs no separate command. Set MEDIA_WORKER_ONLY
+# in compose if the HTTP listener should stay idle here.
+
+FROM golang:1.26.4-alpine AS build
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/titop-arenda-api ./cmd/api
+
+FROM alpine:3.21
+
+# ffmpeg brings ffprobe with it. tini reaps zombie ffmpeg processes: every job
+# spawns subprocesses, and without an init the container accumulates defunct
+# entries until it hits the pid limit.
+RUN apk add --no-cache ffmpeg tini ca-certificates \
+    && adduser -D -u 65532 nonroot
+
+# Frames and downloaded videos are transient. compose mounts a size-capped
+# tmpfs here so a burst of uploads cannot fill the host disk, and the files never
+# touch persistent storage.
+RUN mkdir -p /var/tmp/media-work && chown nonroot:nonroot /var/tmp/media-work
+
+COPY --from=build /out/titop-arenda-api /titop-arenda-api
+
+USER nonroot
+
+ENV MEDIA_WORK_DIR=/var/tmp/media-work \
+    FFMPEG_PATH=/usr/bin/ffmpeg \
+    FFPROBE_PATH=/usr/bin/ffprobe
+
+ENTRYPOINT ["/sbin/tini", "--", "/titop-arenda-api"]

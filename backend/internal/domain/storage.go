@@ -30,6 +30,10 @@ type FileStorage interface {
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 	StatObject(ctx context.Context, key string) (ObjectInfo, error)
 	ReadObject(ctx context.Context, key string, maxBytes int64) (ObjectData, error)
+	// PutObject writes bytes produced server-side (video covers, moderation
+	// frames). Client uploads still go through PresignUpload — this is only for
+	// content the backend generates itself.
+	PutObject(ctx context.Context, key string, data []byte, contentType string) error
 	PublicURL(key string) string
 	Delete(ctx context.Context, key string) error
 }

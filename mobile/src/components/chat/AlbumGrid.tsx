@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 
-import type { ChatAttachment } from './types';
+import { type ChatAttachment, isPendingAttachment } from './types';
 
 /**
  * Предпочтительная ширина сетки. На планшете дальше не растём: сетка во всю
@@ -52,6 +52,10 @@ function Tile({ attachment, width, height, overflowCount, onPress }: TileProps) 
 			}
 		>
 			<Image source={{ uri: attachment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+			{/* Проверяется — плитка затемняется. Показываем на каждой, а не одну на
+			    сетку: в альбоме файлы проверяются независимо, и часть может быть уже
+			    одобрена. */}
+			{isPendingAttachment(attachment) ? <View style={styles.pending} /> : null}
 			{overflowCount ? (
 				<View style={styles.overflow}>
 					<Text style={styles.overflowText}>+{overflowCount}</Text>
@@ -144,6 +148,14 @@ const styles = StyleSheet.create({
 	tile: {
 		overflow: 'hidden',
 		backgroundColor: 'rgba(18,24,32,0.06)',
+	},
+	pending: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0,0,0,0.45)',
 	},
 	overflow: {
 		position: 'absolute',

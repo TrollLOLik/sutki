@@ -63,6 +63,44 @@ services:
         condition: service_started
     mem_limit: 512m
 
+  # Media worker: frame extraction for chat video and animated images.
+  #
+  # Runs the same binary as api, on an alpine base that can host ffmpeg (the api
+  # image is distroless and cannot). Sizing is deliberate on a 4 GB / 2 core box
+  # where postgres, api, centrifugo and glitchtip already reserve ~2.7 GB:
+  #
+  #   mem_limit 256m — measured peak for extracting 8 frames from a 30s 720p clip
+  #                    is 47 MB, so this is roughly 5x headroom.
+  #   cpus 0.75      — ffmpeg is CPU-bound and the API shares these two cores.
+  #                    Capping it means a burst of uploads slows moderation, not
+  #                    the chat itself.
+  #
+  # The worker claims jobs with FOR UPDATE SKIP LOCKED, so running it next to api
+  # (which also starts the loop) is safe — no job is processed twice.
+  media-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      # No HTTP listener needed here; the loopback bind keeps it unreachable.
+      HTTP_ADDR: 127.0.0.1:8081
+      DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable
+      CENTRIFUGO_URL: http://centrifugo:8000
+    # Frames and downloaded videos live here and nowhere else: tmpfs keeps them
+    # off the 50 GB disk and the size cap makes a burst fail loudly instead of
+    # filling the filesystem.
+    tmpfs:
+      - /var/tmp/media-work:size=512m,mode=1777
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      centrifugo:
+        condition: service_started
+    mem_limit: 256m
+    cpus: 0.75
+
   centrifugo:
     image: centrifugo/centrifugo:v6
     restart: unless-stopped

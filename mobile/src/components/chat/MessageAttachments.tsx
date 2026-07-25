@@ -5,7 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '@/theme/useAppTheme';
 import { AlbumGrid } from './AlbumGrid';
-import { type ChatAttachment, isImageAttachment, formatFileSize } from './types';
+import { VideoAttachment } from './VideoAttachment';
+import {
+	type ChatAttachment,
+	isImageAttachment,
+	isVideoAttachment,
+	isPendingAttachment,
+	formatFileSize,
+} from './types';
 
 /** Ширина одиночного изображения в пузыре. */
 const SINGLE_IMAGE_WIDTH = 210;
@@ -27,21 +34,41 @@ export function ImageAttachment({ attachment, onPress }: ImageAttachmentProps) {
 		attachment.width && attachment.height
 			? (attachment.height / attachment.width) * SINGLE_IMAGE_WIDTH
 			: FALLBACK_IMAGE_HEIGHT;
+	const pending = isPendingAttachment(attachment);
 
 	return (
 		<TouchableOpacity
 			activeOpacity={0.9}
 			onPress={() => onPress(attachment)}
+			disabled={pending}
 			style={styles.imageAttachment}
 			accessibilityRole="imagebutton"
-			accessibilityLabel="Открыть изображение"
+			accessibilityLabel={pending ? 'Изображение проверяется' : 'Открыть изображение'}
 		>
 			<Image
 				source={{ uri: attachment.url }}
 				style={{ width: SINGLE_IMAGE_WIDTH, height }}
 				contentFit="cover"
 			/>
+			{/* Без этой плашки отправитель не понимает, почему сообщение «не дошло»:
+			    получателю оно действительно не доставлено до вердикта. */}
+			{pending ? <PendingOverlay /> : null}
 		</TouchableOpacity>
+	);
+}
+
+/**
+ * Плашка «Проверяется» поверх вложения на модерации.
+ *
+ * Встречается только на своих сообщениях: чужие непроверенные вложения сервер не
+ * отдаёт вовсе.
+ */
+export function PendingOverlay() {
+	return (
+		<View style={styles.pendingOverlay}>
+			<ActivityIndicator size="small" color="#fff" />
+			<Text style={styles.pendingText}>Проверяется</Text>
+		</View>
 	);
 }
 
@@ -106,6 +133,12 @@ interface MessageAttachmentsProps {
 	downloadingAttachmentID: number | null;
 	onImagePress: (attachment: ChatAttachment) => void;
 	onDocumentPress: (attachment: ChatAttachment) => void;
+	onVideoPress: (attachment: ChatAttachment) => void;
+	/**
+	 * Локальные обложки по id вложения. Нужны, пока сервер не сгенерировал свои:
+	 * он делает это только после модерации, а показать что-то надо сразу.
+	 */
+	localThumbnails?: Record<number, string>;
 }
 
 /**
@@ -124,16 +157,24 @@ export function MessageAttachments({
 	downloadingAttachmentID,
 	onImagePress,
 	onDocumentPress,
+	onVideoPress,
+	localThumbnails,
 }: MessageAttachmentsProps) {
 	const isBusy = downloadingAttachmentID != null;
 
-	const { images, documents } = React.useMemo(() => {
+	// Три группы вместо двух: видео показывается обложкой с Play, и в сетку
+	// альбома не идёт — обрезать кадр в квадрат и терять кнопку воспроизведения
+	// бессмысленно.
+	const { images, videos, documents } = React.useMemo(() => {
 		const images: ChatAttachment[] = [];
+		const videos: ChatAttachment[] = [];
 		const documents: ChatAttachment[] = [];
 		for (const att of attachments) {
-			(isImageAttachment(att) ? images : documents).push(att);
+			if (isImageAttachment(att)) images.push(att);
+			else if (isVideoAttachment(att)) videos.push(att);
+			else documents.push(att);
 		}
-		return { images, documents };
+		return { images, videos, documents };
 	}, [attachments]);
 
 	return (
@@ -143,6 +184,15 @@ export function MessageAttachments({
 			) : images.length > 1 ? (
 				<AlbumGrid images={images} onPress={onImagePress} />
 			) : null}
+
+			{videos.map((att) => (
+				<VideoAttachment
+					key={att.id}
+					attachment={att}
+					localThumbnailUri={localThumbnails?.[att.id]}
+					onPress={onVideoPress}
+				/>
+			))}
 
 			{documents.map((att) => (
 				<DocumentAttachment
@@ -163,5 +213,21 @@ const styles = StyleSheet.create({
 		marginBottom: 2,
 		borderRadius: 18,
 		overflow: 'hidden',
+	},
+	pendingOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0,0,0,0.45)',
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	pendingText: {
+		marginTop: 6,
+		color: '#fff',
+		fontSize: 11,
+		fontWeight: '600',
 	},
 });
