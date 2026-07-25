@@ -2,6 +2,9 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
+	withDelay,
+	withSequence,
+	withTiming,
 	useAnimatedStyle,
 	useSharedValue,
 	withSpring,
@@ -93,9 +96,25 @@ export const MessageBubble = React.memo(function MessageBubble({
 		!isDeleted && !!message.attachments?.some((att) => isImageAttachment(att) || isVideoAttachment(att));
 	const isRead = otherLastReadMessageID != null && message.id <= otherLastReadMessageID;
 	const holdScale = useSharedValue(1);
+	const highlightProgress = useSharedValue(0);
 	const holdStyle = useAnimatedStyle(() => ({
 		transform: [{ scale: holdScale.value }],
 	}));
+	const highlightStyle = useAnimatedStyle(() => ({
+		opacity: highlightProgress.value,
+	}));
+
+	React.useEffect(() => {
+		if (!highlighted) {
+			highlightProgress.value = withTiming(0, { duration: 160 });
+			return;
+		}
+
+		highlightProgress.value = withSequence(
+			withTiming(1, { duration: 180 }),
+			withDelay(520, withTiming(0, { duration: 460 })),
+		);
+	}, [highlighted, highlightProgress]);
 
 	const handleReply = React.useCallback(() => onReply(message), [message, onReply]);
 	const handleQuotePress = React.useCallback(() => {
@@ -250,7 +269,15 @@ export const MessageBubble = React.memo(function MessageBubble({
 	);
 
 	return (
-		<View style={highlighted ? [styles.highlight, { backgroundColor: palette.primaryLight }] : undefined}>
+		<View>
+			<Animated.View
+				pointerEvents="none"
+				style={[
+					styles.highlightOverlay,
+					{ backgroundColor: palette.primaryLight, borderColor: palette.primary },
+					highlightStyle,
+				]}
+			/>
 			<SwipeToReply onReply={handleReply} disabled={!canInteract}>
 				{interactive}
 			</SwipeToReply>
@@ -291,8 +318,13 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 6,
 		paddingVertical: 3,
 	},
-	highlight: {
-		borderRadius: 16,
-		marginHorizontal: 8,
+	highlightOverlay: {
+		position: 'absolute',
+		top: 0,
+		bottom: 0,
+		left: 8,
+		right: 8,
+		borderRadius: 22,
+		borderWidth: 1,
 	},
 });
