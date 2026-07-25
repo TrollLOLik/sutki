@@ -26,11 +26,11 @@ import {
 	useMessages,
 	useSendMessage,
 	useReadMessages,
-	presignUpload,
 	useConversations,
 	useConversationPresence,
 	publishTyping,
 	replaceMessageInCache,
+	type AttachmentInput,
 } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
@@ -44,9 +44,10 @@ import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
+import { StagedAttachmentsBar } from '@/components/chat/StagedAttachmentsBar';
 import { useChatColors } from '@/components/chat/useChatColors';
 import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
-import { useChatUploads, type PickedFile } from '@/hooks/useChatUploads';
+import { useChatUploads, MAX_ATTACHMENTS_PER_MESSAGE } from '@/hooks/useChatUploads';
 import { hapticTapLight } from '@/lib/haptics';
 import Animated, {
 	Easing,
@@ -88,10 +89,14 @@ export default function ChatDialogScreen() {
 	// что делать с готовыми метаданными (сейчас — отправить сообщением).
 	const {
 		uploading,
+		staged,
+		addStaged,
+		removeStaged,
+		clearStaged,
+		uploadStaged,
 		pickImages,
 		takePhoto: takePhotoFromCamera,
 		pickDocument: pickDocumentFile,
-		uploadSingle,
 	} = useChatUploads();
 	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
@@ -531,27 +536,65 @@ export default function ChatDialogScreen() {
 		};
 	}, [centrifuge, socketStatus, convID]);
 
+	/**
+	 * Отправка сообщения: текст, альбом вложений или и то и другое.
+	 *
+	 * Раньше это были два независимых пути — текст уходил отсюда, а файл
+	 * отправлялся отдельным сообщением сразу после выбора в галерее. Теперь путь
+	 * один, поэтому подпись к фото это просто body того же сообщения: отдельное
+	 * поле в схеме не понадобилось.
+	 */
 	const handleSend = async () => {
 		const text = inputText.trim();
-		if (!text) return;
+		const hasAttachments = staged.length > 0;
+		if (!text && !hasAttachments) return;
 
 		stopOwnTyping();
-		setInputText('');
 
-		// Снимок ответа: поле сбрасывается сразу, а отправка асинхронная, поэтому
-		// к моменту запроса состояние может уже смениться.
+		// Снимки состояния: поля сбрасываются сразу, а отправка асинхронная,
+		// поэтому к моменту запроса состояние может уже смениться.
 		const replyTarget = replyTo;
-		setReplyTo(null);
+		const stagedSnapshot = staged;
 
-		// Create optimistic message
+		// Вложения сначала загружаем и только потом чистим композер: при сбое
+		// пачка должна остаться на месте, чтобы её можно было отправить снова.
+		let attachments: AttachmentInput[] = [];
+		if (hasAttachments) {
+			const uploaded = await uploadStaged();
+			if (!uploaded) return; // сообщение об ошибке показал сам хук
+			attachments = uploaded;
+		}
+
+		setInputText('');
+		setReplyTo(null);
+		clearStaged();
+
+		// Оптимистичное сообщение: показываем локальные превью до ответа сервера,
+		// иначе альбом появлялся бы в ленте только после загрузки всех файлов.
 		const tempId = -Date.now();
 		const optimisticMsg: ChatMessage = {
 			id: tempId,
 			conversation_id: convID,
 			sender_id: sessionUser?.id ?? 0,
-			body: text,
+			body: text || undefined,
 			created_at: new Date().toISOString(),
 			pending: true,
+			...(hasAttachments
+				? {
+						attachments: stagedSnapshot.map((file, index) => ({
+							// Отрицательные id не пересекаются с серверными и служат
+							// только ключами списка до подмены реальным сообщением.
+							id: -(index + 1),
+							message_id: tempId,
+							url: file.uri,
+							file_name: file.fileName,
+							mime_type: file.mimeType,
+							size_bytes: file.size,
+							width: file.width,
+							height: file.height,
+						})),
+					}
+				: {}),
 			// Цитату собираем локально из уже загруженного сообщения: сервер
 			// пришлёт свою версию в ответе, но пузырь должен показать её сразу.
 			...(replyTarget
@@ -582,8 +625,9 @@ export default function ChatDialogScreen() {
 
 		try {
 			const saved = await performSendMessage({
-				body: text,
+				body: text || undefined,
 				reply_to_message_id: replyTarget?.id,
+				attachments: hasAttachments ? attachments : undefined,
 			});
 
 			// Replace optimistic message in cache with real database response
@@ -608,6 +652,17 @@ export default function ChatDialogScreen() {
 					),
 				};
 			});
+
+			// Модерация могла отклонить всю пачку целиком. Возвращаем файлы в
+			// композер, чтобы выбор пользователя не пропал вместе с ошибкой.
+			if (hasAttachments) {
+				Alert.alert(
+					'Сообщение не отправлено',
+					err instanceof ApiError
+						? err.message
+						: 'Не удалось отправить вложения. Попробуйте ещё раз.',
+				);
+			}
 		}
 	};
 
@@ -615,41 +670,25 @@ export default function ChatDialogScreen() {
 		setIsAttachMenuVisible(true);
 	};
 
-	/**
-	 * Загружает файл и отправляет его отдельным сообщением.
-	 *
-	 * Текущее поведение: один файл — одно сообщение, отправка сразу после
-	 * выбора. Альбомы со стадией подготовки и подписью добавляет этап A3.
-	 */
-	const uploadAndSendFile = async (file: PickedFile) => {
-		const attachment = await uploadSingle(file);
-		if (!attachment) return;
-		try {
-			await performSendMessage({ attachments: [attachment] });
-		} catch (err) {
-			console.error('[Chat] Failed to send attachment message:', err);
-			Alert.alert(
-				'Ошибка отправки',
-				err instanceof ApiError
-					? err.message
-					: 'Файл загружен, но сообщение не отправлено. Попробуйте ещё раз.',
-			);
-		}
-	};
+	// Выбранные файлы попадают в стадию подготовки, а не улетают сразу: только
+	// так к ним можно добавить подпись и собрать из них альбом. Отправка — по
+	// кнопке в композере, общая с текстом.
+
+	const remainingSlots = MAX_ATTACHMENTS_PER_MESSAGE - staged.length;
 
 	const pickImage = async () => {
-		const [file] = await pickImages();
-		if (file) await uploadAndSendFile(file);
+		if (remainingSlots <= 0) return;
+		addStaged(await pickImages(remainingSlots));
 	};
 
 	const takePhoto = async () => {
-		const [file] = await takePhotoFromCamera();
-		if (file) await uploadAndSendFile(file);
+		if (remainingSlots <= 0) return;
+		addStaged(await takePhotoFromCamera());
 	};
 
 	const pickDocument = async () => {
-		const [file] = await pickDocumentFile();
-		if (file) await uploadAndSendFile(file);
+		if (remainingSlots <= 0) return;
+		addStaged(await pickDocumentFile());
 	};
 
 	const downloadAttachment = async (attachment: ChatAttachment) => {
@@ -733,6 +772,9 @@ export default function ChatDialogScreen() {
 	};
 
 	const isInputEmpty = !inputText.trim();
+	// Отправлять можно и одни вложения без подписи, поэтому кнопка смотрит на
+	// оба источника, а не только на текст.
+	const canSend = (!isInputEmpty || staged.length > 0) && !uploading;
 	const isDeletedUser = !!activeConv?.other_user_deleted;
 	const conversationTitle = activeConv
 		? [activeConv.other_user_name, activeConv.other_user_surname]
@@ -1010,6 +1052,14 @@ export default function ChatDialogScreen() {
 						className="border-t"
 					>
 					{/* Quick replies for the owner in fresh dialogs */}
+					<StagedAttachmentsBar
+						files={staged}
+						uploading={uploading}
+						onRemove={removeStaged}
+						onAddMore={handlePickMedia}
+						canAddMore={staged.length < MAX_ATTACHMENTS_PER_MESSAGE}
+					/>
+
 					{replyTo ? (
 						<ReplyPreviewBar
 							message={replyTo}
@@ -1057,7 +1107,7 @@ export default function ChatDialogScreen() {
 						{/* Input and emoji share one continuous material. */}
 						<View style={{ backgroundColor: chatColors.panelRaised }} className="flex-1 flex-row items-center rounded-[22px] min-h-11">
 							<TextInput
-								placeholder="Сообщение..."
+								placeholder={staged.length > 0 ? 'Добавьте подпись...' : 'Сообщение...'}
 								placeholderTextColor={palette.inkMuted}
 								value={inputText}
 								onChangeText={handleInputChange}
@@ -1072,10 +1122,10 @@ export default function ChatDialogScreen() {
 							icon="arrow-up"
 							iconSize={20}
 							size={44}
-							tone={isInputEmpty ? 'neutral' : 'primary'}
-							filled={!isInputEmpty}
+							tone={canSend ? 'primary' : 'neutral'}
+							filled={canSend}
 							onPress={handleSend}
-							disabled={isInputEmpty}
+							disabled={!canSend}
 							style={{ marginLeft: 8 }}
 						/>
 						</MaterialSurface>

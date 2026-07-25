@@ -8,7 +8,12 @@ import { useChatColors } from './useChatColors';
 import { MessageAttachments } from './MessageAttachments';
 import { QuotedMessage } from './QuotedMessage';
 import { SwipeToReply } from './SwipeToReply';
-import { type ChatAttachment, isImageOnlyMessage, formatMessageTime } from './types';
+import {
+	type ChatAttachment,
+	isImageAttachment,
+	isImageOnlyMessage,
+	formatMessageTime,
+} from './types';
 
 interface MessageBubbleProps {
 	message: ChatMessage;
@@ -66,6 +71,13 @@ export const MessageBubble = React.memo(function MessageBubble({
 	const isEdited = !!message.edited_at;
 	// Удалённое сообщение не может быть «только картинками»: вложения снесены.
 	const imageOnly = !isDeleted && isImageOnlyMessage(message);
+	/**
+	 * В сообщении есть изображения — фото или сетка альбома идут в край пузыря,
+	 * без внутренних отступов. Подпись под ними получает отступы отдельно, иначе
+	 * сетка оказывается в рамке из фона пузыря и выглядит вставленной, а не
+	 * частью сообщения.
+	 */
+	const mediaEdgeToEdge = !isDeleted && !!message.attachments?.some(isImageAttachment);
 	const isRead = otherLastReadMessageID != null && message.id <= otherLastReadMessageID;
 
 	const handleReply = React.useCallback(() => onReply(message), [message, onReply]);
@@ -107,18 +119,20 @@ export const MessageBubble = React.memo(function MessageBubble({
 								? palette.primary
 								: chatColors.incoming,
 						borderColor: imageOnly || isMine ? 'transparent' : chatColors.softBorder,
-						paddingHorizontal: imageOnly ? 0 : 15,
-						paddingVertical: imageOnly ? 0 : 11,
+						paddingHorizontal: mediaEdgeToEdge ? 0 : 15,
+						paddingVertical: mediaEdgeToEdge ? 0 : 11,
 					},
 				]}
 			>
 				{message.reply_to ? (
-					<QuotedMessage
-						quote={message.reply_to}
-						onDark={isMine && !imageOnly}
-						authorName={quoteAuthorName(message.reply_to.sender_id)}
-						onPress={handleQuotePress}
-					/>
+					<View style={mediaEdgeToEdge ? styles.mediaInset : undefined}>
+						<QuotedMessage
+							quote={message.reply_to}
+							onDark={isMine && !imageOnly}
+							authorName={quoteAuthorName(message.reply_to.sender_id)}
+							onPress={handleQuotePress}
+						/>
+					</View>
 				) : null}
 
 				{message.attachments?.length ? (
@@ -132,14 +146,23 @@ export const MessageBubble = React.memo(function MessageBubble({
 				) : null}
 
 				{message.body ? (
-					<Text className={`text-[15px] leading-[20px] ${isMine ? 'text-white' : 'text-ink'}`}>
+					<Text
+						className={`text-[15px] leading-[20px] ${isMine ? 'text-white' : 'text-ink'}`}
+						style={mediaEdgeToEdge ? styles.caption : undefined}
+					>
 						{message.body}
 					</Text>
 				) : null}
 
 				<View
 					className="flex-row justify-end items-center mt-1 self-end"
-					style={imageOnly ? styles.imageTimestamp : undefined}
+					style={
+						imageOnly
+							? styles.imageTimestamp
+							: mediaEdgeToEdge
+								? styles.captionTimestamp
+								: undefined
+					}
 				>
 					{isEdited ? (
 						<Text
@@ -201,6 +224,18 @@ const styles = StyleSheet.create({
 		maxWidth: '82%',
 		borderRadius: 21,
 		borderWidth: StyleSheet.hairlineWidth,
+	},
+	mediaInset: {
+		paddingHorizontal: 6,
+		paddingTop: 6,
+	},
+	caption: {
+		paddingHorizontal: 13,
+		paddingTop: 7,
+	},
+	captionTimestamp: {
+		paddingHorizontal: 13,
+		paddingBottom: 8,
 	},
 	deletedBubble: {
 		flexDirection: 'row',

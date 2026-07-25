@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { AlbumGrid } from './AlbumGrid';
 import { type ChatAttachment, isImageAttachment, formatFileSize } from './types';
 
 /** Ширина одиночного изображения в пузыре. */
@@ -110,10 +111,12 @@ interface MessageAttachmentsProps {
 /**
  * Вложения сообщения.
  *
- * Здесь сознательно нет логики сетки альбома: несколько изображений пока
- * рендерятся столбиком, как и до вынесения компонента. Сетку добавляет
- * отдельный этап плана (A4) — этот шаг только переносит существующее
- * поведение без изменений.
+ * Изображения и документы разделяются, потому что показываются по-разному:
+ * несколько фото складываются в сетку альбома, а документы всегда идут списком
+ * (сетка из иконок файлов ничего не даёт, а имена в ней не читаются).
+ *
+ * Одиночное фото остаётся вне сетки: у него есть реальные пропорции, и
+ * панорамный снимок не нужно обрезать в квадрат.
  */
 export function MessageAttachments({
 	attachments,
@@ -124,22 +127,33 @@ export function MessageAttachments({
 }: MessageAttachmentsProps) {
 	const isBusy = downloadingAttachmentID != null;
 
+	const { images, documents } = React.useMemo(() => {
+		const images: ChatAttachment[] = [];
+		const documents: ChatAttachment[] = [];
+		for (const att of attachments) {
+			(isImageAttachment(att) ? images : documents).push(att);
+		}
+		return { images, documents };
+	}, [attachments]);
+
 	return (
 		<>
-			{attachments.map((att) =>
-				isImageAttachment(att) ? (
-					<ImageAttachment key={att.id} attachment={att} onPress={onImagePress} />
-				) : (
-					<DocumentAttachment
-						key={att.id}
-						attachment={att}
-						isMine={isMine}
-						isDownloading={downloadingAttachmentID === att.id}
-						isBusy={isBusy}
-						onPress={onDocumentPress}
-					/>
-				),
-			)}
+			{images.length === 1 ? (
+				<ImageAttachment attachment={images[0]} onPress={onImagePress} />
+			) : images.length > 1 ? (
+				<AlbumGrid images={images} onPress={onImagePress} />
+			) : null}
+
+			{documents.map((att) => (
+				<DocumentAttachment
+					key={att.id}
+					attachment={att}
+					isMine={isMine}
+					isDownloading={downloadingAttachmentID === att.id}
+					isBusy={isBusy}
+					onPress={onDocumentPress}
+				/>
+			))}
 		</>
 	);
 }
