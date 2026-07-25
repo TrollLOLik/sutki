@@ -9,7 +9,7 @@ import {
 	NativeModules,
 	StyleSheet,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -37,7 +37,6 @@ import {
 	mergeChatMessage,
 	type AttachmentInput,
 } from '@/lib/api/chat';
-import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
 import { useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { useMyReviewEligibility } from '@/lib/api/reviews';
@@ -80,6 +79,10 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
+
+const CHAT_LIST_CONTENT_STYLE = { paddingVertical: 18 } as const;
+const CHAT_LIST_BATCH_SIZE = 8;
+const keyExtractor = (item: ChatMessage) => String(item.id);
 
 export default function ChatDialogScreen() {
 	const { palette, isDark } = useAppTheme();
@@ -209,15 +212,30 @@ export default function ChatDialogScreen() {
 	const { mutateAsync: performEditMessage, isPending: isSavingEdit } = useEditMessage(convID);
 	const { mutate: performDeleteMessage } = useDeleteMessage(convID);
 
-	const messages = data?.pages.flat().filter(Boolean) ?? [];
+	const messages = React.useMemo(
+		() => data?.pages.flat().filter(Boolean) ?? [],
+		[data?.pages],
+	);
 
 	// Booking card actions (owner shortcuts to the same confirm/reject
 	// endpoints as the requests screen).
 	const isListingOwner = !!listing && !!sessionUser && listing.owner_id === sessionUser.id;
 	const reviewEligibility = useMyReviewEligibility(!!sessionUser && !isListingOwner);
-	const eligibilityByRequest = new Map((reviewEligibility.data?.items ?? []).map((entry) => [entry.request_id, entry]));
-	const confirmBookingMutation = useConfirmBooking();
-	const rejectBookingMutation = useRejectBooking();
+	const eligibilityByRequest = React.useMemo(
+		() =>
+			new Map(
+				(reviewEligibility.data?.items ?? []).map((entry) => [entry.request_id, entry]),
+			),
+		[reviewEligibility.data?.items],
+	);
+	const {
+		mutate: confirmBooking,
+		isPending: isConfirmingBooking,
+	} = useConfirmBooking();
+	const {
+		mutate: rejectBooking,
+		isPending: isRejectingBooking,
+	} = useRejectBooking();
 	const [actioningRequestId, setActioningRequestId] = useState<number | null>(null);
 
 	// A `new` card keeps its buttons only while no later card exists for the
@@ -234,23 +252,23 @@ export default function ChatDialogScreen() {
 		return map;
 	}, [messages]);
 
-	const handleConfirmBooking = (requestID: number) => {
+	const handleConfirmBooking = React.useCallback((requestID: number) => {
 		Alert.alert('Подтвердить бронирование?', 'Гость получит уведомление и точный адрес.', [
 			{ text: 'Отмена', style: 'cancel' },
 			{
 				text: 'Подтвердить',
 				onPress: () => {
 					setActioningRequestId(requestID);
-					confirmBookingMutation.mutate(requestID, {
+					confirmBooking(requestID, {
 						onError: () => Alert.alert('Ошибка', 'Не удалось подтвердить заявку. Попробуйте еще раз.'),
 						onSettled: () => setActioningRequestId(null),
 					});
 				},
 			},
 		]);
-	};
+	}, [confirmBooking]);
 
-	const handleRejectBooking = (requestID: number) => {
+	const handleRejectBooking = React.useCallback((requestID: number) => {
 		Alert.alert('Отклонить заявку?', 'Гость получит уведомление об отказе.', [
 			{ text: 'Отмена', style: 'cancel' },
 			{
@@ -258,7 +276,7 @@ export default function ChatDialogScreen() {
 				style: 'destructive',
 				onPress: () => {
 					setActioningRequestId(requestID);
-					rejectBookingMutation.mutate(
+					rejectBooking(
 						{ id: requestID },
 						{
 							onError: () => Alert.alert('Ошибка', 'Не удалось отклонить заявку. Попробуйте еще раз.'),
@@ -268,7 +286,7 @@ export default function ChatDialogScreen() {
 				},
 			},
 		]);
-	};
+	}, [rejectBooking]);
 
 	const [galleryVisible, setGalleryVisible] = useState(false);
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -947,9 +965,11 @@ export default function ChatDialogScreen() {
 		}
 	};
 
-	// Держим ref в синхроне на каждом рендере: отложенная отправка по долгому
-	// нажатию на подсказку должна вызвать актуальную версию, а не замыкание.
-	sendRef.current = handleSend;
+	// Отложенная отправка по долгому нажатию на подсказку должна вызвать
+	// актуальную версию обработчика, а не замыкание прошлого рендера.
+	React.useEffect(() => {
+		sendRef.current = handleSend;
+	}, [handleSend]);
 
 	const handlePickMedia = () => {
 		setIsAttachMenuVisible(true);
@@ -994,59 +1014,64 @@ export default function ChatDialogScreen() {
 		[addStaged],
 	);
 
-	const downloadAttachment = async (attachment: ChatAttachment) => {
-		if (downloadingAttachmentID != null) return;
-		setDownloadingAttachmentID(attachment.id);
-		try {
-			const safeName =
-				attachment.file_name
-					.trim()
-					.replace(/[\\/:*?"<>|]/g, '_')
-					.replace(/^\.+/, '') || `document_${attachment.id}`;
+	const downloadAttachment = React.useCallback(
+		async (attachment: ChatAttachment) => {
+			if (downloadingAttachmentID != null) return;
+			setDownloadingAttachmentID(attachment.id);
+			try {
+				const safeName =
+					attachment.file_name
+						.trim()
+						.replace(/[\\/:*?"<>|]/g, '_')
+						.replace(/^\.+/, '') || `document_${attachment.id}`;
 
-			const nativeDownloader = NativeModules.TitopDownload as
-				| {
-						downloadAndOpen?: (
-							url: string,
-							fileName: string,
-							mimeType: string,
-						) => Promise<{ opened?: boolean }>;
-				  }
-				| undefined;
+				const nativeDownloader = NativeModules.TitopDownload as
+					| {
+							downloadAndOpen?: (
+								url: string,
+								fileName: string,
+								mimeType: string,
+							) => Promise<{ opened?: boolean }>;
+					  }
+					| undefined;
 
-			if (nativeDownloader?.downloadAndOpen) {
-				const result = await nativeDownloader.downloadAndOpen(
-					attachment.url,
-					safeName,
-					attachment.mime_type || 'application/octet-stream',
-				);
-				if (!result?.opened) {
+				if (nativeDownloader?.downloadAndOpen) {
+					const result = await nativeDownloader.downloadAndOpen(
+						attachment.url,
+						safeName,
+						attachment.mime_type || 'application/octet-stream',
+					);
+					if (!result?.opened) {
+						Alert.alert(
+							'Файл сохранён',
+							`${safeName} сохранён в папке Download/Titop Arenda. Подходящее приложение для открытия не найдено.`,
+						);
+					}
+				} else {
+					// Старый APK не содержит MediaStore-модуль. Сохраняем прежний
+					// сценарий вместо падения, пока пользователь не обновит приложение.
+					const directory = await Directory.pickDirectoryAsync();
+					const destination = new File(directory, safeName);
+					await File.downloadFileAsync(attachment.url, destination, {
+						idempotent: true,
+					});
 					Alert.alert(
 						'Файл сохранён',
-						`${safeName} сохранён в папке Download/Titop Arenda. Подходящее приложение для открытия не найдено.`,
+						`${safeName} сохранён в выбранную папку. Установите обновление, чтобы сохранять автоматически.`,
 					);
 				}
-			} else {
-				// Старый APK не содержит MediaStore-модуль. Сохраняем прежний
-				// сценарий вместо падения, пока пользователь не обновит приложение.
-				const directory = await Directory.pickDirectoryAsync();
-				const destination = new File(directory, safeName);
-				await File.downloadFileAsync(attachment.url, destination, { idempotent: true });
-				Alert.alert(
-					'Файл сохранён',
-					`${safeName} сохранён в выбранную папку. Установите обновление, чтобы сохранять автоматически.`,
-				);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				if (!/cancel/i.test(message)) {
+					console.error('[Chat] Failed downloading attachment:', error);
+					Alert.alert('Ошибка загрузки', 'Не удалось сохранить документ. Попробуйте ещё раз.');
+				}
+			} finally {
+				setDownloadingAttachmentID(null);
 			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			if (!/cancel/i.test(message)) {
-				console.error('[Chat] Failed downloading attachment:', error);
-				Alert.alert('Ошибка загрузки', 'Не удалось сохранить документ. Попробуйте ещё раз.');
-			}
-		} finally {
-			setDownloadingAttachmentID(null);
-		}
-	};
+		},
+		[downloadingAttachmentID],
+	);
 
 	const openVideoPlayer = React.useCallback((attachment: ChatAttachment) => {
 		setPlayingVideoUri(attachment.url);
@@ -1066,53 +1091,121 @@ export default function ChatDialogScreen() {
 		[chatGalleryItems],
 	);
 
-	const renderMessage = ({ item }: { item: ChatMessage }) => {
-		// System booking card: centered, no bubble, optional owner actions.
-		if (item.kind === 'booking_status' && item.payload) {
-			const rid = item.payload.request_id;
+	const handleReviewPress = React.useCallback(
+		(requestID: number) =>
+			router.push({
+				pathname: '/review/[id]',
+				params: { id: String(requestID) },
+			}),
+		[router],
+	);
+
+	const renderMessage = React.useCallback(
+		({ item }: { item: ChatMessage }) => {
+			// System booking card: centered, no bubble, optional owner actions.
+			if (item.kind === 'booking_status' && item.payload) {
+				const rid = item.payload.request_id;
+				const eligibility = eligibilityByRequest.get(rid);
+				return (
+					<BookingStatusCard
+						payload={item.payload}
+						createdAt={item.created_at}
+						isOwner={isListingOwner}
+						isActionable={latestCardEventByRequest.get(rid) === 'new'}
+						confirming={actioningRequestId === rid && isConfirmingBooking}
+						rejecting={actioningRequestId === rid && isRejectingBooking}
+						onConfirm={handleConfirmBooking}
+						onReject={handleRejectBooking}
+						reviewAvailable={eligibility?.can_review === true}
+						reviewLabel={
+							eligibility?.review_status === 'rejected' ||
+							eligibility?.review_status === 'moderation_review'
+								? 'Изменить отзыв'
+								: 'Оставить отзыв'
+						}
+						reviewStatus={eligibility?.review_status}
+						onReview={handleReviewPress}
+					/>
+				);
+			}
+
+			const isMe = item.sender_id != null && item.sender_id === sessionUser?.id;
+
 			return (
-				<BookingStatusCard
-					payload={item.payload}
-					createdAt={item.created_at}
-					isOwner={isListingOwner}
-					isActionable={latestCardEventByRequest.get(rid) === 'new'}
-					confirming={actioningRequestId === rid && confirmBookingMutation.isPending}
-					rejecting={actioningRequestId === rid && rejectBookingMutation.isPending}
-					onConfirm={handleConfirmBooking}
-					onReject={handleRejectBooking}
-					reviewAvailable={eligibilityByRequest.get(rid)?.can_review === true}
-					reviewLabel={
-						eligibilityByRequest.get(rid)?.review_status === 'rejected' ||
-						eligibilityByRequest.get(rid)?.review_status === 'moderation_review'
-							? 'Изменить отзыв'
-							: 'Оставить отзыв'
-					}
-					reviewStatus={eligibilityByRequest.get(rid)?.review_status}
-					onReview={(requestID) => router.push({ pathname: '/review/[id]', params: { id: String(requestID) } })}
+				<MessageBubble
+					message={item}
+					isMine={isMe}
+					otherLastReadMessageID={activeConv?.other_last_read_message_id}
+					downloadingAttachmentID={downloadingAttachmentID}
+					onImagePress={openImageViewer}
+					onDocumentPress={downloadAttachment}
+					onVideoPress={openVideoPlayer}
+					localThumbnails={localVideoThumbnails}
+					quoteAuthorName={resolveAuthorName}
+					onReply={startReply}
+					onQuotePress={scrollToMessage}
+					onLongPress={openActions}
+					highlighted={highlightedMessageID === item.id}
 				/>
 			);
+		},
+		[
+			actioningRequestId,
+			activeConv?.other_last_read_message_id,
+			downloadingAttachmentID,
+			eligibilityByRequest,
+			handleConfirmBooking,
+			handleRejectBooking,
+			handleReviewPress,
+			highlightedMessageID,
+			isConfirmingBooking,
+			isListingOwner,
+			isRejectingBooking,
+			latestCardEventByRequest,
+			localVideoThumbnails,
+			openActions,
+			openImageViewer,
+			openVideoPlayer,
+			downloadAttachment,
+			resolveAuthorName,
+			scrollToMessage,
+			sessionUser?.id,
+			startReply,
+		],
+	);
+
+	const handleLoadOlderMessages = React.useCallback(() => {
+		if (hasNextPage && !isFetchingNextPage) {
+			fetchNextPage();
 		}
+	}, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-		const isMe = item.sender_id != null && item.sender_id === sessionUser?.id;
+	const handleScrollToIndexFailed = React.useCallback(
+		({ index, averageItemLength }: { index: number; averageItemLength: number }) => {
+			listRef.current?.scrollToOffset({
+				offset: index * Math.max(averageItemLength, 1),
+				animated: true,
+			});
+		},
+		[],
+	);
 
-		return (
-			<MessageBubble
-				message={item}
-				isMine={isMe}
-				otherLastReadMessageID={activeConv?.other_last_read_message_id}
-				downloadingAttachmentID={downloadingAttachmentID}
-				onImagePress={openImageViewer}
-				onDocumentPress={downloadAttachment}
-				onVideoPress={openVideoPlayer}
-				localThumbnails={localVideoThumbnails}
-				quoteAuthorName={resolveAuthorName}
-				onReply={startReply}
-				onQuotePress={scrollToMessage}
-				onLongPress={openActions}
-				highlighted={highlightedMessageID === item.id}
-			/>
-		);
-	};
+	const chatListStyle = React.useMemo(
+		() => ({ backgroundColor: chatColors.background }),
+		[chatColors.background],
+	);
+
+	const chatListFooter = React.useMemo(
+		() =>
+			isFetchingNextPage ? (
+				<ActivityIndicator
+					size="small"
+					color={palette.primary}
+					style={styles.historyLoader}
+				/>
+			) : null,
+		[isFetchingNextPage, palette.primary],
+	);
 
 	const isInputEmpty = !inputText.trim();
 	// Отправлять можно и одни вложения без подписи, поэтому кнопка смотрит на
@@ -1384,31 +1477,23 @@ export default function ChatDialogScreen() {
 				<FlatList
 					ref={listRef}
 					data={messages}
-					keyExtractor={(item) => String(item.id)}
+					keyExtractor={keyExtractor}
 					// Высоты сообщений разные, поэтому FlatList не всегда может
 					// сразу доскроллить к индексу. Без этого обработчика переход
 					// к цитате роняет список исключением.
-					onScrollToIndexFailed={({ index, averageItemLength }) => {
-						listRef.current?.scrollToOffset({
-							offset: index * Math.max(averageItemLength, 1),
-							animated: true,
-						});
-					}}
+					onScrollToIndexFailed={handleScrollToIndexFailed}
 					renderItem={renderMessage}
 					inverted
-					onEndReached={() => {
-						if (hasNextPage && !isFetchingNextPage) {
-							fetchNextPage();
-						}
-					}}
+					onEndReached={handleLoadOlderMessages}
 					onEndReachedThreshold={0.3}
-					contentContainerStyle={{ paddingVertical: 18 }}
-					style={{ backgroundColor: chatColors.background }}
-					ListFooterComponent={
-						isFetchingNextPage ? (
-							<ActivityIndicator size="small" color={palette.primary} className="my-2" />
-						) : null
-					}
+					contentContainerStyle={CHAT_LIST_CONTENT_STYLE}
+					style={chatListStyle}
+					ListFooterComponent={chatListFooter}
+					initialNumToRender={CHAT_LIST_BATCH_SIZE}
+					maxToRenderPerBatch={CHAT_LIST_BATCH_SIZE}
+					updateCellsBatchingPeriod={40}
+					windowSize={9}
+					removeClippedSubviews
 				/>
 			)}
 
@@ -1617,6 +1702,9 @@ const styles = StyleSheet.create({
 		width: 64,
 		height: 64,
 		borderRadius: 13,
+	},
+	historyLoader: {
+		marginVertical: 8,
 	},
 	composer: {
 		minHeight: 58,

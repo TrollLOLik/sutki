@@ -57,7 +57,7 @@ function guestsLabel(n: number): string {
  * confirm/reject shortcuts on the `new` card while the request is pending;
  * both actions hit the same endpoints as the requests screen.
  */
-export function BookingStatusCard({
+export const BookingStatusCard = React.memo(function BookingStatusCard({
 	payload,
 	createdAt,
 	isOwner,
@@ -202,7 +202,7 @@ export function BookingStatusCard({
 			</View>
 		</View>
 	);
-}
+});
 
 const styles = StyleSheet.create({
 	card: {
