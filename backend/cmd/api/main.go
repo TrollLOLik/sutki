@@ -254,7 +254,11 @@ func main() {
 		MaxVideoSeconds: cfg.MaxVideoSeconds,
 	})
 	chatSvc.SetAttachmentModerationQueue(attachmentModerationRepo, attachmentModerator)
-	attachmentModerator.StartWorker(ctx)
+	if cfg.AttachmentModerationWorkerEnabled {
+		attachmentModerator.StartWorker(ctx)
+	} else {
+		log.Println("attachment moderation worker: disabled in this process; jobs are handled by media-worker")
+	}
 
 	chatHandler := httpdelivery.NewChatHandler(chatSvc)
 

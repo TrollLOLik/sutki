@@ -50,6 +50,9 @@ services:
       DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable
       CENTRIFUGO_URL: http://centrifugo:8000
       TRUST_PROXY_HEADERS: "true"
+      # The API only enqueues media checks. It has no ffmpeg in its
+      # distroless image and must not compete with media-worker for video jobs.
+      ATTACHMENT_MODERATION_WORKER_ENABLED: "false"
     ports:
       - "127.0.0.1:8080:8080"
     networks:
@@ -88,6 +91,7 @@ services:
       HTTP_ADDR: 127.0.0.1:8081
       DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable
       CENTRIFUGO_URL: http://centrifugo:8000
+      ATTACHMENT_MODERATION_WORKER_ENABLED: "true"
     # Frames and downloaded videos live here and nowhere else: tmpfs keeps them
     # off the 50 GB disk and the size cap makes a burst fail loudly instead of
     # filling the filesystem.

@@ -1,6 +1,11 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withSpring,
+} from 'react-native-reanimated';
 
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -75,6 +80,7 @@ export const MessageBubble = React.memo(function MessageBubble({
 	const isFailed = message.failed;
 	const isDeleted = !!message.deleted_at;
 	const isEdited = !!message.edited_at;
+	const canInteract = !isPending && !isFailed;
 	// Удалённое сообщение не может быть «только картинками»: вложения снесены.
 	const imageOnly = !isDeleted && isImageOnlyMessage(message);
 	/**
@@ -86,14 +92,34 @@ export const MessageBubble = React.memo(function MessageBubble({
 	const mediaEdgeToEdge =
 		!isDeleted && !!message.attachments?.some((att) => isImageAttachment(att) || isVideoAttachment(att));
 	const isRead = otherLastReadMessageID != null && message.id <= otherLastReadMessageID;
+	const holdScale = useSharedValue(1);
+	const holdStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: holdScale.value }],
+	}));
 
 	const handleReply = React.useCallback(() => onReply(message), [message, onReply]);
 	const handleQuotePress = React.useCallback(() => {
-		if (message.reply_to_message_id) onQuotePress(message.reply_to_message_id);
-	}, [message.reply_to_message_id, onQuotePress]);
+		const quotedMessageID = message.reply_to_message_id ?? message.reply_to?.id;
+		if (quotedMessageID != null) onQuotePress(quotedMessageID);
+	}, [message.reply_to?.id, message.reply_to_message_id, onQuotePress]);
 	const handleLongPress = React.useCallback(() => {
 		onLongPress?.(message);
 	}, [message, onLongPress]);
+	const handlePressIn = React.useCallback(() => {
+		if (!canInteract) return;
+		holdScale.value = withSpring(0.985, {
+			damping: 18,
+			stiffness: 360,
+			mass: 0.55,
+		});
+	}, [canInteract, holdScale]);
+	const handlePressOut = React.useCallback(() => {
+		holdScale.value = withSpring(1, {
+			damping: 16,
+			stiffness: 280,
+			mass: 0.6,
+		});
+	}, [holdScale]);
 
 	// Удалённое сообщение — плашка вместо пузыря. Отвечать на него и открывать
 	// действия незачем, поэтому ни свайпа, ни долгого нажатия здесь нет.
@@ -209,11 +235,15 @@ export const MessageBubble = React.memo(function MessageBubble({
 
 	// Оптимистичное сообщение ещё не имеет серверного id, поэтому отвечать на
 	// него нельзя — реплай сослался бы на временный отрицательный id.
-	const canInteract = !isPending && !isFailed;
-
 	const interactive = onLongPress ? (
-		<Pressable onLongPress={handleLongPress} delayLongPress={280} disabled={!canInteract}>
-			{bubble}
+		<Pressable
+			onPressIn={handlePressIn}
+			onPressOut={handlePressOut}
+			onLongPress={handleLongPress}
+			delayLongPress={280}
+			disabled={!canInteract}
+		>
+			<Animated.View style={holdStyle}>{bubble}</Animated.View>
 		</Pressable>
 	) : (
 		bubble

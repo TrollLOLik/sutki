@@ -164,6 +164,30 @@ export function sendMessage(convID: number, body: SendMessageBody): Promise<Chat
 	return api.post<ChatMessage>(`/api/v1/chat/conversations/${convID}/messages`, body);
 }
 
+/**
+ * Merge a server message into a locally richer copy.
+ *
+ * A reply is hydrated on the server, but the HTTP/realtime payload can arrive
+ * without the nested quote while the message is being finalized. Do not let
+ * that partial payload erase the quote already rendered optimistically.
+ */
+export function mergeChatMessage(previous: ChatMessage, updated: ChatMessage): ChatMessage {
+	const merged = { ...previous, ...updated };
+	const hasReplyID = merged.reply_to_message_id != null;
+
+	if (hasReplyID && updated.reply_to == null && previous.reply_to) {
+		merged.reply_to = previous.reply_to;
+	}
+	if (previous.reply_to_message_id != null && updated.reply_to_message_id === undefined) {
+		merged.reply_to_message_id = previous.reply_to_message_id;
+	}
+	if (updated.reply_to_message_id === null) {
+		merged.reply_to = null;
+	}
+
+	return merged;
+}
+
 export function useSendMessage(convID: number) {
 	const queryClient = useQueryClient();
 	return useMutation({
@@ -271,7 +295,7 @@ export function replaceMessageInCache(
 			pages: old.pages.map((page) =>
 				page.map((m) => {
 					if (m.id !== updated.id) return m;
-					const merged = { ...m, ...updated };
+					const merged = mergeChatMessage(m, updated);
 					// Сервер опускает пустые поля (omitempty), поэтому у удалённого
 					// сообщения ключей body и attachments в JSON просто нет — при
 					// поверхностном слиянии они бы уцелели от старой версии. Тогда

@@ -106,6 +106,10 @@ type Config struct {
 	FFmpegTimeout   time.Duration
 	MediaWorkDir    string
 	MaxVideoSeconds int
+	// AttachmentModerationWorkerEnabled controls whether this process claims
+	// chat-media moderation jobs. The API keeps enqueueing jobs, while the
+	// dedicated media-worker is the only production process that processes them.
+	AttachmentModerationWorkerEnabled bool
 
 	// Centrifugo config
 	CentrifugoURL        string
@@ -194,8 +198,9 @@ func Load() (Config, error) {
 		FFmpegTimeout: getDuration("FFMPEG_TIMEOUT", 60*time.Second),
 		// Should point at a size-capped tmpfs: frames and downloaded videos are
 		// transient, and a burst must not be able to fill the disk.
-		MediaWorkDir:    getEnv("MEDIA_WORK_DIR", ""),
-		MaxVideoSeconds: getInt("MAX_VIDEO_SECONDS", 60),
+		MediaWorkDir:                      getEnv("MEDIA_WORK_DIR", ""),
+		MaxVideoSeconds:                   getInt("MAX_VIDEO_SECONDS", 60),
+		AttachmentModerationWorkerEnabled: getBool("ATTACHMENT_MODERATION_WORKER_ENABLED", true),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
 		CentrifugoKey:        os.Getenv("CENTRIFUGO_API_KEY"),

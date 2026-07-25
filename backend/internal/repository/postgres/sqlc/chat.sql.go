@@ -628,13 +628,13 @@ SELECT
     m.deleted_at,
     LEFT(COALESCE(m.body, ''), $1::int)::text AS body_preview,
     (SELECT COUNT(*) FROM message_attachment ma WHERE ma.message_id = m.id) AS attachment_count,
-    (
+    COALESCE((
         SELECT ma.url
         FROM message_attachment ma
         WHERE ma.message_id = m.id AND ma.mime_type LIKE 'image/%'
         ORDER BY ma.id
         LIMIT 1
-    )::text AS first_image_url
+    ), '')::text AS first_image_url
 FROM message m
 WHERE m.id = ANY($2::bigint[])
 `

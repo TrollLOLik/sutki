@@ -33,6 +33,7 @@ import {
 	useChatSuggestions,
 	publishTyping,
 	replaceMessageInCache,
+	mergeChatMessage,
 	type AttachmentInput,
 } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
@@ -339,24 +340,45 @@ export default function ChatDialogScreen() {
 	 * чтобы молча ничего не делать.
 	 */
 	const scrollToMessage = React.useCallback(
-		(messageID: number) => {
-			const index = messages.findIndex((m) => m.id === messageID);
-			if (index < 0) {
-				if (hasNextPage && !isFetchingNextPage) {
-					fetchNextPage();
-					Alert.alert('Загружаем историю', 'Сообщение выше — подгружаем и попробуйте ещё раз.');
-				} else {
-					Alert.alert('Сообщение недоступно', 'Не удалось найти исходное сообщение в переписке.');
-				}
-				return;
-			}
+		async (messageID: number) => {
+			try {
+				let loadedMessages = messages;
+				let index = loadedMessages.findIndex((m) => m.id === messageID);
+				let canLoadMore = hasNextPage;
+				let loadedPages = 0;
 
-			listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-			setHighlightedMessageID(messageID);
-			if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-			highlightTimerRef.current = setTimeout(() => setHighlightedMessageID(null), 1200);
+				// A quote can point far beyond the currently loaded 20-message page.
+				// Keep loading older pages for this explicit user action instead of
+				// asking them to tap the same quote repeatedly.
+				while (index < 0 && canLoadMore && loadedPages < 12) {
+					const result = await fetchNextPage();
+					loadedMessages = result.data?.pages.flat().filter(Boolean) ?? loadedMessages;
+					index = loadedMessages.findIndex((m) => m.id === messageID);
+					canLoadMore = result.hasNextPage;
+					loadedPages += 1;
+				}
+
+				if (index < 0) {
+					Alert.alert('Сообщение недоступно', 'Не удалось найти исходное сообщение в переписке.');
+					return;
+				}
+
+				// Let FlatList receive the newly fetched pages before asking it to
+				// measure and center the target row.
+				requestAnimationFrame(() => {
+					listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+				});
+				setHighlightedMessageID(messageID);
+				if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+				highlightTimerRef.current = setTimeout(() => setHighlightedMessageID(null), 1200);
+			} catch {
+				Alert.alert(
+					'Не удалось загрузить сообщение',
+					'Проверьте подключение к интернету и попробуйте ещё раз.',
+				);
+			}
 		},
-		[fetchNextPage, hasNextPage, isFetchingNextPage, messages],
+		[fetchNextPage, hasNextPage, messages],
 	);
 
 	useEffect(
@@ -583,9 +605,22 @@ export default function ChatDialogScreen() {
 				queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
 					if (!old) return old;
 
-					// 1. Avoid duplicates if the message is already in cache
+					// A moderation worker republishes the same message id after
+					// an attachment changes from pending to approved. Merge that
+					// final server copy instead of treating it as a duplicate, or
+					// the sender would stay on the local "Проверяется" state
+					// until the next full history refetch.
 					if (old.pages.flat().some((m) => m.id === newMsg.id)) {
-						return old;
+						return {
+							...old,
+							pages: old.pages.map((page) =>
+								page.map((m) =>
+									m.id === newMsg.id
+										? { ...mergeChatMessage(m, newMsg), pending: false, failed: false }
+										: m,
+								),
+							),
+						};
 					}
 
 					// 2. If it's our own message, try to find and replace the optimistic pending message
@@ -595,7 +630,11 @@ export default function ChatDialogScreen() {
 							return page.map((m) => {
 								if (m.pending && !replaced) {
 									replaced = true;
-									return newMsg;
+									return {
+										...mergeChatMessage(m, newMsg),
+										pending: false,
+										failed: false,
+									};
 								}
 								return m;
 							});
@@ -843,7 +882,15 @@ export default function ChatDialogScreen() {
 				return {
 					...old,
 					pages: old.pages.map((page) =>
-						page.map((m) => (m.id === tempId ? saved : m)),
+						page.map((m) =>
+							m.id === tempId
+								? {
+										...mergeChatMessage(m, saved),
+										pending: false,
+										failed: false,
+									}
+								: m,
+						),
 					),
 				};
 			});
