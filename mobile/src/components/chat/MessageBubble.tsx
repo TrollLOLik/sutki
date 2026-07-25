@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useChatColors } from './useChatColors';
 import { MessageAttachments } from './MessageAttachments';
+import { QuotedMessage } from './QuotedMessage';
+import { SwipeToReply } from './SwipeToReply';
 import { type ChatAttachment, isImageOnlyMessage, formatMessageTime } from './types';
 
 interface MessageBubbleProps {
@@ -20,6 +22,16 @@ interface MessageBubbleProps {
 	downloadingAttachmentID: number | null;
 	onImagePress: (attachment: ChatAttachment) => void;
 	onDocumentPress: (attachment: ChatAttachment) => void;
+	/** Имя автора процитированного сообщения, для шапки цитаты. */
+	quoteAuthorName: (senderID?: number | null) => string;
+	/** Свайп по пузырю — ответить на это сообщение. */
+	onReply: (message: ChatMessage) => void;
+	/** Переход к оригиналу по тапу на цитату. */
+	onQuotePress: (messageID: number) => void;
+	/** Долгое нажатие — панель действий с сообщением (этап A5). */
+	onLongPress?: (message: ChatMessage) => void;
+	/** Подсветка после перехода к оригиналу — короткая вспышка фона. */
+	highlighted?: boolean;
 }
 
 /**
@@ -39,16 +51,51 @@ export const MessageBubble = React.memo(function MessageBubble({
 	downloadingAttachmentID,
 	onImagePress,
 	onDocumentPress,
+	quoteAuthorName,
+	onReply,
+	onQuotePress,
+	onLongPress,
+	highlighted = false,
 }: MessageBubbleProps) {
 	const { palette } = useAppTheme();
 	const chatColors = useChatColors();
 
 	const isPending = message.pending;
 	const isFailed = message.failed;
-	const imageOnly = isImageOnlyMessage(message);
+	const isDeleted = !!message.deleted_at;
+	const isEdited = !!message.edited_at;
+	// Удалённое сообщение не может быть «только картинками»: вложения снесены.
+	const imageOnly = !isDeleted && isImageOnlyMessage(message);
 	const isRead = otherLastReadMessageID != null && message.id <= otherLastReadMessageID;
 
-	return (
+	const handleReply = React.useCallback(() => onReply(message), [message, onReply]);
+	const handleQuotePress = React.useCallback(() => {
+		if (message.reply_to_message_id) onQuotePress(message.reply_to_message_id);
+	}, [message.reply_to_message_id, onQuotePress]);
+	const handleLongPress = React.useCallback(() => {
+		onLongPress?.(message);
+	}, [message, onLongPress]);
+
+	// Удалённое сообщение — плашка вместо пузыря. Отвечать на него и открывать
+	// действия незачем, поэтому ни свайпа, ни долгого нажатия здесь нет.
+	if (isDeleted) {
+		return (
+			<View className={`flex-row my-1.5 px-4 ${isMine ? 'justify-end' : 'justify-start'}`}>
+				<View
+					style={[
+						styles.messageBubble,
+						styles.deletedBubble,
+						{ borderColor: chatColors.border, backgroundColor: chatColors.panelRaised },
+					]}
+				>
+					<Ionicons name="ban-outline" size={13} color={palette.inkMuted} />
+					<Text className="ml-1.5 text-[13px] italic text-ink-muted">Сообщение удалено</Text>
+				</View>
+			</View>
+		);
+	}
+
+	const bubble = (
 		<View className={`flex-row my-1.5 px-4 ${isMine ? 'justify-end' : 'justify-start'}`}>
 			<View
 				style={[
@@ -65,6 +112,15 @@ export const MessageBubble = React.memo(function MessageBubble({
 					},
 				]}
 			>
+				{message.reply_to ? (
+					<QuotedMessage
+						quote={message.reply_to}
+						onDark={isMine && !imageOnly}
+						authorName={quoteAuthorName(message.reply_to.sender_id)}
+						onPress={handleQuotePress}
+					/>
+				) : null}
+
 				{message.attachments?.length ? (
 					<MessageAttachments
 						attachments={message.attachments}
@@ -85,6 +141,13 @@ export const MessageBubble = React.memo(function MessageBubble({
 					className="flex-row justify-end items-center mt-1 self-end"
 					style={imageOnly ? styles.imageTimestamp : undefined}
 				>
+					{isEdited ? (
+						<Text
+							className={`text-[10px] ${isMine || imageOnly ? 'text-white/70' : 'text-ink-muted'} mr-1`}
+						>
+							ред.
+						</Text>
+					) : null}
 					<Text
 						className={`text-[10px] ${isMine || imageOnly ? 'text-white/80' : 'text-ink-muted'} mr-1`}
 					>
@@ -111,6 +174,26 @@ export const MessageBubble = React.memo(function MessageBubble({
 			</View>
 		</View>
 	);
+
+	// Оптимистичное сообщение ещё не имеет серверного id, поэтому отвечать на
+	// него нельзя — реплай сослался бы на временный отрицательный id.
+	const canInteract = !isPending && !isFailed;
+
+	const interactive = onLongPress ? (
+		<Pressable onLongPress={handleLongPress} delayLongPress={280} disabled={!canInteract}>
+			{bubble}
+		</Pressable>
+	) : (
+		bubble
+	);
+
+	return (
+		<View style={highlighted ? [styles.highlight, { backgroundColor: palette.primaryLight }] : undefined}>
+			<SwipeToReply onReply={handleReply} disabled={!canInteract}>
+				{interactive}
+			</SwipeToReply>
+		</View>
+	);
 });
 
 const styles = StyleSheet.create({
@@ -118,6 +201,12 @@ const styles = StyleSheet.create({
 		maxWidth: '82%',
 		borderRadius: 21,
 		borderWidth: StyleSheet.hairlineWidth,
+	},
+	deletedBubble: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingHorizontal: 13,
+		paddingVertical: 9,
 	},
 	imageTimestamp: {
 		position: 'absolute',
@@ -127,5 +216,9 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 		paddingHorizontal: 6,
 		paddingVertical: 3,
+	},
+	highlight: {
+		borderRadius: 16,
+		marginHorizontal: 8,
 	},
 });

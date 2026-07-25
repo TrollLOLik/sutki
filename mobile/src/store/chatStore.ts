@@ -15,6 +15,27 @@ interface BookingStatusPayload {
 	address?: string;
 }
 
+/**
+ * Компактные данные процитированного сообщения.
+ *
+ * Приходит с сервера уже гидрированной: история грузится страницами по 20, и
+ * родитель реплая часто оказывается вне загруженного окна — искать его в кэше
+ * бессмысленно. body_preview обрезан сервером до 120 символов.
+ */
+interface MessageQuote {
+	id: number;
+	sender_id?: number | null;
+	kind: string;
+	/** Пусто, если процитировано сообщение без текста (только вложения). */
+	body_preview: string;
+	/** Сколько вложений у родителя — чтобы показать «3 фото» без их загрузки. */
+	attachment_count: number;
+	/** Подписанная миниатюра первого вложения, если оно изображение. */
+	first_attachment_url?: string;
+	/** Родитель удалён: показываем «Сообщение удалено» вместо текста. */
+	deleted: boolean;
+}
+
 interface ChatMessage {
 	id: number;
 	conversation_id: number;
@@ -35,6 +56,14 @@ interface ChatMessage {
 		width?: number;
 		height?: number;
 	}>;
+	/** id процитированного сообщения, если это ответ. */
+	reply_to_message_id?: number | null;
+	/** Гидрированная сервером цитата для reply_to_message_id. */
+	reply_to?: MessageQuote | null;
+	/** Время правки; наличие значения включает метку «(ред.)». */
+	edited_at?: string | null;
+	/** Мягкое удаление: тело и вложения очищены, строка осталась. */
+	deleted_at?: string | null;
 	pending?: boolean;
 	failed?: boolean;
 }
@@ -179,4 +208,4 @@ export const useChatStore = create<ChatState>((set, get) => ({
 		set({ activeConversationId: id });
 	},
 }));
-export type { ChatMessage, BookingStatusPayload };
+export type { ChatMessage, BookingStatusPayload, MessageQuote };

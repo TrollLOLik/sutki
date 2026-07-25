@@ -30,6 +30,7 @@ import {
 	useConversations,
 	useConversationPresence,
 	publishTyping,
+	replaceMessageInCache,
 } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
 import { useListing } from '@/lib/api/listings';
@@ -42,9 +43,11 @@ import { formatRooms } from '@/lib/format';
 import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
 import { useChatColors } from '@/components/chat/useChatColors';
 import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
 import { useChatUploads, type PickedFile } from '@/hooks/useChatUploads';
+import { hapticTapLight } from '@/lib/haptics';
 import Animated, {
 	Easing,
 	FadeIn,
@@ -242,6 +245,9 @@ export default function ChatDialogScreen() {
 	const chatImages = React.useMemo(() => {
 		const list: string[] = [];
 		for (let i = messages.length - 1; i >= 0; i--) {
+			// Удалённое сообщение пропускаем: его файлы уже убраны из хранилища,
+			// и попав в этот список они сдвинули бы индексы просмотрщика.
+			if (messages[i].deleted_at) continue;
 			messages[i].attachments?.forEach((att) => {
 				if (att.mime_type.startsWith('image/')) {
 					list.push(att.url);
@@ -250,6 +256,74 @@ export default function ChatDialogScreen() {
 		}
 		return list;
 	}, [messages]);
+
+	// Ответ на сообщение: хранится целиком, а не только id — блок над полем
+	// ввода показывает текст и миниатюру, а они уже есть в ленте.
+	const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+	// Подсветка после перехода к оригиналу: короткая вспышка, чтобы глаз нашёл
+	// сообщение в ленте.
+	const [highlightedMessageID, setHighlightedMessageID] = useState<number | null>(null);
+	const listRef = useRef<FlatList<ChatMessage>>(null);
+	const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const startReply = React.useCallback((message: ChatMessage) => {
+		setReplyTo(message);
+		hapticTapLight();
+	}, []);
+
+	const cancelReply = React.useCallback(() => setReplyTo(null), []);
+
+	/**
+	 * Имя автора для шапки цитаты.
+	 *
+	 * В беседе всего два участника, поэтому достаточно различить «я» и
+	 * собеседник — отдельный запрос профиля не нужен. sender_id === null бывает
+	 * у системных карточек брони.
+	 */
+	const resolveAuthorName = React.useCallback(
+		(senderID?: number | null) => {
+			if (senderID == null) return 'Бронирование';
+			if (senderID === sessionUser?.id) return 'Вы';
+			return activeConv?.other_user_name?.trim() || 'Собеседник';
+		},
+		[activeConv?.other_user_name, sessionUser?.id],
+	);
+
+	/**
+	 * Переход к процитированному сообщению.
+	 *
+	 * Оригинал может лежать за пределами загруженных страниц: история тянется
+	 * по 20 сообщений, а цитата ссылается куда угодно. Если сообщения нет в
+	 * ленте — подгружаем следующую страницу и говорим об этом, вместо того
+	 * чтобы молча ничего не делать.
+	 */
+	const scrollToMessage = React.useCallback(
+		(messageID: number) => {
+			const index = messages.findIndex((m) => m.id === messageID);
+			if (index < 0) {
+				if (hasNextPage && !isFetchingNextPage) {
+					fetchNextPage();
+					Alert.alert('Загружаем историю', 'Сообщение выше — подгружаем и попробуйте ещё раз.');
+				} else {
+					Alert.alert('Сообщение недоступно', 'Не удалось найти исходное сообщение в переписке.');
+				}
+				return;
+			}
+
+			listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+			setHighlightedMessageID(messageID);
+			if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+			highlightTimerRef.current = setTimeout(() => setHighlightedMessageID(null), 1200);
+		},
+		[fetchNextPage, hasNextPage, isFetchingNextPage, messages],
+	);
+
+	useEffect(
+		() => () => {
+			if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+		},
+		[],
+	);
 
 	const ownTypingActiveRef = useRef(false);
 	const ownTypingLastSentAtRef = useRef(0);
@@ -419,6 +493,25 @@ export default function ChatDialogScreen() {
 				if (newMsg.sender_id !== sessionUser?.id) {
 					performReadMessages(newMsg.id);
 				}
+				return;
+			}
+
+			// Правка и удаление приходят одним и тем же способом: сервер
+			// присылает сообщение целиком, клиент подменяет запись в кэше. Так
+			// удалённое сообщение превращается в плашку, а исправленное меняет
+			// текст и получает метку «ред.» — без перезагрузки истории.
+			if (
+				(payload.type === 'message.edited' || payload.type === 'message.deleted') &&
+				payload.message
+			) {
+				const updated = payload.message;
+				replaceMessageInCache(queryClient, convID, updated);
+
+				// Ответ на сообщение, которое только что удалили, оставлять в
+				// композере нельзя: цитата уже недействительна.
+				if (payload.type === 'message.deleted') {
+					setReplyTo((current) => (current?.id === updated.id ? null : current));
+				}
 			}
 		});
 
@@ -445,6 +538,11 @@ export default function ChatDialogScreen() {
 		stopOwnTyping();
 		setInputText('');
 
+		// Снимок ответа: поле сбрасывается сразу, а отправка асинхронная, поэтому
+		// к моменту запроса состояние может уже смениться.
+		const replyTarget = replyTo;
+		setReplyTo(null);
+
 		// Create optimistic message
 		const tempId = -Date.now();
 		const optimisticMsg: ChatMessage = {
@@ -454,6 +552,24 @@ export default function ChatDialogScreen() {
 			body: text,
 			created_at: new Date().toISOString(),
 			pending: true,
+			// Цитату собираем локально из уже загруженного сообщения: сервер
+			// пришлёт свою версию в ответе, но пузырь должен показать её сразу.
+			...(replyTarget
+				? {
+						reply_to_message_id: replyTarget.id,
+						reply_to: {
+							id: replyTarget.id,
+							sender_id: replyTarget.sender_id,
+							kind: replyTarget.kind ?? 'user',
+							body_preview: (replyTarget.body ?? '').slice(0, 120),
+							attachment_count: replyTarget.attachments?.length ?? 0,
+							first_attachment_url: replyTarget.attachments?.find((a) =>
+								a.mime_type.startsWith('image/'),
+							)?.url,
+							deleted: false,
+						},
+					}
+				: {}),
 		};
 
 		// Push optimistic message to cache
@@ -465,7 +581,10 @@ export default function ChatDialogScreen() {
 		});
 
 		try {
-			const saved = await performSendMessage({ body: text });
+			const saved = await performSendMessage({
+				body: text,
+				reply_to_message_id: replyTarget?.id,
+			});
 
 			// Replace optimistic message in cache with real database response
 			queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
@@ -605,6 +724,10 @@ export default function ChatDialogScreen() {
 				downloadingAttachmentID={downloadingAttachmentID}
 				onImagePress={openImageViewer}
 				onDocumentPress={downloadAttachment}
+				quoteAuthorName={resolveAuthorName}
+				onReply={startReply}
+				onQuotePress={scrollToMessage}
+				highlighted={highlightedMessageID === item.id}
 			/>
 		);
 	};
@@ -832,8 +955,18 @@ export default function ChatDialogScreen() {
 				</View>
 			) : (
 				<FlatList
+					ref={listRef}
 					data={messages}
 					keyExtractor={(item) => String(item.id)}
+					// Высоты сообщений разные, поэтому FlatList не всегда может
+					// сразу доскроллить к индексу. Без этого обработчика переход
+					// к цитате роняет список исключением.
+					onScrollToIndexFailed={({ index, averageItemLength }) => {
+						listRef.current?.scrollToOffset({
+							offset: index * Math.max(averageItemLength, 1),
+							animated: true,
+						});
+					}}
 					renderItem={renderMessage}
 					inverted
 					onEndReached={() => {
@@ -877,6 +1010,14 @@ export default function ChatDialogScreen() {
 						className="border-t"
 					>
 					{/* Quick replies for the owner in fresh dialogs */}
+					{replyTo ? (
+						<ReplyPreviewBar
+							message={replyTo}
+							authorName={resolveAuthorName(replyTo.sender_id)}
+							onCancel={cancelReply}
+						/>
+					) : null}
+
 					{showQuickReplies && (
 						<FlatList
 							horizontal
