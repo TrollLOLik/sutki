@@ -28,6 +28,7 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Get("/conversations", h.listConversations)
 	r.Post("/conversations", h.findOrCreateConversation)
 	r.Get("/conversations/{id}/messages", h.getMessages)
+	r.Get("/conversations/{id}/images", h.getConversationImages)
 	r.Post("/conversations/{id}/messages", h.sendMessage)
 	// Message mutations are addressed by message id alone: the id is globally
 	// unique, and authorization is by authorship rather than by conversation.
@@ -343,6 +344,31 @@ func (h *ChatHandler) getMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, msgs)
+}
+
+func (h *ChatHandler) getConversationImages(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	convID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || convID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	images, err := h.svc.GetConversationImages(r.Context(), userID, convID)
+	if err != nil {
+		if errors.Is(err, domain.ErrBookingForbidden) {
+			writeError(w, http.StatusForbidden, "not a participant of this conversation")
+			return
+		}
+		writeInternalError(w, r, err, "failed to get conversation images")
+		return
+	}
+	writeJSON(w, http.StatusOK, images)
 }
 
 type sendMessageRequest struct {

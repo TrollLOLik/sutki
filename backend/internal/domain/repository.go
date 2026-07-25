@@ -211,6 +211,9 @@ type ChatRepository interface {
 	ListUserConversations(ctx context.Context, userID int32) ([]ConversationSummary, error)
 	GetHostResponseStats(ctx context.Context, hostID int32) (HostResponseStats, error)
 	GetConversationMessages(ctx context.Context, convID int64, cursorMessageID int64, limit int32) ([]Message, error)
+	// GetConversationImages returns approved image attachments from the whole
+	// dialog, independently of message-history pagination.
+	GetConversationImages(ctx context.Context, convID int64, limit int32) ([]MessageAttachment, error)
 	UpdateLastReadMessage(ctx context.Context, messageID int64, convID int64, userID int32) error
 	CheckParticipantExists(ctx context.Context, convID int64, userID int32) (bool, error)
 	IsOtherParticipantDeleted(ctx context.Context, convID int64, userID int32) (bool, error)

@@ -501,6 +501,30 @@ func (s *Service) GetConversationMessages(ctx context.Context, userID int32, con
 	return msgs, nil
 }
 
+func (s *Service) GetConversationImages(
+	ctx context.Context,
+	userID int32,
+	convID int64,
+) ([]domain.MessageAttachment, error) {
+	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !isParticipant {
+		return nil, domain.ErrBookingForbidden
+	}
+
+	const maxConversationImages = 500
+	images, err := s.repo.GetConversationImages(ctx, convID, maxConversationImages)
+	if err != nil {
+		return nil, err
+	}
+	for i := range images {
+		images[i] = s.presignAttachment(ctx, images[i])
+	}
+	return images, nil
+}
+
 func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, body *string, replyToMessageID *int64, attachments []domain.MessageAttachment) (domain.Message, error) {
 	// Verify participation
 	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)

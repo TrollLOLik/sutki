@@ -69,6 +69,7 @@ export const chatKeys = {
 	all: ['chat'] as const,
 	conversations: () => [...chatKeys.all, 'conversations'] as const,
 	messages: (convID: number) => [...chatKeys.all, 'messages', convID] as const,
+	images: (convID: number) => [...chatKeys.all, 'images', convID] as const,
 	presence: (convID: number) => [...chatKeys.all, 'presence', convID] as const,
 	/**
 	 * Ключ включает id последнего сообщения: подсказки относятся к конкретному
@@ -116,6 +117,23 @@ export function useMessages(convID: number | undefined) {
 			return lastPage[lastPage.length - 1].id;
 		},
 		enabled: convID != null && convID > 0,
+	});
+}
+
+export function fetchConversationImages(
+	convID: number,
+): Promise<NonNullable<ChatMessage['attachments']>> {
+	return api.get<NonNullable<ChatMessage['attachments']>>(
+		`/api/v1/chat/conversations/${convID}/images`,
+	);
+}
+
+export function useConversationImages(convID: number | undefined) {
+	return useQuery({
+		queryKey: chatKeys.images(convID ?? 0),
+		queryFn: () => fetchConversationImages(convID as number),
+		enabled: convID != null && convID > 0,
+		staleTime: 30_000,
 	});
 }
 

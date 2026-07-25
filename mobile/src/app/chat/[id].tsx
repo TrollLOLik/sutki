@@ -3,10 +3,10 @@ import {
 	View,
 	Text,
 	FlatList,
-	TextInput,
 	TouchableOpacity,
 	ActivityIndicator,
 	Linking,
+	NativeModules,
 	StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ import { useChatStore, ChatMessage } from '@/store/chatStore';
 import {
 	chatKeys,
 	useMessages,
+	useConversationImages,
 	useSendMessage,
 	useReadMessages,
 	useEditMessage,
@@ -47,6 +48,10 @@ import { formatRooms } from '@/lib/format';
 import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import {
+	RichContentTextInput,
+	type KeyboardMedia,
+} from '@/components/chat/RichContentTextInput';
 import { ReplyPreviewBar } from '@/components/chat/ReplyPreviewBar';
 import { StagedAttachmentsBar } from '@/components/chat/StagedAttachmentsBar';
 import { SuggestionChips } from '@/components/chat/SuggestionChips';
@@ -58,7 +63,11 @@ import {
 } from '@/components/chat/MessageActionsSheet';
 import { useChatColors } from '@/components/chat/useChatColors';
 import { type ChatAttachment, formatLastSeen } from '@/components/chat/types';
-import { useChatUploads, MAX_ATTACHMENTS_PER_MESSAGE } from '@/hooks/useChatUploads';
+import {
+	useChatUploads,
+	MAX_ATTACHMENTS_PER_MESSAGE,
+	MAX_ATTACHMENT_BYTES,
+} from '@/hooks/useChatUploads';
 import { MAX_VIDEO_SECONDS } from '@/lib/video';
 import { hapticTapLight, hapticTapMedium, hapticSuccess } from '@/lib/haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -186,6 +195,7 @@ export default function ChatDialogScreen() {
 		isFetchingNextPage,
 		refetch,
 	} = useMessages(convID);
+	const { data: conversationImages = [] } = useConversationImages(convID);
 	const { data: presence, refetch: refetchPresence } = useConversationPresence(convID);
 
 	// Load listing context if available
@@ -266,23 +276,39 @@ export default function ChatDialogScreen() {
 	// картинкой, иначе несколько декодеров на экране рвут скролл.
 	const [playingVideoUri, setPlayingVideoUri] = useState<string | null>(null);
 
-	const chatImages = React.useMemo(() => {
-		const list: string[] = [];
+	const chatGalleryItems = React.useMemo(() => {
+		const list: ChatAttachment[] = [];
+		const keys = new Set<string>();
+
+		const append = (attachment: ChatAttachment) => {
+			const key = `${attachment.message_id}:${attachment.id}`;
+			if (keys.has(key)) return;
+			keys.add(key);
+			list.push(attachment);
+		};
+
+		// The API contains approved images from the complete conversation, not
+		// only the currently loaded page of the message history.
+		conversationImages.forEach(append);
+
+		// Keep local/pending sender images usable immediately. Recipients never
+		// receive pending media from the server, so this cannot expose
+		// unmoderated content to the other participant.
 		for (let i = messages.length - 1; i >= 0; i--) {
-			// Удалённое сообщение пропускаем: его файлы уже убраны из хранилища,
-			// и попав в этот список они сдвинули бы индексы просмотрщика.
 			if (messages[i].deleted_at) continue;
 			messages[i].attachments?.forEach((att) => {
-				// Видео сюда не идёт — у него свой плеер. Непроверенное фото тоже:
-				// оно ещё может быть отклонено, а его присутствие в списке сдвинуло
-				// бы индексы уже одобренных снимков.
-				if (att.mime_type.startsWith('image/') && att.moderation_status !== 'pending') {
-					list.push(att.url);
+				if (att.mime_type.startsWith('image/')) {
+					append(att);
 				}
 			});
 		}
 		return list;
-	}, [messages]);
+	}, [conversationImages, messages]);
+
+	const chatImages = React.useMemo(
+		() => chatGalleryItems.map((attachment) => attachment.url),
+		[chatGalleryItems],
+	);
 
 	// Ответ на сообщение: хранится целиком, а не только id — блок над полем
 	// ввода показывает текст и миниатюру, а они уже есть в ленте.
@@ -596,6 +622,7 @@ export default function ChatDialogScreen() {
 
 			if (payload.type === 'message.new' && payload.message) {
 				const newMsg = payload.message;
+				queryClient.invalidateQueries({ queryKey: chatKeys.images(convID) });
 				if (newMsg.sender_id !== sessionUser?.id) {
 					if (otherTypingExpiryRef.current) clearTimeout(otherTypingExpiryRef.current);
 					setIsOtherTyping(false);
@@ -956,19 +983,60 @@ export default function ChatDialogScreen() {
 		addStaged(await pickDocumentFile());
 	};
 
+	const handleKeyboardMedia = React.useCallback(
+		(media: KeyboardMedia) => {
+			if (media.size <= 0 || media.size > MAX_ATTACHMENT_BYTES) {
+				Alert.alert('GIF слишком большой', 'Можно отправить GIF размером не более 15 МБ.');
+				return;
+			}
+			addStaged([media]);
+		},
+		[addStaged],
+	);
+
 	const downloadAttachment = async (attachment: ChatAttachment) => {
 		if (downloadingAttachmentID != null) return;
 		setDownloadingAttachmentID(attachment.id);
 		try {
-			const directory = await Directory.pickDirectoryAsync();
 			const safeName =
 				attachment.file_name
 					.trim()
 					.replace(/[\\/:*?"<>|]/g, '_')
 					.replace(/^\.+/, '') || `document_${attachment.id}`;
-			const destination = new File(directory, safeName);
-			await File.downloadFileAsync(attachment.url, destination, { idempotent: true });
-			Alert.alert('Файл сохранён', `${safeName} сохранён в выбранную папку.`);
+
+			const nativeDownloader = NativeModules.TitopDownload as
+				| {
+						downloadAndOpen?: (
+							url: string,
+							fileName: string,
+							mimeType: string,
+						) => Promise<{ opened?: boolean }>;
+				  }
+				| undefined;
+
+			if (nativeDownloader?.downloadAndOpen) {
+				const result = await nativeDownloader.downloadAndOpen(
+					attachment.url,
+					safeName,
+					attachment.mime_type || 'application/octet-stream',
+				);
+				if (!result?.opened) {
+					Alert.alert(
+						'Файл сохранён',
+						`${safeName} сохранён в папке Download/Titop Arenda. Подходящее приложение для открытия не найдено.`,
+					);
+				}
+			} else {
+				// Старый APK не содержит MediaStore-модуль. Сохраняем прежний
+				// сценарий вместо падения, пока пользователь не обновит приложение.
+				const directory = await Directory.pickDirectoryAsync();
+				const destination = new File(directory, safeName);
+				await File.downloadFileAsync(attachment.url, destination, { idempotent: true });
+				Alert.alert(
+					'Файл сохранён',
+					`${safeName} сохранён в выбранную папку. Установите обновление, чтобы сохранять автоматически.`,
+				);
+			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			if (!/cancel/i.test(message)) {
@@ -986,13 +1054,16 @@ export default function ChatDialogScreen() {
 
 	const openImageViewer = React.useCallback(
 		(attachment: ChatAttachment) => {
-			const index = chatImages.indexOf(attachment.url);
+			const key = `${attachment.message_id}:${attachment.id}`;
+			const index = chatGalleryItems.findIndex(
+				(item) => `${item.message_id}:${item.id}` === key,
+			);
 			if (index >= 0) {
 				setSelectedImageIndex(index);
 				setGalleryVisible(true);
 			}
 		},
-		[chatImages],
+		[chatGalleryItems],
 	);
 
 	const renderMessage = ({ item }: { item: ChatMessage }) => {
@@ -1412,12 +1483,13 @@ export default function ChatDialogScreen() {
 
 						{/* Input and emoji share one continuous material. */}
 						<View style={{ backgroundColor: chatColors.panelRaised }} className="flex-1 flex-row items-center rounded-[22px] min-h-11">
-							<TextInput
+							<RichContentTextInput
 								placeholder={staged.length > 0 ? 'Добавьте подпись...' : 'Сообщение...'}
 								placeholderTextColor={palette.inkMuted}
 								value={inputText}
 								onChangeText={handleInputChange}
 								onBlur={stopOwnTyping}
+								onKeyboardMedia={handleKeyboardMedia}
 								className="flex-1 pl-4 pr-1 py-2.5 text-ink max-h-24 text-[15px]"
 								multiline
 							/>

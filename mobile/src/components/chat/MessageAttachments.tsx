@@ -40,10 +40,9 @@ export function ImageAttachment({ attachment, onPress }: ImageAttachmentProps) {
 		<TouchableOpacity
 			activeOpacity={0.9}
 			onPress={() => onPress(attachment)}
-			disabled={pending}
 			style={styles.imageAttachment}
 			accessibilityRole="imagebutton"
-			accessibilityLabel={pending ? 'Изображение проверяется' : 'Открыть изображение'}
+			accessibilityLabel={pending ? 'Открыть изображение, оно проверяется' : 'Открыть изображение'}
 		>
 			<Image
 				source={{ uri: attachment.url }}

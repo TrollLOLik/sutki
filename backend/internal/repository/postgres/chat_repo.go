@@ -495,6 +495,62 @@ LIMIT $3`
 	return messages, nil
 }
 
+func (r *ChatRepo) GetConversationImages(
+	ctx context.Context,
+	convID int64,
+	limit int32,
+) ([]domain.MessageAttachment, error) {
+	const q = `
+SELECT id, message_id, url, COALESCE(file_name, ''), COALESCE(mime_type, ''),
+       COALESCE(size_bytes, 0), width, height, moderation_status,
+       duration_seconds, COALESCE(thumbnail_url, '')
+FROM (
+  SELECT ma.id, ma.message_id, ma.url, ma.file_name, ma.mime_type,
+         ma.size_bytes, ma.width, ma.height, ma.moderation_status,
+         ma.duration_seconds, ma.thumbnail_url, m.id AS sort_message_id
+  FROM message_attachment ma
+  JOIN message m ON m.id = ma.message_id
+  WHERE m.conversation_id = $1
+    AND m.deleted_at IS NULL
+    AND ma.moderation_status = 'approved'
+    AND ma.mime_type LIKE 'image/%'
+  ORDER BY m.id DESC, ma.id DESC
+  LIMIT $2
+) recent
+ORDER BY sort_message_id, id`
+
+	rows, err := r.q.DB().Query(ctx, q, convID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	attachments := make([]domain.MessageAttachment, 0)
+	for rows.Next() {
+		var att domain.MessageAttachment
+		if err := rows.Scan(
+			&att.ID,
+			&att.MessageID,
+			&att.URL,
+			&att.FileName,
+			&att.MimeType,
+			&att.SizeBytes,
+			&att.Width,
+			&att.Height,
+			&att.ModerationStatus,
+			&att.DurationSeconds,
+			&att.ThumbnailURL,
+		); err != nil {
+			return nil, err
+		}
+		attachments = append(attachments, att)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return attachments, nil
+}
+
 // toDomainAttachment maps a GetMessageAttachments row to the domain type.
 // Shared by the paged history read and the single-message read so the two cannot
 // drift apart on a newly added column.

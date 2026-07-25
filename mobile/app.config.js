@@ -63,6 +63,7 @@ module.exports = {
     },
     plugins: [
       "expo-router",
+      "./plugins/with-rich-content-text-input",
       [
         "expo-splash-screen",
         {
