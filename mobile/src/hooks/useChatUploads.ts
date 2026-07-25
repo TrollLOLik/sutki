@@ -5,6 +5,13 @@ import * as DocumentPicker from 'expo-document-picker';
 import { presignUpload, type AttachmentInput } from '@/lib/api/chat';
 import { uploadToS3 } from '@/lib/api/media';
 import { appAlert as Alert } from '@/components/AppAlert';
+import {
+	prepareVideo,
+	MAX_VIDEO_BYTES,
+	MAX_VIDEO_SECONDS,
+	VideoTooLongError,
+	VideoTooLargeError,
+} from '@/lib/video';
 
 /** Лимит размера одного файла. Совпадает с maxAttachmentBytes на бэкенде. */
 export const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
@@ -43,6 +50,15 @@ export interface PickedFile {
 	size: number;
 	width?: number;
 	height?: number;
+	/** Длительность видео в секундах. */
+	durationSeconds?: number;
+	/** Локальная обложка видео: показывается, пока сервер не сгенерировал свою. */
+	thumbnailUri?: string;
+}
+
+/** Вложение — видео. */
+export function isVideoFile(file: PickedFile): boolean {
+	return file.mimeType.startsWith('video/');
 }
 
 /**
@@ -58,6 +74,12 @@ export interface StagedFile extends PickedFile {
 	progress?: number;
 	/** Загрузка этого файла не удалась. */
 	failed?: boolean;
+	/**
+	 * Идёт сжатие видео (до загрузки). Отдельно от progress, потому что это два
+	 * разных ожидания подряд: сначала процессор, потом сеть.
+	 */
+	compressing?: boolean;
+	compressProgress?: number;
 }
 
 let stagedCounter = 0;
@@ -138,6 +160,78 @@ export function useChatUploads() {
 		];
 	}, []);
 
+	/**
+	 * Выбор видео из галереи с подготовкой на устройстве.
+	 *
+	 * Сжатие и обложка делаются здесь, до попадания в стадию подготовки: съёмка с
+	 * телефона легко весит сотни мегабайт, и загружать её как есть — значит
+	 * упереться в лимит и надолго занять канал пользователя.
+	 *
+	 * Сжатие небыстрое (секунды), поэтому onProgress обязателен — иначе выбор
+	 * видео выглядит как зависший интерфейс.
+	 */
+	const pickVideo = React.useCallback(
+		async (onCompressProgress?: (progress: number) => void): Promise<PickedFile[]> => {
+			const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+			if (!permission.granted) {
+				Alert.alert('Доступ запрещен', 'Для выбора видео разрешите доступ к галерее в настройках.');
+				return [];
+			}
+
+			const result = await ImagePicker.launchImageLibraryAsync({
+				mediaTypes: 'videos',
+				// Ограничение пикера на iOS. На Android оно зависит от приложения
+				// камеры, поэтому длительность всё равно проверяется в prepareVideo,
+				// а окончательно — на сервере через ffprobe.
+				videoMaxDuration: MAX_VIDEO_SECONDS,
+				allowsMultipleSelection: false,
+			});
+
+			if (result.canceled || !result.assets?.[0]) return [];
+			const asset = result.assets[0];
+
+			// Пикер отдаёт длительность в миллисекундах.
+			const durationSeconds = asset.duration ? Math.round(asset.duration / 1000) : 0;
+
+			try {
+				const prepared = await prepareVideo(
+					asset.uri,
+					asset.fileName || `video_${Date.now()}.mp4`,
+					durationSeconds,
+					onCompressProgress,
+				);
+				return [
+					{
+						uri: prepared.uri,
+						fileName: prepared.fileName,
+						mimeType: prepared.mimeType,
+						size: prepared.size,
+						width: asset.width,
+						height: asset.height,
+						durationSeconds: prepared.durationSeconds,
+						thumbnailUri: prepared.thumbnailUri,
+					},
+				];
+			} catch (err) {
+				if (err instanceof VideoTooLongError) {
+					Alert.alert(
+						'Видео слишком длинное',
+						`Можно отправить видео не длиннее ${MAX_VIDEO_SECONDS} секунд.`,
+					);
+					return [];
+				}
+				if (err instanceof VideoTooLargeError) {
+					Alert.alert('Видео слишком большое', 'Даже после сжатия файл больше 50 МБ.');
+					return [];
+				}
+				console.error('[Chat] Failed to prepare video:', err);
+				Alert.alert('Не удалось обработать видео', 'Попробуйте выбрать другой файл.');
+				return [];
+			}
+		},
+		[],
+	);
+
 	/** Выбор документа. */
 	const pickDocument = React.useCallback(async (): Promise<PickedFile[]> => {
 		const result = await DocumentPicker.getDocumentAsync({
@@ -165,8 +259,14 @@ export function useChatUploads() {
 	 */
 	const uploadFile = React.useCallback(
 		async (file: PickedFile, onProgress?: (progress: number) => void): Promise<AttachmentInput> => {
-			if (file.size > MAX_ATTACHMENT_BYTES) {
-				throw new Error('Размер файла превышает лимит 15 МБ.');
+			// У видео свой, больший лимит: 30-секундный 720p клип в 15 МБ не влезает.
+			const limit = isVideoFile(file) ? MAX_VIDEO_BYTES : MAX_ATTACHMENT_BYTES;
+			if (file.size > limit) {
+				throw new Error(
+					isVideoFile(file)
+						? 'Размер видео превышает лимит 50 МБ.'
+						: 'Размер файла превышает лимит 15 МБ.',
+				);
 			}
 
 			const target = await presignUpload(file.fileName, file.size, file.mimeType);
@@ -296,6 +396,7 @@ export function useChatUploads() {
 		clearStaged,
 		uploadStaged,
 		pickImages,
+		pickVideo,
 		takePhoto,
 		pickDocument,
 		uploadFile,

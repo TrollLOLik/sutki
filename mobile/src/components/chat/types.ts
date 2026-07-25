@@ -10,6 +10,19 @@ export function isImageAttachment(att: ChatAttachment): boolean {
 	return att.mime_type.startsWith('image/');
 }
 
+/** Вложение — видео: рендерится обложкой с Play, а не инлайн-плеером. */
+export function isVideoAttachment(att: ChatAttachment): boolean {
+	return att.mime_type.startsWith('video/');
+}
+
+/**
+ * Вложение ещё проверяется. Чужие pending-вложения сервер не отдаёт вовсе, так
+ * что этот флаг встречается только на своих сообщениях.
+ */
+export function isPendingAttachment(att: ChatAttachment): boolean {
+	return att.moderation_status === 'pending';
+}
+
 /**
  * Сообщение состоит только из изображений, без текста.
  * Такие рендерятся без пузыря — картинка сама себе фон, а время накладывается
@@ -19,6 +32,8 @@ export function isImageOnlyMessage(message: ChatMessage): boolean {
 	const attachments = message.attachments;
 	if (!attachments?.length) return false;
 	if (message.body) return false;
+	// Видео сюда не попадает: у него своя рамка с обложкой, и прозрачный пузырь с
+	// наложенным временем ей не подходит.
 	return attachments.every(isImageAttachment);
 }
 
