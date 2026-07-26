@@ -131,7 +131,11 @@ type UserRepository interface {
 type AuthCodeRepository interface {
 	Upsert(ctx context.Context, code AuthCode) error
 	Get(ctx context.Context, channel, target string) (AuthCode, error)
-	IncrementAttempts(ctx context.Context, channel, target string) error
+	// ConsumeAttempt atomically spends one verification attempt and returns the
+	// code row after the spend, so the caller never compares a code without
+	// having paid for the try. Returns ErrTooManyAttempts once the budget is
+	// exhausted and ErrNotFound when no code exists for the target.
+	ConsumeAttempt(ctx context.Context, channel, target string, maxAttempts int32) (AuthCode, error)
 	Delete(ctx context.Context, channel, target string) error
 }
 
@@ -146,7 +150,11 @@ type PhoneChallengeRepository interface {
 	BeginDelivery(ctx context.Context, challengeID, provider, mode, idempotencyID string, pendingUntil time.Time) (PhoneChallengeDelivery, error)
 	MarkReady(ctx context.Context, challengeID, codeHash string, codeLength int32, mode, providerDeliveryID string, expiresAt time.Time) error
 	MarkDeliveryFailed(ctx context.Context, challengeID string, errorCode, errorMessage *string) error
-	IncrementAttempts(ctx context.Context, challengeID string) error
+	// ConsumeAttempt atomically spends one verification attempt and returns the
+	// challenge after the spend. It must reject (ErrTooManyAttempts) rather than
+	// spend once the budget is exhausted — the guard has to live in the same
+	// statement as the increment, or concurrent verifies bypass it.
+	ConsumeAttempt(ctx context.Context, challengeID string, maxAttempts int32, now time.Time) (PhoneChallenge, error)
 	MarkVerified(ctx context.Context, challengeID string) error
 	MarkExpired(ctx context.Context, challengeID string) error
 }

@@ -1,7 +1,12 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { api } from '@/lib/api/client';
-import type { AuthResponse, RequestCodeResponse, UpdateProfileBody } from '@/types/auth';
+import type {
+  AuthResponse,
+  ReauthChallengeResponse,
+  RequestCodeResponse,
+  UpdateProfileBody,
+} from '@/types/auth';
 import type { User } from '@/types/user';
 
 /**
@@ -62,6 +67,42 @@ export function useDeleteMe() {
   return useMutation({ mutationFn: deleteMe });
 }
 
+/**
+ * Re-authentication: prove control of the factor already on the account.
+ *
+ * Required before changing the phone or the email. The backend picks the
+ * factor and never accepts a target from us — that is what makes it a proof of
+ * ownership rather than a formality. The resulting `temp_token` lives 15
+ * minutes and must be passed to every step of the change that follows.
+ */
+export function requestReauthCode(): Promise<ReauthChallengeResponse> {
+  return api.post<ReauthChallengeResponse>('/api/v1/me/reauth/request');
+}
+
+/** Re-deliver a pending phone re-auth code as a voice call. */
+export function requestReauthVoiceFallback(challengeId: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/reauth/fallback', { challenge_id: challengeId });
+}
+
+/** Exchange the re-auth code for the short-lived proof token. */
+export function verifyReauthCode(code: string, challengeId?: string): Promise<{ temp_token: string }> {
+  return api.post<{ temp_token: string }>('/api/v1/me/reauth/verify', {
+    code,
+    challenge_id: challengeId ?? '',
+  });
+}
+
+export function useRequestReauthCode() {
+  return useMutation({ mutationFn: requestReauthCode });
+}
+
+export function useVerifyReauthCode() {
+  return useMutation({
+    mutationFn: ({ code, challengeId }: { code: string; challengeId?: string }) =>
+      verifyReauthCode(code, challengeId),
+  });
+}
+
 /** Request a code for the current email to verify ownership before change. */
 export function requestOldEmailCode(): Promise<RequestCodeResponse> {
   return api.post<RequestCodeResponse>('/api/v1/me/change-email/request-old');
@@ -80,9 +121,18 @@ export function requestNewEmailCode(tempToken: string, newEmail: string): Promis
   });
 }
 
-/** Confirm the email change with the code sent to the new email. Returns the updated User. */
-export function confirmEmailChange(newEmail: string, code: string): Promise<User> {
-  return api.post<User>('/api/v1/me/change-email/confirm', { new_email: newEmail, code });
+/**
+ * Confirm the email change with the code sent to the new email. Returns the
+ * updated User. `tempToken` is the re-auth proof: the backend re-checks it here
+ * as well as at request time, so the proof must still be live at the moment the
+ * account actually changes hands.
+ */
+export function confirmEmailChange(newEmail: string, code: string, tempToken: string): Promise<User> {
+  return api.post<User>('/api/v1/me/change-email/confirm', {
+    new_email: newEmail,
+    code,
+    temp_token: tempToken,
+  });
 }
 
 export function useRequestOldEmailCode() {
@@ -104,8 +154,8 @@ export function useRequestNewEmailCode() {
 
 export function useConfirmEmailChange() {
   return useMutation({
-    mutationFn: ({ newEmail, code }: { newEmail: string; code: string }) =>
-      confirmEmailChange(newEmail, code),
+    mutationFn: ({ newEmail, code, tempToken }: { newEmail: string; code: string; tempToken: string }) =>
+      confirmEmailChange(newEmail, code, tempToken),
   });
 }
 
@@ -196,9 +246,18 @@ export function verifyPhoneCode(phone: string, code: string, challengeId: string
   return api.post<AuthResponse>('/api/v1/auth/phone/verify', { phone, code, challenge_id: challengeId }, { auth: false });
 }
 
-/** Request a verification code to change/link a new phone number. */
-export function requestChangePhoneCode(phone: string): Promise<RequestCodeResponse> {
-  return api.post<RequestCodeResponse>('/api/v1/me/change-phone/request', { phone });
+/**
+ * Request a verification code to change/link a new phone number.
+ *
+ * `tempToken` comes from the re-auth flow above and is mandatory: without it
+ * the backend answers 403. A valid session alone is deliberately not enough —
+ * whoever can rebind the phone owns the account permanently.
+ */
+export function requestChangePhoneCode(phone: string, tempToken: string): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/change-phone/request', {
+    phone,
+    temp_token: tempToken,
+  });
 }
 
 export function requestChangePhoneVoiceFallback(phone: string, challengeId: string): Promise<RequestCodeResponse> {
@@ -206,8 +265,18 @@ export function requestChangePhoneVoiceFallback(phone: string, challengeId: stri
 }
 
 /** Confirm phone number change/linking with verification code. */
-export function confirmPhoneChange(phone: string, code: string, challengeId: string): Promise<User> {
-  return api.post<User>('/api/v1/me/change-phone/confirm', { phone, code, challenge_id: challengeId });
+export function confirmPhoneChange(
+  phone: string,
+  code: string,
+  challengeId: string,
+  tempToken: string,
+): Promise<User> {
+  return api.post<User>('/api/v1/me/change-phone/confirm', {
+    phone,
+    code,
+    challenge_id: challengeId,
+    temp_token: tempToken,
+  });
 }
 
 export function useRequestPhoneCode() {
@@ -225,14 +294,24 @@ export function useVerifyPhoneCode() {
 
 export function useRequestChangePhoneCode() {
   return useMutation({
-    mutationFn: ({ phone }: { phone: string }) => requestChangePhoneCode(phone),
+    mutationFn: ({ phone, tempToken }: { phone: string; tempToken: string }) =>
+      requestChangePhoneCode(phone, tempToken),
   });
 }
 
 export function useConfirmPhoneChange() {
   return useMutation({
-    mutationFn: ({ phone, code, challengeId }: { phone: string; code: string; challengeId: string }) =>
-      confirmPhoneChange(phone, code, challengeId),
+    mutationFn: ({
+      phone,
+      code,
+      challengeId,
+      tempToken,
+    }: {
+      phone: string;
+      code: string;
+      challengeId: string;
+      tempToken: string;
+    }) => confirmPhoneChange(phone, code, challengeId, tempToken),
   });
 }
 

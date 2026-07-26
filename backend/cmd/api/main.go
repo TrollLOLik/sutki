@@ -252,6 +252,7 @@ func main() {
 		Notifier:        chatSvc,
 		WorkDir:         cfg.MediaWorkDir,
 		MaxVideoSeconds: cfg.MaxVideoSeconds,
+		MaxVideoFrames:  cfg.MaxVideoModerationFrames,
 	})
 	chatSvc.SetAttachmentModerationQueue(attachmentModerationRepo, attachmentModerator)
 	if cfg.AttachmentModerationWorkerEnabled {
@@ -286,7 +287,7 @@ func main() {
 	reviewSvc.StartWorker(ctx)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 
-	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, true)
+	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, cfg.AppEnvironment != "production")
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 

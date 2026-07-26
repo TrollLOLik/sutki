@@ -142,9 +142,56 @@ func (r *PhoneChallengeRepo) MarkDeliveryFailed(ctx context.Context, id string, 
 	return tx.Commit(ctx)
 }
 
-func (r *PhoneChallengeRepo) IncrementAttempts(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE phone_auth_challenge SET attempts=attempts+1,updated_at=now() WHERE id=$1::uuid`, id)
-	return err
+// ConsumeAttempt spends one verification attempt against a live challenge and
+// returns the challenge as it stands *after* the spend.
+//
+// The spend is a single row-level UPDATE guarded by `attempts < $2`. That guard
+// is the only thing that holds the attempt budget under concurrency: reading
+// the counter with a SELECT and incrementing it with a separate UPDATE lets N
+// parallel requests all observe the same pre-increment value, so all N get a
+// code comparison. With a 4-digit code that turns the budget of 5 into
+// "as many guesses as the attacker can open connections".
+//
+// It also bounds bcrypt work: at most maxAttempts comparisons can ever run for
+// a given challenge, so the verify route cannot be used as a CPU amplifier.
+//
+// No row updated means the challenge is absent, not ready, exhausted or
+// expired; the caller-facing reason is resolved by a follow-up read on the
+// failure path only.
+func (r *PhoneChallengeRepo) ConsumeAttempt(ctx context.Context, id string, maxAttempts int32, now time.Time) (domain.PhoneChallenge, error) {
+	c, err := scanPhoneChallenge(r.pool.QueryRow(ctx, `UPDATE phone_auth_challenge
+SET attempts=attempts+1,updated_at=now()
+WHERE id=$1::uuid
+  AND status='ready_for_verification'
+  AND code_hash IS NOT NULL
+  AND attempts < $2
+  AND expires_at > $3
+RETURNING `+phoneChallengeColumns, id, maxAttempts, now))
+	if err == nil {
+		return c, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return domain.PhoneChallenge{}, err
+	}
+	return domain.PhoneChallenge{}, r.classifyUnspendable(ctx, id, maxAttempts, now)
+}
+
+// classifyUnspendable maps a no-op spend onto the error the caller surfaces.
+// A challenge we cannot read at all is reported as an invalid code so the
+// endpoint stays free of an existence oracle.
+func (r *PhoneChallengeRepo) classifyUnspendable(ctx context.Context, id string, maxAttempts int32, now time.Time) error {
+	c, err := r.GetByID(ctx, id)
+	if err != nil {
+		return domain.ErrCodeInvalid
+	}
+	switch {
+	case c.Attempts >= maxAttempts:
+		return domain.ErrTooManyAttempts
+	case c.Status == domain.PhoneChallengeStatusReady && !c.ExpiresAt.After(now):
+		return domain.ErrCodeExpired
+	default:
+		return domain.ErrCodeInvalid
+	}
 }
 func (r *PhoneChallengeRepo) MarkVerified(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE phone_auth_challenge SET status='verified',code_hash=NULL,updated_at=now() WHERE id=$1::uuid`, id)

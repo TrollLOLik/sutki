@@ -168,13 +168,17 @@ type ExtractOptions struct {
 	// MaxFrames caps the sample regardless of duration, so a long file cannot
 	// turn into an unbounded number of paid vision calls.
 	MaxFrames int
+	// DurationSeconds enables uniform sampling across the entire clip. When it
+	// is known, ffmpeg derives the frame rate from MaxFrames/DurationSeconds.
+	DurationSeconds int
 	// Width to downscale frames to. The moderation model does not need full
 	// resolution, and smaller frames mean smaller data URLs.
 	Width int
 }
 
-// DefaultExtractOptions matches the agreed policy: a frame every 4 seconds, at
-// most 10 frames, downscaled to 640px wide.
+// DefaultExtractOptions is the conservative fallback for callers that do not
+// know media duration. Video moderation overrides the count and width so it can
+// build 3x2 contact sheets and retain detailed frames for escalation.
 func DefaultExtractOptions() ExtractOptions {
 	return ExtractOptions{IntervalSeconds: 4, MaxFrames: 10, Width: 640}
 }
@@ -204,13 +208,17 @@ func (e *Extractor) ExtractFrames(ctx context.Context, path, destDir string, opt
 	defer cancel()
 
 	pattern := filepath.Join(destDir, "frame_%03d.jpg")
+	frameRate := fmt.Sprintf("1/%d", opts.IntervalSeconds)
+	if opts.DurationSeconds > 0 && opts.MaxFrames > 0 {
+		frameRate = fmt.Sprintf("%d/%d", opts.MaxFrames, opts.DurationSeconds)
+	}
 	cmd := exec.CommandContext(cmdCtx, e.ffmpegPath,
 		"-v", "error",
 		"-i", path,
 		"-an",
 		// fps=1/N gives one frame every N seconds; scale keeps aspect ratio
 		// (-1 would allow odd heights, -2 keeps them even for the encoder).
-		"-vf", fmt.Sprintf("fps=1/%d,scale=%d:-2", opts.IntervalSeconds, opts.Width),
+		"-vf", fmt.Sprintf("fps=%s,scale=%d:-2", frameRate, opts.Width),
 		"-frames:v", strconv.Itoa(opts.MaxFrames),
 		"-q:v", "4",
 		"-y",

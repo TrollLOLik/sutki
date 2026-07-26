@@ -17,8 +17,14 @@ SELECT channel, target, code_hash, expires_at, attempts, created_at, delivery_pr
 FROM auth_code
 WHERE channel = $1 AND target = $2;
 
--- name: IncrementAuthCodeAttempts :exec
-UPDATE auth_code SET attempts = attempts + 1 WHERE channel = $1 AND target = $2;
+-- name: ConsumeAuthCodeAttempt :one
+-- Spends one verification attempt and returns the row after the spend. The
+-- attempts guard lives in the same statement as the increment on purpose: a
+-- SELECT-then-UPDATE pair lets concurrent verifies all read the same
+-- pre-increment counter and all reach the code comparison.
+UPDATE auth_code SET attempts = attempts + 1
+WHERE channel = $1 AND target = $2 AND attempts < sqlc.arg('max_attempts')
+RETURNING channel, target, code_hash, expires_at, attempts, created_at, delivery_provider, delivery_id, delivery_cost;
 
 -- name: DeleteAuthCode :exec
 DELETE FROM auth_code WHERE channel = $1 AND target = $2;

@@ -86,17 +86,22 @@ func (c *Client) GenerateWithImages(ctx context.Context, systemPrompt, userPromp
 	}
 
 	payload := struct {
-		Model       string  `json:"model"`
-		Messages    []any   `json:"messages"`
-		MaxTokens   int     `json:"max_tokens,omitempty"`
-		Temperature float64 `json:"temperature,omitempty"`
+		Model              string         `json:"model"`
+		Messages           []any          `json:"messages"`
+		MaxTokens          int            `json:"max_tokens,omitempty"`
+		Temperature        float64        `json:"temperature,omitempty"`
+		ResponseFormat     map[string]any `json:"response_format,omitempty"`
+		ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 	}{
 		Model: c.model,
 		Messages: []any{
 			map[string]any{"role": "system", "content": systemPrompt},
 			map[string]any{"role": "user", "content": content},
 		},
-		MaxTokens: maxTokens, Temperature: temperature,
+		MaxTokens:          maxTokens,
+		Temperature:        temperature,
+		ResponseFormat:     map[string]any{"type": "json_object"},
+		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
 	}
 
 	jsonBytes, err := json.Marshal(payload)

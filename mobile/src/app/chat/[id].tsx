@@ -623,7 +623,6 @@ export default function ChatDialogScreen() {
 				/** Причина отказа модерации — показывается отправителю. */
 				reason?: string;
 			};
-			console.log('[Chat] Event on channel:', channel, payload);
 
 			if (payload.type === 'typing.changed' && payload.user_id !== sessionUser?.id) {
 				if (otherTypingExpiryRef.current) clearTimeout(otherTypingExpiryRef.current);

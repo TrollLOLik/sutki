@@ -5,6 +5,15 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
+)
+
+const (
+	// maxCitySuggestBodyBytes bounds the proxied Dadata payload. The route is
+	// unauthenticated, so it must not inherit nginx's 20 MiB body limit.
+	maxCitySuggestBodyBytes = 4 << 10
+	// dadataRequestTimeout bounds how long one proxied call can pin a goroutine.
+	dadataRequestTimeout = 10 * time.Second
 )
 
 // CityHandler handles proxy requests to the Dadata API.
@@ -23,6 +32,10 @@ func (h *CityHandler) Suggest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The upstream payload is a short {"query":..,"count":..} object. Cap the
+	// read so an unauthenticated caller cannot buffer nginx's 20 MiB limit
+	// into API memory on every request.
+	r.Body = http.MaxBytesReader(w, r.Body, maxCitySuggestBodyBytes)
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to read body")
@@ -39,7 +52,7 @@ func (h *CityHandler) Suggest(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Token "+h.apiKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: dadataRequestTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		if r.Context().Err() != nil {
@@ -89,7 +102,7 @@ func (h *CityHandler) IPLocate(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Token "+h.apiKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: dadataRequestTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		if r.Context().Err() != nil {

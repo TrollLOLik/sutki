@@ -25,6 +25,7 @@ const (
 	EventListingApproved  = "listing_approved"
 	EventListingRejected  = "listing_rejected"
 	EventAdminAlert       = "admin_alert"
+	EventFactorChanged    = "factor_changed"
 )
 
 var eventTypes = []string{
@@ -40,6 +41,7 @@ var eventTypes = []string{
 	EventListingApproved,
 	EventListingRejected,
 	EventAdminAlert,
+	EventFactorChanged,
 }
 
 // renderer holds pre-parsed HTML and plain-text template sets per event.

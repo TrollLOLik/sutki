@@ -91,6 +91,22 @@ var (
 	OTPGuestIDLimiter = NewSlidingWindowLimiter(time.Hour)
 	OTPIPLimiter      = NewSlidingWindowLimiter(time.Hour)
 
+	// OTP verification limiters. The per-challenge attempt budget in the
+	// database is the hard stop for one code; these bound how many *codes* an
+	// attacker may work through. Without them, requesting a fresh code after
+	// each exhausted budget gives unlimited guesses against a 4-digit space.
+	//
+	// Per-identifier (phone/email) is the meaningful key — it survives IP
+	// rotation, which is cheap. The per-IP window is a coarse second net, and
+	// the per-challenge one keeps a single code from being hammered even if the
+	// database guard is ever weakened.
+	//
+	// NOTE(multi-instance): like every limiter here, these are per-process and
+	// reset on deploy. They must move to a shared store before a second replica.
+	OTPVerifyChallengeLimiter = NewSlidingWindowLimiter(time.Hour)
+	OTPVerifyIdentityLimiter  = NewSlidingWindowLimiter(time.Hour)
+	OTPVerifyIPLimiter        = NewSlidingWindowLimiter(time.Hour)
+
 	// Booking Rate Limiters (1 hour window)
 	BookingPhoneLimiter   = NewSlidingWindowLimiter(time.Hour)
 	BookingGuestIDLimiter = NewSlidingWindowLimiter(time.Hour)
@@ -108,6 +124,48 @@ var (
 	ViewIdentityLimiter = NewSlidingWindowLimiter(time.Hour)
 	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)
 )
+
+// Verification budgets per hour. maxAttempts (5) codes' worth of guesses per
+// identifier leaves ordinary mistyping unaffected — a real user needs a handful
+// of tries, not tens.
+const (
+	otpVerifyPerChallenge = 10
+	otpVerifyPerIdentity  = 25
+	otpVerifyPerIP        = 60
+)
+
+// otpChallengeKey returns a per-challenge limiter key, or "" when the client
+// did not supply a real challenge id.
+//
+// Legacy clients put a delivery-channel value (`phone_call`, …) in the field
+// the challenge id is read from. Those are a low-cardinality enum shared by
+// every user, so using one as a limiter key would collapse all callers into a
+// single bucket and lock the whole endpoint after a handful of logins.
+func otpChallengeKey(challengeID string) string {
+	if strings.HasPrefix(challengeID, "phone_") {
+		return ""
+	}
+	return challengeID
+}
+
+// allowOTPVerify applies the verification budgets and writes the 429 itself.
+// identity is the normalized phone or email; challenge may be empty when the
+// client did not send one.
+func allowOTPVerify(w http.ResponseWriter, r *http.Request, identity, challenge string) bool {
+	if challenge != "" && !OTPVerifyChallengeLimiter.Allow("otp_verify_challenge:"+challenge, otpVerifyPerChallenge) {
+		writeError(w, http.StatusTooManyRequests, "Слишком много попыток ввода кода. Запросите новый код позже.")
+		return false
+	}
+	if !OTPVerifyIdentityLimiter.Allow("otp_verify_id:"+identity, otpVerifyPerIdentity) {
+		writeError(w, http.StatusTooManyRequests, "Слишком много попыток ввода кода. Пожалуйста, попробуйте позже.")
+		return false
+	}
+	if !OTPVerifyIPLimiter.Allow("otp_verify_ip:"+getClientIP(r), otpVerifyPerIP) {
+		writeError(w, http.StatusTooManyRequests, "Слишком много попыток с вашего IP. Пожалуйста, попробуйте позже.")
+		return false
+	}
+	return true
+}
 
 // trustProxyHeaders controls whether X-Forwarded-For / X-Real-IP are honored.
 // It must only be enabled (TRUST_PROXY_HEADERS=true) when the backend sits

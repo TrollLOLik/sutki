@@ -41,6 +41,10 @@ Sentry.init({
   sendDefaultPii: false,
   enableAutoSessionTracking: false,
   tracesSampleRate: 0,
+  // Console breadcrumbs capture whatever was logged just before an error,
+  // which on chat screens can include message bodies and signed attachment
+  // URLs. sendDefaultPii:false does not cover breadcrumbs, so drop them.
+  beforeBreadcrumb: (breadcrumb) => (breadcrumb.category === 'console' ? null : breadcrumb),
 });
 
 // Initialize Yandex Maps SDK on JS startup to prevent native crashes.

@@ -12,5 +12,6 @@ yarn-error.log*
 .idea/
 .gemini/
 .cache/
+.gocache/
 .pnpm-store/
 /deploy/.env.production

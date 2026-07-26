@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
@@ -57,6 +58,11 @@ var (
 	// ErrTooManyAttachments is returned when a single message carries more than
 	// maxAttachmentsPerMessage files.
 	ErrTooManyAttachments = errors.New("too many attachments in one message")
+
+	// ErrMessageTooLong is returned when a body exceeds the storage limit.
+	// Without this the value reaches Postgres, raises 22001 and surfaces as a
+	// 500 plus an ops alert instead of a plain 400.
+	ErrMessageTooLong = errors.New("message body is too long")
 	// ErrReplyTargetNotFound is returned when the quoted message does not exist
 	// or belongs to another conversation.
 	ErrReplyTargetNotFound = errors.New("reply target not found in this conversation")
@@ -126,6 +132,9 @@ var allowedUploadTypes = map[string]bool{
 // only inspect the first image of a multi-image prompt), so an unbounded batch
 // is an easy way to tie up a worker. Matches the picker limit on the client.
 const maxAttachmentsPerMessage = 10
+
+// maxMessageBodyRunes mirrors the message.body column width (varchar(4000)).
+const maxMessageBodyRunes = 4000
 
 // Config holds settings for the chat service and Centrifugo
 type Config struct {
@@ -549,6 +558,9 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	if !hasBody && len(attachments) == 0 {
 		return domain.Message{}, ErrEmptyMessage
 	}
+	if hasBody && utf8.RuneCountInString(*body) > maxMessageBodyRunes {
+		return domain.Message{}, ErrMessageTooLong
+	}
 	if len(attachments) > maxAttachmentsPerMessage {
 		return domain.Message{}, ErrTooManyAttachments
 	}
@@ -881,6 +893,9 @@ func (s *Service) EditMessage(ctx context.Context, userID int32, messageID int64
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return domain.Message{}, ErrEmptyMessage
+	}
+	if utf8.RuneCountInString(body) > maxMessageBodyRunes {
+		return domain.Message{}, ErrMessageTooLong
 	}
 
 	info, err := s.repo.GetMessageForMutation(ctx, messageID, userID)

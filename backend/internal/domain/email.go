@@ -59,6 +59,15 @@ type EmailNotifier interface {
 	// was published, rejected, or held for an additional check. Gated by the
 	// author's "reviews" preference and deduplicated per moderation outcome.
 	NotifyReviewModerated(ctx context.Context, authorID int32, authorEmail string, reviewID int64, status, targetType, reason string) error
+
+	// NotifyFactorChanged warns the address that was on the account that a
+	// login factor — the phone or the email — has just been rebound.
+	//
+	// Transactional and never deduplicated: it is the account's only
+	// out-of-band signal that someone took it over, so a second change must
+	// produce a second warning rather than be swallowed as a duplicate.
+	// factor is "phone" or "email".
+	NotifyFactorChanged(ctx context.Context, userID int32, email, factor string) error
 }
 
 // EmailCategory names an opt-outable group of notifications. Values are

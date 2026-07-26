@@ -106,6 +106,12 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Get("/me/sessions", authHandler.ListSessions)
 			r.Delete("/me/sessions", authHandler.RevokeOtherSessions)
 			r.Delete("/me/sessions/{id}", authHandler.RevokeSession)
+			// Factor-agnostic re-authentication: proves control of whatever
+			// factor the account already has (verified phone, else email)
+			// before any of the change-* flows below may run.
+			r.Post("/me/reauth/request", authHandler.RequestReauthCode)
+			r.Post("/me/reauth/fallback", authHandler.ReauthFallback)
+			r.Post("/me/reauth/verify", authHandler.VerifyReauthCode)
 			r.Post("/me/change-email/request-old", authHandler.RequestOldEmailCode)
 			r.Post("/me/change-email/verify-old", authHandler.VerifyOldEmailCode)
 			r.Post("/me/change-email/request-new", authHandler.RequestNewEmailCode)

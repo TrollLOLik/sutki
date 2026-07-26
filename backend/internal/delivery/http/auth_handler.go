@@ -154,7 +154,12 @@ func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !h.svc.ExposeCode() {
-		emailClean := strings.ToLower(strings.TrimSpace(body.Email))
+		// Same key as the service's own lookup — see verifyCode.
+		emailClean, err := auth.NormalizeEmail(body.Email)
+		if err != nil {
+			writeAuthError(w, r, err)
+			return
+		}
 		guestID := r.Header.Get("X-Guest-Id")
 		clientIP := getClientIP(r)
 
@@ -191,6 +196,19 @@ func (h *AuthHandler) verifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if !decodeJSON(w, r, &body) {
 		return
+	}
+	if !h.svc.ExposeCode() {
+		// Key on the address the service will actually look up, not on the raw
+		// input: `"Name" <a@b.com>` and `a@b.com` share one auth_code row, so
+		// keying on the raw string hands out a fresh budget per spelling.
+		emailClean, err := auth.NormalizeEmail(body.Email)
+		if err != nil {
+			writeAuthError(w, r, err)
+			return
+		}
+		if !allowOTPVerify(w, r, "email:"+emailClean, "") {
+			return
+		}
 	}
 	res, err := h.svc.VerifyCode(r.Context(), body.Email, body.Code, extractDeviceInfo(r))
 	if err != nil {
@@ -358,6 +376,13 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusTooManyRequests, "please wait before requesting a new code")
 	case errors.Is(err, domain.ErrTokenInvalid):
 		writeError(w, http.StatusUnauthorized, "invalid token")
+	case errors.Is(err, domain.ErrReauthRequired):
+		// 403, not 401: the access token is fine, the caller just has not
+		// proved control of the factor already on the account. A 401 would
+		// send the client into a token refresh that cannot help.
+		writeError(w, http.StatusForbidden, "reauthentication required")
+	case errors.Is(err, domain.ErrReauthUnavailable):
+		writeError(w, http.StatusConflict, "no factor available for reauthentication")
 	default:
 		writeInternalError(w, r, err, "internal error")
 	}
@@ -436,19 +461,132 @@ func (h *AuthHandler) ConfirmEmailChange(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	sessionID, _ := sessionIDFromContext(r.Context())
 	var body struct {
-		NewEmail string `json:"new_email"`
-		Code     string `json:"code"`
+		NewEmail  string `json:"new_email"`
+		Code      string `json:"code"`
+		TempToken string `json:"temp_token"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	user, err := h.svc.ConfirmEmailChange(r.Context(), userID, body.NewEmail, body.Code)
+	user, err := h.svc.ConfirmEmailChange(r.Context(), userID, sessionID, body.NewEmail, body.Code, body.TempToken)
 	if err != nil {
 		writeAuthError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, toUserDTO(user))
+}
+
+// RequestReauthCode sends a one-time code on the factor already attached to the
+// account, as the first step of any factor change. The target is never taken
+// from the request — that is what makes it a proof of ownership.
+func (h *AuthHandler) RequestReauthCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	// This places a real, billable call or email to the account's own contact,
+	// so it needs the same per-identity budget as every other code-issuing
+	// route, not the (much larger) verification budget. Without it a stolen
+	// access token buys a stream of flash calls to the victim's phone.
+	if !h.svc.ExposeCode() {
+		uid := strconv.FormatInt(int64(userID), 10)
+		if !OTPPhoneLimiter.Allow("otp_reauth_user:"+uid, 5) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов кода подтверждения. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if !OTPIPLimiter.Allow("otp_ip:"+getClientIP(r), 15) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
+			return
+		}
+	}
+	res, err := h.svc.RequestReauthCode(r.Context(), userID)
+	if err != nil {
+		log.Printf("requestReauthCode error: %v", err)
+		writeAuthError(w, r, err)
+		return
+	}
+	resp := map[string]any{
+		"sent": true, "factor": res.Factor, "expires_in": res.ExpiresIn,
+	}
+	if res.Factor == auth.ReauthFactorPhone {
+		resp["challenge_id"] = res.ChallengeID
+		resp["delivery_mode"] = res.DeliveryMode
+		resp["code_length"] = res.CodeLength
+		resp["retry_after"] = res.RetryAfter
+		resp["fallback_available"] = res.FallbackAvailable
+		resp["reused"] = res.Reused
+	}
+	if res.Exposed {
+		resp["dev_code"] = res.Code
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// ReauthFallback re-delivers the re-auth code as a voice call. Only meaningful
+// when the account's factor is a phone; the phone is read from the account, not
+// from the request, for the same reason RequestReauthCode does.
+func (h *AuthHandler) ReauthFallback(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		ChallengeID string `json:"challenge_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	// Shares the budget with /me/reauth/request: both make the provider dial
+	// the same number, and the service-level 60s cooldown alone would still
+	// allow 60 calls an hour.
+	if !h.svc.ExposeCode() {
+		uid := strconv.FormatInt(int64(userID), 10)
+		if !OTPPhoneLimiter.Allow("otp_reauth_user:"+uid, 5) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов кода подтверждения. Пожалуйста, попробуйте позже.")
+			return
+		}
+		if !OTPIPLimiter.Allow("otp_ip:"+getClientIP(r), 15) {
+			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
+			return
+		}
+	}
+	res, err := h.svc.RequestReauthVoiceFallback(r.Context(), userID, body.ChallengeID)
+	if err != nil {
+		log.Printf("reauthFallback error: %v", err)
+		writeAuthError(w, r, err)
+		return
+	}
+	writePhoneChallengeResponse(w, res)
+}
+
+// VerifyReauthCode exchanges that code for the short-lived proof the change
+// endpoints require.
+func (h *AuthHandler) VerifyReauthCode(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Code        string `json:"code"`
+		ChallengeID string `json:"challenge_id"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !h.svc.ExposeCode() && !allowOTPVerify(w, r, "reauth:"+strconv.FormatInt(int64(userID), 10), otpChallengeKey(body.ChallengeID)) {
+		return
+	}
+	token, err := h.svc.VerifyReauthCode(r.Context(), userID, body.Code, body.ChallengeID)
+	if err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"temp_token": token})
 }
 
 func (h *AuthHandler) CheckDeleteMe(w http.ResponseWriter, r *http.Request) {
@@ -531,6 +669,10 @@ func writeAuthErrorRussian(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusTooManyRequests, "Пожалуйста, подождите перед повторным запросом кода")
 	case errors.Is(err, domain.ErrTokenInvalid):
 		writeError(w, http.StatusUnauthorized, "Неверный токен авторизации")
+	case errors.Is(err, domain.ErrReauthRequired):
+		writeError(w, http.StatusForbidden, "Подтвердите текущий номер телефона или почту, чтобы продолжить")
+	case errors.Is(err, domain.ErrReauthUnavailable):
+		writeError(w, http.StatusConflict, "К аккаунту не привязан контакт для подтверждения")
 	default:
 		writeInternalError(w, r, err, "Внутренняя ошибка сервера")
 	}
@@ -746,6 +888,19 @@ func (h *AuthHandler) verifyCodePhone(w http.ResponseWriter, r *http.Request) {
 	if challengeID == "" {
 		challengeID = body.Channel
 	}
+	if !h.svc.ExposeCode() {
+		// Normalization failures fall through to the service, which returns the
+		// same error for every malformed number — keying the limiter on the raw
+		// value would let an attacker spread the budget over spelling variants.
+		phoneClean, err := auth.NormalizePhone(body.Phone)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
+			return
+		}
+		if !allowOTPVerify(w, r, "phone:"+phoneClean, otpChallengeKey(challengeID)) {
+			return
+		}
+	}
 	res, err := h.svc.VerifyPhoneCode(r.Context(), body.Phone, body.Code, challengeID, extractDeviceInfo(r))
 	if err != nil {
 		log.Printf("verifyCodePhone error: %v", err)
@@ -762,8 +917,9 @@ func (h *AuthHandler) changePhoneRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var body struct {
-		Phone   string `json:"phone"`
-		Channel string `json:"channel"`
+		Phone     string `json:"phone"`
+		Channel   string `json:"channel"`
+		TempToken string `json:"temp_token"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -788,7 +944,7 @@ func (h *AuthHandler) changePhoneRequest(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	res, err := h.svc.RequestChangePhoneCode(r.Context(), userID, body.Phone, body.Channel)
+	res, err := h.svc.RequestChangePhoneCode(r.Context(), userID, body.Phone, body.Channel, body.TempToken)
 	if err != nil {
 		log.Printf("changePhoneRequest error: %v", err)
 		writeAuthError(w, r, err)
@@ -825,11 +981,13 @@ func (h *AuthHandler) changePhoneConfirm(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	sessionID, _ := sessionIDFromContext(r.Context())
 	var body struct {
 		Phone       string `json:"phone"`
 		Code        string `json:"code"`
 		Channel     string `json:"channel"`
 		ChallengeID string `json:"challenge_id"`
+		TempToken   string `json:"temp_token"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -838,7 +996,17 @@ func (h *AuthHandler) changePhoneConfirm(w http.ResponseWriter, r *http.Request)
 	if challengeID == "" {
 		challengeID = body.Channel
 	}
-	user, err := h.svc.ConfirmPhoneChange(r.Context(), userID, body.Phone, body.Code, challengeID)
+	if !h.svc.ExposeCode() {
+		phoneClean, err := auth.NormalizePhone(body.Phone)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат номера телефона. Используйте +7 или 8.")
+			return
+		}
+		if !allowOTPVerify(w, r, "phone:"+phoneClean, otpChallengeKey(challengeID)) {
+			return
+		}
+	}
+	user, err := h.svc.ConfirmPhoneChange(r.Context(), userID, sessionID, body.Phone, body.Code, challengeID, body.TempToken)
 	if err != nil {
 		log.Printf("changePhoneConfirm error: %v", err)
 		writeAuthError(w, r, err)

@@ -195,7 +195,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
 		// Listen to server-side publications (like personal user#<id> channel events)
 		centrifuge.on('publication', (ctx) => {
-			console.log('[Chat] Received server publication on channel:', ctx.channel, ctx.data);
 			invalidateRealtimeData(ctx.data as UserRealtimeEvent);
 		});
 

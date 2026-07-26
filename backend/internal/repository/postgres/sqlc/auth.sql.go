@@ -56,6 +56,39 @@ func (q *Queries) CheckUserActiveBookings(ctx context.Context, userID *int32) (i
 	return column_1, err
 }
 
+const consumeAuthCodeAttempt = `-- name: ConsumeAuthCodeAttempt :one
+UPDATE auth_code SET attempts = attempts + 1
+WHERE channel = $1 AND target = $2 AND attempts < $3
+RETURNING channel, target, code_hash, expires_at, attempts, created_at, delivery_provider, delivery_id, delivery_cost
+`
+
+type ConsumeAuthCodeAttemptParams struct {
+	Channel     string
+	Target      string
+	MaxAttempts int32
+}
+
+// Spends one verification attempt and returns the row after the spend. The
+// attempts guard lives in the same statement as the increment on purpose: a
+// SELECT-then-UPDATE pair lets concurrent verifies all read the same
+// pre-increment counter and all reach the code comparison.
+func (q *Queries) ConsumeAuthCodeAttempt(ctx context.Context, arg ConsumeAuthCodeAttemptParams) (AuthCode, error) {
+	row := q.db.QueryRow(ctx, consumeAuthCodeAttempt, arg.Channel, arg.Target, arg.MaxAttempts)
+	var i AuthCode
+	err := row.Scan(
+		&i.Channel,
+		&i.Target,
+		&i.CodeHash,
+		&i.ExpiresAt,
+		&i.Attempts,
+		&i.CreatedAt,
+		&i.DeliveryProvider,
+		&i.DeliveryID,
+		&i.DeliveryCost,
+	)
+	return i, err
+}
+
 const createPersonalDataRevocation = `-- name: CreatePersonalDataRevocation :exec
 INSERT INTO personal_data_revocation (user_id, email_hash, revoked_at)
 VALUES ($1, $2, now())
@@ -458,20 +491,6 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phoneNormalized *string) (
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const incrementAuthCodeAttempts = `-- name: IncrementAuthCodeAttempts :exec
-UPDATE auth_code SET attempts = attempts + 1 WHERE channel = $1 AND target = $2
-`
-
-type IncrementAuthCodeAttemptsParams struct {
-	Channel string
-	Target  string
-}
-
-func (q *Queries) IncrementAuthCodeAttempts(ctx context.Context, arg IncrementAuthCodeAttemptsParams) error {
-	_, err := q.db.Exec(ctx, incrementAuthCodeAttempts, arg.Channel, arg.Target)
-	return err
 }
 
 const listActiveRefreshTokens = `-- name: ListActiveRefreshTokens :many

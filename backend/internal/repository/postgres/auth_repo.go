@@ -57,11 +57,38 @@ func (r *AuthCodeRepo) Get(ctx context.Context, channel, target string) (domain.
 	}, nil
 }
 
-func (r *AuthCodeRepo) IncrementAttempts(ctx context.Context, channel, target string) error {
-	return r.q.IncrementAuthCodeAttempts(ctx, sqlc.IncrementAuthCodeAttemptsParams{
-		Channel: channel,
-		Target:  target,
+// ConsumeAttempt spends one verification attempt and returns the code row as
+// it stands after the spend. The budget check is part of the UPDATE, so N
+// concurrent verifies of the same target share one budget instead of each
+// getting a full one. Returns ErrTooManyAttempts when the budget is spent and
+// ErrNotFound when there is no code for this target.
+func (r *AuthCodeRepo) ConsumeAttempt(ctx context.Context, channel, target string, maxAttempts int32) (domain.AuthCode, error) {
+	row, err := r.q.ConsumeAuthCodeAttempt(ctx, sqlc.ConsumeAuthCodeAttemptParams{
+		Channel:     channel,
+		Target:      target,
+		MaxAttempts: maxAttempts,
 	})
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return domain.AuthCode{}, err
+		}
+		// No row updated: either the code is gone, or its budget is exhausted.
+		if _, getErr := r.Get(ctx, channel, target); getErr != nil {
+			return domain.AuthCode{}, domain.ErrNotFound
+		}
+		return domain.AuthCode{}, domain.ErrTooManyAttempts
+	}
+	return domain.AuthCode{
+		Channel:          row.Channel,
+		Target:           row.Target,
+		CodeHash:         row.CodeHash,
+		ExpiresAt:        row.ExpiresAt.Time,
+		Attempts:         row.Attempts,
+		CreatedAt:        row.CreatedAt.Time,
+		DeliveryProvider: row.DeliveryProvider,
+		DeliveryID:       row.DeliveryID,
+		DeliveryCost:     row.DeliveryCost,
+	}, nil
 }
 
 func (r *AuthCodeRepo) Delete(ctx context.Context, channel, target string) error {

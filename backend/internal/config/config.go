@@ -7,11 +7,20 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // weakSecrets are well-known placeholder values that must never be used for
 // signing secrets in any environment.
+// minSecretLength is the floor for shared secrets that sign or authorize.
+// 32 chars keeps an offline attack on a captured token infeasible.
+const minSecretLength = 32
+
+// placeholderPrefixes catch the sample values shipped in .env*.example,
+// which are otherwise valid-looking strings of sufficient length.
+var placeholderPrefixes = []string{"replace_with", "your_", "YOUR_", "changeme", "example_"}
+
 var weakSecrets = map[string]struct{}{
 	"YOUR_SHARED_HMAC_SECRET_KEY": {},
 	"dev_api_key":                 {},
@@ -106,6 +115,9 @@ type Config struct {
 	FFmpegTimeout   time.Duration
 	MediaWorkDir    string
 	MaxVideoSeconds int
+	// MaxVideoModerationFrames limits uniformly sampled frames for one video.
+	// Six frames are packed into each contact-sheet vision request.
+	MaxVideoModerationFrames int
 	// AttachmentModerationWorkerEnabled controls whether this process claims
 	// chat-media moderation jobs. The API keeps enqueueing jobs, while the
 	// dedicated media-worker is the only production process that processes them.
@@ -183,7 +195,7 @@ func Load() (Config, error) {
 		LLMGenerationModel:       getEnv("LLM_GENERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
 		LLMModerationModel:       getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b")),
 		LLMReviewModerationModel: getEnv("LLM_REVIEW_MODERATION_MODEL", getEnv("LLM_MODERATION_MODEL", getEnv("LLM_MODEL", "openai/gpt-oss-120b"))),
-		LLMImageModerationModel:  getEnv("LLM_IMAGE_MODERATION_MODEL", "moonshotai/Kimi-K2.6"),
+		LLMImageModerationModel:  getEnv("LLM_IMAGE_MODERATION_MODEL", "Qwen/Qwen3.6-35B-A3B"),
 		// Отдельная модель под подсказки в чате: это самый частый и самый
 		// дешёвый по объёму вызов, и менять её не должно тянуть за собой
 		// генерацию описаний. Фоллбэк — общая LLM_MODEL.
@@ -200,6 +212,7 @@ func Load() (Config, error) {
 		// transient, and a burst must not be able to fill the disk.
 		MediaWorkDir:                      getEnv("MEDIA_WORK_DIR", ""),
 		MaxVideoSeconds:                   getInt("MAX_VIDEO_SECONDS", 60),
+		MaxVideoModerationFrames:          getInt("MAX_VIDEO_MODERATION_FRAMES", 12),
 		AttachmentModerationWorkerEnabled: getBool("ATTACHMENT_MODERATION_WORKER_ENABLED", true),
 
 		CentrifugoURL:        getEnv("CENTRIFUGO_URL", "http://127.0.0.1:8000"),
@@ -285,6 +298,44 @@ func Load() (Config, error) {
 	// secret is acceptable when a dedicated secret is not configured.
 	if cfg.EmailUnsubscribeSecret == "" {
 		cfg.EmailUnsubscribeSecret = cfg.JWTSecret
+	}
+
+	// --- Production hardening -------------------------------------------
+	// Deliberately scoped to production: development keeps its convenience
+	// defaults, while a misconfigured production deployment refuses to start
+	// rather than starting insecurely.
+	if cfg.AppEnvironment == "production" {
+		if cfg.PaymentProvider == "mock" {
+			return Config{}, fmt.Errorf("PAYMENT_PROVIDER=mock is not allowed when APP_ENV=production")
+		}
+		if cfg.AuthExposeCode {
+			return Config{}, fmt.Errorf("AUTH_EXPOSE_CODE must be false when APP_ENV=production")
+		}
+		// Empty values are intentionally skipped: each optional secret already
+		// fails closed on its own when unset (an empty admin token authorizes
+		// nobody). What must not happen is a weak or sample value being trusted.
+		for _, s := range []struct{ name, value string }{
+			{"JWT_SECRET", cfg.JWTSecret},
+			{"CENTRIFUGO_HMAC_SECRET", cfg.CentrifugoHMACSecret},
+			{"CENTRIFUGO_API_KEY", cfg.CentrifugoKey},
+			{"PAYMENT_ADMIN_TOKEN", cfg.PaymentAdminToken},
+			{"PAYMENT_ADMIN_TOKEN_PREVIOUS", cfg.PaymentAdminTokenPrevious},
+		} {
+			if s.value == "" {
+				continue
+			}
+			if _, weak := weakSecrets[s.value]; weak {
+				return Config{}, fmt.Errorf("%s is set to a known insecure placeholder; generate a strong random secret", s.name)
+			}
+			for _, prefix := range placeholderPrefixes {
+				if strings.HasPrefix(s.value, prefix) {
+					return Config{}, fmt.Errorf("%s still holds a sample placeholder value; generate a strong random secret", s.name)
+				}
+			}
+			if len(s.value) < minSecretLength {
+				return Config{}, fmt.Errorf("%s must be at least %d characters", s.name, minSecretLength)
+			}
+		}
 	}
 	return cfg, nil
 }

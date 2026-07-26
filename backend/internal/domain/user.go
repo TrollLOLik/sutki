@@ -66,6 +66,12 @@ type DeviceInfo struct {
 const (
 	PhoneChallengePurposeLogin       = "login"
 	PhoneChallengePurposeChangePhone = "change_phone"
+	// PhoneChallengePurposeReauth proves the caller still controls the phone
+	// already on the account, before they are allowed to rebind a login
+	// factor. Kept separate from 'login' so a code minted for one purpose
+	// cannot be replayed against the other, and so the partial unique index
+	// on (phone_normalized, purpose) does not collide the two flows.
+	PhoneChallengePurposeReauth = "reauth"
 
 	PhoneChallengeStatusDeliveryPending = "delivery_pending"
 	PhoneChallengeStatusReady           = "ready_for_verification"

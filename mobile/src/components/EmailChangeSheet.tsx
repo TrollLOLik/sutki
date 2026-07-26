@@ -4,10 +4,10 @@ import { Animated, Easing, Modal, Pressable, Text, TextInput, View, KeyboardAvoi
 
 import { Button } from '@/components/ui';
 import {
-  useRequestOldEmailCode,
-  useVerifyOldEmailCode,
+  requestReauthCode,
   useRequestNewEmailCode,
   useConfirmEmailChange,
+  verifyReauthCode,
 } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
@@ -71,12 +71,16 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   const user = useSessionStore((s) => s.user);
   const setUser = useSessionStore((s) => s.setUser);
 
-  const hasCurrentEmail = !!user?.email;
+  // 'verify_old' is never skipped any more, not even for accounts with no
+  // email. Skipping it used to hand every phone-only account a free email
+  // rebind to anyone holding an access token — exactly the accounts with no
+  // second factor to recover through. The step now runs against whatever
+  // factor the account does have: the backend picks it and calls or emails.
+  const [step, setStep] = useState<Step>('verify_old');
+  const [reauthFactor, setReauthFactor] = useState<'phone' | 'email' | null>(null);
+  const [reauthChallengeId, setReauthChallengeId] = useState('');
+  const [reauthCodeLength, setReauthCodeLength] = useState(CODE_LENGTH);
 
-  const [step, setStep] = useState<Step>(() => {
-    return user?.email ? 'verify_old' : 'input_new';
-  });
-  
   // Forms & values
   const [codeOld, setCodeOld] = useState('');
   const [codeNew, setCodeNew] = useState('');
@@ -97,8 +101,8 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   const [localEmailError, setLocalEmailError] = useState<string | null>(null);
 
   // Mutations
-  const requestOld = useRequestOldEmailCode();
-  const verifyOld = useVerifyOldEmailCode();
+  const [requestingOld, setRequestingOld] = useState(false);
+  const [verifyingOld, setVerifyingOld] = useState(false);
   const requestNew = useRequestNewEmailCode();
   const confirmChange = useConfirmEmailChange();
 
@@ -127,7 +131,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   useLayoutEffect(() => {
     if (visible) {
       // Always reset the session state when opening the sheet to start fresh
-      setStep(hasCurrentEmail ? 'verify_old' : 'input_new');
+      setStep('verify_old');
       setCodeOld('');
       setCodeNew('');
       setNewEmail('');
@@ -195,26 +199,39 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
 
   const handleRequestOldCode = async () => {
     setError(null);
+    setRequestingOld(true);
     try {
-      const res = await requestOld.mutateAsync();
-      setSecondsOld(60);
+      const res = await requestReauthCode();
+      setReauthFactor(res.factor);
+      setReauthChallengeId(res.challenge_id ?? '');
+      setReauthCodeLength(res.factor === 'email' ? CODE_LENGTH : (res.code_length ?? 4));
+      setSecondsOld(res.retry_after ?? 60);
       if (res.dev_code) {
         setDevCodeOld(res.dev_code);
       }
       setCodeSentOld(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось отправить код подтверждения.');
+    } finally {
+      setRequestingOld(false);
     }
   };
 
   const handleVerifyOld = async (enteredCode: string) => {
+    // Auto-submit on the last digit and a tap on "Подтвердить" can both fire;
+    // without this guard the second one burns another attempt from the budget
+    // of 5 and lands an error banner on the step we already advanced past.
+    if (verifyingOld) return;
     setError(null);
+    setVerifyingOld(true);
     try {
-      const res = await verifyOld.mutateAsync(enteredCode);
+      const res = await verifyReauthCode(enteredCode, reauthChallengeId);
       setTempToken(res.temp_token);
       setStep('input_new');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Неверный код подтверждения.');
+    } finally {
+      setVerifyingOld(false);
     }
   };
 
@@ -251,7 +268,11 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   const handleConfirm = async (enteredCode: string) => {
     setError(null);
     try {
-      const updatedUser = await confirmChange.mutateAsync({ newEmail: newEmail.trim(), code: enteredCode });
+      const updatedUser = await confirmChange.mutateAsync({
+        newEmail: newEmail.trim(),
+        code: enteredCode,
+        tempToken,
+      });
       setUser(updatedUser);
       setStep('success');
       setTimeout(() => {
@@ -263,7 +284,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   };
 
   const handleReset = () => {
-    setStep(hasCurrentEmail ? 'verify_old' : 'input_new');
+    setStep('verify_old');
     setCodeOld('');
     setCodeNew('');
     setNewEmail('');
@@ -279,15 +300,14 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
 
   if (!visible) return null;
 
-  const stepIndex = step === 'verify_old' ? 1 : step === 'input_new' ? (hasCurrentEmail ? 2 : 1) : (hasCurrentEmail ? 3 : 2);
+  // Always three steps now: prove the current factor, enter the new address,
+  // confirm it. The old two-step variant existed only for accounts with no
+  // email, which is exactly the case that must not skip the proof.
+  const stepIndex = step === 'verify_old' ? 1 : step === 'input_new' ? 2 : 3;
 
-  const leftButtonLabel = ((step === 'verify_old' && !codeSentOld) || (step === 'input_new' && !hasCurrentEmail))
-    ? 'Закрыть'
-    : 'Сбросить';
+  const leftButtonLabel = step === 'verify_old' && !codeSentOld ? 'Закрыть' : 'Сбросить';
 
-  const handleLeftButtonPress = ((step === 'verify_old' && !codeSentOld) || (step === 'input_new' && !hasCurrentEmail))
-    ? handleClose
-    : handleReset;
+  const handleLeftButtonPress = step === 'verify_old' && !codeSentOld ? handleClose : handleReset;
 
   return (
     <Modal
@@ -335,18 +355,9 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
           {/* Stepper bar */}
           {step !== 'success' ? (
             <View className="flex-row gap-2 mb-4 px-4">
-              {hasCurrentEmail ? (
-                <>
-                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
-                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
-                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 3 ? 'bg-primary' : 'bg-line')} />
-                </>
-              ) : (
-                <>
-                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
-                  <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
-                </>
-              )}
+              <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
+              <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
+              <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 3 ? 'bg-primary' : 'bg-line')} />
             </View>
           ) : null}
 
@@ -370,12 +381,15 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                   <View className="gap-5 py-4">
                     <Text className="text-base text-ink-secondary text-center px-4 leading-6">
                       Для смены почты необходимо подтвердить владение аккаунтом.{'\n\n'}
-                      Мы отправим код подтверждения на текущую почту:{'\n'}
-                      <Text className="font-bold text-ink">{maskEmail(user?.email)}</Text>
+                      {user?.email
+                        ? 'Мы отправим код подтверждения на текущую почту:'
+                        : 'Мы позвоним на подтверждённый номер телефона и покажем код.'}
+                      {user?.email ? '\n' : ''}
+                      {user?.email ? <Text className="font-bold text-ink">{maskEmail(user.email)}</Text> : null}
                     </Text>
                     <Button
                       label="Отправить код"
-                      loading={requestOld.isPending}
+                      loading={requestingOld}
                       onPress={handleRequestOldCode}
                       className="mt-2"
                     />
@@ -383,15 +397,20 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                 ) : (
                   <View className="gap-5">
                     <Text className="text-base text-ink-secondary text-center px-4 leading-6">
-                      Мы отправили код подтверждения на вашу текущую почту:{'\n'}
-                      <Text className="font-bold text-ink">{maskEmail(user?.email)}</Text>
+                      {reauthFactor === 'phone'
+                        ? 'Мы позвонили на ваш подтверждённый номер. Введите код из звонка.'
+                        : 'Мы отправили код подтверждения на вашу текущую почту:'}
+                      {reauthFactor === 'phone' ? '' : '\n'}
+                      {reauthFactor === 'phone' ? null : (
+                        <Text className="font-bold text-ink">{maskEmail(user?.email)}</Text>
+                      )}
                     </Text>
 
                     <Pressable
                       className="flex-row justify-center gap-2 py-2"
                       onPress={() => hiddenInputRef.current?.focus()}
                     >
-                      {Array.from({ length: CODE_LENGTH }).map((_, i) => (
+                      {Array.from({ length: reauthCodeLength }).map((_, i) => (
                         <View
                           key={i}
                           className={cn(
@@ -550,21 +569,25 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
               ref={hiddenInputRef}
               value={step === 'verify_old' ? codeOld : codeNew}
               onChangeText={(t) => {
-                const clean = t.replace(/\D/g, '').slice(0, CODE_LENGTH);
+                // The re-auth code is 4 digits when it arrives by flash call
+                // and 6 when it arrives by email; the new-address code is
+                // always 6.
+                const expected = step === 'verify_old' ? reauthCodeLength : CODE_LENGTH;
+                const clean = t.replace(/\D/g, '').slice(0, expected);
                 if (step === 'verify_old') {
                   setCodeOld(clean);
-                  if (clean.length === CODE_LENGTH) {
+                  if (clean.length === expected) {
                     handleVerifyOld(clean);
                   }
                 } else {
                   setCodeNew(clean);
-                  if (clean.length === CODE_LENGTH) {
+                  if (clean.length === expected) {
                     handleConfirm(clean);
                   }
                 }
               }}
               keyboardType="number-pad"
-              maxLength={CODE_LENGTH}
+              maxLength={step === 'verify_old' ? reauthCodeLength : CODE_LENGTH}
               caretHidden
               className="absolute h-px w-px opacity-0"
               style={{ top: -100 }}
@@ -597,8 +620,8 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                         label="Подтвердить"
                         size="md"
                         className="flex-1"
-                        disabled={codeOld.length < CODE_LENGTH}
-                        loading={verifyOld.isPending}
+                        disabled={codeOld.length < reauthCodeLength}
+                        loading={verifyingOld}
                         onPress={() => handleVerifyOld(codeOld)}
                       />
                     ) : step === 'input_new' ? (

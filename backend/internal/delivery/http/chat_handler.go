@@ -405,6 +405,8 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Нельзя написать этому пользователю: его профиль удалён.")
 		case errors.Is(err, chat.ErrEmptyMessage):
 			writeError(w, http.StatusBadRequest, "Сообщение не может быть пустым.")
+		case errors.Is(err, chat.ErrMessageTooLong):
+			writeError(w, http.StatusBadRequest, "Сообщение слишком длинное — не больше 4000 символов.")
 		case errors.Is(err, chat.ErrInvalidAttachment):
 			writeError(w, http.StatusBadRequest, "Некорректное вложение. Выберите файл ещё раз.")
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
@@ -508,6 +510,8 @@ func writeMessageMutationError(w http.ResponseWriter, r *http.Request, userID in
 		writeError(w, http.StatusUnprocessableEntity, "Удалить сообщение можно в течение часа после отправки.")
 	case errors.Is(err, chat.ErrEmptyMessage):
 		writeError(w, http.StatusBadRequest, "Сообщение не может быть пустым.")
+	case errors.Is(err, chat.ErrMessageTooLong):
+		writeError(w, http.StatusBadRequest, "Сообщение слишком длинное — не больше 4000 символов.")
 	default:
 		log.Printf("[Chat] %s error (user=%d, message=%d): %v", op, userID, messageID, err)
 		writeInternalError(w, r, err, "internal error")

@@ -32,6 +32,19 @@ export interface RequestCodeResponse {
 	reused?: boolean;
 }
 
+/**
+ * Response of POST /api/v1/me/reauth/request.
+ *
+ * Re-authentication proves the user still controls a factor already on the
+ * account, and is required before any phone/email change. The backend chooses
+ * the factor — a verified phone wins over email — so the client must branch on
+ * `factor` rather than assume. Phone challenges carry the same delivery fields
+ * as a login challenge.
+ */
+export interface ReauthChallengeResponse extends RequestCodeResponse {
+  factor: 'phone' | 'email';
+}
+
 /** Partial profile update body for PATCH /api/v1/me. */
 export interface UpdateProfileBody {
   name?: string;

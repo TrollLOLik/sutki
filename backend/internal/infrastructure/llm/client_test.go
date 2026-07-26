@@ -13,8 +13,10 @@ import (
 func TestGenerateWithImagesUsesOpenAIContentParts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Model    string `json:"model"`
-			Messages []struct {
+			Model              string         `json:"model"`
+			ResponseFormat     map[string]any `json:"response_format"`
+			ChatTemplateKwargs map[string]any `json:"chat_template_kwargs"`
+			Messages           []struct {
 				Role    string          `json:"role"`
 				Content json.RawMessage `json:"content"`
 			} `json:"messages"`
@@ -24,6 +26,9 @@ func TestGenerateWithImagesUsesOpenAIContentParts(t *testing.T) {
 		}
 		if body.Model != "vision-model" || len(body.Messages) != 2 {
 			t.Fatalf("body=%+v", body)
+		}
+		if body.ResponseFormat["type"] != "json_object" || body.ChatTemplateKwargs["enable_thinking"] != false {
+			t.Fatalf("vision output controls missing: response_format=%v chat_template_kwargs=%v", body.ResponseFormat, body.ChatTemplateKwargs)
 		}
 		var parts []map[string]any
 		if err := json.Unmarshal(body.Messages[1].Content, &parts); err != nil {

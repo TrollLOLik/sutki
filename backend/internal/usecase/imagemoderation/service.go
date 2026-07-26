@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	maxVisionCompletionTokens = 1024
+	// The verdict is a tiny JSON object. A large output budget increases cost
+	// and makes verbose vision models more likely to hit finish_reason=length.
+	maxVisionCompletionTokens = 512
 )
 
 type VisionClient interface {
@@ -32,10 +34,12 @@ func New(client VisionClient) *Service {
 }
 
 type modelVerdict struct {
-	Decision   string  `json:"decision"`
-	Category   string  `json:"category"`
-	Reason     string  `json:"reason"`
-	Confidence float32 `json:"confidence"`
+	Decision          string  `json:"decision"`
+	Category          string  `json:"category"`
+	Reason            string  `json:"reason"`
+	Confidence        float32 `json:"confidence"`
+	EvidenceCell      int     `json:"evidence_cell,omitempty"`
+	EvidenceTimestamp string  `json:"evidence_timestamp,omitempty"`
 }
 
 const systemPrompt = `Ты модерируешь изображения российского сервиса краткосрочной аренды жилья "Дом рядом".
@@ -62,10 +66,20 @@ func (s *Service) ModerateImages(ctx context.Context, imageURLs []string, usage 
 
 	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	userPrompt := fmt.Sprintf("Контекст загрузки: %s. Проверь все %d изображений. Если хотя бы одно нарушает правила, общий verdict должен быть reject.", usage, len(imageURLs))
+	if usage == "chat_video_contact_sheet" {
+		userPrompt = `Это не коллаж из разных изображений, а контактный лист последовательных кадров одного видео.
+Читай ячейки слева направо и сверху вниз. В каждой ячейке выжжены глобальный номер кадра и таймкод.
+Проверь каждую ячейку отдельно. Если нарушение видно хотя бы в одной, верни reject.
+Для reject или review дополнительно верни evidence_cell и evidence_timestamp из подписи наиболее подозрительной ячейки.
+Верни только JSON без рассуждений и текста вокруг него:
+{"decision":"approve|reject|review","category":"safe|sexual|minor_safety|violence|drugs|weapons|extremism|personal_data|illegal|other","reason":"краткая причина по-русски","confidence":0.0,"evidence_cell":0,"evidence_timestamp":"MM:SS"}.`
+	}
+
 	answer, err := s.client.GenerateWithImages(
 		callCtx,
 		systemPrompt,
-		fmt.Sprintf("Контекст загрузки: %s. Проверь все %d изображений. Если хотя бы одно нарушает правила, общий verdict должен быть reject.", usage, len(imageURLs)),
+		userPrompt,
 		imageURLs,
 		maxVisionCompletionTokens,
 		0,
@@ -78,8 +92,16 @@ func (s *Service) ModerateImages(ctx context.Context, imageURLs []string, usage 
 	if err != nil {
 		return domain.ImageModerationResult{}, fmt.Errorf("%w: %v", domain.ErrImageModerationUnavailable, err)
 	}
+	reason := verdict.Reason
+	if verdict.EvidenceCell > 0 {
+		reason = fmt.Sprintf("%s (кадр #%d", reason, verdict.EvidenceCell)
+		if verdict.EvidenceTimestamp != "" {
+			reason += ", " + verdict.EvidenceTimestamp
+		}
+		reason += ")"
+	}
 	return domain.ImageModerationResult{
-		Decision: verdict.Decision, Category: verdict.Category, Reason: verdict.Reason,
+		Decision: verdict.Decision, Category: verdict.Category, Reason: reason,
 		Confidence: verdict.Confidence, Raw: []byte(raw),
 	}, nil
 }

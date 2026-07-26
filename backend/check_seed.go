@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -13,7 +14,10 @@ import (
 )
 
 func main() {
-	dbURL := "postgres://postgres:MadLust20@localhost:5432/ce76279_sutki?sslmode=disable"
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("check_seed: DATABASE_URL is required")
+	}
 	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
 		log.Fatalf("Error opening db: %v", err)
@@ -69,8 +73,8 @@ func main() {
 	}
 
 	// Initialize LLM Client
-	llmBaseURL := "https://api.alltokens.ru/api/v1"
-	llmAPIKey := "sk-at-pqnKI76AYLqnRvcvCd5zJIVx8LTbYyc16sjPxviXfwk"
+	llmBaseURL := os.Getenv("LLM_BASE_URL")
+	llmAPIKey := os.Getenv("LLM_API_KEY")
 	llmModel := "google/gemma-4-31b-it:free"
 	
 	llmClient := llm.NewClient(llmBaseURL, llmAPIKey, llmModel, 30*time.Second)

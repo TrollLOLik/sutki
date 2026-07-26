@@ -209,6 +209,26 @@ func (n *Notifier) SendWelcome(ctx context.Context, userID int32, email string) 
 	}, data)
 }
 
+func (n *Notifier) NotifyFactorChanged(ctx context.Context, userID int32, email, factor string) error {
+	label := "адрес электронной почты"
+	if factor == "phone" {
+		label = "номер телефона"
+	}
+	data := struct {
+		commonData
+		FactorLabel string
+	}{FactorLabel: label}
+
+	return n.enqueue(ctx, OutboxMessage{
+		// No dedup key on purpose: every rebind must produce its own warning.
+		// Collapsing two into one would hide the second takeover.
+		UserID:    userID,
+		Recipient: email,
+		EventType: EventFactorChanged,
+		Subject:   "Изменены данные для входа в «ДомРядом»",
+	}, data)
+}
+
 func (n *Notifier) NotifyReviewReceived(ctx context.Context, ownerID int32, ownerEmail string, reviewID int64, rating int32, address string) error {
 	allowed, err := n.categoryEnabled(ctx, ownerID, domain.EmailCategoryReviews)
 	if err != nil {

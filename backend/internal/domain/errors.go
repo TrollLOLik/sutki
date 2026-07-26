@@ -26,6 +26,16 @@ var (
 	ErrPhoneTaken = errors.New("phone already taken")
 	// ErrPhoneAlreadyLinked is returned when the user already has a phone linked.
 	ErrPhoneAlreadyLinked = errors.New("phone already linked")
+	// ErrReauthRequired is returned when an operation that rebinds a login
+	// factor is attempted without a live proof that the caller controls a
+	// factor already on the account. A valid access token is deliberately not
+	// enough: without this, one stolen 15-minute token converts into permanent
+	// ownership of the account.
+	ErrReauthRequired = errors.New("reauthentication required")
+	// ErrReauthUnavailable is returned when the account has no factor to
+	// re-authenticate against. Not reachable for accounts created through the
+	// normal flows, which always verify email or phone first.
+	ErrReauthUnavailable = errors.New("no factor available for reauthentication")
 )
 
 // Booking-related errors.

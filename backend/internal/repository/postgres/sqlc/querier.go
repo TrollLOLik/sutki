@@ -25,6 +25,11 @@ type Querier interface {
 	ClaimAttachmentModerationJobs(ctx context.Context, batchSize int32) ([]ClaimAttachmentModerationJobsRow, error)
 	CompleteAttachmentModeration(ctx context.Context, arg CompleteAttachmentModerationParams) error
 	ConfirmRequest(ctx context.Context, id int32) (ConfirmRequestRow, error)
+	// Spends one verification attempt and returns the row after the spend. The
+	// attempts guard lives in the same statement as the increment on purpose: a
+	// SELECT-then-UPDATE pair lets concurrent verifies all read the same
+	// pre-increment counter and all reach the code comparison.
+	ConsumeAuthCodeAttempt(ctx context.Context, arg ConsumeAuthCodeAttemptParams) (AuthCode, error)
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
 	CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
@@ -116,7 +121,6 @@ type Querier interface {
 	// the requested [range_start, range_end) date range (half-open: end_date = checkout,
 	// free for next guest). The caller passes the exclusive end (start+1 for single night).
 	HouseHasConfirmedOverlap(ctx context.Context, arg HouseHasConfirmedOverlapParams) (bool, error)
-	IncrementAuthCodeAttempts(ctx context.Context, arg IncrementAuthCodeAttemptsParams) error
 	IsOtherParticipantDeleted(ctx context.Context, arg IsOtherParticipantDeletedParams) (bool, error)
 	LinkGuestRequests(ctx context.Context, arg LinkGuestRequestsParams) error
 	ListActiveRefreshTokens(ctx context.Context, userID int32) ([]RefreshToken, error)

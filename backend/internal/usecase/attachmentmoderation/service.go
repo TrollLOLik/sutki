@@ -1,11 +1,11 @@
 // Package attachmentmoderation runs chat attachment checks outside the request
 // that uploaded them.
 //
-// Why asynchronous: a video has to be sampled into frames and every frame costs
-// a vision call. With LLM_TIMEOUT at 15s that is tens of seconds — far too long
-// to hold an HTTP request open. So the attachment is stored as `pending`, the
-// sender sees "Проверяется", the recipient sees nothing, and a background worker
-// produces the verdict.
+// Why asynchronous: a video has to be sampled into frames and inspected by a
+// vision model. Even the cheap contact-sheet pass is too slow to hold an HTTP
+// request open. So the attachment is stored as `pending`, the sender sees
+// "Проверяется", the recipient sees nothing, and a background worker produces
+// the verdict.
 //
 // Invariants, mirroring usecase/moderation:
 //   - The model never blocks a user-facing request.
@@ -45,7 +45,7 @@ const (
 
 	// leaseTimeout is how long a claimed job may stay in `processing` before
 	// another worker may take it. Generous relative to the worst case (probe +
-	// extract + up to 10 vision calls) so a slow job is not stolen mid-flight.
+	// extract + contact sheets + frame escalation) so a slow job is not stolen.
 	leaseTimeout = 5 * time.Minute
 
 	// maxAttempts before the attachment is rejected outright. Retrying forever
@@ -109,6 +109,9 @@ type Config struct {
 	// MaxVideoSeconds rejects clips longer than the policy allows. Checked here
 	// and not only on the client: duration reported by a client is not evidence.
 	MaxVideoSeconds int
+	// MaxVideoFrames is the upper bound on uniformly sampled video frames.
+	// The common path packs six frames into each paid vision request.
+	MaxVideoFrames int
 }
 
 type Service struct {
@@ -119,6 +122,7 @@ type Service struct {
 	notifier  Notifier
 	workDir   string
 	maxVideo  int
+	maxFrames int
 	wake      chan struct{}
 }
 
@@ -131,6 +135,13 @@ func New(cfg Config) *Service {
 	if maxVideo <= 0 {
 		maxVideo = 60
 	}
+	maxFrames := cfg.MaxVideoFrames
+	if maxFrames <= 0 {
+		maxFrames = 12
+	}
+	if maxFrames > 12 {
+		maxFrames = 12
+	}
 	return &Service{
 		repo:      cfg.Repo,
 		storage:   cfg.Storage,
@@ -139,6 +150,7 @@ func New(cfg Config) *Service {
 		notifier:  cfg.Notifier,
 		workDir:   workDir,
 		maxVideo:  maxVideo,
+		maxFrames: maxFrames,
 		// Buffered: a send must never block the sending request.
 		wake: make(chan struct{}, 1),
 	}
@@ -305,11 +317,20 @@ func (s *Service) inspectFrames(ctx context.Context, job domain.AttachmentModera
 	}
 
 	opts := videoframes.DefaultExtractOptions()
+	// Short clips need one 3x2 sheet; longer clips use two. Frames are sampled
+	// uniformly across the verified duration rather than only near the start.
+	opts.MaxFrames = s.maxFrames
+	if info.DurationSeconds <= 15 && opts.MaxFrames > 6 {
+		opts.MaxFrames = 6
+	}
+	opts.DurationSeconds = info.DurationSeconds
+	// Contact sheets downscale cells to 320px, but escalation sends these
+	// source frames directly, so retain substantially more detail.
+	opts.Width = 1280
 	if job.Kind == domain.AttachmentKindAnimated {
 		// A GIF is typically a couple of seconds long, so a 4-second interval
 		// would yield a single frame — exactly the blind spot being closed here.
-		opts.IntervalSeconds = 1
-		opts.MaxFrames = 5
+		opts.MaxFrames = 6
 	}
 
 	frames, err := s.extractor.ExtractFrames(ctx, localPath, framesDir, opts)
@@ -325,30 +346,61 @@ func (s *Service) inspectFrames(ctx context.Context, job domain.AttachmentModera
 		return domain.ImageModerationResult{}, 0, err
 	}
 
-	// Upload frames next to the original under a temp prefix, moderate them,
+	// Pack six frames into one contact sheet before uploading. This keeps the
+	// whole video covered while reducing the common path to one or two calls.
+	timestamps := make([]int, len(frames))
+	if len(frames) > 1 && info.DurationSeconds > 0 {
+		for i := range frames {
+			timestamps[i] = i * (info.DurationSeconds - 1) / (len(frames) - 1)
+		}
+	}
+
+	sheetDir := filepath.Join(dir, "sheets")
+	sheets, err := videoframes.ComposeContactSheets(frames, timestamps, sheetDir, 6)
+	if err != nil {
+		return domain.ImageModerationResult{}, 0, fmt.Errorf("compose contact sheets: %w", err)
+	}
+
+	// Upload sheets next to the original under a temp prefix, moderate them,
 	// then delete them regardless of outcome.
-	keys := make([]string, 0, len(frames))
+	keys := make([]string, 0, len(sheets)+len(frames))
 	defer func() {
 		for _, key := range keys {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			if err := s.storage.Delete(cleanupCtx, key); err != nil {
-				log.Printf("attachment moderation: delete temp frame %q: %v", key, err)
+				log.Printf("attachment moderation: delete temporary object %q: %v", key, err)
 			}
 			cancel()
 		}
 	}()
 
-	for i, framePath := range frames {
-		key := fmt.Sprintf("%s.frames/%03d.jpg", job.ObjectKey, i)
-		if err := s.uploadObject(ctx, key, framePath); err != nil {
-			return domain.ImageModerationResult{}, 0, fmt.Errorf("upload frame: %w", err)
+	for i, sheetPath := range sheets {
+		key := fmt.Sprintf("%s.sheets/%03d.jpg", job.ObjectKey, i)
+		if err := s.uploadObject(ctx, key, sheetPath); err != nil {
+			return domain.ImageModerationResult{}, 0, fmt.Errorf("upload contact sheet: %w", err)
 		}
 		keys = append(keys, key)
 	}
 
-	result, err := s.moderator.ModerateStoredKeys(ctx, keys, "chat_video_frame")
+	result, err := s.moderator.ModerateStoredKeys(ctx, keys, "chat_video_contact_sheet")
 	if err != nil {
 		return domain.ImageModerationResult{}, 0, err
+	}
+
+	if result.Decision == domain.ImageModerationReview || result.Confidence < 0.9 {
+		frameKeys := make([]string, 0, len(frames))
+		for i, framePath := range frames {
+			key := fmt.Sprintf("%s.frames/%03d.jpg", job.ObjectKey, i)
+			if err := s.uploadObject(ctx, key, framePath); err != nil {
+				return domain.ImageModerationResult{}, 0, fmt.Errorf("upload escalation frame: %w", err)
+			}
+			keys = append(keys, key)
+			frameKeys = append(frameKeys, key)
+		}
+		result, err = s.moderator.ModerateStoredKeys(ctx, frameKeys, "chat_video_frame")
+		if err != nil {
+			return domain.ImageModerationResult{}, 0, err
+		}
 	}
 
 	// A cover is only meaningful for video, and only if the content passed.
@@ -429,6 +481,20 @@ func (s *Service) reject(ctx context.Context, job domain.AttachmentModerationJob
 func (s *Service) handleFailure(ctx context.Context, job domain.AttachmentModerationJob, cause error) {
 	log.Printf("attachment moderation: job %d (attachment %d) failed on attempt %d: %v", job.ID, job.AttachmentID, job.Attempts, cause)
 
+	// A missing provider project/model will not heal on a retry. Repeating paid
+	// requests only delays the sender and creates avoidable provider traffic.
+	// Keep the fail-closed policy, but reject immediately and expose the reason
+	// through the normal attachment notification.
+	if isNonRetryableModerationError(cause) {
+		s.reject(ctx, job, domain.ImageModerationResult{
+			Decision:   domain.ImageModerationReject,
+			Category:   "moderation_unavailable",
+			Reason:     "не удалось проверить вложение: сервис модерации временно недоступен",
+			Confidence: 0,
+		}, 0)
+		return
+	}
+
 	if int(job.Attempts) >= maxAttempts {
 		// Out of retries. The attachment was never verified, so it cannot be
 		// published — reject it and tell the sender.
@@ -457,6 +523,27 @@ func (s *Service) handleFailure(ctx context.Context, job domain.AttachmentModera
 	if err := s.repo.RetryAttachmentModeration(ctx, job.ID, next, msg); err != nil {
 		log.Printf("attachment moderation: schedule retry for job %d: %v", job.ID, err)
 	}
+}
+
+func isNonRetryableModerationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "decode image moderation verdict") ||
+		strings.Contains(message, "empty vision response (finish_reason=length)") {
+		return true
+	}
+	if strings.Contains(message, "vision status 400") &&
+		(strings.Contains(message, "response_format") ||
+			strings.Contains(message, "chat_template_kwargs") ||
+			strings.Contains(message, "enable_thinking")) {
+		return true
+	}
+	return strings.Contains(message, "vision status 403") &&
+		(strings.Contains(message, "project not found") ||
+			strings.Contains(message, "invalid project") ||
+			strings.Contains(message, "project_id"))
 }
 
 // downloadObject streams a stored object to a local file.

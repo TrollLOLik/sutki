@@ -3,8 +3,12 @@ package attachmentmoderation
 import (
 	"context"
 	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -169,6 +173,7 @@ type fakeExtractor struct {
 	frameCount int
 	framesErr  error
 	coverErr   error
+	lastOpts   videoframes.ExtractOptions
 }
 
 func (e *fakeExtractor) Available() bool { return e.available }
@@ -180,14 +185,29 @@ func (e *fakeExtractor) Probe(context.Context, string) (videoframes.MediaInfo, e
 	return e.info, nil
 }
 
-func (e *fakeExtractor) ExtractFrames(_ context.Context, _, destDir string, _ videoframes.ExtractOptions) ([]string, error) {
+func (e *fakeExtractor) ExtractFrames(_ context.Context, _, destDir string, opts videoframes.ExtractOptions) ([]string, error) {
 	if e.framesErr != nil {
 		return nil, e.framesErr
 	}
+	e.lastOpts = opts
 	paths := make([]string, 0, e.frameCount)
 	for i := 0; i < e.frameCount; i++ {
 		p := filepath.Join(destDir, "frame_"+string(rune('a'+i))+".jpg")
-		if err := os.WriteFile(p, []byte("jpeg"), 0o600); err != nil {
+		file, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		if err != nil {
+			return nil, err
+		}
+		frame := image.NewRGBA(image.Rect(0, 0, 8, 8))
+		for y := 0; y < 8; y++ {
+			for x := 0; x < 8; x++ {
+				frame.Set(x, y, color.RGBA{R: uint8(i * 20), G: 120, B: 200, A: 255})
+			}
+		}
+		if err := jpeg.Encode(file, frame, &jpeg.Options{Quality: 80}); err != nil {
+			_ = file.Close()
+			return nil, err
+		}
+		if err := file.Close(); err != nil {
 			return nil, err
 		}
 		paths = append(paths, p)
@@ -203,19 +223,26 @@ func (e *fakeExtractor) ExtractCover(_ context.Context, _, destPath string, _ in
 }
 
 type fakeModerator struct {
-	result domain.ImageModerationResult
-	err    error
+	result  domain.ImageModerationResult
+	results []domain.ImageModerationResult
+	err     error
 	// keys records what was actually sent for checking.
-	mu   sync.Mutex
-	keys []string
+	mu    sync.Mutex
+	keys  []string
+	calls int
 }
 
 func (m *fakeModerator) ModerateStoredKeys(_ context.Context, keys []string, _ string) (domain.ImageModerationResult, error) {
 	m.mu.Lock()
 	m.keys = append(m.keys, keys...)
-	m.mu.Unlock()
+	call := m.calls
+	m.calls++
+	defer m.mu.Unlock()
 	if m.err != nil {
 		return domain.ImageModerationResult{}, m.err
+	}
+	if call < len(m.results) {
+		return m.results[call], nil
 	}
 	return m.result, nil
 }
@@ -313,6 +340,63 @@ func TestApprovedVideoBecomesVisibleAndGetsCover(t *testing.T) {
 	if approvedCount != 1 {
 		t.Fatalf("expected one approval notification, got %d", approvedCount)
 	}
+	if keys := mod.sentKeys(); len(keys) != 2 {
+		t.Fatalf("expected two contact-sheet requests for 8 frames, got %d (%v)", len(keys), keys)
+	}
+	if ext.lastOpts.MaxFrames != 12 || ext.lastOpts.Width != 1280 || ext.lastOpts.DurationSeconds != 30 {
+		t.Fatalf("unexpected extraction policy: %+v", ext.lastOpts)
+	}
+}
+
+func TestShortVideoUsesOneSixFrameSheet(t *testing.T) {
+	repo := newFakeRepo()
+	storage := newFakeStorage()
+	job := videoJob()
+	storage.objects[job.ObjectKey] = []byte("video bytes")
+
+	ext := &fakeExtractor{available: true, info: videoframes.MediaInfo{DurationSeconds: 15, HasVideoStream: true}, frameCount: 6}
+	mod := &fakeModerator{result: approved()}
+	svc := newTestService(t, repo, storage, ext, mod, &fakeNotifier{})
+
+	svc.processJob(context.Background(), job)
+
+	if ext.lastOpts.MaxFrames != 6 {
+		t.Fatalf("expected short video to sample at most six frames, got %+v", ext.lastOpts)
+	}
+	if keys := mod.sentKeys(); len(keys) != 1 || !strings.Contains(keys[0], ".sheets/") {
+		t.Fatalf("expected one contact-sheet request, got %v", keys)
+	}
+}
+
+func TestVideoFrameLimitIsClampedToTwelve(t *testing.T) {
+	svc := New(Config{MaxVideoFrames: 100})
+	if svc.maxFrames != 12 {
+		t.Fatalf("expected the paid-work ceiling to be clamped to 12 frames, got %d", svc.maxFrames)
+	}
+}
+
+func TestLowConfidenceSheetEscalatesToOriginalFrames(t *testing.T) {
+	repo := newFakeRepo()
+	storage := newFakeStorage()
+	job := videoJob()
+	storage.objects[job.ObjectKey] = []byte("video bytes")
+
+	ext := &fakeExtractor{available: true, info: videoframes.MediaInfo{DurationSeconds: 45, HasVideoStream: true}, frameCount: 8}
+	mod := &fakeModerator{results: []domain.ImageModerationResult{
+		{Decision: domain.ImageModerationApprove, Category: "safe", Confidence: 0.7},
+		approved(),
+	}}
+	svc := newTestService(t, repo, storage, ext, mod, &fakeNotifier{})
+
+	svc.processJob(context.Background(), job)
+
+	if got := repo.statuses[job.AttachmentID]; got != domain.AttachmentModerationApproved {
+		t.Fatalf("expected full-resolution escalation to approve, got %q", got)
+	}
+	// Two sheets are checked first, followed by all eight original frames.
+	if keys := mod.sentKeys(); len(keys) != 10 {
+		t.Fatalf("expected 2 sheet keys plus 8 frame keys, got %d (%v)", len(keys), keys)
+	}
 }
 
 // Frames are uploaded to storage for checking and must be cleaned up afterwards,
@@ -329,14 +413,14 @@ func TestTemporaryFramesAreDeleted(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	frameKeys := 0
+	sheetKeys := 0
 	for _, key := range storage.deletedKeys() {
-		if len(key) > len(job.ObjectKey) && key[:len(job.ObjectKey)] == job.ObjectKey && key != job.ObjectKey {
-			frameKeys++
+		if strings.HasPrefix(key, job.ObjectKey+".sheets/") {
+			sheetKeys++
 		}
 	}
-	if frameKeys < 3 {
-		t.Fatalf("expected at least 3 temporary frame objects deleted, got %d (%v)", frameKeys, storage.deletedKeys())
+	if sheetKeys != 1 {
+		t.Fatalf("expected one temporary contact sheet deleted, got %d (%v)", sheetKeys, storage.deletedKeys())
 	}
 }
 
@@ -489,6 +573,22 @@ func TestExhaustedRetriesRejectAttachment(t *testing.T) {
 	}
 }
 
+func TestInvalidVisionRequestIsNotRetried(t *testing.T) {
+	for _, message := range []string{
+		"llm client: empty vision response (finish_reason=length)",
+		"decode image moderation verdict: unexpected end of JSON input",
+		`llm client: vision status 400: unknown field "enable_thinking"`,
+		"llm client: vision status 403: Project not found. Please contact support",
+	} {
+		if !isNonRetryableModerationError(errors.New(message)) {
+			t.Fatalf("expected non-retryable moderation error: %s", message)
+		}
+	}
+	if isNonRetryableModerationError(errors.New("llm client: vision request failed: timeout")) {
+		t.Fatal("a transient transport timeout must remain retryable")
+	}
+}
+
 // An album is delivered only when nothing of it is pending: three of five photos
 // appearing would look broken.
 func TestApprovalWaitsForRemainingAttachments(t *testing.T) {
@@ -553,8 +653,8 @@ func TestAnimatedImageIsSampledIntoFrames(t *testing.T) {
 	svc.processJob(context.Background(), job)
 
 	keys := mod.sentKeys()
-	if len(keys) != 3 {
-		t.Fatalf("expected 3 sampled frames to be checked, got %d (%v)", len(keys), keys)
+	if len(keys) != 1 {
+		t.Fatalf("expected one contact sheet to be checked, got %d (%v)", len(keys), keys)
 	}
 	for _, key := range keys {
 		if key == job.ObjectKey {
