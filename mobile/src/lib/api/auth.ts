@@ -4,6 +4,7 @@ import { api } from '@/lib/api/client';
 import type {
   AuthResponse,
   ReauthChallengeResponse,
+  ReauthPurpose,
   RequestCodeResponse,
   UpdateProfileBody,
 } from '@/types/auth';
@@ -75,42 +76,36 @@ export function useDeleteMe() {
  * ownership rather than a formality. The resulting `temp_token` lives 15
  * minutes and must be passed to every step of the change that follows.
  */
-export function requestReauthCode(): Promise<ReauthChallengeResponse> {
-  return api.post<ReauthChallengeResponse>('/api/v1/me/reauth/request');
+export function requestReauthCode(purpose: ReauthPurpose): Promise<ReauthChallengeResponse> {
+  return api.post<ReauthChallengeResponse>('/api/v1/me/reauth/request', { purpose });
 }
 
-/** Re-deliver a pending phone re-auth code as a voice call. */
-export function requestReauthVoiceFallback(challengeId: string): Promise<RequestCodeResponse> {
-  return api.post<RequestCodeResponse>('/api/v1/me/reauth/fallback', { challenge_id: challengeId });
+/**
+ * Re-deliver the pending phone re-auth code as a voice call. Takes nothing: the
+ * server knows which challenge is in flight.
+ */
+export function requestReauthVoiceFallback(): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/me/reauth/fallback');
 }
 
-/** Exchange the re-auth code for the short-lived proof token. */
-export function verifyReauthCode(code: string, challengeId?: string): Promise<{ temp_token: string }> {
-  return api.post<{ temp_token: string }>('/api/v1/me/reauth/verify', {
-    code,
-    challenge_id: challengeId ?? '',
-  });
+/**
+ * Exchange the re-auth code for the short-lived proof token.
+ *
+ * Sends only the code. What the resulting proof authorizes was fixed by the
+ * server when the code was requested — the client cannot restate it here, which
+ * is what stops a code issued to change the email being redeemed to change the
+ * phone.
+ */
+export function verifyReauthCode(code: string): Promise<{ temp_token: string }> {
+  return api.post<{ temp_token: string }>('/api/v1/me/reauth/verify', { code });
 }
 
 export function useRequestReauthCode() {
-  return useMutation({ mutationFn: requestReauthCode });
+  return useMutation({ mutationFn: (purpose: ReauthPurpose) => requestReauthCode(purpose) });
 }
 
 export function useVerifyReauthCode() {
-  return useMutation({
-    mutationFn: ({ code, challengeId }: { code: string; challengeId?: string }) =>
-      verifyReauthCode(code, challengeId),
-  });
-}
-
-/** Request a code for the current email to verify ownership before change. */
-export function requestOldEmailCode(): Promise<RequestCodeResponse> {
-  return api.post<RequestCodeResponse>('/api/v1/me/change-email/request-old');
-}
-
-/** Verify ownership of the current email. Returns a temp token. */
-export function verifyOldEmailCode(code: string): Promise<{ temp_token: string }> {
-  return api.post<{ temp_token: string }>('/api/v1/me/change-email/verify-old', { code });
+  return useMutation({ mutationFn: (code: string) => verifyReauthCode(code) });
 }
 
 /** Request a code for the new email. Takes the temp token. */
@@ -132,16 +127,6 @@ export function confirmEmailChange(newEmail: string, code: string, tempToken: st
     new_email: newEmail,
     code,
     temp_token: tempToken,
-  });
-}
-
-export function useRequestOldEmailCode() {
-  return useMutation({ mutationFn: requestOldEmailCode });
-}
-
-export function useVerifyOldEmailCode() {
-  return useMutation({
-    mutationFn: (code: string) => verifyOldEmailCode(code),
   });
 }
 

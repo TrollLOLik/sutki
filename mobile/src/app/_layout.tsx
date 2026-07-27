@@ -27,6 +27,9 @@ import { useNavigationHistoryTracker } from '@/hooks/useNavigationHistoryTracker
 import { NavigationHistoryOverlay } from '@/components/NavigationHistoryOverlay';
 import { AppAlertHost } from '@/components/AppAlert';
 import { NetworkStatusBanner } from '@/components/NetworkStatusBanner';
+import { UpgradeRequiredScreen } from '@/components/UpgradeRequiredScreen';
+import { useAppVersionStore } from '@/store/appVersion';
+import { checkMinAppVersion } from '@/lib/api/appVersion';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -73,6 +76,7 @@ function RootLayout() {
   const listingLayoutHydrated = useListingLayoutStore((s) => s.hasHydrated);
   const themeHydrated = useThemeStore((s) => s.hasHydrated);
   const { visible, context, closeGate } = useAuthGateStore();
+  const upgradeRequired = useAppVersionStore((s) => s.upgradeRequired);
   const { isDark, palette } = useAppTheme();
   useNavigationRecovery();
   useNavigationHistoryTracker();
@@ -90,12 +94,34 @@ function RootLayout() {
     ]).finally(() => SplashScreen.hideAsync());
   }, [hydrate, hydrateListingLayout, hydrateSearchCity, hydrateTheme]);
 
+  useEffect(() => {
+    // Ask up front rather than waiting for some request to fail: an
+    // unsupported build should learn that on launch, not halfway through a
+    // booking. Any 426 from a normal request flips the same flag.
+    void checkMinAppVersion();
+  }, []);
+
   if (
     status === 'loading' ||
     !themeHydrated ||
     !searchCityHydrated ||
     !listingLayoutHydrated
   ) return null;
+
+  // Rendered above everything, with no way past it: behind this screen every
+  // request would fail with 426 anyway.
+  if (upgradeRequired) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={[{ flex: 1 }, isDark ? darkVars : lightVars]}>
+          <SafeAreaProvider>
+            <StatusBar style={isDark ? 'light' : 'dark'} />
+            <UpgradeRequiredScreen />
+          </SafeAreaProvider>
+        </View>
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

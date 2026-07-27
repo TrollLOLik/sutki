@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -20,13 +19,51 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/media"
 )
 
-// attachmentKeyPattern is the only S3 object-key shape accepted for chat
-// attachments. Keys are minted server-side by PresignUpload as
-// "chat/uploads/<32 hex chars><ext>", so any other value on an incoming
-// message is rejected to prevent referencing arbitrary/other users' objects.
-var attachmentKeyPattern = regexp.MustCompile(`^chat/uploads/[0-9a-f]{32}(\.[A-Za-z0-9]+)?$`)
+// attachmentKeyKind is the media.OwnerPrefix namespace for chat attachments.
+// Keys are minted server-side as "chat/uploads/<userID>/<32 hex chars><ext>".
+const attachmentKeyKind = "chat/uploads"
+
+// attachmentKeyPattern matches any well-formed chat attachment key, of either
+// generation. It answers "is this one of our keys", NOT "may this caller use
+// it" — ownership is a separate question, see ownsAttachmentKey.
+//
+// Shape alone was once the entire check on an incoming message, and that was
+// the bug: matching the pattern and existing in the bucket says nothing about
+// who uploaded the object. Any participant could lift a key out of a presigned
+// URL they legitimately received, attach it to a message in a different
+// conversation, and have the server serve someone else's private photo to a
+// third party — then delete their own message and destroy the original.
+var attachmentKeyPattern = regexp.MustCompile(`^chat/uploads/(?:[0-9]+/)?[0-9a-f]{32}(\.[A-Za-z0-9]+)?$`)
+
+// legacyAttachmentKeyPattern matches keys minted before the owner segment
+// existed. They stay readable — old conversations must keep rendering — but
+// they can never be attached to a NEW message, because nothing records who
+// uploaded them.
+var legacyAttachmentKeyPattern = regexp.MustCompile(`^chat/uploads/[0-9a-f]{32}(\.[A-Za-z0-9]+)?$`)
+
+// attachmentKey mints the object key for one user's upload. The caller must
+// pass a positive id: OwnerPrefix formats with %d, so a non-positive one would
+// produce "chat/uploads/-1/…", which ownsAttachmentKey rejects — the uploader
+// could neither attach nor even read their own file.
+func attachmentKey(userID int32, random, ext string) string {
+	return media.OwnerPrefix(attachmentKeyKind, userID) + random + ext
+}
+
+// ownsAttachmentKey reports whether key was minted for userID. A legacy key
+// carries no owner and therefore belongs to nobody: it never satisfies this.
+func ownsAttachmentKey(key string, userID int32) bool {
+	return attachmentKeyPattern.MatchString(key) && media.IsOwnedKey(key, attachmentKeyKind, userID)
+}
+
+// isLegacyAttachmentKey reports whether key predates the owner segment. Worth
+// distinguishing from "someone else's key" in logs: one is a leftover, the
+// other would be an attempt to reach across conversations.
+func isLegacyAttachmentKey(key string) bool {
+	return legacyAttachmentKeyPattern.MatchString(strings.TrimSpace(key))
+}
 
 // Sentinel errors exposed so the HTTP layer can map user-facing failures to
 // safe, curated messages instead of leaking internal error text (wrapped
@@ -340,6 +377,14 @@ func (s *Service) FindOrCreateConversation(ctx context.Context, houseID *int32, 
 }
 
 func (s *Service) presignAttachment(ctx context.Context, att domain.MessageAttachment) domain.MessageAttachment {
+	// Drop the stored cover up front and re-derive it below. Sanitising it only
+	// on the success path meant every early exit — an empty URL, an already-
+	// absolute one, a key that fails the pattern, or simply a transient
+	// PresignGet failure — returned whatever string was in the row, which for
+	// anything written before the field was sanitised is attacker-chosen.
+	storedThumbnail := att.ThumbnailURL
+	att.ThumbnailURL = ""
+
 	if att.URL == "" {
 		return att
 	}
@@ -369,7 +414,32 @@ func (s *Service) presignAttachment(ctx context.Context, att domain.MessageAttac
 		return att
 	}
 	att.URL = presignedURL
+
+	// The video cover is a private-bucket key too (the worker writes
+	// "<key>.cover.jpg"), so it needs signing as well — handing the client a
+	// bare key means the cover simply never loads. The key signed here is
+	// derived from the attachment's own key; the stored value is only an
+	// equality gate, never itself used.
+	if coverKey := coverKeyFor(key, storedThumbnail); coverKey != "" {
+		if signed, err := s.storage.PresignGet(ctx, coverKey, 24*time.Hour); err == nil {
+			att.ThumbnailURL = signed
+		} else {
+			log.Printf("[Chat] Failed to sign cover %q: %v", coverKey, err)
+		}
+	}
 	return att
+}
+
+// coverKeyFor accepts a stored thumbnail value only when it is exactly the
+// cover this service derives from the attachment's own key. Anything else —
+// including a leftover client-supplied string from before that field was
+// sanitised — yields "" and is dropped.
+func coverKeyFor(key, stored string) string {
+	want := key + ".cover.jpg"
+	if strings.TrimSpace(stored) == want {
+		return want
+	}
+	return ""
 }
 
 // enqueueAttachmentModeration queues a check for every attachment that needs one.
@@ -585,14 +655,29 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	// need an asynchronous media check, keyed by object key — attachment ids do
 	// not exist until the message row is written.
 	moderationKinds := make(map[string]string, len(attachments))
+	seenKeys := make(map[string]struct{}, len(attachments))
 	for i, att := range attachments {
-		// att.URL holds the S3 object key on incoming request. Reject anything
-		// that does not match a key this service minted via PresignUpload,
-		// otherwise a client could reference (and have us presign) another
-		// user's private object.
-		if !attachmentKeyPattern.MatchString(att.URL) {
+		// att.URL holds the S3 object key on the incoming request. It must be a
+		// key THIS user was issued — not merely a well-formed key that exists.
+		// Shape plus existence is what let one participant re-attach another's
+		// private photo into a conversation the owner is not part of.
+		//
+		// Legacy keys carry no owner and so cannot pass: they are readable in
+		// the conversations they were already sent to, but may not be attached
+		// to anything new.
+		if !ownsAttachmentKey(att.URL, userID) {
 			return domain.Message{}, ErrInvalidAttachment
 		}
+		// One object, one row. Repeating a key is never something the app does,
+		// and each repeat buys another moderation job for the same bytes —
+		// video moderation is frame extraction plus a vision call per frame, so
+		// a single upload named ten times is a tenfold multiplier on the most
+		// expensive work this server does.
+		if _, dup := seenKeys[att.URL]; dup {
+			return domain.Message{}, ErrInvalidAttachment
+		}
+		seenKeys[att.URL] = struct{}{}
+
 		info, err := s.storage.StatObject(ctx, att.URL)
 		if err != nil {
 			return domain.Message{}, fmt.Errorf("failed to verify attachment on S3: %w", err)
@@ -600,10 +685,17 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		// Enforce the size limit against the actual uploaded object, not a
 		// client-claimed size. Presigned PUT cannot cap upload size, so a
 		// client could push an oversized object; reject it and delete the
-		// orphaned object best-effort. Deletion is safe here because the key
-		// already matched attachmentKeyPattern and StatObject confirmed it
-		// exists (we never delete arbitrary client-supplied keys).
-		if info.SizeBytes > maxAttachmentBytes {
+		// orphaned object best-effort. Deletion is safe here because
+		// ownsAttachmentKey established that the key was minted for THIS user —
+		// the previous comment claimed as much on the strength of a shape match
+		// alone, which was not the same thing.
+		//
+		// The ceiling has to be the same one PresignUpload signed the POST
+		// policy with, or the two disagree and this branch deletes a file the
+		// server itself accepted: video is signed up to maxVideoBytes, and a
+		// 20 MB clip uploaded through the app's own flow was reaching 100% and
+		// then being rejected here and destroyed.
+		if info.SizeBytes > attachmentSizeLimit(info.ContentType) {
 			if delErr := s.storage.Delete(ctx, att.URL); delErr != nil {
 				log.Printf("[Chat] Failed to delete oversized attachment %q: %v", att.URL, delErr)
 			}
@@ -613,6 +705,24 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		attachments[i].URL = att.URL
 		attachments[i].SizeBytes = info.SizeBytes
 		attachments[i].MimeType = info.ContentType
+		// Same trust boundary as the key: this arrives from client JSON and is
+		// stored verbatim, and the recipient's client renders it as the video
+		// cover — a URL the recipient's device actually fetches. The moderation
+		// worker is the only legitimate writer, once it has extracted a frame
+		// from the object we accepted.
+		attachments[i].ThumbnailURL = ""
+		// Duration likewise comes from ffprobe, not from the sender.
+		attachments[i].DurationSeconds = nil
+		// Width/Height are a layout hint the picker supplies, so they stay
+		// client-supplied — but they are rendered on the RECIPIENT's device,
+		// which derives a view height from height/width. A row claiming
+		// 1 × 2147483647 makes that device lay out a view hundreds of
+		// thousands of screens tall, and since only the sender can delete the
+		// message, and only within an hour, the recipient cannot clear it. Keep
+		// plausible values, drop the rest — the client already falls back to a
+		// fixed height when they are absent.
+		attachments[i].Width = plausibleDimension(att.Width)
+		attachments[i].Height = plausibleDimension(att.Height)
 
 		// Media is checked after the message is stored, not inside this request.
 		// Video needs frame sampling plus a vision call per frame — tens of
@@ -1006,6 +1116,23 @@ func (s *Service) DeleteMessage(ctx context.Context, userID int32, messageID int
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			for _, key := range keys {
+				// Delete only what this user actually owns. The keys come from
+				// the message's own attachment rows, but rows written before
+				// ownership was enforced may point at somebody else's object,
+				// and deleting one would destroy a file still referenced by a
+				// conversation the deleter is not part of.
+				//
+				// A legacy key names no owner, so it is left in place: an
+				// orphaned object costs storage, an over-eager delete costs
+				// somebody their photo.
+				if !ownsAttachmentKey(key, userID) {
+					reason := "not owned by this user"
+					if isLegacyAttachmentKey(key) {
+						reason = "legacy key with no recorded owner"
+					}
+					log.Printf("[Chat] Not deleting attachment %q of message %d (user %d): %s", key, messageID, userID, reason)
+					continue
+				}
 				if err := s.storage.Delete(cleanupCtx, key); err != nil {
 					log.Printf("[Chat] Failed to delete attachment %q of deleted message %d: %v", key, messageID, err)
 				}
@@ -1047,6 +1174,9 @@ func (s *Service) publishMessageMutation(ctx context.Context, msg domain.Message
 }
 
 func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName string, size int64, contentType string) (domain.UploadTarget, error) {
+	if userID <= 0 {
+		return domain.UploadTarget{}, ErrInvalidAttachment
+	}
 	contentType = strings.ToLower(strings.TrimSpace(contentType))
 
 	// 1. MIME whitelist check
@@ -1071,11 +1201,10 @@ func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName stri
 	}
 
 	// 3. Size check. Video gets its own, larger ceiling: even a 30-second 720p
-	// clip does not fit the 15 MB used for photos and documents.
-	limit := int64(maxAttachmentBytes)
-	if isVideoType(contentType) {
-		limit = maxVideoBytes
-	}
+	// clip does not fit the 15 MB used for photos and documents. The same
+	// function decides the limit SendMessage enforces on the stored object, so
+	// the policy and the acceptance check cannot drift apart.
+	limit := attachmentSizeLimit(contentType)
 	if size > limit {
 		return domain.UploadTarget{}, ErrFileTooLarge
 	}
@@ -1085,8 +1214,10 @@ func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName stri
 	if err != nil {
 		return domain.UploadTarget{}, err
 	}
-	ext := filepath.Ext(fileName)
-	key := fmt.Sprintf("chat/uploads/%s%s", uuid, ext)
+	// The owner segment is what makes the key checkable later: a key alone is a
+	// bearer capability, a key with an owner in it is a claim we can verify
+	// against whoever presents it.
+	key := attachmentKey(userID, uuid, media.SafeExt(fileName))
 
 	// 5. Generate presigned POST params. Pass the server-side limit (not the
 	// client-claimed size) as the content-length-range upper bound: picker
@@ -1114,6 +1245,33 @@ func (s *Service) canSendMotionMedia(ctx context.Context, userID int32) (bool, e
 // isVideoType reports whether the content type is a whitelisted video format.
 func isVideoType(contentType string) bool {
 	return strings.HasPrefix(contentType, "video/")
+}
+
+// attachmentSizeLimit is the ceiling for one stored object. It must agree with
+// the limit PresignUpload puts in the POST policy: the policy is what S3
+// enforces at upload time, and SendMessage deletes anything above the limit it
+// applies here, so a stricter value here silently destroys files the server
+// itself accepted.
+func attachmentSizeLimit(contentType string) int64 {
+	if isVideoType(strings.ToLower(strings.TrimSpace(contentType))) {
+		return maxVideoBytes
+	}
+	return maxAttachmentBytes
+}
+
+// maxImageDimension bounds the width/height a client may record for an
+// attachment. Generous next to what a phone camera produces (about 8000 px on
+// the long side today) and far below anything that breaks a layout.
+const maxImageDimension int32 = 20000
+
+// plausibleDimension keeps a client-supplied pixel dimension only when it could
+// describe a real image. Anything else becomes nil, which the client renders
+// with its fixed fallback height.
+func plausibleDimension(v *int32) *int32 {
+	if v == nil || *v <= 0 || *v > maxImageDimension {
+		return nil
+	}
+	return v
 }
 
 func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {

@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// Remove the internal webhook secret before middleware.Logger sees the URL.
@@ -36,11 +36,23 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// Deliberately outside /api/v1 and therefore outside the version gate: a
+	// client that is too old still has to be able to ask what "new enough"
+	// means, and asking must never itself return 426.
+	r.Get("/app-version", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"minimum_supported_version": minAppVersion})
+	})
 	if opsWebhookHandler != nil {
 		r.Post(glitchTipTelegramPath, opsWebhookHandler.GlitchTipTelegram)
 	}
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// Turns "old build hits a tightened endpoint" from a mystery 4xx on
+		// some form into an explicit, actionable 426. Not a security control —
+		// a client controls its own version header — so nothing below may rely
+		// on it.
+		r.Use(minAppVersionGate(minAppVersion))
 		r.Route("/listings", func(r chi.Router) {
 			r.Get("/", listingHandler.list)
 			r.Get("/map-clusters", listingHandler.mapClusters)
@@ -108,12 +120,12 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Delete("/me/sessions/{id}", authHandler.RevokeSession)
 			// Factor-agnostic re-authentication: proves control of whatever
 			// factor the account already has (verified phone, else email)
-			// before any of the change-* flows below may run.
+			// before any of the change-* flows below may run. This replaced an
+			// email-only predecessor, which could only ever prove a mailbox and
+			// so was useless to — and a downgrade path for — phone accounts.
 			r.Post("/me/reauth/request", authHandler.RequestReauthCode)
 			r.Post("/me/reauth/fallback", authHandler.ReauthFallback)
 			r.Post("/me/reauth/verify", authHandler.VerifyReauthCode)
-			r.Post("/me/change-email/request-old", authHandler.RequestOldEmailCode)
-			r.Post("/me/change-email/verify-old", authHandler.VerifyOldEmailCode)
 			r.Post("/me/change-email/request-new", authHandler.RequestNewEmailCode)
 			r.Post("/me/change-email/confirm", authHandler.ConfirmEmailChange)
 			r.Post("/me/change-phone/request", authHandler.changePhoneRequest)

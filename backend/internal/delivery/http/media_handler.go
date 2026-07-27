@@ -3,10 +3,8 @@ package http
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strings"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -14,15 +12,16 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
 )
 
+// MediaHandler serves avatar and listing uploads. Chat attachments are NOT
+// handled here — they go through the chat service, which additionally gates
+// video and animation on account standing.
 type MediaHandler struct {
-	privateStorage domain.FileStorage
 	publicStorage  domain.FileStorage
 	imageModerator domain.ImageModerator
 }
 
-func NewMediaHandler(privateStorage domain.FileStorage, publicStorage domain.FileStorage, imageModerator domain.ImageModerator) *MediaHandler {
+func NewMediaHandler(publicStorage domain.FileStorage, imageModerator domain.ImageModerator) *MediaHandler {
 	return &MediaHandler{
-		privateStorage: privateStorage,
 		publicStorage:  publicStorage,
 		imageModerator: imageModerator,
 	}
@@ -32,7 +31,7 @@ type presignMediaRequest struct {
 	FileName    string `json:"file_name"`
 	Size        int64  `json:"size"`
 	ContentType string `json:"content_type"`
-	Type        string `json:"type"` // white list: "avatar" | "listing" | "chat"
+	Type        string `json:"type"` // white list: "avatar" | "listing"
 }
 
 func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
@@ -53,8 +52,14 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uploadType := strings.ToLower(strings.TrimSpace(req.Type))
-	if uploadType != "avatar" && uploadType != "listing" && uploadType != "chat" {
-		writeError(w, http.StatusBadRequest, "invalid upload type (must be 'avatar', 'listing', or 'chat')")
+	// "chat" is deliberately not accepted here. This route is a second way to
+	// mint an attachment key, and it never ran the checks the chat route does —
+	// most importantly canSendMotionMedia, which is what stops a fresh
+	// unverified account from uploading GIFs and video. Two routes minting
+	// interchangeable keys means the weaker one defines the security of both.
+	// Chat uploads go through POST /api/v1/chat/attachments/presign.
+	if uploadType != "avatar" && uploadType != "listing" {
+		writeError(w, http.StatusBadRequest, "invalid upload type (must be 'avatar' or 'listing')")
 		return
 	}
 
@@ -86,16 +91,6 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "only images (jpeg, png, webp) are allowed for listing photos")
 			return
 		}
-	case "chat":
-		maxSize = 15 * 1024 * 1024
-		if req.Size > maxSize {
-			writeError(w, http.StatusBadRequest, "chat attachment size exceeds 15MB limit")
-			return
-		}
-		if !isAllowedChatMime(contentType) {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("file type %s is not allowed for chat attachments", contentType))
-			return
-		}
 	}
 
 	// 2. Generate secure random key path
@@ -104,25 +99,23 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, r, err, "failed to generate secure name")
 		return
 	}
-	ext := filepath.Ext(req.FileName)
+	// Clamped, not raw: an unbounded or exotic extension ends up inside the
+	// object key, and one containing "${" can reach the POST policy and turn a
+	// pinned key into a prefix match.
+	ext := media.SafeExt(req.FileName)
 
-	var targetStorage domain.FileStorage
+	// Both remaining kinds live in the public bucket; the indirection that used
+	// to pick between buckets went with the chat branch.
 	var key string
-
 	switch uploadType {
 	case "avatar":
-		targetStorage = h.publicStorage
 		key = media.OwnerPrefix("avatars", userID) + uuid + ext
 	case "listing":
-		targetStorage = h.publicStorage
 		key = media.OwnerPrefix("listings", userID) + uuid + ext
-	case "chat":
-		targetStorage = h.privateStorage
-		key = fmt.Sprintf("chat/uploads/%s%s", uuid, ext)
 	}
 
 	// 3. Generate S3 presigned POST target (size capped by maxSize via policy)
-	target, err := targetStorage.PresignUpload(r.Context(), key, maxSize, contentType)
+	target, err := h.publicStorage.PresignUpload(r.Context(), key, maxSize, contentType)
 	if err != nil {
 		// Log the full error server-side; never leak storage internals to the client.
 		log.Printf("[Media] PresignUpload error (type=%s): %v", uploadType, err)
@@ -205,21 +198,6 @@ func (h *MediaHandler) ModerateListingImages(w http.ResponseWriter, r *http.Requ
 
 func isImageMime(mime string) bool {
 	return mime == "image/jpeg" || mime == "image/png" || mime == "image/webp"
-}
-
-func isAllowedChatMime(mime string) bool {
-	allowedTypes := []string{
-		"image/jpeg", "image/png", "image/webp", "image/gif",
-		"application/pdf", "text/plain",
-		"application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		"application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	}
-	for _, t := range allowedTypes {
-		if mime == t {
-			return true
-		}
-	}
-	return false
 }
 
 func generateMediaRandomHex(n int) (string, error) {

@@ -1,5 +1,6 @@
 import { env } from '@/lib/env';
 import { storeRef } from '@/lib/api/store-ref';
+import { useAppVersionStore } from '@/store/appVersion';
 import { getDeviceMetadata } from '@/lib/device';
 import { getGuestId } from '@/lib/guestId';
 
@@ -108,7 +109,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     Accept: 'application/json',
     'X-Device-Name': metadata.deviceName,
     'X-Device-OS': metadata.deviceOS,
-    'X-App-Version': metadata.appVersion,
+    // Omitted when the platform cannot tell us the version (web, Expo Go).
+    // The server's minimum-version gate fails open on a missing header, so
+    // omitting is correct; sending an empty or invented value is not.
+    ...(metadata.appVersion ? { 'X-App-Version': metadata.appVersion } : {}),
     ...(headers as Record<string, string> | undefined),
   };
 
@@ -147,7 +151,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
                   Accept: 'application/json',
                   'X-Device-Name': metadata.deviceName,
                   'X-Device-OS': metadata.deviceOS,
-                  'X-App-Version': metadata.appVersion,
+                  ...(metadata.appVersion ? { 'X-App-Version': metadata.appVersion } : {}),
                 },
                 body: JSON.stringify({ refresh_token: refreshToken }),
               });
@@ -207,7 +211,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const payload = isJson ? await res.json().catch(() => undefined) : undefined;
 
   if (!res.ok) {
-    const errBody = payload as { message?: string; error?: string } | undefined;
+    const errBody = payload as
+      | { message?: string; error?: string; minimum_supported_version?: string }
+      | undefined;
+    // 426 means this build is older than the backend's MIN_APP_VERSION. It is
+    // not a per-request failure the caller can act on, so flip the global flag:
+    // the root layout replaces the whole UI with an update screen rather than
+    // letting a generic error land on whatever form we happened to be on.
+    if (res.status === 426) {
+      useAppVersionStore.getState().requireUpgrade(errBody?.minimum_supported_version ?? null);
+    }
     const message = errBody?.message ?? errBody?.error ?? `Request failed (${res.status})`;
     throw new ApiError(res.status, localizeApiMessage(message, res.status), payload);
   }

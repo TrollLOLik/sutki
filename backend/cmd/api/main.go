@@ -199,16 +199,17 @@ func main() {
 	refreshRepo := postgres.NewRefreshTokenRepo(queries)
 	phoneChallengeRepo := postgres.NewPhoneChallengeRepo(pool)
 	authSvc := auth.New(userRepo, codeRepo, refreshRepo, auth.Config{
-		Secret:          cfg.JWTSecret,
-		AccessTTL:       cfg.AccessTTL,
-		RefreshTTL:      cfg.RefreshTTL,
-		ExposeCode:      cfg.AuthExposeCode,
-		Notifier:        notifier,
-		PhoneCaller:     ucallerClient,
-		PhoneChallenges: phoneChallengeRepo,
-		DadataAPIKey:    cfg.DadataAPIKey,
-		Storage:         publicStorage,
-		ImageModerator:  imageModerator,
+		Secret:           cfg.JWTSecret,
+		AccessTTL:        cfg.AccessTTL,
+		RefreshTTL:       cfg.RefreshTTL,
+		ExposeCode:       cfg.AuthExposeCode,
+		Notifier:         notifier,
+		PhoneCaller:      ucallerClient,
+		PhoneChallenges:  phoneChallengeRepo,
+		ReauthChallenges: postgres.NewReauthChallengeRepo(pool),
+		DadataAPIKey:     cfg.DadataAPIKey,
+		Storage:          publicStorage,
+		ImageModerator:   imageModerator,
 	})
 	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
@@ -291,7 +292,7 @@ func main() {
 
 	cityHandler := httpdelivery.NewCityHandler(cfg.DadataAPIKey)
 
-	mediaHandler := httpdelivery.NewMediaHandler(privateStorage, publicStorage, imageModerator)
+	mediaHandler := httpdelivery.NewMediaHandler(publicStorage, imageModerator)
 	var opsWebhookHandler *httpdelivery.OpsWebhookHandler
 	if cfg.TelegramBotToken != "" {
 		telegramClient := telegram.NewClient(telegram.Config{
@@ -304,7 +305,7 @@ func main() {
 	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, opsWebhookHandler, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.MinAppVersion, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

@@ -78,7 +78,6 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   // factor the account does have: the backend picks it and calls or emails.
   const [step, setStep] = useState<Step>('verify_old');
   const [reauthFactor, setReauthFactor] = useState<'phone' | 'email' | null>(null);
-  const [reauthChallengeId, setReauthChallengeId] = useState('');
   const [reauthCodeLength, setReauthCodeLength] = useState(CODE_LENGTH);
 
   // Forms & values
@@ -201,9 +200,8 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
     setError(null);
     setRequestingOld(true);
     try {
-      const res = await requestReauthCode();
+      const res = await requestReauthCode('change_email');
       setReauthFactor(res.factor);
-      setReauthChallengeId(res.challenge_id ?? '');
       setReauthCodeLength(res.factor === 'email' ? CODE_LENGTH : (res.code_length ?? 4));
       setSecondsOld(res.retry_after ?? 60);
       if (res.dev_code) {
@@ -225,7 +223,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
     setError(null);
     setVerifyingOld(true);
     try {
-      const res = await verifyReauthCode(enteredCode, reauthChallengeId);
+      const res = await verifyReauthCode(enteredCode);
       setTempToken(res.temp_token);
       setStep('input_new');
     } catch (err) {

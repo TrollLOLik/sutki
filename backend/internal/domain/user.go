@@ -40,6 +40,65 @@ type AuthCode struct {
 	DeliveryCost     *string
 }
 
+// ReauthChallenge is a stored re-authentication attempt.
+//
+// The row exists from the moment the user asks for a code, not from the moment
+// they enter it: Purpose and Factor are decided server-side at that point and
+// read back here at verification, so the operation a code authorizes cannot be
+// switched by the client between the two calls. TokenHash is set only once the
+// code is verified — the proof token itself is never stored.
+type ReauthChallenge struct {
+	ID      int64
+	UserID  int32
+	Purpose string
+	Factor  string
+	// PhoneChallengeID pins which flash-call challenge the code must answer.
+	// Nil for an email re-authentication.
+	PhoneChallengeID *string
+	TokenHash        *string
+	VerifiedAt       *time.Time
+	ExpiresAt        time.Time
+	ConsumedAt       *time.Time
+	CreatedAt        time.Time
+}
+
+// ReauthAttempt is the request to start re-authenticating.
+type ReauthAttempt struct {
+	UserID           int32
+	Purpose          string
+	Factor           string
+	PhoneChallengeID *string
+	ExpiresAt        time.Time
+	Now              time.Time
+}
+
+// ReauthRebind is a factor change to apply atomically with spending its proof.
+// Exactly one of Phone and Email is set.
+type ReauthRebind struct {
+	TokenHash        string
+	UserID           int32
+	Purpose          string
+	Now              time.Time
+	CurrentSessionID int64
+	Phone            *ReauthRebindPhone
+	Email            *string
+}
+
+// ReauthRebindPhone carries the new number in both the stored forms.
+type ReauthRebindPhone struct {
+	Raw        string
+	Normalized string
+	VerifiedAt time.Time
+}
+
+// What a re-authentication proof authorizes. Scoping matters: a proof minted to
+// change the email must not be spendable on the phone, which is the credential
+// that grants passwordless login.
+const (
+	ReauthPurposeChangePhone = "change_phone"
+	ReauthPurposeChangeEmail = "change_email"
+)
+
 // RefreshToken is a persisted (hashed) refresh token for JWT rotation.
 type RefreshToken struct {
 	ID           int64

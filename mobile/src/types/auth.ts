@@ -33,6 +33,12 @@ export interface RequestCodeResponse {
 }
 
 /**
+ * What a re-authentication proof authorizes. The backend scopes each proof, so
+ * one minted to change the email is refused when presented for the phone.
+ */
+export type ReauthPurpose = 'change_phone' | 'change_email';
+
+/**
  * Response of POST /api/v1/me/reauth/request.
  *
  * Re-authentication proves the user still controls a factor already on the

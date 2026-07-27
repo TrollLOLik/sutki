@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -50,25 +49,30 @@ type Config struct {
 	Notifier        domain.EmailNotifier
 	PhoneCaller     domain.PhoneCallProvider
 	PhoneChallenges domain.PhoneChallengeRepository
-	DadataAPIKey    string
-	Storage         domain.FileStorage
-	ImageModerator  domain.ImageModerator
+	// ReauthChallenges persists factor-change proofs. Required in any
+	// deployment that allows changing a phone or email: when nil, every such
+	// change is refused rather than silently permitted.
+	ReauthChallenges domain.ReauthChallengeRepository
+	DadataAPIKey     string
+	Storage          domain.FileStorage
+	ImageModerator   domain.ImageModerator
 }
 
 // Service implements passwordless email/phone auth with JWT access/refresh.
 type Service struct {
-	users           domain.UserRepository
-	codes           domain.AuthCodeRepository
-	refresh         domain.RefreshTokenRepository
-	phoneCaller     domain.PhoneCallProvider
-	phoneChallenges domain.PhoneChallengeRepository
-	tm              *TokenManager
-	accessTTL       time.Duration
-	refreshTTL      time.Duration
-	exposeCode      bool
-	now             func() time.Time
-	storage         domain.FileStorage
-	imageModerator  domain.ImageModerator
+	users            domain.UserRepository
+	codes            domain.AuthCodeRepository
+	refresh          domain.RefreshTokenRepository
+	phoneCaller      domain.PhoneCallProvider
+	phoneChallenges  domain.PhoneChallengeRepository
+	reauthChallenges domain.ReauthChallengeRepository
+	tm               *TokenManager
+	accessTTL        time.Duration
+	refreshTTL       time.Duration
+	exposeCode       bool
+	now              func() time.Time
+	storage          domain.FileStorage
+	imageModerator   domain.ImageModerator
 
 	notifier     domain.EmailNotifier
 	dadataAPIKey string
@@ -83,7 +87,6 @@ type Service struct {
 	// backend instance only. Before scaling horizontally they must move to a
 	// shared store (e.g. Redis or the DB), otherwise email-change tokens and
 	// the session blacklist won't be visible across instances.
-	reauthTokens     sync.Map // map[int32]reauthToken (userID -> proof of a recent factor check)
 	sessionCache     sync.Map // map[int64]time.Time (sid -> expiresAt)
 	sessionBlacklist sync.Map // map[int64]bool (sid -> isBlacklisted)
 	ipLocationCache  sync.Map // map[string]string (ip -> city/region)
@@ -99,71 +102,59 @@ const (
 	ReauthFactorEmail = "email"
 )
 
-// reauthToken is a short-lived proof that the user recently demonstrated
-// control of a factor ALREADY attached to the account — the verified phone, or
-// the current email.
-//
-// Every operation that rebinds a login factor requires one. A valid access
-// token is deliberately not sufficient: the phone number is the login
-// credential, so whoever can rebind it owns the account permanently, and a
-// token lives 15 minutes in a screenshot, a shared device or a log.
-type reauthToken struct {
-	token string
-	// factor records which factor was proven. requireReauth compares it against
-	// the factor the account currently designates, so a proof obtained through a
-	// weaker factor cannot be spent on rebinding a stronger one.
-	factor    string
-	expiresAt time.Time
-}
+// reauthTokenBytes is the entropy of a proof token. 32 bytes matches the
+// refresh tokens: a proof authorizes taking over the account, so it must not be
+// the weakest link.
+const reauthTokenBytes = 32
 
-// loadReauthToken returns the user's live proof, deleting it if expired.
-func (s *Service) loadReauthToken(userID int32) (reauthToken, bool) {
-	v, ok := s.reauthTokens.Load(userID)
-	if !ok {
-		return reauthToken{}, false
-	}
-	tok, ok := v.(reauthToken)
-	if !ok {
-		s.reauthTokens.Delete(userID)
-		return reauthToken{}, false
-	}
-	if s.now().After(tok.expiresAt) {
-		s.reauthTokens.Delete(userID)
-		return reauthToken{}, false
-	}
-	return tok, true
-}
-
-// requireReauth rejects unless the caller presents the live proof issued by
-// VerifyReauthCode. The proof is checked but NOT consumed: a factor change is
-// a request/confirm pair and both halves must be covered, so it is consumed
-// only once the rebind has actually happened.
+// requireReauth rejects unless the caller presents a live, verified, unspent
+// proof scoped to this purpose. The proof is validated but NOT spent here: a
+// factor change is a request/confirm pair, and burning the proof on the first
+// half would leave the second half unauthorized.
 //
-// The proof must also have been minted from the factor the account currently
-// designates. Without that check, an account holding both a verified phone and
-// an email could be attacked through the weaker one: prove the email, then use
-// that proof to rebind the phone — which is the credential that actually grants
-// login, and the one reauthFactorFor deliberately selects.
-func (s *Service) requireReauth(ctx context.Context, userID int32, presented string) error {
-	stored, ok := s.loadReauthToken(userID)
-	if !ok {
+// The spend happens in ConsumeAndRebind, inside the same transaction as the
+// rebind itself, where the factor is also re-checked against a locked account
+// row. This function is the cheap early gate, not the security boundary.
+func (s *Service) requireReauth(ctx context.Context, userID int32, purpose, presented string) error {
+	if s.reauthChallenges == nil {
+		// Fail closed. A deployment without the repository wired cannot verify
+		// anyone, and silently allowing the change would be the exact hole this
+		// whole mechanism exists to close.
 		return domain.ErrReauthRequired
 	}
-	if subtle.ConstantTimeCompare([]byte(stored.token), []byte(presented)) != 1 {
+	if presented == "" {
 		return domain.ErrReauthRequired
 	}
-	user, err := s.users.GetByID(ctx, userID)
-	if err != nil {
+	if _, err := s.reauthChallenges.Get(ctx, hashToken(presented), userID, purpose, s.now()); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.ErrReauthRequired
+		}
 		return err
-	}
-	factor, err := reauthFactorFor(user)
-	if err != nil {
-		return err
-	}
-	if stored.factor != factor {
-		return domain.ErrReauthRequired
 	}
 	return nil
+}
+
+// rebindWithProof spends the proof and applies the factor change as one
+// transaction, so a failure anywhere leaves neither applied.
+func (s *Service) rebindWithProof(ctx context.Context, req domain.ReauthRebind, presented string) error {
+	if s.reauthChallenges == nil {
+		return domain.ErrReauthRequired
+	}
+	if presented == "" {
+		return domain.ErrReauthRequired
+	}
+	req.TokenHash = hashToken(presented)
+	err := s.reauthChallenges.ConsumeAndRebind(ctx, req, reauthFactorFor)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.ErrReauthRequired
+	}
+	return err
+}
+
+// validReauthPurpose rejects anything outside the enum the table's CHECK
+// allows, so a bad client value fails here rather than as a 23514 from the DB.
+func validReauthPurpose(p string) bool {
+	return p == domain.ReauthPurposeChangePhone || p == domain.ReauthPurposeChangeEmail
 }
 
 // reauthFactorFor picks the factor the account must prove.
@@ -193,7 +184,13 @@ type ReauthChallenge struct {
 // account. It never accepts a target from the caller — that is the whole point:
 // the code has to reach whoever owns the account today, not whoever holds the
 // access token right now.
-func (s *Service) RequestReauthCode(ctx context.Context, userID int32) (ReauthChallenge, error) {
+func (s *Service) RequestReauthCode(ctx context.Context, userID int32, purpose string) (ReauthChallenge, error) {
+	if !validReauthPurpose(purpose) {
+		return ReauthChallenge{}, domain.ErrCodeInvalid
+	}
+	if s.reauthChallenges == nil {
+		return ReauthChallenge{}, domain.ErrReauthUnavailable
+	}
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return ReauthChallenge{}, err
@@ -202,35 +199,79 @@ func (s *Service) RequestReauthCode(ctx context.Context, userID int32) (ReauthCh
 	if err != nil {
 		return ReauthChallenge{}, err
 	}
+
+	var res RequestCodeResult
+	var phoneChallengeID *string
 	if factor == ReauthFactorPhone {
-		res, err := s.requestPhoneChallenge(ctx, user.PhoneNormalized, domain.PhoneChallengePurposeReauth, &userID)
+		res, err = s.requestPhoneChallenge(ctx, user.PhoneNormalized, domain.PhoneChallengePurposeReauth, &userID)
 		if err != nil {
 			return ReauthChallenge{}, err
 		}
-		return ReauthChallenge{Factor: factor, RequestCodeResult: res}, nil
+		id := res.ChallengeID
+		phoneChallengeID = &id
+	} else {
+		res, err = s.RequestCode(ctx, user.Email)
+		if err != nil {
+			return ReauthChallenge{}, err
+		}
 	}
-	res, err := s.RequestCode(ctx, user.Email)
-	if err != nil {
+
+	// Record what this code is for, server-side, BEFORE the user ever sends it
+	// back. Verification reads purpose and factor from here rather than from the
+	// verify request, so a client cannot request a code "to change my email" and
+	// then present it as authorization to change the phone.
+	now := s.now()
+	if _, err := s.reauthChallenges.Start(ctx, domain.ReauthAttempt{
+		UserID:           userID,
+		Purpose:          purpose,
+		Factor:           factor,
+		PhoneChallengeID: phoneChallengeID,
+		ExpiresAt:        now.Add(codeTTL),
+		Now:              now,
+	}); err != nil {
 		return ReauthChallenge{}, err
 	}
 	return ReauthChallenge{Factor: factor, RequestCodeResult: res}, nil
 }
 
-// VerifyReauthCode checks the code against the account's current factor and,
+// VerifyReauthCode checks the code against the attempt the server recorded and,
 // on success, issues the short-lived proof the change endpoints demand.
-func (s *Service) VerifyReauthCode(ctx context.Context, userID int32, code, challengeID string) (string, error) {
+//
+// It deliberately takes no purpose and no challenge id: both come from the
+// stored attempt. Accepting either from the caller is what let a code issued
+// for one operation be redeemed as authorization for another.
+func (s *Service) VerifyReauthCode(ctx context.Context, userID int32, code string) (string, error) {
+	if s.reauthChallenges == nil {
+		return "", domain.ErrReauthUnavailable
+	}
+	now := s.now()
+	attempt, err := s.reauthChallenges.Pending(ctx, userID, now)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return "", domain.ErrCodeInvalid
+		}
+		return "", err
+	}
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return "", err
 	}
+	// The account must still designate the factor this attempt was opened for,
+	// or the code in flight no longer proves what it was meant to.
 	factor, err := reauthFactorFor(user)
 	if err != nil {
 		return "", err
 	}
+	if factor != attempt.Factor {
+		return "", domain.ErrReauthRequired
+	}
 
-	if factor == ReauthFactorPhone {
+	if attempt.Factor == ReauthFactorPhone {
+		if attempt.PhoneChallengeID == nil {
+			return "", domain.ErrCodeInvalid
+		}
 		c, err := s.verifyPhoneChallenge(ctx, user.PhoneNormalized, code,
-			domain.PhoneChallengePurposeReauth, challengeID, &userID)
+			domain.PhoneChallengePurposeReauth, *attempt.PhoneChallengeID, &userID)
 		if err != nil {
 			return "", err
 		}
@@ -247,40 +288,49 @@ func (s *Service) VerifyReauthCode(ctx context.Context, userID int32, code, chal
 		}
 	}
 
-	return s.issueReauthToken(userID, factor)
+	return s.issueReauthToken(ctx, attempt.ID, userID, now)
 }
 
 // RequestReauthVoiceFallback re-delivers a pending phone re-auth code as a
-// voice call. The number comes from the account, never from the caller.
-func (s *Service) RequestReauthVoiceFallback(ctx context.Context, userID int32, challengeID string) (RequestCodeResult, error) {
+// voice call. Number and challenge both come from the server side.
+func (s *Service) RequestReauthVoiceFallback(ctx context.Context, userID int32) (RequestCodeResult, error) {
+	if s.reauthChallenges == nil {
+		return RequestCodeResult{}, domain.ErrReauthUnavailable
+	}
+	attempt, err := s.reauthChallenges.Pending(ctx, userID, s.now())
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return RequestCodeResult{}, domain.ErrCodeInvalid
+		}
+		return RequestCodeResult{}, err
+	}
+	if attempt.Factor != ReauthFactorPhone || attempt.PhoneChallengeID == nil {
+		return RequestCodeResult{}, domain.ErrCodeInvalid
+	}
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return RequestCodeResult{}, err
 	}
-	factor, err := reauthFactorFor(user)
-	if err != nil {
-		return RequestCodeResult{}, err
-	}
-	if factor != ReauthFactorPhone {
-		return RequestCodeResult{}, domain.ErrCodeInvalid
-	}
-	return s.RequestPhoneVoiceFallback(ctx, user.PhoneNormalized, challengeID,
+	return s.RequestPhoneVoiceFallback(ctx, user.PhoneNormalized, *attempt.PhoneChallengeID,
 		domain.PhoneChallengePurposeReauth, &userID)
 }
 
-// issueReauthToken mints and stores the proof. Any previously issued proof for
-// this user is replaced, so a second re-auth invalidates the first.
-func (s *Service) issueReauthToken(userID int32, factor string) (string, error) {
-	b := make([]byte, 16)
+// issueReauthToken mints a proof for the attempt whose code just checked out and
+// stores only its hash. The token is handed to the client exactly once; the
+// database never holds anything spendable.
+func (s *Service) issueReauthToken(ctx context.Context, attemptID int64, userID int32, now time.Time) (string, error) {
+	b := make([]byte, reauthTokenBytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	token := hex.EncodeToString(b)
-	s.reauthTokens.Store(userID, reauthToken{
-		token:     token,
-		factor:    factor,
-		expiresAt: s.now().Add(reauthTokenTTL),
-	})
+	if err := s.reauthChallenges.MarkVerified(ctx, attemptID, userID, hashToken(token), now.Add(reauthTokenTTL), now); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			// Another request verified the same attempt first.
+			return "", domain.ErrCodeInvalid
+		}
+		return "", err
+	}
 	return token, nil
 }
 
@@ -307,17 +357,29 @@ func (s *Service) consumeEmailCode(ctx context.Context, email, code string) erro
 	return nil
 }
 
-// afterFactorChange runs once a rebind has actually happened: it drops every
-// other session and warns the address the account had beforehand.
+// afterFactorChange runs once a rebind has committed: it drops the in-memory
+// session cache for the sessions the transaction already revoked, and warns the
+// address the account had beforehand.
 //
-// Both steps are best-effort and deliberately do not fail the change — the
-// factor is already rebound, and returning an error here would tell the user
-// their change failed when it did not. Failures are logged instead.
-func (s *Service) afterFactorChange(ctx context.Context, userID int32, currentSID int64, factor, previousEmail string) {
-	s.reauthTokens.Delete(userID)
-
-	if err := s.RevokeAllSessionsExcept(ctx, currentSID, userID); err != nil {
-		log.Printf("auth: failed to revoke other sessions for user %d after %s change: %v", userID, factor, err)
+// The durable half of the revocation — refresh_token.revoked_at — is written
+// inside the rebind transaction, so it cannot be lost. What happens here is the
+// process-local cache invalidation that makes it take effect immediately on
+// this instance, plus the notification. Both are best-effort by design: the
+// factor is already rebound, and failing the call now would tell the user their
+// change failed when it did not.
+func (s *Service) afterFactorChange(ctx context.Context, userID int32, currentSID int64, priorSessions []domain.RefreshToken, factor, previousEmail string) {
+	// Mirrors the revocation already committed by ConsumeAndRebind into this
+	// process's positive session cache.
+	//
+	// priorSessions is a snapshot taken BEFORE the transaction on purpose:
+	// ListActive filters on revoked_at IS NULL, so asking again here would
+	// return only the surviving session and the loop would silently blacklist
+	// nothing — leaving a stolen session that is warm in the cache passing the
+	// middleware for the rest of its access token's life.
+	for _, t := range priorSessions {
+		if t.ID != currentSID {
+			s.blacklistSession(t.ID)
+		}
 	}
 
 	// Email is the only channel that can reach the *former* owner: the phone
@@ -339,18 +401,19 @@ func New(
 	cfg Config,
 ) *Service {
 	return &Service{
-		users:           users,
-		codes:           codes,
-		refresh:         refresh,
-		phoneCaller:     cfg.PhoneCaller,
-		phoneChallenges: cfg.PhoneChallenges,
-		tm:              NewTokenManager(cfg.Secret, cfg.AccessTTL),
-		accessTTL:       cfg.AccessTTL,
-		refreshTTL:      cfg.RefreshTTL,
-		exposeCode:      cfg.ExposeCode,
-		now:             time.Now,
-		storage:         cfg.Storage,
-		imageModerator:  cfg.ImageModerator,
+		users:            users,
+		codes:            codes,
+		refresh:          refresh,
+		phoneCaller:      cfg.PhoneCaller,
+		phoneChallenges:  cfg.PhoneChallenges,
+		reauthChallenges: cfg.ReauthChallenges,
+		tm:               NewTokenManager(cfg.Secret, cfg.AccessTTL),
+		accessTTL:        cfg.AccessTTL,
+		refreshTTL:       cfg.RefreshTTL,
+		exposeCode:       cfg.ExposeCode,
+		now:              time.Now,
+		storage:          cfg.Storage,
+		imageModerator:   cfg.ImageModerator,
 
 		notifier:     cfg.Notifier,
 		dadataAPIKey: cfg.DadataAPIKey,
@@ -808,53 +871,6 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// RequestOldEmailCode is the email-only predecessor of RequestReauthCode, kept
-// for existing clients. Accounts with no email must use /me/reauth/request,
-// which picks whichever factor the account actually has.
-func (s *Service) RequestOldEmailCode(ctx context.Context, userID int32) (RequestCodeResult, error) {
-	user, err := s.users.GetByID(ctx, userID)
-	if err != nil {
-		return RequestCodeResult{}, err
-	}
-	factor, err := reauthFactorFor(user)
-	if err != nil {
-		return RequestCodeResult{}, err
-	}
-	if factor != ReauthFactorEmail {
-		return RequestCodeResult{}, domain.ErrReauthRequired
-	}
-	return s.RequestCode(ctx, user.Email)
-}
-
-// VerifyOldEmailCode is the email-only predecessor of VerifyReauthCode, kept
-// so existing clients keep working. It only ever proves an email, so accounts
-// whose current factor is a phone must use the re-auth endpoints instead.
-func (s *Service) VerifyOldEmailCode(ctx context.Context, userID int32, code string) (string, error) {
-	user, err := s.users.GetByID(ctx, userID)
-	if err != nil {
-		return "", err
-	}
-	// An account whose designated factor is the phone must not be able to mint a
-	// phone-strength proof through this legacy email route — that would let a
-	// mailbox compromise rebind the phone, the credential that actually grants
-	// login. Such accounts use /me/reauth/* instead.
-	factor, err := reauthFactorFor(user)
-	if err != nil {
-		return "", err
-	}
-	if factor != ReauthFactorEmail {
-		return "", domain.ErrReauthRequired
-	}
-	email, err := normalizeEmail(user.Email)
-	if err != nil {
-		return "", err
-	}
-	if err := s.consumeEmailCode(ctx, email, code); err != nil {
-		return "", err
-	}
-	return s.issueReauthToken(userID, ReauthFactorEmail)
-}
-
 func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToken, newEmailRaw string) (RequestCodeResult, error) {
 	if _, err := s.users.GetByID(ctx, userID); err != nil {
 		return RequestCodeResult{}, err
@@ -865,7 +881,7 @@ func (s *Service) RequestNewEmailCode(ctx context.Context, userID int32, oldToke
 	// holding an access token — and made the "request-old / verify-old" pair
 	// decorative for exactly the accounts that had no second factor to fall
 	// back on.
-	if err := s.requireReauth(ctx, userID, oldToken); err != nil {
+	if err := s.requireReauth(ctx, userID, domain.ReauthPurposeChangeEmail, oldToken); err != nil {
 		return RequestCodeResult{}, err
 	}
 
@@ -893,7 +909,7 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, sessionI
 	// Unconditional, and re-checked here rather than only at request time: the
 	// proof must still be live at the moment the account actually changes
 	// hands, not merely when the flow started.
-	if err := s.requireReauth(ctx, userID, reauthTok); err != nil {
+	if err := s.requireReauth(ctx, userID, domain.ReauthPurposeChangeEmail, reauthTok); err != nil {
 		return domain.User{}, err
 	}
 
@@ -907,13 +923,38 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, userID int32, sessionI
 	}
 
 	previousEmail := user.Email
-
-	u, err := s.users.UpdateEmail(ctx, userID, newEmail)
+	// Snapshot before the rebind: afterwards these rows are revoked and would no
+	// longer be listed.
+	priorSessions, err := s.refresh.ListActive(ctx, userID)
 	if err != nil {
+		log.Printf("auth: failed to snapshot sessions for user %d before email change: %v", userID, err)
+	}
+
+	// One transaction: lock the account, re-check the factor, spend the proof,
+	// rebind, revoke other sessions. Spending the proof in its own statement and
+	// updating separately would mean a failed update leaves the proof burned and
+	// the email unchanged.
+	if err := s.rebindWithProof(ctx, domain.ReauthRebind{
+		UserID:           userID,
+		Purpose:          domain.ReauthPurposeChangeEmail,
+		Now:              s.now(),
+		CurrentSessionID: sessionID,
+		Email:            &newEmail,
+	}, reauthTok); err != nil {
 		return domain.User{}, err
 	}
 
-	s.afterFactorChange(ctx, userID, sessionID, ReauthFactorEmail, previousEmail)
+	// The change has committed. A failure re-reading the account is a display
+	// problem, not a failed change — returning an error here would tell the user
+	// their email did not change when it did, and would skip the notification.
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		log.Printf("auth: failed to reload user %d after email change: %v", userID, err)
+		u = user
+		u.Email = newEmail
+	}
+
+	s.afterFactorChange(ctx, userID, sessionID, priorSessions, ReauthFactorEmail, previousEmail)
 	return s.formatUserAvatar(u), nil
 }
 
@@ -1214,10 +1255,24 @@ func (s *Service) StartPhoneChallengeReaper(ctx context.Context, interval time.D
 					log.Printf("phone challenge reaper: %v", err)
 					observability.CaptureException(ctx, err)
 				}
+				if s.reauthChallenges == nil {
+					continue
+				}
+				// Spent and expired proofs are kept for a grace period so an
+				// operator investigating a takeover still has the trail, then
+				// dropped — otherwise the table only ever grows.
+				if err := s.reauthChallenges.DeleteExpired(context.Background(), now.Add(-reauthRetention)); err != nil {
+					log.Printf("reauth challenge reaper: %v", err)
+					observability.CaptureException(ctx, err)
+				}
 			}
 		}
 	}()
 }
+
+// reauthRetention is how long an unusable proof row survives past its expiry,
+// purely so a takeover investigation can see it.
+const reauthRetention = 7 * 24 * time.Hour
 
 // RequestPhoneCode starts Flash Call by default. Legacy voice channel values
 // are accepted but mapped to Flash Call.
@@ -1449,7 +1504,7 @@ func (s *Service) RequestChangePhoneCode(ctx context.Context, userID int32, rawP
 	// unauthenticated /auth/phone/verify, surviving token expiry, refresh
 	// rotation and "log out everywhere". For a phone-only account the real
 	// owner never gets back in.
-	if err := s.requireReauth(ctx, userID, reauthTok); err != nil {
+	if err := s.requireReauth(ctx, userID, domain.ReauthPurposeChangePhone, reauthTok); err != nil {
 		return RequestCodeResult{}, err
 	}
 
@@ -1473,7 +1528,7 @@ func (s *Service) RequestChangePhoneCode(ctx context.Context, userID int32, rawP
 func (s *Service) ConfirmPhoneChange(ctx context.Context, userID int32, sessionID int64, rawPhone, code, challengeID, reauthTok string) (domain.User, error) {
 	// Re-checked at confirm as well as at request: the proof must still be
 	// live when the account actually changes hands.
-	if err := s.requireReauth(ctx, userID, reauthTok); err != nil {
+	if err := s.requireReauth(ctx, userID, domain.ReauthPurposeChangePhone, reauthTok); err != nil {
 		return domain.User{}, err
 	}
 	previous, err := s.users.GetByID(ctx, userID)
@@ -1492,14 +1547,50 @@ func (s *Service) ConfirmPhoneChange(ctx context.Context, userID int32, sessionI
 	if err == nil && existing.ID != userID {
 		return domain.User{}, domain.ErrPhoneTaken
 	}
-	updatedUser, err := s.users.UpdatePhone(ctx, userID, rawPhone, phone, s.now())
+	// Snapshot before the rebind: afterwards these rows are revoked and would no
+	// longer be listed.
+	priorSessions, listErr := s.refresh.ListActive(ctx, userID)
+	if listErr != nil {
+		log.Printf("auth: failed to snapshot sessions for user %d before phone change: %v", userID, listErr)
+	}
+
+	// One transaction: lock the account, re-check the factor, spend the proof,
+	// rebind, revoke other sessions.
+	//
+	// Spending here rather than at the top of the function matters too:
+	// everything above can legitimately fail (a mistyped code, a number taken in
+	// the meantime), and burning the proof on those would cost the user a whole
+	// re-authentication — another billable call — for one typo.
+	now := s.now()
+	if err := s.rebindWithProof(ctx, domain.ReauthRebind{
+		UserID:           userID,
+		Purpose:          domain.ReauthPurposeChangePhone,
+		Now:              now,
+		CurrentSessionID: sessionID,
+		Phone: &domain.ReauthRebindPhone{
+			Raw:        rawPhone,
+			Normalized: phone,
+			VerifiedAt: now,
+		},
+	}, reauthTok); err != nil {
+		return domain.User{}, err
+	}
+	// Committed. A failed re-read is a display problem, not a failed change.
+	updatedUser, err := s.users.GetByID(ctx, userID)
 	if err != nil {
-		return domain.User{}, err
+		log.Printf("auth: failed to reload user %d after phone change: %v", userID, err)
+		updatedUser = previous
+		updatedUser.Phone, updatedUser.PhoneNormalized = rawPhone, phone
+		updatedUser.PhoneVerifiedAt = &now
 	}
+	// Past this point the rebind has landed. Burning the challenge is
+	// bookkeeping — the code was already consumed and cannot be replayed — so a
+	// failure here is logged, not returned: telling the user their change failed
+	// when their phone has in fact changed is the worse outcome.
 	if err = s.phoneChallenges.MarkVerified(ctx, c.ID); err != nil {
-		return domain.User{}, err
+		log.Printf("auth: failed to mark phone challenge %s verified after rebind for user %d: %v", c.ID, userID, err)
 	}
-	s.afterFactorChange(ctx, userID, sessionID, ReauthFactorPhone, previous.Email)
+	s.afterFactorChange(ctx, userID, sessionID, priorSessions, ReauthFactorPhone, previous.Email)
 	linkedIDs, linkErr := s.users.LinkGuestRequestsByPhone(ctx, userID, phone)
 	if linkErr == nil && len(linkedIDs) > 0 && s.onGuestRequestsLinked != nil {
 		go s.onGuestRequestsLinked(context.Background(), linkedIDs)

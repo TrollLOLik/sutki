@@ -388,44 +388,6 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-func (h *AuthHandler) RequestOldEmailCode(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	res, err := h.svc.RequestOldEmailCode(r.Context(), userID)
-	if err != nil {
-		writeAuthError(w, r, err)
-		return
-	}
-	resp := map[string]any{"sent": true, "expires_in": res.ExpiresIn}
-	if res.Exposed {
-		resp["dev_code"] = res.Code
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-func (h *AuthHandler) VerifyOldEmailCode(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	var body struct {
-		Code string `json:"code"`
-	}
-	if !decodeJSON(w, r, &body) {
-		return
-	}
-	token, err := h.svc.VerifyOldEmailCode(r.Context(), userID, body.Code)
-	if err != nil {
-		writeAuthError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"temp_token": token})
-}
-
 func (h *AuthHandler) RequestNewEmailCode(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
@@ -487,6 +449,12 @@ func (h *AuthHandler) RequestReauthCode(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	var body struct {
+		Purpose string `json:"purpose"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
 	// This places a real, billable call or email to the account's own contact,
 	// so it needs the same per-identity budget as every other code-issuing
 	// route, not the (much larger) verification budget. Without it a stolen
@@ -502,7 +470,7 @@ func (h *AuthHandler) RequestReauthCode(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	res, err := h.svc.RequestReauthCode(r.Context(), userID)
+	res, err := h.svc.RequestReauthCode(r.Context(), userID, body.Purpose)
 	if err != nil {
 		log.Printf("requestReauthCode error: %v", err)
 		writeAuthError(w, r, err)
@@ -534,12 +502,8 @@ func (h *AuthHandler) ReauthFallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	var body struct {
-		ChallengeID string `json:"challenge_id"`
-	}
-	if !decodeJSON(w, r, &body) {
-		return
-	}
+	// No body: which challenge to re-deliver comes from the attempt the server
+	// recorded, not from the caller.
 	// Shares the budget with /me/reauth/request: both make the provider dial
 	// the same number, and the service-level 60s cooldown alone would still
 	// allow 60 calls an hour.
@@ -554,7 +518,7 @@ func (h *AuthHandler) ReauthFallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	res, err := h.svc.RequestReauthVoiceFallback(r.Context(), userID, body.ChallengeID)
+	res, err := h.svc.RequestReauthVoiceFallback(r.Context(), userID)
 	if err != nil {
 		log.Printf("reauthFallback error: %v", err)
 		writeAuthError(w, r, err)
@@ -571,17 +535,20 @@ func (h *AuthHandler) VerifyReauthCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	// Only the code. The purpose and the challenge it answers both come from the
+	// attempt the server recorded at request time — accepting either from the
+	// caller is what allowed a code issued for one operation to be redeemed as
+	// authorization for another.
 	var body struct {
-		Code        string `json:"code"`
-		ChallengeID string `json:"challenge_id"`
+		Code string `json:"code"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
 	}
-	if !h.svc.ExposeCode() && !allowOTPVerify(w, r, "reauth:"+strconv.FormatInt(int64(userID), 10), otpChallengeKey(body.ChallengeID)) {
+	if !h.svc.ExposeCode() && !allowOTPVerify(w, r, "reauth:"+strconv.FormatInt(int64(userID), 10), "") {
 		return
 	}
-	token, err := h.svc.VerifyReauthCode(r.Context(), userID, body.Code, body.ChallengeID)
+	token, err := h.svc.VerifyReauthCode(r.Context(), userID, body.Code)
 	if err != nil {
 		writeAuthError(w, r, err)
 		return

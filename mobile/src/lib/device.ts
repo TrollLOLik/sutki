@@ -23,7 +23,11 @@ export function getDeviceMetadata(): DeviceMetadata {
   const osVersion = Device.osVersion || '';
   const deviceOS = osVersion ? `${osName} ${osVersion}` : osName;
 
-  const appVersion = Application.nativeApplicationVersion || '1.0.0';
+  // Empty, never a made-up number. On the web build and in Expo Go this is
+  // null, and substituting a low version would make the server's minimum-version
+  // gate reject those clients outright — the gate is written to fail open on a
+  // missing version, so pass the absence through instead of inventing one.
+  const appVersion = Application.nativeApplicationVersion ?? '';
 
   return {
     deviceName: model,

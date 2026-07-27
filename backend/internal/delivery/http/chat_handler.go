@@ -410,7 +410,7 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, chat.ErrInvalidAttachment):
 			writeError(w, http.StatusBadRequest, "Некорректное вложение. Выберите файл ещё раз.")
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
-			writeError(w, http.StatusBadRequest, "Размер вложения превышает 15 МБ.")
+			writeError(w, http.StatusBadRequest, "Файл слишком большой: до 15 МБ для фото и документов, до 50 МБ для видео.")
 		case errors.Is(err, chat.ErrTooManyAttachments):
 			writeError(w, http.StatusBadRequest, "За раз можно отправить не больше 10 файлов.")
 		case errors.Is(err, chat.ErrReplyTargetNotFound):

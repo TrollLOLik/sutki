@@ -43,10 +43,14 @@ type Config struct {
 	GlitchTipTelegramWebhookSecret string
 	TelegramTimeout                time.Duration
 	AppEnvironment                 string
-	AppRelease                     string
-	JWTSecret                      string
-	AccessTTL                      time.Duration
-	RefreshTTL                     time.Duration
+	// MinAppVersion is the oldest mobile build the API serves. Older builds get
+	// 426 Upgrade Required instead of a confusing endpoint-level error. Empty
+	// disables the gate.
+	MinAppVersion string
+	AppRelease    string
+	JWTSecret     string
+	AccessTTL     time.Duration
+	RefreshTTL    time.Duration
 	// AuthExposeCode returns login codes in the API response and logs them
 	// (dev only). Defaults to false; opt in explicitly via AUTH_EXPOSE_CODE=true.
 	AuthExposeCode bool
@@ -151,6 +155,7 @@ func Load() (Config, error) {
 		GlitchTipTelegramWebhookSecret: getEnv("GLITCHTIP_TELEGRAM_WEBHOOK_SECRET", ""),
 		TelegramTimeout:                getDuration("TELEGRAM_TIMEOUT", 10*time.Second),
 		AppEnvironment:                 getEnv("APP_ENV", "development"),
+		MinAppVersion:                  getEnv("MIN_APP_VERSION", ""),
 		AppRelease:                     getEnv("APP_RELEASE", ""),
 		JWTSecret:                      os.Getenv("JWT_SECRET"),
 		AccessTTL:                      getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),

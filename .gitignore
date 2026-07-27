@@ -11,6 +11,7 @@ yarn-error.log*
 .vscode/*
 .idea/
 .gemini/
+/_to_delete/
 .cache/
 .gocache/
 .pnpm-store/

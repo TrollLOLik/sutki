@@ -22,7 +22,11 @@ export function presignMediaUpload(
 	fileName: string,
 	size: number,
 	contentType: string,
-	type: 'avatar' | 'listing' | 'chat',
+	// Chat attachments are NOT minted here. This route never ran the checks
+	// the chat service does (account standing for video, per-conversation
+	// limits), and the backend rejects type='chat' outright since MEDIA-02.
+	// Use presignChatAttachment from lib/api/chat.
+	type: 'avatar' | 'listing',
 ): Promise<UploadTarget> {
 	return api.post<UploadTarget>('/api/v1/media/presign', {
 		file_name: fileName,

@@ -118,7 +118,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
     setError(null);
     setReauthPending(true);
     try {
-      const response = await requestReauthCode();
+      const response = await requestReauthCode('change_phone');
       // Only the success path touches these. A failed request (the 60s resend
       // cooldown returns 429, which is easy to hit by reopening the sheet)
       // must not leave the screen rendering 4 boxes for a 6-digit email code.
@@ -180,7 +180,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
     setError(null);
     setVerifyingReauth(true);
     try {
-      const { temp_token } = await verifyReauthCode(enteredCode, challengeId);
+      const { temp_token } = await verifyReauthCode(enteredCode);
       setTempToken(temp_token);
       setStep('input_phone');
       setCode('');
@@ -202,10 +202,12 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
   };
 
   const handleReauthVoiceFallback = async () => {
-    if (!challengeId) return;
+    // Gated on the local flag, not on a challenge id: the server resolves which
+    // challenge to re-deliver from the attempt it recorded.
+    if (!reauthSent) return;
     setError(null);
     try {
-      const response = await requestReauthVoiceFallback(challengeId);
+      const response = await requestReauthVoiceFallback();
       setSeconds(response.retry_after ?? 60);
       setMode(response.delivery_mode ?? 'voice');
       setCodeLength(response.code_length ?? DEFAULT_CODE_LENGTH);

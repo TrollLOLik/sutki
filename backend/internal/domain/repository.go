@@ -159,6 +159,33 @@ type PhoneChallengeRepository interface {
 	MarkExpired(ctx context.Context, challengeID string) error
 }
 
+// ReauthChallengeRepository persists re-authentication attempts and owns the
+// transaction that turns a verified proof into a factor change.
+//
+// Durable rather than in-memory on purpose: attempts must survive a restart, be
+// visible to every replica, and be spendable exactly once. Only a token's
+// SHA-256 is ever passed in.
+type ReauthChallengeRepository interface {
+	// Start records an attempt, cancelling whatever the user had in flight, and
+	// returns the stored row.
+	Start(ctx context.Context, attempt ReauthAttempt) (ReauthChallenge, error)
+	// Pending returns the user's live, unverified attempt — the server-side
+	// source of truth for what the code being entered actually authorizes.
+	Pending(ctx context.Context, userID int32, now time.Time) (ReauthChallenge, error)
+	// MarkVerified attaches the proof hash once the code checks out. Must
+	// refuse a second call for the same attempt.
+	MarkVerified(ctx context.Context, id int64, userID int32, tokenHash string, expiresAt, now time.Time) error
+	// Get validates a proof without spending it, for the request half of a
+	// change flow. ErrNotFound covers absent, unverified, spent and expired.
+	Get(ctx context.Context, tokenHash string, userID int32, purpose string, now time.Time) (ReauthChallenge, error)
+	// ConsumeAndRebind spends the proof, applies the factor change and revokes
+	// the user's other sessions in ONE transaction, with the account row locked
+	// while designate decides which factor it currently requires. Any failure —
+	// including a factor mismatch — must roll the spend back with it.
+	ConsumeAndRebind(ctx context.Context, req ReauthRebind, designate func(User) (string, error)) error
+	DeleteExpired(ctx context.Context, before time.Time) error
+}
+
 // RefreshTokenRepository persists hashed refresh tokens for JWT rotation.
 type RefreshTokenRepository interface {
 	Create(ctx context.Context, userID int32, tokenHash string, expiresAt time.Time, deviceName, deviceOS, appVersion, ipAddress, location *string) (int64, error)
