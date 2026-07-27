@@ -115,6 +115,23 @@ type MessageAttachment struct {
 	// still with a play button; the player opens on tap. Rendering video inline
 	// would put several decoders on screen and destroy scrolling.
 	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	// UploadKey is the replayable capability originally issued to the sender.
+	// It is never serialized; URL points at the immutable sealed object.
+	UploadKey string `json:"-"`
+}
+
+// ChatUpload is a server-issued object key and its durable owner. A key is not
+// attachable merely because it has the expected path shape or exists in S3:
+// it must have been registered for the authenticated user when the presigned
+// upload target was created.
+type ChatUpload struct {
+	ObjectKey   string
+	OwnerID     int32
+	SizeBytes   int64
+	MimeType    string
+	SealedKey   string
+	ContentETag string
+	CreatedAt   time.Time
 }
 
 // IsPendingModeration reports whether the attachment is still being checked.

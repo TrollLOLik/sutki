@@ -55,6 +55,9 @@ func (f *fakeStorage) StatObject(context.Context, string) (domain.ObjectInfo, er
 func (f *fakeStorage) PutObject(context.Context, string, []byte, string) error {
 	return errors.New("not implemented")
 }
+func (f *fakeStorage) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{}, errors.New("not implemented")
+}
 func (f *fakeStorage) PublicURL(key string) string          { return "https://example.invalid/" + key }
 func (f *fakeStorage) Delete(context.Context, string) error { return nil }
 

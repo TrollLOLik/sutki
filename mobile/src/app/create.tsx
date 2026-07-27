@@ -366,7 +366,7 @@ export default function CreateListingScreen() {
 
       setUploadStatuses((prev) => ({
         ...prev,
-        [uri]: { progress: 1, error: false, key: target.key },
+        [uri]: { progress: 1, error: false, key: verdict.key },
       }));
     } catch (err) {
       console.error('[CreateListing] Upload photo failed:', err);

@@ -289,6 +289,17 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 	if err := normalizeAndValidateListing(&in); err != nil {
 		return domain.House{}, ErrInvalidListing
 	}
+	sealedPhotos, err := s.sealListingPhotos(ctx, in.OwnerID, in.Photos)
+	if err != nil {
+		return domain.House{}, err
+	}
+	in.Photos = sealedPhotos.keys
+	persisted := false
+	defer func() {
+		if !persisted {
+			s.cleanupNewListingSeals(context.Background(), sealedPhotos)
+		}
+	}()
 	if err := s.validateListingPhotos(ctx, in.OwnerID, in.Photos); err != nil {
 		return domain.House{}, err
 	}
@@ -306,6 +317,8 @@ func (s *Service) Create(ctx context.Context, in domain.NewHouse) (domain.House,
 	if err != nil {
 		return domain.House{}, err
 	}
+	persisted = true
+	s.cleanupListingUploadSources(context.Background(), sealedPhotos)
 
 	// Moderation: synchronous prefilter + async LLM verdict. The listing was
 	// inserted as pending_moderation; Submit may flip it (e.g. provisional
@@ -430,6 +443,17 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	if err := normalizeAndValidateListing(&in); err != nil {
 		return domain.House{}, ErrInvalidListing
 	}
+	sealedPhotos, err := s.sealListingPhotos(ctx, in.OwnerID, in.Photos)
+	if err != nil {
+		return domain.House{}, err
+	}
+	in.Photos = sealedPhotos.keys
+	persisted := false
+	defer func() {
+		if !persisted {
+			s.cleanupNewListingSeals(context.Background(), sealedPhotos)
+		}
+	}()
 	if err := s.validateListingPhotos(ctx, in.OwnerID, in.Photos); err != nil {
 		return domain.House{}, err
 	}
@@ -473,6 +497,8 @@ func (s *Service) Update(ctx context.Context, id int32, in domain.NewHouse) (dom
 	if err != nil {
 		return domain.House{}, err
 	}
+	persisted = true
+	s.cleanupListingUploadSources(context.Background(), sealedPhotos)
 	if s.storage != nil {
 		oldPhotoKeys := make([]string, 0, len(oldPhotos))
 		for _, photo := range oldPhotos {

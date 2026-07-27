@@ -26,6 +26,25 @@ func (q *Queries) AddConversationParticipant(ctx context.Context, arg AddConvers
 	return err
 }
 
+const checkChatUploadOwnership = `-- name: CheckChatUploadOwnership :one
+SELECT COUNT(*) = cardinality($1::text[]) AS owned
+FROM chat_upload
+WHERE owner_id = $2::int
+  AND object_key = ANY($1::text[])
+`
+
+type CheckChatUploadOwnershipParams struct {
+	ObjectKeys []string
+	OwnerID    int32
+}
+
+func (q *Queries) CheckChatUploadOwnership(ctx context.Context, arg CheckChatUploadOwnershipParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkChatUploadOwnership, arg.ObjectKeys, arg.OwnerID)
+	var owned bool
+	err := row.Scan(&owned)
+	return owned, err
+}
+
 const checkParticipantExists = `-- name: CheckParticipantExists :one
 SELECT EXISTS(
     SELECT 1 FROM conversation_participant 
@@ -152,11 +171,35 @@ func (q *Queries) CountPendingAttachments(ctx context.Context, messageID int64) 
 }
 
 const createAttachment = `-- name: CreateAttachment :one
+WITH owned_upload AS (
+  -- Record authoritative S3 metadata and lock the upload row until the
+  -- surrounding message transaction commits.
+  UPDATE chat_upload
+  SET size_bytes = COALESCE($5, chat_upload.size_bytes),
+      mime_type = COALESCE($4, chat_upload.mime_type)
+  WHERE object_key = $11
+    AND owner_id = $12::int
+    AND sealed_key = $2
+    AND content_etag IS NOT NULL
+  RETURNING object_key
+)
 INSERT INTO message_attachment (
   message_id, url, file_name, mime_type, size_bytes, width, height,
-  moderation_status, duration_seconds, thumbnail_url
+  moderation_status, duration_seconds, thumbnail_url, upload_key
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT
+  $1,
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  $7,
+  $8,
+  $9,
+  $10,
+  owned_upload.object_key
+FROM owned_upload
 RETURNING id, message_id, url, file_name, mime_type, size_bytes, width, height,
           moderation_status, duration_seconds, thumbnail_url
 `
@@ -172,6 +215,8 @@ type CreateAttachmentParams struct {
 	ModerationStatus string
 	DurationSeconds  *int32
 	ThumbnailUrl     *string
+	UploadKey        string
+	OwnerID          int32
 }
 
 type CreateAttachmentRow struct {
@@ -200,6 +245,8 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 		arg.ModerationStatus,
 		arg.DurationSeconds,
 		arg.ThumbnailUrl,
+		arg.UploadKey,
+		arg.OwnerID,
 	)
 	var i CreateAttachmentRow
 	err := row.Scan(
@@ -288,27 +335,47 @@ func (q *Queries) DeleteAttachment(ctx context.Context, id int64) error {
 	return err
 }
 
-const deleteMessageAttachments = `-- name: DeleteMessageAttachments :many
+const deleteMessageAttachments = `-- name: DeleteMessageAttachments :exec
 DELETE FROM message_attachment
 WHERE message_id = $1
-RETURNING url
 `
 
-// Удаляет вложения удалённого сообщения и возвращает их ключи, чтобы usecase
-// убрал объекты из S3.
-func (q *Queries) DeleteMessageAttachments(ctx context.Context, messageID int64) ([]string, error) {
-	rows, err := q.db.Query(ctx, deleteMessageAttachments, messageID)
+// Legacy rows and registered references are removed together. The caller gets
+// deletable S3 keys from DeleteOrphanedChatUploads, never from this statement.
+func (q *Queries) DeleteMessageAttachments(ctx context.Context, messageID int64) error {
+	_, err := q.db.Exec(ctx, deleteMessageAttachments, messageID)
+	return err
+}
+
+const deleteOrphanedChatUploads = `-- name: DeleteOrphanedChatUploads :many
+DELETE FROM chat_upload cu
+WHERE cu.object_key = ANY($1::text[])
+  AND NOT EXISTS (
+    SELECT 1
+    FROM message_attachment ma
+    WHERE ma.upload_key = cu.object_key
+  )
+RETURNING cu.object_key, cu.sealed_key
+`
+
+type DeleteOrphanedChatUploadsRow struct {
+	ObjectKey string
+	SealedKey *string
+}
+
+func (q *Queries) DeleteOrphanedChatUploads(ctx context.Context, objectKeys []string) ([]DeleteOrphanedChatUploadsRow, error) {
+	rows, err := q.db.Query(ctx, deleteOrphanedChatUploads, objectKeys)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []DeleteOrphanedChatUploadsRow
 	for rows.Next() {
-		var url string
-		if err := rows.Scan(&url); err != nil {
+		var i DeleteOrphanedChatUploadsRow
+		if err := rows.Scan(&i.ObjectKey, &i.SealedKey); err != nil {
 			return nil, err
 		}
-		items = append(items, url)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -345,6 +412,57 @@ func (q *Queries) EnqueueAttachmentModeration(ctx context.Context, arg EnqueueAt
 		arg.Kind,
 	)
 	return err
+}
+
+const getChatUploads = `-- name: GetChatUploads :many
+SELECT object_key, owner_id, size_bytes, mime_type, sealed_key, content_etag, created_at
+FROM chat_upload
+WHERE owner_id = $1::int
+  AND object_key = ANY($2::text[])
+ORDER BY object_key
+`
+
+type GetChatUploadsParams struct {
+	OwnerID    int32
+	ObjectKeys []string
+}
+
+type GetChatUploadsRow struct {
+	ObjectKey   string
+	OwnerID     *int32
+	SizeBytes   int64
+	MimeType    string
+	SealedKey   *string
+	ContentEtag *string
+	CreatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) GetChatUploads(ctx context.Context, arg GetChatUploadsParams) ([]GetChatUploadsRow, error) {
+	rows, err := q.db.Query(ctx, getChatUploads, arg.OwnerID, arg.ObjectKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetChatUploadsRow
+	for rows.Next() {
+		var i GetChatUploadsRow
+		if err := rows.Scan(
+			&i.ObjectKey,
+			&i.OwnerID,
+			&i.SizeBytes,
+			&i.MimeType,
+			&i.SealedKey,
+			&i.ContentEtag,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getConversationByParticipantsAndHouse = `-- name: GetConversationByParticipantsAndHouse :one
@@ -962,6 +1080,82 @@ func (q *Queries) ListUserConversations(ctx context.Context, userID int32) ([]Li
 	return items, nil
 }
 
+const lockAttachmentUpload = `-- name: LockAttachmentUpload :one
+SELECT cu.object_key
+FROM chat_upload cu
+JOIN message_attachment ma ON ma.upload_key = cu.object_key
+WHERE ma.id = $1
+FOR UPDATE OF cu
+`
+
+func (q *Queries) LockAttachmentUpload(ctx context.Context, attachmentID int64) (string, error) {
+	row := q.db.QueryRow(ctx, lockAttachmentUpload, attachmentID)
+	var object_key string
+	err := row.Scan(&object_key)
+	return object_key, err
+}
+
+const lockMessageAttachmentUploads = `-- name: LockMessageAttachmentUploads :many
+SELECT cu.object_key
+FROM chat_upload cu
+JOIN (
+  SELECT DISTINCT upload_key
+  FROM message_attachment
+  WHERE message_id = $1
+    AND upload_key IS NOT NULL
+) refs ON refs.upload_key = cu.object_key
+ORDER BY cu.object_key
+FOR UPDATE OF cu
+`
+
+// Lock registered uploads in a stable order before removing references.
+func (q *Queries) LockMessageAttachmentUploads(ctx context.Context, messageID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, lockMessageAttachmentUploads, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var object_key string
+		if err := rows.Scan(&object_key); err != nil {
+			return nil, err
+		}
+		items = append(items, object_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const registerChatUpload = `-- name: RegisterChatUpload :exec
+INSERT INTO chat_upload (object_key, owner_id, size_bytes, mime_type)
+VALUES (
+  $1,
+  $2,
+  $3,
+  $4
+)
+`
+
+type RegisterChatUploadParams struct {
+	ObjectKey string
+	OwnerID   *int32
+	SizeBytes int64
+	MimeType  string
+}
+
+func (q *Queries) RegisterChatUpload(ctx context.Context, arg RegisterChatUploadParams) error {
+	_, err := q.db.Exec(ctx, registerChatUpload,
+		arg.ObjectKey,
+		arg.OwnerID,
+		arg.SizeBytes,
+		arg.MimeType,
+	)
+	return err
+}
+
 const releaseStaleAttachmentJobs = `-- name: ReleaseStaleAttachmentJobs :exec
 UPDATE attachment_moderation_job
 SET status = 'queued',
@@ -1000,6 +1194,38 @@ type RetryAttachmentModerationParams struct {
 func (q *Queries) RetryAttachmentModeration(ctx context.Context, arg RetryAttachmentModerationParams) error {
 	_, err := q.db.Exec(ctx, retryAttachmentModeration, arg.NextAttemptAt, arg.LastError, arg.JobID)
 	return err
+}
+
+const sealChatUpload = `-- name: SealChatUpload :one
+UPDATE chat_upload
+SET sealed_key = $1,
+    content_etag = $2
+WHERE object_key = $3
+  AND owner_id = $4::int
+  AND (
+    sealed_key IS NULL OR
+    (sealed_key = $1 AND content_etag = $2)
+  )
+RETURNING object_key
+`
+
+type SealChatUploadParams struct {
+	SealedKey   *string
+	ContentEtag *string
+	ObjectKey   string
+	OwnerID     int32
+}
+
+func (q *Queries) SealChatUpload(ctx context.Context, arg SealChatUploadParams) (string, error) {
+	row := q.db.QueryRow(ctx, sealChatUpload,
+		arg.SealedKey,
+		arg.ContentEtag,
+		arg.ObjectKey,
+		arg.OwnerID,
+	)
+	var object_key string
+	err := row.Scan(&object_key)
+	return object_key, err
 }
 
 const setAttachmentModerationStatus = `-- name: SetAttachmentModerationStatus :exec

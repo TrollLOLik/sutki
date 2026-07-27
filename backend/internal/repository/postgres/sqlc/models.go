@@ -51,6 +51,16 @@ type AuthCode struct {
 	DeliveryCost     *string
 }
 
+type ChatUpload struct {
+	ObjectKey   string
+	OwnerID     *int32
+	SizeBytes   int64
+	MimeType    string
+	CreatedAt   pgtype.Timestamptz
+	SealedKey   *string
+	ContentEtag *string
+}
+
 type Code struct {
 	ID    int32
 	Email string
@@ -286,6 +296,7 @@ type MessageAttachment struct {
 	ModerationStatus string
 	DurationSeconds  *int32
 	ThumbnailUrl     *string
+	UploadKey        *string
 }
 
 type ModerationVerdict struct {
@@ -446,6 +457,19 @@ type PromotionExpiryJob struct {
 	Attempts    int32
 	LastError   *string
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type ReauthChallenge struct {
+	ID               int64
+	UserID           int32
+	Purpose          string
+	Factor           string
+	PhoneChallengeID pgtype.UUID
+	TokenHash        *string
+	VerifiedAt       pgtype.Timestamptz
+	ExpiresAt        pgtype.Timestamptz
+	ConsumedAt       pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
 }
 
 type RefreshToken struct {

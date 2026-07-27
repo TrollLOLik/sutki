@@ -68,12 +68,22 @@ func TestOwnsAttachmentKey(t *testing.T) {
 	}
 }
 
+func TestOwnsStoredAttachmentKeyAcceptsOnlyOwnersSealedSnapshot(t *testing.T) {
+	key := "chat/approved/11/sealed-" + strings.Repeat("a", 64) + "-" + strings.Repeat("b", 64) + ".jpg"
+	if !ownsStoredAttachmentKey(key, aliceID) {
+		t.Fatalf("owner cannot clean up sealed key %q", key)
+	}
+	if ownsStoredAttachmentKey(key, bobID) {
+		t.Fatalf("another user can claim sealed key %q", key)
+	}
+}
+
 func TestAttachmentKey_IsOwnerScoped(t *testing.T) {
 	key := attachmentKey(aliceID, "0123456789abcdef0123456789abcdef", ".jpg")
 	if !strings.HasPrefix(key, "chat/uploads/11/") {
 		t.Fatalf("key = %q, want it scoped under the owner", key)
 	}
-	if !attachmentKeyPattern.MatchString(key) {
+	if !deliveryAttachmentKeyPattern.MatchString(key) {
 		t.Fatalf("freshly minted key %q does not match the accepted pattern", key)
 	}
 	if isLegacyAttachmentKey(key) {
@@ -87,7 +97,7 @@ func TestAttachmentKey_IsOwnerScoped(t *testing.T) {
 func TestLegacyKeys_ReadableButNotAttachable(t *testing.T) {
 	legacy := "chat/uploads/0123456789abcdef0123456789abcdef.jpg"
 
-	if !attachmentKeyPattern.MatchString(legacy) {
+	if !deliveryAttachmentKeyPattern.MatchString(legacy) {
 		t.Fatal("legacy key no longer presignable; existing conversations would show broken images")
 	}
 	if !isLegacyAttachmentKey(legacy) {
@@ -107,7 +117,7 @@ func TestAttachmentKeyPattern_AcceptsBothGenerations(t *testing.T) {
 		"chat/uploads/0123456789abcdef0123456789abcdef",        // legacy, no extension
 		"chat/uploads/11/0123456789abcdef0123456789abcdef",     // scoped, no extension
 	} {
-		if !attachmentKeyPattern.MatchString(key) {
+		if !deliveryAttachmentKeyPattern.MatchString(key) {
 			t.Errorf("pattern rejects %q, which the service mints or already stores", key)
 		}
 	}
@@ -119,7 +129,7 @@ func TestAttachmentKeyPattern_AcceptsBothGenerations(t *testing.T) {
 		"../chat/uploads/0123456789abcdef0123456789abcdef.jpg",
 		"chat/uploads/0123456789abcdef0123456789abcdef.jpg/../../secret",
 	} {
-		if attachmentKeyPattern.MatchString(key) {
+		if deliveryAttachmentKeyPattern.MatchString(key) {
 			t.Errorf("pattern accepts %q, which the service never mints", key)
 		}
 	}
@@ -134,7 +144,7 @@ func TestAttachmentKeyPattern_AcceptsBothGenerations(t *testing.T) {
 // bug. These pin the shape they actually produce.
 func TestPresignUpload_MintsAnOwnerScopedKey(t *testing.T) {
 	storage := &keyCapturingStorage{}
-	svc := &Service{storage: storage}
+	svc := &Service{repo: &fakeChatRepo{}, storage: storage}
 
 	if _, err := svc.PresignUpload(context.Background(), aliceID, "photo.jpg", 1024, "image/jpeg"); err != nil {
 		t.Fatalf("presign: %v", err)
@@ -154,7 +164,7 @@ func TestPresignUpload_RejectsNonPositiveUserID(t *testing.T) {
 	// OwnerPrefix formats with %d, so a non-positive id would mint
 	// "chat/uploads/-1/…" — a key its own uploader could neither attach nor
 	// read. Fail at the source instead.
-	svc := &Service{storage: &keyCapturingStorage{}}
+	svc := &Service{repo: &fakeChatRepo{}, storage: &keyCapturingStorage{}}
 	for _, uid := range []int32{0, -1} {
 		if _, err := svc.PresignUpload(context.Background(), uid, "photo.jpg", 1024, "image/jpeg"); !errors.Is(err, ErrInvalidAttachment) {
 			t.Fatalf("uid %d: got %v, want ErrInvalidAttachment", uid, err)
@@ -164,7 +174,7 @@ func TestPresignUpload_RejectsNonPositiveUserID(t *testing.T) {
 
 func TestPresignUpload_DropsAnUnusableExtension(t *testing.T) {
 	storage := &keyCapturingStorage{}
-	svc := &Service{storage: storage}
+	svc := &Service{repo: &fakeChatRepo{}, storage: storage}
 
 	if _, err := svc.PresignUpload(context.Background(), aliceID, "photo."+strings.Repeat("a", 300), 1024, "image/jpeg"); err != nil {
 		t.Fatalf("presign: %v", err)
@@ -329,6 +339,46 @@ func TestSendMessage_RejectsAKeyTheSenderWasNotIssued(t *testing.T) {
 	}
 }
 
+func TestSendMessage_RejectsAnUnregisteredOwnerShapedKey(t *testing.T) {
+	key := attachmentKey(aliceID, strings.Repeat("a", 32), ".jpg")
+	repo := &fakeChatRepo{enforceUploads: true}
+	storage := &fakeAttachmentStorage{}
+	svc := &Service{repo: repo, storage: storage}
+
+	_, err := svc.SendMessage(context.Background(), aliceID, 1, nil, nil,
+		[]domain.MessageAttachment{{URL: key}})
+	if !errors.Is(err, ErrInvalidAttachment) {
+		t.Fatalf("got %v, want ErrInvalidAttachment", err)
+	}
+	if storage.statCalls != 0 {
+		t.Fatalf("StatObject called %d times for a key the server never issued", storage.statCalls)
+	}
+	if len(repo.persisted) != 0 {
+		t.Fatal("message persisted with an unregistered attachment")
+	}
+}
+
+func TestPresignedUploadCanBeAttachedOnlyByItsRegisteredOwner(t *testing.T) {
+	repo := &fakeChatRepo{enforceUploads: true}
+	storage := &keyAndObjectStorage{}
+	svc := &Service{repo: repo, storage: storage}
+
+	target, err := svc.PresignUpload(context.Background(), aliceID, "photo.jpg", 1024, "image/jpeg")
+	if err != nil {
+		t.Fatalf("presign: %v", err)
+	}
+
+	if _, err := svc.SendMessage(context.Background(), bobID, 1, nil, nil,
+		[]domain.MessageAttachment{{URL: target.Key}}); !errors.Is(err, ErrInvalidAttachment) {
+		t.Fatalf("Bob attaching Alice's upload: got %v, want ErrInvalidAttachment", err)
+	}
+
+	if _, err := svc.SendMessage(context.Background(), aliceID, 1, nil, nil,
+		[]domain.MessageAttachment{{URL: target.Key}}); err != nil {
+		t.Fatalf("Alice attaching her registered upload: %v", err)
+	}
+}
+
 // size_bytes, mime_type, thumbnail_url and duration_seconds all arrive in the
 // same client JSON as the key. The first two are overwritten from StatObject;
 // the last two have no server-side source at send time and must be cleared —
@@ -437,8 +487,13 @@ func TestSendMessage_SizeLimitMatchesTheOneItSigned(t *testing.T) {
 			case !tc.wantErr && err != nil:
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if !tc.wantErr && len(storage.deleted) != 0 {
-				t.Fatalf("deleted %v; the server signed this upload and then destroyed it", storage.deleted)
+			if !tc.wantErr {
+				if len(storage.deleted) != 1 || storage.deleted[0] != key {
+					t.Fatalf("deleted %v; only the replayable upload source should be removed", storage.deleted)
+				}
+				if len(repo.persisted) != 1 || repo.persisted[0].URL == key {
+					t.Fatalf("message did not retain an immutable snapshot: %+v", repo.persisted)
+				}
 			}
 		})
 	}
@@ -580,6 +635,28 @@ func (s *limitCapturingStorage) PresignUpload(_ context.Context, key string, max
 	return domain.UploadTarget{Key: key}, nil
 }
 
+type keyAndObjectStorage struct {
+	domain.FileStorage
+}
+
+func (s *keyAndObjectStorage) PresignUpload(_ context.Context, key string, _ int64, _ string) (domain.UploadTarget, error) {
+	return domain.UploadTarget{Key: key}, nil
+}
+
+func (s *keyAndObjectStorage) StatObject(_ context.Context, _ string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 1024, ContentType: "image/jpeg", ETag: `"object"`}, nil
+}
+
+func (s *keyAndObjectStorage) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 1024, ContentType: "image/jpeg", ETag: `"sealed"`}, nil
+}
+
+func (s *keyAndObjectStorage) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "https://signed.example/" + key, nil
+}
+
+func (s *keyAndObjectStorage) Delete(context.Context, string) error { return nil }
+
 // alwaysAllowedMediaRepo passes the account-standing gate on video uploads.
 type alwaysAllowedMediaRepo struct {
 	domain.ChatRepository
@@ -588,6 +665,10 @@ type alwaysAllowedMediaRepo struct {
 func (r *alwaysAllowedMediaRepo) GetUserMediaStanding(_ context.Context, _ int32) (domain.UserMediaStanding, error) {
 	verified := time.Now().Add(-30 * 24 * time.Hour)
 	return domain.UserMediaStanding{PhoneVerifiedAt: &verified, CreatedAt: verified}, nil
+}
+
+func (r *alwaysAllowedMediaRepo) RegisterChatUpload(context.Context, domain.ChatUpload) error {
+	return nil
 }
 
 // countingModerationQueue counts the jobs a single message produces.
@@ -611,7 +692,7 @@ type fakeAttachmentStorage struct {
 	deleted     []string
 }
 
-func (s *fakeAttachmentStorage) StatObject(_ context.Context, _ string) (domain.ObjectInfo, error) {
+func (s *fakeAttachmentStorage) StatObject(_ context.Context, key string) (domain.ObjectInfo, error) {
 	s.statCalls++
 	ct := s.contentType
 	if ct == "" {
@@ -621,7 +702,23 @@ func (s *fakeAttachmentStorage) StatObject(_ context.Context, _ string) (domain.
 	if size == 0 {
 		size = fakeObjectSize
 	}
-	return domain.ObjectInfo{SizeBytes: size, ContentType: ct}, nil
+	etag := `"source"`
+	if strings.HasPrefix(key, sealedAttachmentKeyKind+"/") {
+		etag = `"sealed"`
+	}
+	return domain.ObjectInfo{SizeBytes: size, ContentType: ct, ETag: etag}, nil
+}
+
+func (s *fakeAttachmentStorage) CopyObjectIfMatch(_ context.Context, _, _ string, _ string) (domain.ObjectInfo, error) {
+	ct := s.contentType
+	if ct == "" {
+		ct = "image/jpeg"
+	}
+	size := s.size
+	if size == 0 {
+		size = fakeObjectSize
+	}
+	return domain.ObjectInfo{SizeBytes: size, ContentType: ct, ETag: `"sealed"`}, nil
 }
 
 func (s *fakeAttachmentStorage) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
@@ -652,7 +749,11 @@ func (s *presignErrorStorage) PresignGet(_ context.Context, key string, _ time.D
 // be written.
 type fakeChatRepo struct {
 	domain.ChatRepository
-	persisted []domain.MessageAttachment
+	persisted      []domain.MessageAttachment
+	uploads        map[string]int32
+	sealedKeys     map[string]string
+	sealedETags    map[string]string
+	enforceUploads bool
 }
 
 func (r *fakeChatRepo) CheckParticipantExists(_ context.Context, _ int64, _ int32) (bool, error) {
@@ -665,6 +766,62 @@ func (r *fakeChatRepo) IsOtherParticipantDeleted(_ context.Context, _ int64, _ i
 
 func (r *fakeChatRepo) GetOtherParticipantID(_ context.Context, _ int64, _ int32) (int32, error) {
 	return bobID, nil
+}
+
+func (r *fakeChatRepo) RegisterChatUpload(_ context.Context, upload domain.ChatUpload) error {
+	if r.uploads == nil {
+		r.uploads = make(map[string]int32)
+	}
+	r.uploads[upload.ObjectKey] = upload.OwnerID
+	return nil
+}
+
+func (r *fakeChatRepo) GetChatUploads(_ context.Context, userID int32, keys []string) ([]domain.ChatUpload, error) {
+	uploads := make([]domain.ChatUpload, 0, len(keys))
+	for _, key := range keys {
+		ownerID := userID
+		if r.enforceUploads {
+			ownerID = r.uploads[key]
+			if ownerID != userID {
+				continue
+			}
+		}
+		uploads = append(uploads, domain.ChatUpload{
+			ObjectKey:   key,
+			OwnerID:     ownerID,
+			SealedKey:   r.sealedKeys[key],
+			ContentETag: r.sealedETags[key],
+		})
+	}
+	return uploads, nil
+}
+
+func (r *fakeChatRepo) SealChatUpload(_ context.Context, userID int32, objectKey, sealedKey, contentETag string) error {
+	if r.enforceUploads && r.uploads[objectKey] != userID {
+		return domain.ErrChatUploadNotOwned
+	}
+	if r.sealedKeys == nil {
+		r.sealedKeys = make(map[string]string)
+		r.sealedETags = make(map[string]string)
+	}
+	if existing := r.sealedKeys[objectKey]; existing != "" && existing != sealedKey {
+		return domain.ErrChatUploadNotOwned
+	}
+	r.sealedKeys[objectKey] = sealedKey
+	r.sealedETags[objectKey] = contentETag
+	return nil
+}
+
+func (r *fakeChatRepo) CheckChatUploadOwnership(_ context.Context, userID int32, keys []string) (bool, error) {
+	if !r.enforceUploads {
+		return true, nil
+	}
+	for _, key := range keys {
+		if r.uploads[key] != userID {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // channelDeleteStorage reports every Delete on a channel so the background

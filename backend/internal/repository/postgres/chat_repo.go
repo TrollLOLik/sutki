@@ -22,6 +22,67 @@ func NewChatRepo(q *sqlc.Queries) *ChatRepo {
 	return &ChatRepo{q: q}
 }
 
+func (r *ChatRepo) RegisterChatUpload(ctx context.Context, upload domain.ChatUpload) error {
+	return r.q.RegisterChatUpload(ctx, sqlc.RegisterChatUploadParams{
+		ObjectKey: upload.ObjectKey,
+		OwnerID:   &upload.OwnerID,
+		SizeBytes: upload.SizeBytes,
+		MimeType:  upload.MimeType,
+	})
+}
+
+func (r *ChatRepo) CheckChatUploadOwnership(ctx context.Context, userID int32, objectKeys []string) (bool, error) {
+	if len(objectKeys) == 0 {
+		return true, nil
+	}
+	return r.q.CheckChatUploadOwnership(ctx, sqlc.CheckChatUploadOwnershipParams{
+		ObjectKeys: objectKeys,
+		OwnerID:    userID,
+	})
+}
+
+func (r *ChatRepo) GetChatUploads(ctx context.Context, userID int32, objectKeys []string) ([]domain.ChatUpload, error) {
+	if len(objectKeys) == 0 {
+		return nil, nil
+	}
+	rows, err := r.q.GetChatUploads(ctx, sqlc.GetChatUploadsParams{
+		OwnerID:    userID,
+		ObjectKeys: objectKeys,
+	})
+	if err != nil {
+		return nil, err
+	}
+	uploads := make([]domain.ChatUpload, 0, len(rows))
+	for _, row := range rows {
+		if row.OwnerID == nil {
+			continue
+		}
+		uploads = append(uploads, domain.ChatUpload{
+			ObjectKey:   row.ObjectKey,
+			OwnerID:     *row.OwnerID,
+			SizeBytes:   row.SizeBytes,
+			MimeType:    row.MimeType,
+			SealedKey:   derefString(row.SealedKey),
+			ContentETag: derefString(row.ContentEtag),
+			CreatedAt:   toTime(row.CreatedAt),
+		})
+	}
+	return uploads, nil
+}
+
+func (r *ChatRepo) SealChatUpload(ctx context.Context, userID int32, objectKey, sealedKey, contentETag string) error {
+	_, err := r.q.SealChatUpload(ctx, sqlc.SealChatUploadParams{
+		SealedKey:   &sealedKey,
+		ContentEtag: &contentETag,
+		ObjectKey:   objectKey,
+		OwnerID:     userID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrChatUploadNotOwned
+	}
+	return err
+}
+
 func generateAdvisoryLockKey(houseID int32, user1, user2 int32) int64 {
 	uMin := user1
 	uMax := user2
@@ -225,6 +286,7 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 		row, err := qtx.CreateAttachment(ctx, sqlc.CreateAttachmentParams{
 			MessageID:        msg.ID,
 			Url:              att.URL,
+			UploadKey:        att.UploadKey,
 			FileName:         fileName,
 			MimeType:         mimeType,
 			SizeBytes:        sizeBytes,
@@ -233,8 +295,12 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, convID int64, senderID int
 			ModerationStatus: status,
 			DurationSeconds:  att.DurationSeconds,
 			ThumbnailUrl:     strPtrOrNil(att.ThumbnailURL),
+			OwnerID:          senderID,
 		})
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.Message{}, domain.ErrChatUploadNotOwned
+			}
 			return domain.Message{}, fmt.Errorf("failed to save attachment: %w", err)
 		}
 		dbAttachments = append(dbAttachments, domain.MessageAttachment{
@@ -853,9 +919,32 @@ func (r *ChatRepo) SoftDeleteMessage(ctx context.Context, messageID int64, userI
 		return domain.Message{}, nil, false, err
 	}
 
-	keys, err := qtx.DeleteMessageAttachments(ctx, messageID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	// Lock the upload rows before removing references. CreateAttachment takes
+	// the same row lock, so a concurrent attach either commits first (and keeps
+	// the object alive) or waits until this transaction removes the registry
+	// row and is rejected.
+	candidateKeys, err := qtx.LockMessageAttachmentUploads(ctx, messageID)
+	if err != nil {
 		return domain.Message{}, nil, false, err
+	}
+
+	if err := qtx.DeleteMessageAttachments(ctx, messageID); err != nil {
+		return domain.Message{}, nil, false, err
+	}
+
+	orphanedKeys := []string(nil)
+	if len(candidateKeys) > 0 {
+		rows, deleteErr := qtx.DeleteOrphanedChatUploads(ctx, candidateKeys)
+		err = deleteErr
+		if err != nil {
+			return domain.Message{}, nil, false, err
+		}
+		for _, deleted := range rows {
+			orphanedKeys = append(orphanedKeys, deleted.ObjectKey)
+			if deleted.SealedKey != nil && *deleted.SealedKey != "" {
+				orphanedKeys = append(orphanedKeys, *deleted.SealedKey)
+			}
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -872,7 +961,7 @@ func (r *ChatRepo) SoftDeleteMessage(ctx context.Context, messageID int64, userI
 		ReplyToMessageID: row.ReplyToMessageID,
 		EditedAt:         timestamptzPtr(row.EditedAt),
 		DeletedAt:        timestamptzPtr(row.DeletedAt),
-	}, keys, true, nil
+	}, orphanedKeys, true, nil
 }
 
 // durationToInterval renders a Go duration as a Postgres interval for the

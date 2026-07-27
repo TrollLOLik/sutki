@@ -16,6 +16,7 @@ type UploadTarget struct {
 type ObjectInfo struct {
 	SizeBytes   int64
 	ContentType string
+	ETag        string
 }
 
 // ObjectData contains a bounded object body read by the backend.
@@ -34,6 +35,9 @@ type FileStorage interface {
 	// frames). Client uploads still go through PresignUpload — this is only for
 	// content the backend generates itself.
 	PutObject(ctx context.Context, key string, data []byte, contentType string) error
+	// CopyObjectIfMatch snapshots a client upload under a key clients cannot
+	// write. The source ETag closes the metadata-check/copy race.
+	CopyObjectIfMatch(ctx context.Context, sourceKey, destinationKey, sourceETag string) (ObjectInfo, error)
 	PublicURL(key string) string
 	Delete(ctx context.Context, key string) error
 }

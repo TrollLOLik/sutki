@@ -100,8 +100,56 @@ func (r *AttachmentModerationRepo) SetAttachmentVideoMeta(ctx context.Context, a
 	})
 }
 
-func (r *AttachmentModerationRepo) DeleteAttachment(ctx context.Context, attachmentID int64) error {
-	return r.q.DeleteAttachment(ctx, attachmentID)
+// DeleteAttachment releases one message reference and returns both the upload
+// capability and immutable object only when this was their final durable
+// reference. The row lock is the same one CreateAttachment takes.
+func (r *AttachmentModerationRepo) DeleteAttachment(ctx context.Context, attachmentID int64) ([]string, error) {
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	txb, ok := r.q.DB().(TxBeginner)
+	if !ok {
+		return nil, errors.New("underlying database connection does not support transactions")
+	}
+
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.q.WithTx(tx)
+	objectKey, err := qtx.LockAttachmentUpload(ctx, attachmentID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		objectKey = ""
+	}
+
+	if err := qtx.DeleteAttachment(ctx, attachmentID); err != nil {
+		return nil, err
+	}
+
+	var orphanedKeys []string
+	if objectKey != "" {
+		rows, err := qtx.DeleteOrphanedChatUploads(ctx, []string{objectKey})
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			orphanedKeys = append(orphanedKeys, row.ObjectKey)
+			if row.SealedKey != nil && *row.SealedKey != "" {
+				orphanedKeys = append(orphanedKeys, *row.SealedKey)
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return orphanedKeys, nil
 }
 
 func (r *AttachmentModerationRepo) CountPendingAttachments(ctx context.Context, messageID int64) (int64, error) {

@@ -30,6 +30,7 @@ type fakeRepo struct {
 	retried         map[int64]time.Time
 	deleted         map[int64]bool
 	videoMeta       map[int64]string // attachmentID -> thumbnail key
+	orphanedKey     string
 	pendingCount    int64
 	releaseCalls    int
 }
@@ -42,6 +43,7 @@ func newFakeRepo() *fakeRepo {
 		retried:         map[int64]time.Time{},
 		deleted:         map[int64]bool{},
 		videoMeta:       map[int64]string{},
+		orphanedKey:     videoJob().ObjectKey,
 	}
 }
 
@@ -96,11 +98,14 @@ func (r *fakeRepo) SetAttachmentVideoMeta(_ context.Context, attachmentID int64,
 	return nil
 }
 
-func (r *fakeRepo) DeleteAttachment(_ context.Context, attachmentID int64) error {
+func (r *fakeRepo) DeleteAttachment(_ context.Context, attachmentID int64) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.deleted[attachmentID] = true
-	return nil
+	if r.orphanedKey == "" {
+		return nil, nil
+	}
+	return []string{r.orphanedKey}, nil
 }
 
 func (r *fakeRepo) CountPendingAttachments(context.Context, int64) (int64, error) {
@@ -162,6 +167,9 @@ func (s *fakeStorage) PresignGet(context.Context, string, time.Duration) (string
 	return "", errors.New("not implemented")
 }
 func (s *fakeStorage) StatObject(context.Context, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{}, errors.New("not implemented")
+}
+func (s *fakeStorage) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
 	return domain.ObjectInfo{}, errors.New("not implemented")
 }
 func (s *fakeStorage) PublicURL(key string) string { return "https://example.invalid/" + key }
@@ -459,6 +467,35 @@ func TestRejectedVideoIsDeletedEverywhere(t *testing.T) {
 	// The sender must not be left with an eternal spinner and no explanation.
 	if notifier.rejectMsg == "" {
 		t.Fatal("expected a reason in the rejection notification")
+	}
+}
+
+func TestRejectedReferenceDoesNotDeleteSharedObject(t *testing.T) {
+	repo := newFakeRepo()
+	repo.orphanedKey = ""
+	storage := newFakeStorage()
+	job := videoJob()
+	storage.objects[job.ObjectKey] = []byte("video bytes")
+
+	ext := &fakeExtractor{
+		available:  true,
+		info:       videoframes.MediaInfo{DurationSeconds: 5, HasVideoStream: true},
+		frameCount: 2,
+	}
+	mod := &fakeModerator{result: domain.ImageModerationResult{
+		Decision:   domain.ImageModerationReject,
+		Category:   "sexual",
+		Reason:     "violation",
+		Confidence: 1,
+	}}
+	svc := newTestService(t, repo, storage, ext, mod, &fakeNotifier{})
+
+	svc.processJob(context.Background(), job)
+
+	for _, key := range storage.deletedKeys() {
+		if key == job.ObjectKey {
+			t.Fatalf("shared object %q was deleted while another reference exists", key)
+		}
 	}
 }
 

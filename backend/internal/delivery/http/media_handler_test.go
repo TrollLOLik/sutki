@@ -23,7 +23,39 @@ type mediaModerationStorageStub struct {
 	domain.FileStorage
 }
 
+type cleanupTrackingStorageStub struct {
+	domain.FileStorage
+	deleted []string
+}
+
+func (mediaModerationStorageStub) StatObject(context.Context, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 8, ContentType: "image/png", ETag: `"source"`}, nil
+}
+
+func (mediaModerationStorageStub) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 8, ContentType: "image/png", ETag: `"sealed"`}, nil
+}
+
+func (mediaModerationStorageStub) Delete(context.Context, string) error { return nil }
+
 func (mediaModerationStorageStub) ReadObject(context.Context, string, int64) (domain.ObjectData, error) {
+	return domain.ObjectData{Bytes: []byte("\x89PNG\r\n\x1a\n"), ContentType: "image/png"}, nil
+}
+
+func (s *cleanupTrackingStorageStub) StatObject(context.Context, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 8, ContentType: "image/png", ETag: `"source"`}, nil
+}
+
+func (s *cleanupTrackingStorageStub) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 8, ContentType: "image/png", ETag: `"sealed"`}, nil
+}
+
+func (s *cleanupTrackingStorageStub) Delete(_ context.Context, key string) error {
+	s.deleted = append(s.deleted, key)
+	return nil
+}
+
+func (s *cleanupTrackingStorageStub) ReadObject(context.Context, string, int64) (domain.ObjectData, error) {
 	return domain.ObjectData{Bytes: []byte("\x89PNG\r\n\x1a\n"), ContentType: "image/png"}, nil
 }
 
@@ -159,5 +191,59 @@ func TestModerateListingImagesChecksEveryOwnedKey(t *testing.T) {
 	}
 	if moderator.calls != 2 {
 		t.Fatalf("moderation calls = %d, want 2", moderator.calls)
+	}
+	var response struct {
+		Items []moderateListingMediaItem `json:"items"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Items) != 2 {
+		t.Fatalf("response items = %d, want 2", len(response.Items))
+	}
+	for _, item := range response.Items {
+		if !strings.HasPrefix(item.Key, "listings/42/sealed-") {
+			t.Fatalf("preview returned replayable upload key %q", item.Key)
+		}
+	}
+}
+
+func TestModerateListingImagesCleansSealsWhenLaterKeyIsInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		keys []string
+	}{
+		{
+			name: "foreign key",
+			keys: []string{"listings/42/cover.png", "listings/7/foreign.png"},
+		},
+		{
+			name: "duplicate key",
+			keys: []string{"listings/42/cover.png", "listings/42/cover.png"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &cleanupTrackingStorageStub{}
+			moderator := &mediaImageModeratorStub{}
+			handler := NewMediaHandler(storage, moderator)
+			body, err := json.Marshal(moderateListingMediaRequest{Keys: tt.keys})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/media/listings/moderate", bytes.NewReader(body))
+			req = req.WithContext(context.WithValue(req.Context(), userIDKey, int32(42)))
+			recorder := httptest.NewRecorder()
+			handler.ModerateListingImages(recorder, req)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if len(storage.deleted) != 1 || !strings.HasPrefix(storage.deleted[0], "listings/42/sealed-") {
+				t.Fatalf("deleted keys = %#v, want the previously created sealed object", storage.deleted)
+			}
+		})
 	}
 }

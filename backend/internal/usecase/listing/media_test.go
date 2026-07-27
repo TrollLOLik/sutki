@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,15 @@ func (s *listingMediaStorageStub) ReadObject(context.Context, string, int64) (do
 func (s *listingMediaStorageStub) PutObject(context.Context, string, []byte, string) error {
 	return nil
 }
+func (s *listingMediaStorageStub) CopyObjectIfMatch(_ context.Context, sourceKey, destinationKey, _ string) (domain.ObjectInfo, error) {
+	info, ok := s.objects[sourceKey]
+	if !ok {
+		return domain.ObjectInfo{}, errors.New("not found")
+	}
+	info.ETag = `"sealed"`
+	s.objects[destinationKey] = info
+	return info, nil
+}
 func (s *listingMediaStorageStub) PublicURL(key string) string          { return "https://media.test/" + key }
 func (s *listingMediaStorageStub) Delete(context.Context, string) error { return nil }
 
@@ -45,6 +55,25 @@ func TestValidateListingPhotosAcceptsOwnedUploadedImages(t *testing.T) {
 
 	if err := svc.validateListingPhotos(context.Background(), 42, []string{key}); err != nil {
 		t.Fatalf("validateListingPhotos() error = %v", err)
+	}
+}
+
+func TestSealListingPhotosReturnsBackendOnlySnapshot(t *testing.T) {
+	const key = "listings/42/photo.jpg"
+	storage := &listingMediaStorageStub{objects: map[string]domain.ObjectInfo{
+		key: {SizeBytes: 1024, ContentType: "image/jpeg", ETag: `"source"`},
+	}}
+	svc := &Service{storage: storage}
+
+	sealed, err := svc.sealListingPhotos(context.Background(), 42, []string{key})
+	if err != nil {
+		t.Fatalf("sealListingPhotos() error = %v", err)
+	}
+	if len(sealed.keys) != 1 || sealed.keys[0] == key {
+		t.Fatalf("sealed keys = %#v", sealed.keys)
+	}
+	if !strings.HasPrefix(sealed.keys[0], "listings/42/sealed-") {
+		t.Fatalf("unexpected sealed key %q", sealed.keys[0])
 	}
 }
 

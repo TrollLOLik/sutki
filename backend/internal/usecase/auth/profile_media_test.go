@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,14 @@ type profileStorageStub struct {
 	deleted []string
 }
 
+func (s *profileStorageStub) StatObject(context.Context, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 100, ContentType: "image/webp", ETag: `"source"`}, nil
+}
+
+func (s *profileStorageStub) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 100, ContentType: "image/webp", ETag: `"sealed"`}, nil
+}
+
 func (s *profileStorageStub) Delete(_ context.Context, key string) error {
 	s.deleted = append(s.deleted, key)
 	return nil
@@ -46,10 +55,14 @@ func TestUpdateProfileDeletesReplacedOwnedAvatar(t *testing.T) {
 	service := New(repo, nil, nil, Config{Secret: "test", AccessTTL: time.Minute, Storage: storage})
 	newAvatar := "avatars/42/new.webp"
 
-	if _, err := service.UpdateProfile(context.Background(), 42, nil, nil, nil, nil, nil, &newAvatar, nil, nil, nil); err != nil {
+	updated, err := service.UpdateProfile(context.Background(), 42, nil, nil, nil, nil, nil, &newAvatar, nil, nil, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(storage.deleted) != 1 || storage.deleted[0] != "avatars/42/old.webp" {
+	if !strings.Contains(updated.AvatarURL, "/avatars/42/sealed-") {
+		t.Fatalf("avatar still points at replayable upload: %q", updated.AvatarURL)
+	}
+	if !containsString(storage.deleted, "avatars/42/old.webp") {
 		t.Fatalf("deleted = %#v", storage.deleted)
 	}
 }
@@ -65,9 +78,18 @@ func TestUpdateProfileDoesNotDeleteUnownedAvatar(t *testing.T) {
 			if _, err := service.UpdateProfile(context.Background(), 42, nil, nil, nil, nil, nil, &newAvatar, nil, nil, nil); err != nil {
 				t.Fatal(err)
 			}
-			if len(storage.deleted) != 0 {
+			if containsString(storage.deleted, oldKey) {
 				t.Fatalf("deleted unowned key: %#v", storage.deleted)
 			}
 		})
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

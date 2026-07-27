@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,22 @@ func (r *imageChatRepo) CheckParticipantExists(context.Context, int64, int32) (b
 
 func (r *imageChatRepo) IsOtherParticipantDeleted(context.Context, int64, int32) (bool, error) {
 	return false, nil
+}
+
+func (r *imageChatRepo) CheckChatUploadOwnership(context.Context, int32, []string) (bool, error) {
+	return true, nil
+}
+
+func (r *imageChatRepo) GetChatUploads(_ context.Context, userID int32, keys []string) ([]domain.ChatUpload, error) {
+	uploads := make([]domain.ChatUpload, 0, len(keys))
+	for _, key := range keys {
+		uploads = append(uploads, domain.ChatUpload{ObjectKey: key, OwnerID: userID})
+	}
+	return uploads, nil
+}
+
+func (r *imageChatRepo) SealChatUpload(context.Context, int32, string, string, string) error {
+	return nil
 }
 
 func (r *imageChatRepo) CreateMessage(_ context.Context, convID int64, senderID int32, _ *string, _ *int64, attachments []domain.MessageAttachment) (domain.Message, error) {
@@ -44,7 +61,11 @@ type imageChatStorage struct {
 }
 
 func (s *imageChatStorage) StatObject(context.Context, string) (domain.ObjectInfo, error) {
-	return domain.ObjectInfo{SizeBytes: 100, ContentType: "image/jpeg"}, nil
+	return domain.ObjectInfo{SizeBytes: 100, ContentType: "image/jpeg", ETag: `"source"`}, nil
+}
+
+func (s *imageChatStorage) CopyObjectIfMatch(context.Context, string, string, string) (domain.ObjectInfo, error) {
+	return domain.ObjectInfo{SizeBytes: 100, ContentType: "image/jpeg", ETag: `"sealed"`}, nil
 }
 
 func (s *imageChatStorage) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
@@ -89,7 +110,9 @@ func TestSendMessageQueuesImageModerationAfterPersisting(t *testing.T) {
 	if len(queue.jobs) != 1 {
 		t.Fatalf("queued jobs=%+v", queue.jobs)
 	}
-	if queue.jobs[0].ObjectKey != key || queue.jobs[0].Kind != domain.AttachmentKindImage {
+	if queue.jobs[0].ObjectKey == key ||
+		!strings.HasPrefix(queue.jobs[0].ObjectKey, "chat/approved/7/sealed-") ||
+		queue.jobs[0].Kind != domain.AttachmentKindImage {
 		t.Fatalf("queued job=%+v", queue.jobs[0])
 	}
 }

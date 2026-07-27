@@ -207,6 +207,17 @@ type ChatRepository interface {
 	// listing contact (targetID owns houseID), or a booking relationship in
 	// either direction.
 	CanContact(ctx context.Context, houseID *int32, initiatorID, targetID int32) (bool, error)
+	// RegisterChatUpload persists a server-issued object key before it is
+	// returned to the uploader.
+	RegisterChatUpload(ctx context.Context, upload ChatUpload) error
+	// CheckChatUploadOwnership rejects invented owner-shaped keys before an S3
+	// stat. CreateMessage repeats the check atomically while inserting refs.
+	CheckChatUploadOwnership(ctx context.Context, userID int32, objectKeys []string) (bool, error)
+	// GetChatUploads resolves upload capabilities to their immutable snapshots.
+	GetChatUploads(ctx context.Context, userID int32, objectKeys []string) ([]ChatUpload, error)
+	// SealChatUpload binds the first immutable snapshot to the capability.
+	// A different second binding is rejected fail-closed.
+	SealChatUpload(ctx context.Context, userID int32, objectKey, sealedKey, contentETag string) error
 	CreateMessage(ctx context.Context, convID int64, senderID int32, body *string, replyToMessageID *int64, attachments []MessageAttachment) (Message, error)
 	// GetSuggestionContext loads the listing details and recent messages needed
 	// to generate reply suggestions. recentLimit caps how many messages are
@@ -235,8 +246,8 @@ type ChatRepository interface {
 	EditMessageBody(ctx context.Context, messageID int64, userID int32, body string, window time.Duration) (msg Message, ok bool, err error)
 	// SoftDeleteMessage clears the body and stamps deleted_at, keeping the row
 	// so replies keep their quote and read cursors stay valid. Returns the
-	// storage keys of the removed attachments so the caller can drop the
-	// objects from S3.
+	// storage keys whose final durable reference was removed, so the caller can
+	// drop only orphaned objects from S3.
 	SoftDeleteMessage(ctx context.Context, messageID int64, userID int32, window time.Duration) (msg Message, attachmentKeys []string, ok bool, err error)
 	// CreateSystemMessage inserts a server-generated message (sender_id NULL)
 	// with the given kind/payload and a human-readable fallback body. Returns

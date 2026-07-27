@@ -164,32 +164,70 @@ func (h *MediaHandler) ModerateListingImages(w http.ResponseWriter, r *http.Requ
 
 	seen := make(map[string]struct{}, len(req.Keys))
 	items := make([]moderateListingMediaItem, 0, len(req.Keys))
+	sealedObjects := make([]media.SealedObject, 0, len(req.Keys))
+	cleanupNewSeals := func() {
+		for _, item := range sealedObjects {
+			if item.Created {
+				_ = h.publicStorage.Delete(r.Context(), item.Key)
+			}
+		}
+	}
 	for _, rawKey := range req.Keys {
 		key := strings.TrimSpace(rawKey)
 		if !media.IsOwnedKey(key, "listings", userID) {
+			cleanupNewSeals()
 			writeError(w, http.StatusBadRequest, "listing image key is outside the user's media scope")
 			return
 		}
 		if _, exists := seen[key]; exists {
+			cleanupNewSeals()
 			writeError(w, http.StatusBadRequest, "duplicate listing image key")
 			return
 		}
 		seen[key] = struct{}{}
 
-		result, err := imagemoderation.ModerateStoredImages(r.Context(), h.imageModerator, h.publicStorage, []string{key}, "listing_preview", 10*1024*1024)
+		sealed, err := media.SealOwnedObject(
+			r.Context(),
+			h.publicStorage,
+			key,
+			"listings",
+			"listings",
+			userID,
+			10*1024*1024,
+			map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true},
+		)
 		if err != nil {
-			log.Printf("[Media] listing image moderation error key=%q: %v", key, err)
+			log.Printf("[Media] listing image sealing error key=%q: %v", key, err)
+			cleanupNewSeals()
+			writeError(w, http.StatusServiceUnavailable, "image moderation is temporarily unavailable")
+			return
+		}
+		sealedObjects = append(sealedObjects, sealed)
+
+		result, err := imagemoderation.ModerateStoredImages(r.Context(), h.imageModerator, h.publicStorage, []string{sealed.Key}, "listing_preview", 10*1024*1024)
+		if err != nil {
+			log.Printf("[Media] listing image moderation error key=%q: %v", sealed.Key, err)
+			cleanupNewSeals()
 			writeError(w, http.StatusServiceUnavailable, "image moderation is temporarily unavailable")
 			return
 		}
 		items = append(items, moderateListingMediaItem{
-			Key: key, Decision: result.Decision, Category: result.Category,
+			Key: sealed.Key, Decision: result.Decision, Category: result.Category,
 			Reason: result.Reason, Confidence: result.Confidence,
 		})
-		if result.Decision != domain.ImageModerationApprove {
-			if err := h.publicStorage.Delete(r.Context(), key); err != nil {
-				log.Printf("[Media] delete rejected listing image key=%q: %v", key, err)
+		if result.Decision != domain.ImageModerationApprove && sealed.Created {
+			if err := h.publicStorage.Delete(r.Context(), sealed.Key); err != nil {
+				log.Printf("[Media] delete rejected listing image key=%q: %v", sealed.Key, err)
 			}
+		}
+	}
+
+	for _, sealed := range sealedObjects {
+		if !sealed.Created {
+			continue
+		}
+		if err := h.publicStorage.Delete(r.Context(), sealed.SourceKey); err != nil {
+			log.Printf("[Media] delete sealed listing upload source key=%q: %v", sealed.SourceKey, err)
 		}
 	}
 

@@ -69,7 +69,9 @@ type Repository interface {
 	RetryAttachmentModeration(ctx context.Context, jobID int64, nextAttemptAt time.Time, lastError string) error
 	SetAttachmentModerationStatus(ctx context.Context, attachmentID int64, status string) error
 	SetAttachmentVideoMeta(ctx context.Context, attachmentID int64, durationSeconds *int32, thumbnailURL string) error
-	DeleteAttachment(ctx context.Context, attachmentID int64) error
+	// DeleteAttachment removes one reference and returns the upload capability
+	// and sealed object only when no other message still references them.
+	DeleteAttachment(ctx context.Context, attachmentID int64) (orphanedObjectKeys []string, err error)
 	CountPendingAttachments(ctx context.Context, messageID int64) (int64, error)
 }
 
@@ -465,11 +467,19 @@ func (s *Service) reject(ctx context.Context, job domain.AttachmentModerationJob
 
 	// Deleting the attachment row cascades the job away, so the object has to be
 	// removed via the key captured in the job.
-	if err := s.repo.DeleteAttachment(ctx, job.AttachmentID); err != nil {
+	orphanedKeys, err := s.repo.DeleteAttachment(ctx, job.AttachmentID)
+	if err != nil {
 		log.Printf("attachment moderation: delete rejected attachment %d: %v", job.AttachmentID, err)
 	}
-	if err := s.storage.Delete(ctx, job.ObjectKey); err != nil {
-		log.Printf("attachment moderation: delete rejected object %q: %v", job.ObjectKey, err)
+	for _, orphanedKey := range orphanedKeys {
+		if err := s.storage.Delete(ctx, orphanedKey); err != nil {
+			log.Printf("attachment moderation: delete rejected object %q: %v", orphanedKey, err)
+		}
+		if orphanedKey == job.ObjectKey {
+			if err := s.storage.Delete(ctx, orphanedKey+".cover.jpg"); err != nil {
+				log.Printf("attachment moderation: delete rejected cover %q: %v", orphanedKey+".cover.jpg", err)
+			}
+		}
 	}
 
 	if s.notifier != nil {

@@ -184,10 +184,15 @@ func (s *S3Storage) StatObject(ctx context.Context, key string) (domain.ObjectIn
 	if out.ContentLength != nil {
 		size = *out.ContentLength
 	}
+	etag := ""
+	if out.ETag != nil {
+		etag = strings.TrimSpace(*out.ETag)
+	}
 
 	return domain.ObjectInfo{
 		SizeBytes:   size,
 		ContentType: contentType,
+		ETag:        etag,
 	}, nil
 }
 
@@ -270,6 +275,31 @@ func (s *S3Storage) PutObject(ctx context.Context, key string, data []byte, cont
 		ContentType: aws.String(contentType),
 	})
 	return err
+}
+
+func (s *S3Storage) CopyObjectIfMatch(ctx context.Context, sourceKey, destinationKey, sourceETag string) (domain.ObjectInfo, error) {
+	sourceKey = strings.TrimLeft(strings.TrimSpace(sourceKey), "/")
+	destinationKey = strings.TrimLeft(strings.TrimSpace(destinationKey), "/")
+	sourceETag = strings.TrimSpace(sourceETag)
+	if sourceKey == "" || destinationKey == "" || sourceETag == "" {
+		return domain.ObjectInfo{}, fmt.Errorf("copy object: source, destination and ETag are required")
+	}
+
+	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:            aws.String(s.bucket),
+		Key:               aws.String(destinationKey),
+		CopySource:        aws.String(url.PathEscape(s.bucket + "/" + sourceKey)),
+		CopySourceIfMatch: aws.String(sourceETag),
+	})
+	if err != nil {
+		return domain.ObjectInfo{}, fmt.Errorf("copy object %q -> %q: %w", sourceKey, destinationKey, err)
+	}
+
+	info, err := s.StatObject(ctx, destinationKey)
+	if err != nil {
+		return domain.ObjectInfo{}, fmt.Errorf("stat sealed object %q: %w", destinationKey, err)
+	}
+	return info, nil
 }
 
 func (s *S3Storage) Delete(ctx context.Context, key string) error {

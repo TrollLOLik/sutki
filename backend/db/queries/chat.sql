@@ -31,17 +31,75 @@ RETURNING id, house_id, created_at, updated_at;
 INSERT INTO conversation_participant (conversation_id, user_id, last_read_at, last_read_message_id)
 VALUES ($1, $2, now(), 0);
 
+-- name: RegisterChatUpload :exec
+INSERT INTO chat_upload (object_key, owner_id, size_bytes, mime_type)
+VALUES (
+  sqlc.arg(object_key),
+  sqlc.arg(owner_id),
+  sqlc.arg(size_bytes),
+  sqlc.arg(mime_type)
+);
+
+-- name: CheckChatUploadOwnership :one
+SELECT COUNT(*) = cardinality(sqlc.arg(object_keys)::text[]) AS owned
+FROM chat_upload
+WHERE owner_id = sqlc.arg(owner_id)::int
+  AND object_key = ANY(sqlc.arg(object_keys)::text[]);
+
+-- name: GetChatUploads :many
+SELECT object_key, owner_id, size_bytes, mime_type, sealed_key, content_etag, created_at
+FROM chat_upload
+WHERE owner_id = sqlc.arg(owner_id)::int
+  AND object_key = ANY(sqlc.arg(object_keys)::text[])
+ORDER BY object_key;
+
+-- name: SealChatUpload :one
+UPDATE chat_upload
+SET sealed_key = sqlc.arg(sealed_key),
+    content_etag = sqlc.arg(content_etag)
+WHERE object_key = sqlc.arg(object_key)
+  AND owner_id = sqlc.arg(owner_id)::int
+  AND (
+    sealed_key IS NULL OR
+    (sealed_key = sqlc.arg(sealed_key) AND content_etag = sqlc.arg(content_etag))
+  )
+RETURNING object_key;
+
 -- name: CreateMessage :one
 INSERT INTO message (conversation_id, sender_id, body, reply_to_message_id, created_at)
 VALUES ($1, $2, $3, $4, now())
 RETURNING id, conversation_id, sender_id, body, reply_to_message_id, created_at;
 
 -- name: CreateAttachment :one
+WITH owned_upload AS (
+  -- Record authoritative S3 metadata and lock the upload row until the
+  -- surrounding message transaction commits.
+  UPDATE chat_upload
+  SET size_bytes = COALESCE(sqlc.narg(size_bytes), chat_upload.size_bytes),
+      mime_type = COALESCE(sqlc.narg(mime_type), chat_upload.mime_type)
+  WHERE object_key = sqlc.arg(upload_key)
+    AND owner_id = sqlc.arg(owner_id)::int
+    AND sealed_key = sqlc.arg(url)
+    AND content_etag IS NOT NULL
+  RETURNING object_key
+)
 INSERT INTO message_attachment (
   message_id, url, file_name, mime_type, size_bytes, width, height,
-  moderation_status, duration_seconds, thumbnail_url
+  moderation_status, duration_seconds, thumbnail_url, upload_key
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT
+  sqlc.arg(message_id),
+  sqlc.arg(url),
+  sqlc.narg(file_name),
+  sqlc.narg(mime_type),
+  sqlc.narg(size_bytes),
+  sqlc.narg(width),
+  sqlc.narg(height),
+  sqlc.arg(moderation_status),
+  sqlc.narg(duration_seconds),
+  sqlc.narg(thumbnail_url),
+  owned_upload.object_key
+FROM owned_upload
 RETURNING id, message_id, url, file_name, mime_type, size_bytes, width, height,
           moderation_status, duration_seconds, thumbnail_url;
 
@@ -192,12 +250,41 @@ WHERE id = sqlc.arg(message_id)
   AND created_at > now() - sqlc.arg(delete_window)::interval
 RETURNING id, conversation_id, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at;
 
--- name: DeleteMessageAttachments :many
--- Удаляет вложения удалённого сообщения и возвращает их ключи, чтобы usecase
--- убрал объекты из S3.
+-- name: LockMessageAttachmentUploads :many
+-- Lock registered uploads in a stable order before removing references.
+SELECT cu.object_key
+FROM chat_upload cu
+JOIN (
+  SELECT DISTINCT upload_key
+  FROM message_attachment
+  WHERE message_id = sqlc.arg(message_id)
+    AND upload_key IS NOT NULL
+) refs ON refs.upload_key = cu.object_key
+ORDER BY cu.object_key
+FOR UPDATE OF cu;
+
+-- name: LockAttachmentUpload :one
+SELECT cu.object_key
+FROM chat_upload cu
+JOIN message_attachment ma ON ma.upload_key = cu.object_key
+WHERE ma.id = sqlc.arg(attachment_id)
+FOR UPDATE OF cu;
+
+-- name: DeleteMessageAttachments :exec
+-- Legacy rows and registered references are removed together. The caller gets
+-- deletable S3 keys from DeleteOrphanedChatUploads, never from this statement.
 DELETE FROM message_attachment
-WHERE message_id = sqlc.arg(message_id)
-RETURNING url;
+WHERE message_id = sqlc.arg(message_id);
+
+-- name: DeleteOrphanedChatUploads :many
+DELETE FROM chat_upload cu
+WHERE cu.object_key = ANY(sqlc.arg(object_keys)::text[])
+  AND NOT EXISTS (
+    SELECT 1
+    FROM message_attachment ma
+    WHERE ma.upload_key = cu.object_key
+  )
+RETURNING cu.object_key, cu.sealed_key;
 
 -- name: GetUserMediaStanding :one
 -- Данные аккаунта для гейта на видео: подтверждён ли телефон и когда создан.

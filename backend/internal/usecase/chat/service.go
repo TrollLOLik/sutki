@@ -26,6 +26,10 @@ import (
 // Keys are minted server-side as "chat/uploads/<userID>/<32 hex chars><ext>".
 const attachmentKeyKind = "chat/uploads"
 
+// No upload form is ever issued for this namespace. Objects enter it only via
+// the backend's conditional server-side copy.
+const sealedAttachmentKeyKind = "chat/approved"
+
 // attachmentKeyPattern matches any well-formed chat attachment key, of either
 // generation. It answers "is this one of our keys", NOT "may this caller use
 // it" — ownership is a separate question, see ownsAttachmentKey.
@@ -36,7 +40,14 @@ const attachmentKeyKind = "chat/uploads"
 // URL they legitimately received, attach it to a message in a different
 // conversation, and have the server serve someone else's private photo to a
 // third party — then delete their own message and destroy the original.
-var attachmentKeyPattern = regexp.MustCompile(`^chat/uploads/(?:[0-9]+/)?[0-9a-f]{32}(\.[A-Za-z0-9]+)?$`)
+var uploadAttachmentKeyPattern = regexp.MustCompile(`^chat/uploads/(?:[0-9]+/)?[0-9a-f]{32}(\.[A-Za-z0-9]{1,10})?$`)
+
+// Delivery accepts both old upload keys already stored in conversations and
+// new immutable server-side snapshots. New messages still accept only upload
+// capabilities through ownsAttachmentKey plus the database ownership record.
+var deliveryAttachmentKeyPattern = regexp.MustCompile(
+	`^(?:chat/uploads/(?:[0-9]+/)?[0-9a-f]{32}|chat/approved/[0-9]+/sealed-[0-9a-f]{64}-[0-9a-f]{64})(\.[A-Za-z0-9]{1,10})?$`,
+)
 
 // legacyAttachmentKeyPattern matches keys minted before the owner segment
 // existed. They stay readable — old conversations must keep rendering — but
@@ -55,7 +66,12 @@ func attachmentKey(userID int32, random, ext string) string {
 // ownsAttachmentKey reports whether key was minted for userID. A legacy key
 // carries no owner and therefore belongs to nobody: it never satisfies this.
 func ownsAttachmentKey(key string, userID int32) bool {
-	return attachmentKeyPattern.MatchString(key) && media.IsOwnedKey(key, attachmentKeyKind, userID)
+	return uploadAttachmentKeyPattern.MatchString(key) && media.IsOwnedKey(key, attachmentKeyKind, userID)
+}
+
+func ownsStoredAttachmentKey(key string, userID int32) bool {
+	return ownsAttachmentKey(key, userID) ||
+		media.IsSealedOwnedKey(key, sealedAttachmentKeyKind, userID)
 }
 
 // isLegacyAttachmentKey reports whether key predates the owner segment. Worth
@@ -393,16 +409,20 @@ func (s *Service) presignAttachment(ctx context.Context, att domain.MessageAttac
 		return att
 	}
 
-	// Clean any bucket prefix dynamically (e.g. "chat-uploads/chat/uploads/..." -> "chat/uploads/...")
+	// Clean any bucket prefix dynamically. Legacy rows use chat/uploads while
+	// new rows point at immutable chat/approved snapshots.
 	key := att.URL
-	if idx := strings.Index(key, "chat/uploads/"); idx != -1 {
-		key = key[idx:]
+	for _, prefix := range []string{"chat/uploads/", "chat/approved/"} {
+		if idx := strings.Index(key, prefix); idx != -1 {
+			key = key[idx:]
+			break
+		}
 	}
 
 	// Only presign keys that match the server-minted attachment shape. This
 	// guards against presigning arbitrary objects if a bad key ever reached
 	// storage.
-	if !attachmentKeyPattern.MatchString(key) {
+	if !deliveryAttachmentKeyPattern.MatchString(key) {
 		log.Printf("[Chat] Refusing to presign unexpected attachment key: %q", key)
 		return att
 	}
@@ -656,7 +676,8 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	// not exist until the message row is written.
 	moderationKinds := make(map[string]string, len(attachments))
 	seenKeys := make(map[string]struct{}, len(attachments))
-	for i, att := range attachments {
+	objectKeys := make([]string, 0, len(attachments))
+	for _, att := range attachments {
 		// att.URL holds the S3 object key on the incoming request. It must be a
 		// key THIS user was issued — not merely a well-formed key that exists.
 		// Shape plus existence is what let one participant re-attach another's
@@ -677,11 +698,102 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 			return domain.Message{}, ErrInvalidAttachment
 		}
 		seenKeys[att.URL] = struct{}{}
+		objectKeys = append(objectKeys, att.URL)
+	}
 
-		info, err := s.storage.StatObject(ctx, att.URL)
+	uploadsByKey := make(map[string]domain.ChatUpload, len(objectKeys))
+	if len(objectKeys) > 0 {
+		owned, err := s.repo.CheckChatUploadOwnership(ctx, userID, objectKeys)
 		if err != nil {
-			return domain.Message{}, fmt.Errorf("failed to verify attachment on S3: %w", err)
+			return domain.Message{}, err
 		}
+		if !owned {
+			return domain.Message{}, ErrInvalidAttachment
+		}
+
+		uploads, err := s.repo.GetChatUploads(ctx, userID, objectKeys)
+		if err != nil {
+			return domain.Message{}, err
+		}
+		for _, upload := range uploads {
+			uploadsByKey[upload.ObjectKey] = upload
+		}
+		if len(uploadsByKey) != len(objectKeys) {
+			return domain.Message{}, ErrInvalidAttachment
+		}
+	}
+
+	sourceKeysToDelete := make([]string, 0, len(attachments))
+	for i, att := range attachments {
+		upload, ok := uploadsByKey[att.URL]
+		if !ok {
+			return domain.Message{}, ErrInvalidAttachment
+		}
+
+		var sealed media.SealedObject
+		if upload.SealedKey != "" {
+			if upload.ContentETag == "" ||
+				!media.IsSealedOwnedKey(upload.SealedKey, sealedAttachmentKeyKind, userID) {
+				return domain.Message{}, ErrInvalidAttachment
+			}
+			info, err := s.storage.StatObject(ctx, upload.SealedKey)
+			if err != nil {
+				return domain.Message{}, fmt.Errorf("verify sealed chat attachment: %w", err)
+			}
+			if normalizeETag(info.ETag) == "" ||
+				normalizeETag(info.ETag) != normalizeETag(upload.ContentETag) {
+				return domain.Message{}, errors.New("sealed chat attachment integrity check failed")
+			}
+			sealed = media.SealedObject{
+				SourceKey: att.URL,
+				Key:       upload.SealedKey,
+				Info:      info,
+			}
+		} else {
+			var err error
+			sealed, err = media.SealOwnedObject(
+				ctx,
+				s.storage,
+				att.URL,
+				attachmentKeyKind,
+				sealedAttachmentKeyKind,
+				userID,
+				maxVideoBytes,
+				allowedUploadTypes,
+			)
+			if err != nil {
+				if errors.Is(err, media.ErrInvalidMediaSize) {
+					_ = s.storage.Delete(ctx, att.URL)
+					return domain.Message{}, ErrAttachmentTooLarge
+				}
+				return domain.Message{}, fmt.Errorf("seal chat attachment: %w", err)
+			}
+			if sealed.Info.SizeBytes > attachmentSizeLimit(sealed.Info.ContentType) {
+				if sealed.Created {
+					_ = s.storage.Delete(ctx, sealed.Key)
+				}
+				_ = s.storage.Delete(ctx, att.URL)
+				return domain.Message{}, ErrAttachmentTooLarge
+			}
+			if err := s.repo.SealChatUpload(
+				ctx,
+				userID,
+				att.URL,
+				sealed.Key,
+				sealed.Info.ETag,
+			); err != nil {
+				if sealed.Created {
+					_ = s.storage.Delete(ctx, sealed.Key)
+				}
+				if errors.Is(err, domain.ErrChatUploadNotOwned) {
+					return domain.Message{}, ErrInvalidAttachment
+				}
+				return domain.Message{}, err
+			}
+			sourceKeysToDelete = append(sourceKeysToDelete, att.URL)
+		}
+
+		info := sealed.Info
 		// Enforce the size limit against the actual uploaded object, not a
 		// client-claimed size. Presigned PUT cannot cap upload size, so a
 		// client could push an oversized object; reject it and delete the
@@ -696,13 +808,20 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 		// 20 MB clip uploaded through the app's own flow was reaching 100% and
 		// then being rejected here and destroyed.
 		if info.SizeBytes > attachmentSizeLimit(info.ContentType) {
+			if sealed.Created {
+				if delErr := s.storage.Delete(ctx, sealed.Key); delErr != nil {
+					log.Printf("[Chat] Failed to delete oversized sealed attachment %q: %v", sealed.Key, delErr)
+				}
+			}
 			if delErr := s.storage.Delete(ctx, att.URL); delErr != nil {
-				log.Printf("[Chat] Failed to delete oversized attachment %q: %v", att.URL, delErr)
+				log.Printf("[Chat] Failed to delete oversized upload %q: %v", att.URL, delErr)
 			}
 			return domain.Message{}, ErrAttachmentTooLarge
 		}
-		// Save the clean S3 object key (e.g. chat/uploads/...) to the database, rather than the public URL
-		attachments[i].URL = att.URL
+		// Recipients and moderation read only the immutable object. UploadKey
+		// remains the ownership/refcount identity in the database.
+		attachments[i].URL = sealed.Key
+		attachments[i].UploadKey = att.URL
 		attachments[i].SizeBytes = info.SizeBytes
 		attachments[i].MimeType = info.ContentType
 		// Same trust boundary as the key: this arrives from client JSON and is
@@ -734,12 +853,23 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 			continue
 		}
 		attachments[i].ModerationStatus = domain.AttachmentModerationPending
-		moderationKinds[att.URL] = kind
+		moderationKinds[sealed.Key] = kind
 	}
 
 	msg, err := s.repo.CreateMessage(ctx, convID, userID, body, replyToMessageID, attachments)
 	if err != nil {
+		if errors.Is(err, domain.ErrChatUploadNotOwned) {
+			return domain.Message{}, ErrInvalidAttachment
+		}
 		return domain.Message{}, err
+	}
+
+	// Replaying a presigned form can recreate these source keys, but no reader
+	// trusts them after sealing. Delete the current copies best-effort anyway.
+	for _, sourceKey := range sourceKeysToDelete {
+		if err := s.storage.Delete(ctx, sourceKey); err != nil {
+			log.Printf("[Chat] Failed to delete sealed upload source %q: %v", sourceKey, err)
+		}
 	}
 
 	// Queue the checks now that attachment rows exist and have ids.
@@ -767,6 +897,10 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	}
 
 	return msg, nil
+}
+
+func normalizeETag(etag string) string {
+	return strings.Trim(strings.TrimSpace(etag), `"`)
 }
 
 // PostBookingStatus implements domain.ChatSystemPoster. It finds or creates
@@ -1125,7 +1259,7 @@ func (s *Service) DeleteMessage(ctx context.Context, userID int32, messageID int
 				// A legacy key names no owner, so it is left in place: an
 				// orphaned object costs storage, an over-eager delete costs
 				// somebody their photo.
-				if !ownsAttachmentKey(key, userID) {
+				if !ownsStoredAttachmentKey(key, userID) {
 					reason := "not owned by this user"
 					if isLegacyAttachmentKey(key) {
 						reason = "legacy key with no recorded owner"
@@ -1135,6 +1269,9 @@ func (s *Service) DeleteMessage(ctx context.Context, userID int32, messageID int
 				}
 				if err := s.storage.Delete(cleanupCtx, key); err != nil {
 					log.Printf("[Chat] Failed to delete attachment %q of deleted message %d: %v", key, messageID, err)
+				}
+				if err := s.storage.Delete(cleanupCtx, key+".cover.jpg"); err != nil {
+					log.Printf("[Chat] Failed to delete attachment cover %q of deleted message %d: %v", key+".cover.jpg", messageID, err)
 				}
 			}
 		}(attachmentKeys)
@@ -1222,7 +1359,24 @@ func (s *Service) PresignUpload(ctx context.Context, userID int32, fileName stri
 	// 5. Generate presigned POST params. Pass the server-side limit (not the
 	// client-claimed size) as the content-length-range upper bound: picker
 	// sizes are unreliable, and S3 enforces this bound authoritatively.
-	return s.storage.PresignUpload(ctx, key, limit, contentType)
+	target, err := s.storage.PresignUpload(ctx, key, limit, contentType)
+	if err != nil {
+		return domain.UploadTarget{}, err
+	}
+
+	// The path shape is defence in depth, not ownership proof. Persist the
+	// server-issued capability before returning it to the client; SendMessage
+	// accepts only keys registered for the authenticated user.
+	if err := s.repo.RegisterChatUpload(ctx, domain.ChatUpload{
+		ObjectKey: key,
+		OwnerID:   userID,
+		SizeBytes: size,
+		MimeType:  contentType,
+	}); err != nil {
+		return domain.UploadTarget{}, err
+	}
+
+	return target, nil
 }
 
 // canSendMotionMedia reports whether the account may upload video or animation.

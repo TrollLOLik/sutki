@@ -18,6 +18,7 @@ type Querier interface {
 	AddHouseService(ctx context.Context, arg AddHouseServiceParams) error
 	AnonymizeUser(ctx context.Context, id int32) error
 	CancelRequest(ctx context.Context, id int32) (CancelRequestRow, error)
+	CheckChatUploadOwnership(ctx context.Context, arg CheckChatUploadOwnershipParams) (bool, error)
 	CheckParticipantExists(ctx context.Context, arg CheckParticipantExistsParams) (bool, error)
 	CheckUserActiveBookings(ctx context.Context, userID *int32) (int64, error)
 	// Отбор пачки задач. FOR UPDATE SKIP LOCKED — чтобы несколько воркеров могли
@@ -61,9 +62,10 @@ type Querier interface {
 	DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
 	DeleteHouseServices(ctx context.Context, houseID int32) error
-	// Удаляет вложения удалённого сообщения и возвращает их ключи, чтобы usecase
-	// убрал объекты из S3.
-	DeleteMessageAttachments(ctx context.Context, messageID int64) ([]string, error)
+	// Legacy rows and registered references are removed together. The caller gets
+	// deletable S3 keys from DeleteOrphanedChatUploads, never from this statement.
+	DeleteMessageAttachments(ctx context.Context, messageID int64) error
+	DeleteOrphanedChatUploads(ctx context.Context, objectKeys []string) ([]DeleteOrphanedChatUploadsRow, error)
 	DeleteUser(ctx context.Context, id int32) error
 	DeleteUserDeviceTokens(ctx context.Context, userID int32) error
 	DeleteUserFavorites(ctx context.Context, userID int32) error
@@ -72,6 +74,7 @@ type Querier interface {
 	// не ошибка (UNIQUE по attachment_id), а no-op: сообщение могли переотправить.
 	EnqueueAttachmentModeration(ctx context.Context, arg EnqueueAttachmentModerationParams) error
 	GetAuthCode(ctx context.Context, arg GetAuthCodeParams) (AuthCode, error)
+	GetChatUploads(ctx context.Context, arg GetChatUploadsParams) ([]GetChatUploadsRow, error)
 	// 1. Поиск диалога привязанного к объекту (house_id IS NOT NULL)
 	GetConversationByParticipantsAndHouse(ctx context.Context, arg GetConversationByParticipantsAndHouseParams) (int64, error)
 	// 2. Поиск общего диалога между пользователями (house_id IS NULL)
@@ -148,6 +151,10 @@ type Querier interface {
 	ListReviewsForHost(ctx context.Context, arg ListReviewsForHostParams) ([]ListReviewsForHostRow, error)
 	// Тянет последнее сообщение с Фолбэком для медиа-вложений (превью в списке диалогов)
 	ListUserConversations(ctx context.Context, userID int32) ([]ListUserConversationsRow, error)
+	LockAttachmentUpload(ctx context.Context, attachmentID int64) (string, error)
+	// Lock registered uploads in a stable order before removing references.
+	LockMessageAttachmentUploads(ctx context.Context, messageID int64) ([]string, error)
+	RegisterChatUpload(ctx context.Context, arg RegisterChatUploadParams) error
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
 	// Возвращает в очередь задачи, которые воркер взял и не завершил: процесс мог
 	// умереть посреди нарезки кадров. Без этого задача залипает в processing
@@ -163,6 +170,7 @@ type Querier interface {
 	RevokeAllOtherRefreshTokens(ctx context.Context, arg RevokeAllOtherRefreshTokensParams) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	RevokeRefreshTokenByID(ctx context.Context, arg RevokeRefreshTokenByIDParams) error
+	SealChatUpload(ctx context.Context, arg SealChatUploadParams) (string, error)
 	SetAttachmentModerationStatus(ctx context.Context, arg SetAttachmentModerationStatusParams) error
 	// Длительность и обложка становятся известны только после probe на сервере:
 	// заявленным клиентом значениям доверять нельзя.

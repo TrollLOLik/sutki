@@ -635,6 +635,7 @@ func (s *Service) GetUser(ctx context.Context, id int32) (domain.User, error) {
 func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, patronymic, phone, city, avatarURL *string, birthday *time.Time, vkID *string, vkIDDoNull *bool) (domain.User, error) {
 	cleanAvatarURL := trimPtr(avatarURL)
 	oldAvatarURL := ""
+	var avatarSeal *media.SealedObject
 	if cleanAvatarURL != nil {
 		oldUser, err := s.users.GetByID(ctx, id)
 		if err != nil {
@@ -645,7 +646,26 @@ func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, pa
 			if !media.IsOwnedKey(*cleanAvatarURL, "avatars", id) {
 				return domain.User{}, domain.ErrUnsafeImage
 			}
-			if err := s.moderateAvatar(ctx, id, *cleanAvatarURL); err != nil {
+			sealed, err := media.SealOwnedObject(
+				ctx,
+				s.storage,
+				*cleanAvatarURL,
+				"avatars",
+				"avatars",
+				id,
+				5*1024*1024,
+				map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true},
+			)
+			if err != nil {
+				return domain.User{}, fmt.Errorf("%w: %v", domain.ErrImageModerationUnavailable, err)
+			}
+			avatarSeal = &sealed
+			*cleanAvatarURL = sealed.Key
+			if err := s.moderateAvatar(ctx, id, sealed.Key); err != nil {
+				if sealed.Created {
+					_ = s.storage.Delete(ctx, sealed.Key)
+					_ = s.storage.Delete(ctx, sealed.SourceKey)
+				}
 				return domain.User{}, err
 			}
 		}
@@ -653,7 +673,15 @@ func (s *Service) UpdateProfile(ctx context.Context, id int32, name, surname, pa
 
 	u, err := s.users.UpdateProfile(ctx, id, trimPtr(name), trimPtr(surname), trimPtr(patronymic), trimPtr(phone), trimPtr(city), cleanAvatarURL, birthday, vkID, vkIDDoNull)
 	if err != nil {
+		if avatarSeal != nil && avatarSeal.Created {
+			_ = s.storage.Delete(ctx, avatarSeal.Key)
+		}
 		return domain.User{}, err
+	}
+	if avatarSeal != nil && avatarSeal.Created {
+		if err := s.storage.Delete(ctx, avatarSeal.SourceKey); err != nil {
+			log.Printf("auth update profile: delete sealed avatar source for user %d: %v", id, err)
+		}
 	}
 	if cleanAvatarURL != nil && oldAvatarURL != *cleanAvatarURL && s.storage != nil && media.IsOwnedKey(oldAvatarURL, "avatars", id) {
 		if err := s.storage.Delete(ctx, oldAvatarURL); err != nil {
@@ -685,9 +713,6 @@ func (s *Service) moderateAvatar(ctx context.Context, userID int32, key string) 
 	}
 	if result.Decision != domain.ImageModerationApprove {
 		log.Printf("auth avatar moderation: rejected avatar for user %d (category=%s)", userID, result.Category)
-		if delErr := s.storage.Delete(ctx, key); delErr != nil {
-			log.Printf("auth avatar moderation: delete rejected avatar for user %d: %v", userID, delErr)
-		}
 		return &domain.UnsafeImageError{
 			Decision: result.Decision,
 			Category: result.Category,

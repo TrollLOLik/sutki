@@ -60,6 +60,14 @@ var (
 	ErrListingNotPromotable = errors.New("listing is not promotable")
 )
 
+// Chat-related errors.
+var (
+	// ErrChatUploadNotOwned means an attachment key was not issued to the
+	// authenticated sender. Repositories return it from the same transaction
+	// that creates the message, closing the check-then-insert race.
+	ErrChatUploadNotOwned = errors.New("chat upload is not owned by sender")
+)
+
 // Review-related errors.
 var (
 	// ErrInvalidReview is returned when a review fails validation (rating out of
