@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 
-import { type ChatAttachment, isPendingAttachment } from './types';
+import { type ChatAttachment, isFailedAttachment, isPendingAttachment } from './types';
 
 /**
  * Предпочтительная ширина сетки. На планшете дальше не растём: сетка во всю
@@ -30,6 +31,8 @@ interface AlbumGridProps {
 	/** Только изображения, уже отфильтрованные вызывающим кодом. */
 	images: ChatAttachment[];
 	onPress: (attachment: ChatAttachment) => void;
+	onRetry: (attachment: ChatAttachment) => void;
+	retryingAttachmentID: number | null;
 }
 
 interface TileProps {
@@ -39,12 +42,16 @@ interface TileProps {
 	/** Число скрытых фото; выводит полупрозрачную плашку «+N» поверх плитки. */
 	overflowCount?: number;
 	onPress: (attachment: ChatAttachment) => void;
+	onRetry: (attachment: ChatAttachment) => void;
+	retrying: boolean;
 }
 
-function Tile({ attachment, width, height, overflowCount, onPress }: TileProps) {
+function Tile({ attachment, width, height, overflowCount, onPress, onRetry, retrying }: TileProps) {
+	const failed = isFailedAttachment(attachment);
 	return (
 		<Pressable
-			onPress={() => onPress(attachment)}
+			onPress={() => (failed ? onRetry(attachment) : onPress(attachment))}
+			disabled={isPendingAttachment(attachment) || retrying}
 			style={[styles.tile, { width, height }]}
 			accessibilityRole="imagebutton"
 			accessibilityLabel={
@@ -56,6 +63,18 @@ function Tile({ attachment, width, height, overflowCount, onPress }: TileProps) 
 			    сетку: в альбоме файлы проверяются независимо, и часть может быть уже
 			    одобрена. */}
 			{isPendingAttachment(attachment) ? <View style={styles.pending} /> : null}
+			{failed ? (
+				<View style={styles.failed}>
+					{retrying ? (
+						<ActivityIndicator size="small" color="#FFFFFF" />
+					) : (
+						<>
+							<Ionicons name="refresh" size={21} color="#FFFFFF" />
+							<Text style={styles.failedText}>Повторить</Text>
+						</>
+					)}
+				</View>
+			) : null}
 			{overflowCount ? (
 				<View style={styles.overflow}>
 					<Text style={styles.overflowText}>+{overflowCount}</Text>
@@ -78,7 +97,12 @@ function Tile({ attachment, width, height, overflowCount, onPress }: TileProps) 
  * того, какие фото попали в сообщение. Одиночное изображение сюда не попадает —
  * его рендерит ImageAttachment по реальным пропорциям.
  */
-export const AlbumGrid = React.memo(function AlbumGrid({ images, onPress }: AlbumGridProps) {
+export const AlbumGrid = React.memo(function AlbumGrid({
+	images,
+	onPress,
+	onRetry,
+	retryingAttachmentID,
+}: AlbumGridProps) {
 	const albumWidth = useAlbumWidth();
 	const count = images.length;
 
@@ -86,8 +110,8 @@ export const AlbumGrid = React.memo(function AlbumGrid({ images, onPress }: Albu
 		const size = (albumWidth - GAP) / 2;
 		return (
 			<View style={[styles.row, { width: albumWidth }]}>
-				<Tile attachment={images[0]} width={size} height={size} onPress={onPress} />
-				<Tile attachment={images[1]} width={size} height={size} onPress={onPress} />
+				<Tile attachment={images[0]} width={size} height={size} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[0].id} />
+				<Tile attachment={images[1]} width={size} height={size} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[1].id} />
 			</View>
 		);
 	}
@@ -98,10 +122,10 @@ export const AlbumGrid = React.memo(function AlbumGrid({ images, onPress }: Albu
 		const sideHeight = (mainWidth - GAP) / 2;
 		return (
 			<View style={[styles.row, { width: albumWidth }]}>
-				<Tile attachment={images[0]} width={mainWidth} height={mainWidth} onPress={onPress} />
+				<Tile attachment={images[0]} width={mainWidth} height={mainWidth} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[0].id} />
 				<View style={styles.column}>
-					<Tile attachment={images[1]} width={sideWidth} height={sideHeight} onPress={onPress} />
-					<Tile attachment={images[2]} width={sideWidth} height={sideHeight} onPress={onPress} />
+					<Tile attachment={images[1]} width={sideWidth} height={sideHeight} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[1].id} />
+					<Tile attachment={images[2]} width={sideWidth} height={sideHeight} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[2].id} />
 				</View>
 			</View>
 		);
@@ -122,6 +146,8 @@ export const AlbumGrid = React.memo(function AlbumGrid({ images, onPress }: Albu
 					height={size}
 					overflowCount={index === MAX_TILES - 1 && hidden > 0 ? hidden : undefined}
 					onPress={onPress}
+					onRetry={onRetry}
+					retrying={retryingAttachmentID === att.id}
 				/>
 			))}
 		</View>
@@ -156,6 +182,22 @@ const styles = StyleSheet.create({
 		right: 0,
 		bottom: 0,
 		backgroundColor: 'rgba(0,0,0,0.45)',
+	},
+	failed: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(44,8,10,0.78)',
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	failedText: {
+		marginTop: 3,
+		color: '#FFFFFF',
+		fontSize: 10,
+		fontWeight: '800',
 	},
 	overflow: {
 		position: 'absolute',

@@ -12,6 +12,7 @@ import {
 	isVideoAttachment,
 	isPendingAttachment,
 	isRejectedAttachment,
+	isFailedAttachment,
 	formatFileSize,
 } from './types';
 
@@ -23,6 +24,8 @@ const FALLBACK_IMAGE_HEIGHT = 150;
 interface ImageAttachmentProps {
 	attachment: ChatAttachment;
 	onPress: (attachment: ChatAttachment) => void;
+	onRetry: (attachment: ChatAttachment) => void;
+	retrying: boolean;
 }
 
 /**
@@ -30,17 +33,19 @@ interface ImageAttachmentProps {
  * их прислал — часть старых вложений записана без width/height, для них берётся
  * фиксированная высота.
  */
-export function ImageAttachment({ attachment, onPress }: ImageAttachmentProps) {
+export function ImageAttachment({ attachment, onPress, onRetry, retrying }: ImageAttachmentProps) {
 	const height =
 		attachment.width && attachment.height
 			? (attachment.height / attachment.width) * SINGLE_IMAGE_WIDTH
 			: FALLBACK_IMAGE_HEIGHT;
 	const pending = isPendingAttachment(attachment);
+	const failed = isFailedAttachment(attachment);
 
 	return (
 		<TouchableOpacity
 			activeOpacity={0.9}
-			onPress={() => onPress(attachment)}
+			onPress={() => (failed ? onRetry(attachment) : onPress(attachment))}
+			disabled={pending || retrying}
 			style={styles.imageAttachment}
 			accessibilityRole="imagebutton"
 			accessibilityLabel={pending ? 'Открыть изображение, оно проверяется' : 'Открыть изображение'}
@@ -53,6 +58,13 @@ export function ImageAttachment({ attachment, onPress }: ImageAttachmentProps) {
 			{/* Без этой плашки отправитель не понимает, почему сообщение «не дошло»:
 			    получателю оно действительно не доставлено до вердикта. */}
 			{pending ? <PendingOverlay /> : null}
+			{failed ? (
+				<FailedOverlay
+					reason={attachment.moderation_reason}
+					retrying={retrying}
+					onRetry={() => onRetry(attachment)}
+				/>
+			) : null}
 		</TouchableOpacity>
 	);
 }
@@ -68,6 +80,43 @@ export function PendingOverlay() {
 		<View style={styles.pendingOverlay}>
 			<ActivityIndicator size="small" color="#fff" />
 			<Text style={styles.pendingText}>Проверяется</Text>
+		</View>
+	);
+}
+
+export function FailedOverlay({
+	reason,
+	retrying,
+	onRetry,
+}: {
+	reason?: string;
+	retrying: boolean;
+	onRetry: () => void;
+}) {
+	return (
+		<View style={styles.failedOverlay}>
+			{retrying ? (
+				<ActivityIndicator size="small" color="#FFFFFF" />
+			) : (
+				<Ionicons name="alert-circle-outline" size={24} color="#FFFFFF" />
+			)}
+			<Text style={styles.failedTitle}>{retrying ? 'Проверяется' : 'Не удалось проверить'}</Text>
+			{!retrying ? (
+				<>
+					<Text numberOfLines={2} style={styles.failedReason}>
+						{reason || 'Сервис проверки временно недоступен.'}
+					</Text>
+					<Pressable
+						onPress={onRetry}
+						style={styles.retryButton}
+						accessibilityRole="button"
+						accessibilityLabel="Повторить проверку вложения"
+					>
+						<Ionicons name="refresh" size={15} color="#FFFFFF" />
+						<Text style={styles.retryText}>Повторить</Text>
+					</Pressable>
+				</>
+			) : null}
 		</View>
 	);
 }
@@ -166,6 +215,8 @@ interface MessageAttachmentsProps {
 	onImagePress: (attachment: ChatAttachment) => void;
 	onDocumentPress: (attachment: ChatAttachment) => void;
 	onVideoPress: (attachment: ChatAttachment) => void;
+	onRetry: (attachment: ChatAttachment) => void;
+	retryingAttachmentID: number | null;
 	/**
 	 * Локальные обложки по id вложения. Нужны, пока сервер не сгенерировал свои:
 	 * он делает это только после модерации, а показать что-то надо сразу.
@@ -190,6 +241,8 @@ export function MessageAttachments({
 	onImagePress,
 	onDocumentPress,
 	onVideoPress,
+	onRetry,
+	retryingAttachmentID,
 	localThumbnails,
 }: MessageAttachmentsProps) {
 	const isBusy = downloadingAttachmentID != null;
@@ -218,9 +271,19 @@ export function MessageAttachments({
 			))}
 
 			{images.length === 1 ? (
-				<ImageAttachment attachment={images[0]} onPress={onImagePress} />
+				<ImageAttachment
+					attachment={images[0]}
+					onPress={onImagePress}
+					onRetry={onRetry}
+					retrying={retryingAttachmentID === images[0].id}
+				/>
 			) : images.length > 1 ? (
-				<AlbumGrid images={images} onPress={onImagePress} />
+				<AlbumGrid
+					images={images}
+					onPress={onImagePress}
+					onRetry={onRetry}
+					retryingAttachmentID={retryingAttachmentID}
+				/>
 			) : null}
 
 			{videos.map((att) => (
@@ -229,6 +292,8 @@ export function MessageAttachments({
 					attachment={att}
 					localThumbnailUri={localThumbnails?.[att.id]}
 					onPress={onVideoPress}
+					onRetry={onRetry}
+					retrying={retryingAttachmentID === att.id}
 				/>
 			))}
 
@@ -267,6 +332,46 @@ const styles = StyleSheet.create({
 		color: '#fff',
 		fontSize: 11,
 		fontWeight: '600',
+	},
+	failedOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(44, 8, 10, 0.82)',
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingHorizontal: 14,
+	},
+	failedTitle: {
+		marginTop: 5,
+		color: '#FFFFFF',
+		fontSize: 12,
+		fontWeight: '800',
+	},
+	failedReason: {
+		marginTop: 3,
+		color: 'rgba(255,255,255,0.78)',
+		fontSize: 10,
+		lineHeight: 13,
+		textAlign: 'center',
+	},
+	retryButton: {
+		marginTop: 8,
+		minHeight: 30,
+		paddingHorizontal: 12,
+		borderRadius: 15,
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: 'rgba(255,255,255,0.16)',
+	},
+	retryText: {
+		marginLeft: 5,
+		color: '#FFFFFF',
+		fontSize: 11,
+		fontWeight: '800',
 	},
 	rejectedAttachment: {
 		width: 238,

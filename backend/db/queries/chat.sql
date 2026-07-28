@@ -128,7 +128,7 @@ SELECT
               NOT EXISTS (
                 SELECT 1 FROM message_attachment pending_ma
                 WHERE pending_ma.message_id = unread_m.id
-                  AND pending_ma.moderation_status = 'pending'
+                  AND pending_ma.moderation_status IN ('pending', 'failed')
               )
               AND (
                 NOT EXISTS (
@@ -151,7 +151,7 @@ SELECT
           AND EXISTS (
             SELECT 1 FROM message_attachment rejected_ma
             WHERE rejected_ma.message_id = m.id
-              AND rejected_ma.moderation_status = 'rejected'
+              AND rejected_ma.moderation_status IN ('rejected', 'failed')
           )
           AND NOT EXISTS (
             SELECT 1 FROM message_attachment approved_ma
@@ -209,7 +209,7 @@ LEFT JOIN message m ON m.conversation_id = c.id AND m.id = (
           NOT EXISTS (
             SELECT 1 FROM message_attachment pending_ma
             WHERE pending_ma.message_id = candidate.id
-              AND pending_ma.moderation_status = 'pending'
+              AND pending_ma.moderation_status IN ('pending', 'failed')
           )
           AND (
             NOT EXISTS (
@@ -422,6 +422,56 @@ SET status = 'done',
     updated_at = now()
 WHERE id = sqlc.arg(job_id);
 
+-- name: FailAttachmentModerationJob :exec
+UPDATE attachment_moderation_job
+SET status = 'done',
+    decision = 'failed',
+    category = 'moderation_unavailable',
+    reason = LEFT(sqlc.arg(reason), 500),
+    confidence = NULL,
+    frames_checked = NULL,
+    last_error = LEFT(sqlc.arg(last_error), 1000),
+    updated_at = now()
+WHERE id = sqlc.arg(job_id);
+
+-- name: FailAttachment :exec
+UPDATE message_attachment
+SET moderation_status = 'failed',
+    moderation_reason = LEFT(sqlc.arg(moderation_reason), 500)
+WHERE id = sqlc.arg(attachment_id);
+
+-- name: LockFailedAttachmentForRetry :one
+SELECT ma.message_id, m.conversation_id
+FROM message_attachment ma
+JOIN message m ON m.id = ma.message_id
+JOIN attachment_moderation_job job ON job.attachment_id = ma.id
+WHERE ma.id = sqlc.arg(attachment_id)
+  AND m.sender_id = sqlc.arg(sender_id)
+  AND ma.moderation_status = 'failed'
+  AND job.status = 'done'
+FOR UPDATE OF ma, job;
+
+-- name: ResetFailedAttachmentForRetry :execrows
+UPDATE message_attachment
+SET moderation_status = 'pending',
+    moderation_reason = NULL
+WHERE id = sqlc.arg(attachment_id)
+  AND moderation_status = 'failed';
+
+-- name: RequeueFailedAttachmentModeration :execrows
+UPDATE attachment_moderation_job
+SET status = 'queued',
+    next_attempt_at = now(),
+    decision = NULL,
+    category = NULL,
+    reason = NULL,
+    confidence = NULL,
+    frames_checked = NULL,
+    last_error = NULL,
+    updated_at = now()
+WHERE attachment_id = sqlc.arg(attachment_id)
+  AND status = 'done';
+
 -- name: RetryAttachmentModeration :exec
 -- Инфраструктурный сбой (модель недоступна, ffmpeg упал): задача возвращается в
 -- очередь с отложенной попыткой. Вложение остаётся pending, то есть не
@@ -458,10 +508,10 @@ SET moderation_status = 'rejected',
 WHERE id = sqlc.arg(attachment_id);
 
 -- name: CountPendingAttachments :one
--- Сколько вложений сообщения ещё проверяется. Ноль означает, что сообщение
--- можно доставлять получателю.
+-- Сколько вложений сообщения ещё проверяется или ждёт ручного повтора.
+-- Ноль означает, что сообщение можно доставлять получателю.
 SELECT COUNT(*)::bigint FROM message_attachment
-WHERE message_id = $1 AND moderation_status = 'pending';
+WHERE message_id = $1 AND moderation_status IN ('pending', 'failed');
 
 -- name: GetSuggestionContext :one
 -- Контекст беседы для ИИ-подсказок: объявление, роль запрашивающего и курсор

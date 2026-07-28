@@ -27,6 +27,10 @@ export function isRejectedAttachment(att: ChatAttachment): boolean {
 	return att.moderation_status === 'rejected';
 }
 
+export function isFailedAttachment(att: ChatAttachment): boolean {
+	return att.moderation_status === 'failed';
+}
+
 /**
  * Сообщение состоит только из изображений, без текста.
  * Такие рендерятся без пузыря — картинка сама себе фон, а время накладывается

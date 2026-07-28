@@ -120,50 +120,52 @@ function RootLayout() {
           <SafeAreaProvider>
             <QueryClientProvider client={queryClient}>
               <StatusBar style={isDark ? 'light' : 'dark'} />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: palette.surface },
-                  animation: 'slide_from_right',
-                  gestureEnabled: true,
-                  gestureDirection: 'horizontal',
-                  fullScreenGestureEnabled: true,
-                }}>
-                <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
-                  <Stack.Screen name="(tabs)" />
-                  <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
-                  <Stack.Screen name="listing/[id]/location" />
-                  <Stack.Screen name="listing/[id]/promote" />
-                  <Stack.Screen name="profile/[id]" />
-                  <Stack.Screen name="chat/[id]" />
-                  <Stack.Screen name="reviews/[id]" />
-                  <Stack.Screen name="review/[id]" />
-                  <Stack.Screen name="my-reviews" />
-                  <Stack.Screen name="filters" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-                  <Stack.Screen name="booking/[id]" />
-                  <Stack.Screen name="bookings/index" />
-                  <Stack.Screen name="bookings/[id]" />
-                  <Stack.Screen name="incoming/index" />
-                  <Stack.Screen name="incoming/[id]" />
-                  <Stack.Screen name="create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-                  <Stack.Screen name="my-listings/index" />
-                  <Stack.Screen name="notifications" />
-                  <Stack.Screen name="payments/checkout" />
-                  <Stack.Screen name="payments/return" />
-                </Stack.Protected>
-                {/* Tokens are set but the profile is incomplete: the (auth) stack is
-                    unmounted and only profile-setup is reachable until onboarding
-                    completes. This also covers a cold start mid-onboarding. */}
-                <Stack.Protected guard={status === 'onboarding'}>
-                  <Stack.Screen name="profile-setup" />
-                </Stack.Protected>
-                <Stack.Protected guard={status === 'unauthenticated' || status === 'guest'}>
-                  <Stack.Screen name="(auth)" />
-                </Stack.Protected>
-              </Stack>
+              <View style={{ flex: 1 }}>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: palette.surface },
+                    animation: 'slide_from_right',
+                    gestureEnabled: true,
+                    gestureDirection: 'horizontal',
+                    fullScreenGestureEnabled: true,
+                  }}>
+                  <Stack.Protected guard={status === 'authenticated' || status === 'guest'}>
+                    <Stack.Screen name="(tabs)" />
+                    <Stack.Screen name="listing/[id]" options={{ presentation: 'card' }} />
+                    <Stack.Screen name="listing/[id]/location" />
+                    <Stack.Screen name="listing/[id]/promote" />
+                    <Stack.Screen name="profile/[id]" />
+                    <Stack.Screen name="chat/[id]" />
+                    <Stack.Screen name="reviews/[id]" />
+                    <Stack.Screen name="review/[id]" />
+                    <Stack.Screen name="my-reviews" />
+                    <Stack.Screen name="filters" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                    <Stack.Screen name="booking/[id]" />
+                    <Stack.Screen name="bookings/index" />
+                    <Stack.Screen name="bookings/[id]" />
+                    <Stack.Screen name="incoming/index" />
+                    <Stack.Screen name="incoming/[id]" />
+                    <Stack.Screen name="create" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                    <Stack.Screen name="my-listings/index" />
+                    <Stack.Screen name="notifications" />
+                    <Stack.Screen name="payments/checkout" />
+                    <Stack.Screen name="payments/return" />
+                  </Stack.Protected>
+                  {/* Tokens are set but the profile is incomplete: the (auth) stack is
+                      unmounted and only profile-setup is reachable until onboarding
+                      completes. This also covers a cold start mid-onboarding. */}
+                  <Stack.Protected guard={status === 'onboarding'}>
+                    <Stack.Screen name="profile-setup" />
+                  </Stack.Protected>
+                  <Stack.Protected guard={status === 'unauthenticated' || status === 'guest'}>
+                    <Stack.Screen name="(auth)" />
+                  </Stack.Protected>
+                </Stack>
+                <NetworkStatusBanner />
+              </View>
               <AuthGateSheet visible={visible} onClose={closeGate} context={context} />
               <AppAlertHost />
-              <NetworkStatusBanner />
             </QueryClientProvider>
             <NavigationHistoryOverlay />
           </SafeAreaProvider>

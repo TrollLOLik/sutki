@@ -691,6 +691,57 @@ func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID int64) (domain.
 	return msg, nil
 }
 
+// RetryFailedAttachment reuses the immutable stored upload. Ownership, failed
+// state and queue reset are checked in one transaction so concurrent taps can
+// enqueue at most one paid moderation attempt.
+func (r *ChatRepo) RetryFailedAttachment(
+	ctx context.Context,
+	attachmentID int64,
+	userID int32,
+) (int64, int64, bool, error) {
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	txb, ok := r.q.DB().(TxBeginner)
+	if !ok {
+		return 0, 0, false, errors.New("underlying database connection does not support transactions")
+	}
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.q.WithTx(tx)
+	row, err := qtx.LockFailedAttachmentForRetry(ctx, sqlc.LockFailedAttachmentForRetryParams{
+		AttachmentID: attachmentID,
+		SenderID:     &userID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, false, nil
+	}
+	if err != nil {
+		return 0, 0, false, err
+	}
+
+	attachmentRows, err := qtx.ResetFailedAttachmentForRetry(ctx, attachmentID)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	jobRows, err := qtx.RequeueFailedAttachmentModeration(ctx, attachmentID)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if attachmentRows != 1 || jobRows != 1 {
+		return 0, 0, false, errors.New("failed attachment retry state changed concurrently")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, false, err
+	}
+	return row.MessageID, row.ConversationID, true, nil
+}
+
 // GetMessageConversation returns the conversation a message belongs to.
 func (r *ChatRepo) GetMessageConversation(ctx context.Context, messageID int64) (int64, error) {
 	return r.q.GetMessageConversation(ctx, messageID)

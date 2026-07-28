@@ -17,6 +17,8 @@ interface VideoAttachmentProps {
 	/** Локальная обложка: показывается, пока сервер не сгенерировал свою. */
 	localThumbnailUri?: string;
 	onPress: (attachment: ChatAttachment) => void;
+	onRetry: (attachment: ChatAttachment) => void;
+	retrying: boolean;
 }
 
 /**
@@ -34,18 +36,21 @@ export const VideoAttachment = React.memo(function VideoAttachment({
 	attachment,
 	localThumbnailUri,
 	onPress,
+	onRetry,
+	retrying,
 }: VideoAttachmentProps) {
 	const { palette } = useAppTheme();
 
 	const isPending = attachment.moderation_status === 'pending';
+	const isFailed = attachment.moderation_status === 'failed';
 	// Серверная обложка появляется только после проверки, поэтому до неё
 	// опираемся на локальную.
 	const thumbnail = attachment.thumbnail_url || localThumbnailUri;
 
 	return (
 		<Pressable
-			onPress={() => onPress(attachment)}
-			disabled={isPending}
+			onPress={() => (isFailed ? onRetry(attachment) : onPress(attachment))}
+			disabled={isPending || retrying}
 			style={styles.container}
 			accessibilityRole="button"
 			accessibilityLabel={
@@ -64,10 +69,19 @@ export const VideoAttachment = React.memo(function VideoAttachment({
 			{/* Затемнение: белые элементы поверх кадра иначе теряются на светлом видео. */}
 			<View style={styles.scrim} />
 
-			{isPending ? (
+			{isPending || retrying ? (
 				<View style={styles.center}>
 					<ActivityIndicator size="small" color="#fff" />
 					<Text style={styles.pendingLabel}>Проверяется</Text>
+				</View>
+			) : isFailed ? (
+				<View style={styles.center}>
+					<Ionicons name="alert-circle-outline" size={25} color="#FFFFFF" />
+					<Text style={styles.failedLabel}>Не удалось проверить</Text>
+					<View style={styles.retryButton}>
+						<Ionicons name="refresh" size={15} color="#FFFFFF" />
+						<Text style={styles.retryText}>Повторить</Text>
+					</View>
 				</View>
 			) : (
 				<View style={styles.playButton}>
@@ -116,6 +130,27 @@ const styles = StyleSheet.create({
 		color: '#fff',
 		fontSize: 11,
 		fontWeight: '600',
+	},
+	failedLabel: {
+		marginTop: 5,
+		color: '#FFFFFF',
+		fontSize: 11,
+		fontWeight: '800',
+	},
+	retryButton: {
+		marginTop: 7,
+		minHeight: 29,
+		paddingHorizontal: 11,
+		borderRadius: 15,
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: 'rgba(255,255,255,0.16)',
+	},
+	retryText: {
+		marginLeft: 5,
+		color: '#FFFFFF',
+		fontSize: 10,
+		fontWeight: '800',
 	},
 	playButton: {
 		width: 46,

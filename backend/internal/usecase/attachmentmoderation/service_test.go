@@ -29,6 +29,7 @@ type fakeRepo struct {
 	completedFrames map[int64]int32
 	retried         map[int64]time.Time
 	rejected        map[int64]bool
+	failed          map[int64]bool
 	rejectionReason map[int64]string
 	videoMeta       map[int64]string // attachmentID -> thumbnail key
 	orphanedKey     string
@@ -43,6 +44,7 @@ func newFakeRepo() *fakeRepo {
 		completedFrames: map[int64]int32{},
 		retried:         map[int64]time.Time{},
 		rejected:        map[int64]bool{},
+		failed:          map[int64]bool{},
 		rejectionReason: map[int64]string{},
 		videoMeta:       map[int64]string{},
 		orphanedKey:     videoJob().ObjectKey,
@@ -83,6 +85,16 @@ func (r *fakeRepo) RetryAttachmentModeration(_ context.Context, jobID int64, nex
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.retried[jobID] = next
+	return nil
+}
+
+func (r *fakeRepo) FailAttachment(_ context.Context, jobID, attachmentID int64, reason, _ string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.failed[attachmentID] = true
+	r.statuses[attachmentID] = domain.AttachmentModerationFailed
+	r.rejectionReason[attachmentID] = reason
+	r.completed[jobID] = "failed"
 	return nil
 }
 
@@ -277,6 +289,7 @@ type fakeNotifier struct {
 	mu        sync.Mutex
 	approved  []int64
 	rejected  []int64
+	failed    []int64
 	rejectMsg string
 }
 
@@ -291,6 +304,12 @@ func (n *fakeNotifier) AttachmentRejected(_ context.Context, _, messageID int64,
 	defer n.mu.Unlock()
 	n.rejected = append(n.rejected, messageID)
 	n.rejectMsg = reason
+}
+
+func (n *fakeNotifier) AttachmentFailed(_ context.Context, _, messageID int64, _ string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.failed = append(n.failed, messageID)
 }
 
 func (n *fakeNotifier) counts() (int, int) {
@@ -606,7 +625,7 @@ func TestTransientFailureRetriesAndKeepsPending(t *testing.T) {
 
 // After the retry budget is spent the attachment is dropped: leaving the sender
 // on "Проверяется" indefinitely is worse than telling them it failed.
-func TestExhaustedRetriesRejectAttachment(t *testing.T) {
+func TestExhaustedRetriesMarkAttachmentFailed(t *testing.T) {
 	repo := newFakeRepo()
 	storage := newFakeStorage()
 	storage.readErr = errors.New("storage still unavailable")
@@ -617,8 +636,14 @@ func TestExhaustedRetriesRejectAttachment(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	if !repo.rejected[job.AttachmentID] {
-		t.Fatal("expected the attachment to be dropped after the retry budget")
+	if !repo.failed[job.AttachmentID] {
+		t.Fatal("expected the attachment to become retryable after the retry budget")
+	}
+	if repo.rejected[job.AttachmentID] {
+		t.Fatal("provider trouble must not be recorded as a policy rejection")
+	}
+	if len(storage.deleted) != 0 {
+		t.Fatal("a retryable upload must remain in storage")
 	}
 	if _, retried := repo.retried[job.ID]; retried {
 		t.Fatal("expected no further retry after the budget is spent")

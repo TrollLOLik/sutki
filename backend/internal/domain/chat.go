@@ -81,6 +81,7 @@ const (
 	AttachmentModerationPending  = "pending"
 	AttachmentModerationApproved = "approved"
 	AttachmentModerationRejected = "rejected"
+	AttachmentModerationFailed   = "failed"
 )
 
 // Attachment kinds for the moderation queue: how the file has to be inspected.
@@ -106,11 +107,11 @@ type MessageAttachment struct {
 	Width     *int32    `json:"width,omitempty"`
 	Height    *int32    `json:"height,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	// ModerationStatus is pending/approved/rejected. Clients render a
-	// "Проверяется" placeholder for pending attachments of their own messages.
+	// ModerationStatus is pending/approved/rejected/failed. Clients render a
+	// placeholder for pending or retryable failed attachments of their own messages.
 	ModerationStatus string `json:"moderation_status"`
-	// ModerationReason is populated for rejected media and is returned only to
-	// the sender. The underlying object and URL are deleted first.
+	// ModerationReason is populated for rejected or failed media and is returned
+	// only to the sender. Failed media keeps its object so it can be retried.
 	ModerationReason string `json:"moderation_reason,omitempty"`
 	// DurationSeconds is set for video only.
 	DurationSeconds *int32 `json:"duration_seconds,omitempty"`
@@ -140,6 +141,13 @@ type ChatUpload struct {
 // IsPendingModeration reports whether the attachment is still being checked.
 func (a MessageAttachment) IsPendingModeration() bool {
 	return a.ModerationStatus == AttachmentModerationPending
+}
+
+// IsBlockingModeration reports whether the attachment must remain sender-only.
+// A failed check is retryable and therefore still unverified.
+func (a MessageAttachment) IsBlockingModeration() bool {
+	return a.ModerationStatus == AttachmentModerationPending ||
+		a.ModerationStatus == AttachmentModerationFailed
 }
 
 // UserMediaStanding is the account data behind the video upload gate.

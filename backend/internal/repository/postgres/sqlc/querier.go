@@ -34,8 +34,8 @@ type Querier interface {
 	CountFavoriteHouses(ctx context.Context, userID int32) (int64, error)
 	CountHousesByOwner(ctx context.Context, ownerID int32) (int64, error)
 	CountHousesFiltered(ctx context.Context, arg CountHousesFilteredParams) (int64, error)
-	// Сколько вложений сообщения ещё проверяется. Ноль означает, что сообщение
-	// можно доставлять получателю.
+	// Сколько вложений сообщения ещё проверяется или ждёт ручного повтора.
+	// Ноль означает, что сообщение можно доставлять получателю.
 	CountPendingAttachments(ctx context.Context, messageID int64) (int64, error)
 	CountRequestsByGuest(ctx context.Context, arg CountRequestsByGuestParams) (int64, error)
 	CountRequestsByUser(ctx context.Context, arg CountRequestsByUserParams) (int64, error)
@@ -70,6 +70,8 @@ type Querier interface {
 	// Ставит вложение в очередь проверки. Повторная постановка того же вложения —
 	// не ошибка (UNIQUE по attachment_id), а no-op: сообщение могли переотправить.
 	EnqueueAttachmentModeration(ctx context.Context, arg EnqueueAttachmentModerationParams) error
+	FailAttachment(ctx context.Context, arg FailAttachmentParams) error
+	FailAttachmentModerationJob(ctx context.Context, arg FailAttachmentModerationJobParams) error
 	GetAuthCode(ctx context.Context, arg GetAuthCodeParams) (AuthCode, error)
 	GetChatUploads(ctx context.Context, arg GetChatUploadsParams) ([]GetChatUploadsRow, error)
 	// 1. Поиск диалога привязанного к объекту (house_id IS NOT NULL)
@@ -149,6 +151,7 @@ type Querier interface {
 	// Тянет последнее сообщение с Фолбэком для медиа-вложений (превью в списке диалогов)
 	ListUserConversations(ctx context.Context, userID int32) ([]ListUserConversationsRow, error)
 	LockAttachmentUpload(ctx context.Context, attachmentID int64) (string, error)
+	LockFailedAttachmentForRetry(ctx context.Context, arg LockFailedAttachmentForRetryParams) (LockFailedAttachmentForRetryRow, error)
 	// Lock registered uploads in a stable order before removing references.
 	LockMessageAttachmentUploads(ctx context.Context, messageID int64) ([]string, error)
 	RegisterChatUpload(ctx context.Context, arg RegisterChatUploadParams) error
@@ -161,6 +164,8 @@ type Querier interface {
 	// навсегда, а вложение — в pending, то есть получатель его никогда не увидит.
 	ReleaseStaleAttachmentJobs(ctx context.Context, lease pgtype.Interval) error
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
+	RequeueFailedAttachmentModeration(ctx context.Context, attachmentID int64) (int64, error)
+	ResetFailedAttachmentForRetry(ctx context.Context, attachmentID int64) (int64, error)
 	// Инфраструктурный сбой (модель недоступна, ffmpeg упал): задача возвращается в
 	// очередь с отложенной попыткой. Вложение остаётся pending, то есть не
 	// публикуется — при недоступной проверке безопаснее задержать, чем пропустить.

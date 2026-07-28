@@ -26,6 +26,7 @@ import {
 	useMessages,
 	useConversationImages,
 	useSendMessage,
+	useRetryAttachment,
 	useReadMessages,
 	useEditMessage,
 	useDeleteMessage,
@@ -208,6 +209,11 @@ export default function ChatDialogScreen() {
 	const { data: listing } = useListing(houseID);
 
 	const { mutateAsync: performSendMessage } = useSendMessage(convID);
+	const {
+		mutate: performRetryAttachment,
+		isPending: isRetryingAttachment,
+		variables: retryingAttachmentID,
+	} = useRetryAttachment(convID);
 	const { mutate: performReadMessages } = useReadMessages(convID);
 	const { mutateAsync: performEditMessage, isPending: isSavingEdit } = useEditMessage(convID);
 	const { mutate: performDeleteMessage } = useDeleteMessage(convID);
@@ -215,6 +221,20 @@ export default function ChatDialogScreen() {
 	const messages = React.useMemo(
 		() => data?.pages.flat().filter(Boolean) ?? [],
 		[data?.pages],
+	);
+
+	const retryAttachment = React.useCallback(
+		(attachment: ChatAttachment) => {
+			performRetryAttachment(attachment.id, {
+				onError: (error) => {
+					Alert.alert(
+						'Не удалось повторить проверку',
+						error instanceof ApiError ? error.message : 'Проверьте соединение и попробуйте ещё раз.',
+					);
+				},
+			});
+		},
+		[performRetryAttachment],
 	);
 
 	// Booking card actions (owner shortcuts to the same confirm/reject
@@ -737,15 +757,17 @@ export default function ChatDialogScreen() {
 				return;
 			}
 
-			// Вложение не прошло модерацию. Приходит только отправителю (получатель
-			// его и не видел), поэтому здесь достаточно обновить своё сообщение и
-			// сказать, почему файл исчез.
-			if (payload.type === 'attachment.rejected') {
-				if (payload.reason) {
+			// Все изменения статуса вложения приходят только отправителю, пока
+			// файл не одобрен. Policy-reject дополнительно объясняем диалогом;
+			// временный сбой остаётся внутри пузыря с кнопкой повтора.
+			if (
+				payload.type === 'attachment.rejected' ||
+				payload.type === 'attachment.failed' ||
+				payload.type === 'attachment.retrying'
+			) {
+				if (payload.type === 'attachment.rejected' && payload.reason) {
 					Alert.alert('Вложение не отправлено', payload.reason);
 				}
-				// Перезапрашиваем историю: сервер уже удалил вложение, и подменять
-				// сообщение вручную здесь пришлось бы дублированием его логики.
 				refetch();
 				return;
 			}
@@ -1139,6 +1161,12 @@ export default function ChatDialogScreen() {
 					onImagePress={openImageViewer}
 					onDocumentPress={downloadAttachment}
 					onVideoPress={openVideoPlayer}
+					onRetryAttachment={retryAttachment}
+					retryingAttachmentID={
+						isRetryingAttachment && typeof retryingAttachmentID === 'number'
+							? retryingAttachmentID
+							: null
+					}
 					localThumbnails={localVideoThumbnails}
 					quoteAuthorName={resolveAuthorName}
 					onReply={startReply}
@@ -1160,6 +1188,7 @@ export default function ChatDialogScreen() {
 			isConfirmingBooking,
 			isListingOwner,
 			isRejectingBooking,
+			isRetryingAttachment,
 			latestCardEventByRequest,
 			localVideoThumbnails,
 			openActions,
@@ -1167,6 +1196,8 @@ export default function ChatDialogScreen() {
 			openVideoPlayer,
 			downloadAttachment,
 			resolveAuthorName,
+			retryAttachment,
+			retryingAttachmentID,
 			scrollToMessage,
 			sessionUser?.id,
 			startReply,

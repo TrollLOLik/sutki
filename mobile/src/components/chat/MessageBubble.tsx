@@ -38,6 +38,8 @@ interface MessageBubbleProps {
 	onImagePress: (attachment: ChatAttachment) => void;
 	onDocumentPress: (attachment: ChatAttachment) => void;
 	onVideoPress: (attachment: ChatAttachment) => void;
+	onRetryAttachment: (attachment: ChatAttachment) => void;
+	retryingAttachmentID: number | null;
 	/** Локальные обложки видео по id вложения, до появления серверных. */
 	localThumbnails?: Record<number, string>;
 	/** Имя автора процитированного сообщения, для шапки цитаты. */
@@ -70,6 +72,8 @@ export const MessageBubble = React.memo(function MessageBubble({
 	onImagePress,
 	onDocumentPress,
 	onVideoPress,
+	onRetryAttachment,
+	retryingAttachmentID,
 	localThumbnails,
 	quoteAuthorName,
 	onReply,
@@ -199,6 +203,8 @@ export const MessageBubble = React.memo(function MessageBubble({
 						onImagePress={onImagePress}
 						onDocumentPress={onDocumentPress}
 						onVideoPress={onVideoPress}
+						onRetry={onRetryAttachment}
+						retryingAttachmentID={retryingAttachmentID}
 						localThumbnails={localThumbnails}
 					/>
 				) : null}

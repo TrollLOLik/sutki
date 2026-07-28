@@ -40,6 +40,33 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Post("/conversations/{id}/typing", h.typing)
 	r.Post("/presence/heartbeat", h.presenceHeartbeat)
 	r.Post("/attachments/presign", h.presignUpload)
+	r.Post("/attachments/{attachmentID}/retry", h.retryAttachment)
+}
+
+func (h *ChatHandler) retryAttachment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	attachmentID, err := strconv.ParseInt(chi.URLParam(r, "attachmentID"), 10, 64)
+	if err != nil || attachmentID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid attachment id")
+		return
+	}
+	if !ChatAttachmentRetryLimiter.Allow(fmt.Sprintf("chat_attachment_retry_user_%d", userID), 5) {
+		writeError(w, http.StatusTooManyRequests, "Слишком много попыток. Подождите немного.")
+		return
+	}
+	if err := h.svc.RetryAttachmentModeration(r.Context(), userID, attachmentID); err != nil {
+		if errors.Is(err, chat.ErrAttachmentRetryNotAllowed) {
+			writeError(w, http.StatusConflict, "Это вложение уже проверяется или недоступно для повтора.")
+			return
+		}
+		writeInternalError(w, r, err, "failed to retry attachment moderation")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *ChatHandler) HostResponseStats(w http.ResponseWriter, r *http.Request) {

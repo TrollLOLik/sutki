@@ -85,6 +85,45 @@ func (r *AttachmentModerationRepo) RetryAttachmentModeration(ctx context.Context
 	})
 }
 
+// FailAttachment completes an infrastructure-failed job and marks its
+// attachment retryable without deleting the stored object.
+func (r *AttachmentModerationRepo) FailAttachment(
+	ctx context.Context,
+	jobID, attachmentID int64,
+	reason, lastError string,
+) error {
+	type TxBeginner interface {
+		Begin(ctx context.Context) (pgx.Tx, error)
+	}
+
+	txb, ok := r.q.DB().(TxBeginner)
+	if !ok {
+		return errors.New("underlying database connection does not support transactions")
+	}
+
+	tx, err := txb.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := r.q.WithTx(tx)
+	if err := qtx.FailAttachmentModerationJob(ctx, sqlc.FailAttachmentModerationJobParams{
+		Reason:    reason,
+		LastError: lastError,
+		JobID:     jobID,
+	}); err != nil {
+		return err
+	}
+	if err := qtx.FailAttachment(ctx, sqlc.FailAttachmentParams{
+		ModerationReason: reason,
+		AttachmentID:     attachmentID,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *AttachmentModerationRepo) SetAttachmentModerationStatus(ctx context.Context, attachmentID int64, status string) error {
 	return r.q.SetAttachmentModerationStatus(ctx, sqlc.SetAttachmentModerationStatusParams{
 		ModerationStatus: status,

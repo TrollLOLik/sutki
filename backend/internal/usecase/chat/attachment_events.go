@@ -95,6 +95,30 @@ func (s *Service) AttachmentRejected(ctx context.Context, conversationID, messag
 	s.publishAttachmentChanged(conversationID, messageID)
 }
 
+// AttachmentFailed keeps the media sender-only and tells the sender it can be
+// retried. Unlike rejection, this is an infrastructure outcome: the object is
+// retained and no recipient notification is generated.
+func (s *Service) AttachmentFailed(ctx context.Context, conversationID, messageID int64, reason string) {
+	msg, err := s.repo.GetMessageByID(ctx, messageID)
+	if err != nil {
+		log.Printf("[Chat] Failed attachment: load message %d: %v", messageID, err)
+		return
+	}
+	if msg.SenderID == nil {
+		return
+	}
+	if reason == "" {
+		reason = "Сервис проверки временно недоступен. Нажмите «Повторить»."
+	}
+	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", *msg.SenderID), map[string]any{
+		"type":            "attachment.failed",
+		"conversation_id": conversationID,
+		"message_id":      messageID,
+		"reason":          reason,
+	})
+	s.publishAttachmentChanged(conversationID, messageID)
+}
+
 func (s *Service) publishAttachmentChanged(conversationID, messageID int64) {
 	_ = s.centrifugoPublish(fmt.Sprintf("chat:conv_%d", conversationID), map[string]any{
 		"type":       "message.attachment_changed",

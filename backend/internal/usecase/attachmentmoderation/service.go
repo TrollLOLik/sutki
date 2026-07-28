@@ -48,10 +48,12 @@ const (
 	// extract + contact sheets + frame escalation) so a slow job is not stolen.
 	leaseTimeout = 5 * time.Minute
 
-	// maxAttempts before the attachment is rejected outright. Retrying forever
-	// would leave the sender staring at "Проверяется" indefinitely; at some
-	// point an unverifiable file has to be dropped.
-	maxAttempts = 5
+	// maxAttempts includes the initial try. After one automatic retry, the
+	// attachment becomes failed and waits for an explicit retry by the sender.
+	maxAttempts = 2
+
+	// A broken provider or media tool must not hold a queue item forever.
+	jobTimeout = 90 * time.Second
 
 	// maxObjectBytes bounds what we pull from storage into the worker. Matches
 	// the video size limit.
@@ -59,7 +61,7 @@ const (
 )
 
 // retryBackoff for transient failures (model down, ffmpeg hiccup).
-var retryBackoff = []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute, 30 * time.Minute}
+var retryBackoff = []time.Duration{30 * time.Second}
 
 // Repository is the persistence slice the worker needs.
 type Repository interface {
@@ -67,6 +69,7 @@ type Repository interface {
 	ClaimAttachmentModerationJobs(ctx context.Context, batchSize int32) ([]domain.AttachmentModerationJob, error)
 	CompleteAttachmentModeration(ctx context.Context, jobID int64, decision, category, reason string, confidence float32, framesChecked int32) error
 	RetryAttachmentModeration(ctx context.Context, jobID int64, nextAttemptAt time.Time, lastError string) error
+	FailAttachment(ctx context.Context, jobID, attachmentID int64, reason, lastError string) error
 	SetAttachmentModerationStatus(ctx context.Context, attachmentID int64, status string) error
 	SetAttachmentVideoMeta(ctx context.Context, attachmentID int64, durationSeconds *int32, thumbnailURL string) error
 	// RejectAttachment atomically completes the job and replaces the unsafe
@@ -83,6 +86,7 @@ type Notifier interface {
 	// AttachmentRejected fires when an attachment was dropped, so the sender
 	// learns why instead of watching an eternal spinner.
 	AttachmentRejected(ctx context.Context, conversationID, messageID int64, reason string)
+	AttachmentFailed(ctx context.Context, conversationID, messageID int64, reason string)
 }
 
 // FrameExtractor is the videoframes slice used here.
@@ -225,7 +229,10 @@ func (s *Service) processDue(ctx context.Context) {
 
 // processJob checks one attachment and applies the verdict.
 func (s *Service) processJob(ctx context.Context, job domain.AttachmentModerationJob) {
-	result, framesChecked, err := s.inspect(ctx, job)
+	jobCtx, cancel := context.WithTimeout(ctx, jobTimeout)
+	defer cancel()
+
+	result, framesChecked, err := s.inspect(jobCtx, job)
 	if err != nil {
 		s.handleFailure(ctx, job, err)
 		return
@@ -512,33 +519,18 @@ func userFacingRejectionReason(result domain.ImageModerationResult) string {
 	}
 }
 
-// handleFailure retries transient problems and gives up after maxAttempts.
+// handleFailure retries one transient failure and then exposes a retryable
+// sender-only failure. Provider trouble is not a content-policy rejection.
 func (s *Service) handleFailure(ctx context.Context, job domain.AttachmentModerationJob, cause error) {
 	log.Printf("attachment moderation: job %d (attachment %d) failed on attempt %d: %v", job.ID, job.AttachmentID, job.Attempts, cause)
 
-	// A missing provider project/model will not heal on a retry. Repeating paid
-	// requests only delays the sender and creates avoidable provider traffic.
-	// Keep the fail-closed policy, but reject immediately and expose the reason
-	// through the normal attachment notification.
 	if isNonRetryableModerationError(cause) {
-		s.reject(ctx, job, domain.ImageModerationResult{
-			Decision:   domain.ImageModerationReject,
-			Category:   "moderation_unavailable",
-			Reason:     "не удалось проверить вложение: сервис модерации временно недоступен",
-			Confidence: 0,
-		}, 0)
+		s.fail(ctx, job, cause)
 		return
 	}
 
 	if int(job.Attempts) >= maxAttempts {
-		// Out of retries. The attachment was never verified, so it cannot be
-		// published — reject it and tell the sender.
-		s.reject(ctx, job, domain.ImageModerationResult{
-			Decision:   domain.ImageModerationReject,
-			Category:   "unverified",
-			Reason:     "не удалось проверить вложение, попробуйте отправить снова",
-			Confidence: 0,
-		}, 0)
+		s.fail(ctx, job, cause)
 		return
 	}
 
@@ -557,6 +549,21 @@ func (s *Service) handleFailure(ctx context.Context, job domain.AttachmentModera
 	}
 	if err := s.repo.RetryAttachmentModeration(ctx, job.ID, next, msg); err != nil {
 		log.Printf("attachment moderation: schedule retry for job %d: %v", job.ID, err)
+	}
+}
+
+func (s *Service) fail(ctx context.Context, job domain.AttachmentModerationJob, cause error) {
+	const reason = "Сервис проверки временно недоступен. Нажмите «Повторить»."
+	lastError := cause.Error()
+	if len(lastError) > 1000 {
+		lastError = lastError[:1000]
+	}
+	if err := s.repo.FailAttachment(ctx, job.ID, job.AttachmentID, reason, lastError); err != nil {
+		log.Printf("attachment moderation: mark attachment %d failed: %v", job.AttachmentID, err)
+		return
+	}
+	if s.notifier != nil {
+		s.notifier.AttachmentFailed(ctx, job.ConversationID, job.MessageID, reason)
 	}
 }
 

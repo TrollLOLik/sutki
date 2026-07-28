@@ -111,6 +111,9 @@ var (
 	// ErrTooManyAttachments is returned when a single message carries more than
 	// maxAttachmentsPerMessage files.
 	ErrTooManyAttachments = errors.New("too many attachments in one message")
+	// ErrAttachmentRetryNotAllowed covers foreign, missing and non-failed
+	// attachments without leaking which ids exist.
+	ErrAttachmentRetryNotAllowed = errors.New("attachment cannot be retried")
 
 	// ErrMessageTooLong is returned when a body exceeds the storage limit.
 	// Without this the value reaches Postgres, raises 22001 and surfaces as a
@@ -502,19 +505,43 @@ func (s *Service) enqueueAttachmentModeration(ctx context.Context, msg domain.Me
 // hasPendingAttachments reports whether any attachment is still unverified.
 func hasPendingAttachments(msg domain.Message) bool {
 	for _, att := range msg.Attachments {
-		if att.IsPendingModeration() {
+		if att.IsBlockingModeration() {
 			return true
 		}
 	}
 	return false
 }
 
+// RetryAttachmentModeration returns a failed sender-owned upload to the queue.
+// The original immutable object is reused, so retrying does not upload media a
+// second time and cannot substitute different bytes under the same attachment.
+func (s *Service) RetryAttachmentModeration(ctx context.Context, userID int32, attachmentID int64) error {
+	messageID, conversationID, ok, err := s.repo.RetryFailedAttachment(ctx, attachmentID, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrAttachmentRetryNotAllowed
+	}
+
+	if s.attachmentWaker != nil {
+		s.attachmentWaker.Wake()
+	}
+	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", userID), map[string]any{
+		"type":            "attachment.retrying",
+		"conversation_id": conversationID,
+		"message_id":      messageID,
+		"attachment_id":   attachmentID,
+	})
+	s.publishAttachmentChanged(conversationID, messageID)
+	return nil
+}
+
 // visibleAttachments strips attachments the viewer must not see yet.
 //
-// A pending attachment is shown to its own sender (as a "Проверяется"
-// placeholder) but hidden from the recipient: the whole point of post-moderation
-// is that unverified media is not delivered. Filtering here, in one place, means
-// every read path — history, realtime publish, edit response — inherits it.
+// Pending and failed attachments are shown to their own sender as moderation
+// state, but hidden from the recipient: unverified media is never delivered.
+// Filtering here means every read path inherits the same rule.
 func visibleAttachments(msg domain.Message, viewerID int32) []domain.MessageAttachment {
 	if len(msg.Attachments) == 0 {
 		return msg.Attachments
@@ -550,7 +577,7 @@ func messageVisibleToViewer(msg domain.Message, viewerID int32) bool {
 }
 
 // messageForRecipient returns the sanitized copy safe to publish on the shared
-// conversation channel. Rejected tombstones remain sender-only.
+// conversation channel. Rejected and retryable failed states remain sender-only.
 func messageForRecipient(msg domain.Message) (domain.Message, bool) {
 	if hasPendingAttachments(msg) {
 		return domain.Message{}, false
@@ -1479,10 +1506,9 @@ func plausibleDimension(v *int32) *int32 {
 }
 
 func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
-	// A message whose media is still being checked must not reach the recipient
-	// yet, and the conversation channel is shared by both participants. So while
-	// anything is pending the broadcast is suppressed entirely; the worker
-	// publishes the message once every attachment has passed
+	// A message whose media is still being checked or awaits manual retry must
+	// not reach the recipient, and the conversation channel is shared by both
+	// participants. The worker publishes it once every attachment has passed
 	// (see PublishApprovedMessage). The sender already has it from the HTTP
 	// response, so nothing is lost for them.
 	publicMsg, deliverable := messageForRecipient(msg)

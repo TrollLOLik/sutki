@@ -120,6 +120,9 @@ var (
 	// AI reply suggestions. Bounds how often one user can trigger a paid model
 	// call by opening chats.
 	ChatSuggestionLimiter = NewSlidingWindowLimiter(time.Hour)
+	// Manual media moderation retries. The failed->pending transition is also
+	// atomic, while this cap limits repeated paid attempts during an outage.
+	ChatAttachmentRetryLimiter = NewSlidingWindowLimiter(time.Minute)
 
 	ViewIdentityLimiter = NewSlidingWindowLimiter(time.Hour)
 	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)

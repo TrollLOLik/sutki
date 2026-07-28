@@ -206,14 +206,14 @@ export function mergeChatMessage(previous: ChatMessage, updated: ChatMessage): C
 	// The shared conversation channel carries only recipient-safe attachments.
 	// Preserve sender-only rejection tombstones until the authoritative history
 	// refetch arrives, otherwise the reason briefly disappears on mixed albums.
-	const rejected = previous.attachments?.filter(
-		(att) => att.moderation_status === 'rejected',
+	const senderOnly = previous.attachments?.filter(
+		(att) => att.moderation_status === 'rejected' || att.moderation_status === 'failed',
 	);
-	if (rejected?.length && updated.attachments) {
+	if (senderOnly?.length && updated.attachments) {
 		const updatedIDs = new Set(updated.attachments.map((att) => att.id));
 		merged.attachments = [
 			...updated.attachments,
-			...rejected.filter((att) => !updatedIDs.has(att.id)),
+			...senderOnly.filter((att) => !updatedIDs.has(att.id)),
 		];
 	}
 
@@ -226,6 +226,22 @@ export function useSendMessage(convID: number) {
 		mutationFn: (body: SendMessageBody) => sendMessage(convID, body),
 		onSuccess: (newMsg) => {
 			// Invalidate conversation list
+			queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+		},
+	});
+}
+
+export function retryAttachment(attachmentID: number): Promise<void> {
+	return api.post<void>(`/api/v1/chat/attachments/${attachmentID}/retry`);
+}
+
+export function useRetryAttachment(convID: number) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: retryAttachment,
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: chatKeys.messages(convID) });
+			queryClient.invalidateQueries({ queryKey: chatKeys.images(convID) });
 			queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
 		},
 	});

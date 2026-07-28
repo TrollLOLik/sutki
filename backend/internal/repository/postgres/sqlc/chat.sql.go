@@ -158,11 +158,11 @@ func (q *Queries) CompleteAttachmentModeration(ctx context.Context, arg Complete
 
 const countPendingAttachments = `-- name: CountPendingAttachments :one
 SELECT COUNT(*)::bigint FROM message_attachment
-WHERE message_id = $1 AND moderation_status = 'pending'
+WHERE message_id = $1 AND moderation_status IN ('pending', 'failed')
 `
 
-// Сколько вложений сообщения ещё проверяется. Ноль означает, что сообщение
-// можно доставлять получателю.
+// Сколько вложений сообщения ещё проверяется или ждёт ручного повтора.
+// Ноль означает, что сообщение можно доставлять получателю.
 func (q *Queries) CountPendingAttachments(ctx context.Context, messageID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, countPendingAttachments, messageID)
 	var column_1 int64
@@ -400,6 +400,47 @@ func (q *Queries) EnqueueAttachmentModeration(ctx context.Context, arg EnqueueAt
 		arg.MimeType,
 		arg.Kind,
 	)
+	return err
+}
+
+const failAttachment = `-- name: FailAttachment :exec
+UPDATE message_attachment
+SET moderation_status = 'failed',
+    moderation_reason = LEFT($1, 500)
+WHERE id = $2
+`
+
+type FailAttachmentParams struct {
+	ModerationReason string
+	AttachmentID     int64
+}
+
+func (q *Queries) FailAttachment(ctx context.Context, arg FailAttachmentParams) error {
+	_, err := q.db.Exec(ctx, failAttachment, arg.ModerationReason, arg.AttachmentID)
+	return err
+}
+
+const failAttachmentModerationJob = `-- name: FailAttachmentModerationJob :exec
+UPDATE attachment_moderation_job
+SET status = 'done',
+    decision = 'failed',
+    category = 'moderation_unavailable',
+    reason = LEFT($1, 500),
+    confidence = NULL,
+    frames_checked = NULL,
+    last_error = LEFT($2, 1000),
+    updated_at = now()
+WHERE id = $3
+`
+
+type FailAttachmentModerationJobParams struct {
+	Reason    string
+	LastError string
+	JobID     int64
+}
+
+func (q *Queries) FailAttachmentModerationJob(ctx context.Context, arg FailAttachmentModerationJobParams) error {
+	_, err := q.db.Exec(ctx, failAttachmentModerationJob, arg.Reason, arg.LastError, arg.JobID)
 	return err
 }
 
@@ -974,7 +1015,7 @@ SELECT
               NOT EXISTS (
                 SELECT 1 FROM message_attachment pending_ma
                 WHERE pending_ma.message_id = unread_m.id
-                  AND pending_ma.moderation_status = 'pending'
+                  AND pending_ma.moderation_status IN ('pending', 'failed')
               )
               AND (
                 NOT EXISTS (
@@ -997,7 +1038,7 @@ SELECT
           AND EXISTS (
             SELECT 1 FROM message_attachment rejected_ma
             WHERE rejected_ma.message_id = m.id
-              AND rejected_ma.moderation_status = 'rejected'
+              AND rejected_ma.moderation_status IN ('rejected', 'failed')
           )
           AND NOT EXISTS (
             SELECT 1 FROM message_attachment approved_ma
@@ -1055,7 +1096,7 @@ LEFT JOIN message m ON m.conversation_id = c.id AND m.id = (
           NOT EXISTS (
             SELECT 1 FROM message_attachment pending_ma
             WHERE pending_ma.message_id = candidate.id
-              AND pending_ma.moderation_status = 'pending'
+              AND pending_ma.moderation_status IN ('pending', 'failed')
           )
           AND (
             NOT EXISTS (
@@ -1157,6 +1198,35 @@ func (q *Queries) LockAttachmentUpload(ctx context.Context, attachmentID int64) 
 	return object_key, err
 }
 
+const lockFailedAttachmentForRetry = `-- name: LockFailedAttachmentForRetry :one
+SELECT ma.message_id, m.conversation_id
+FROM message_attachment ma
+JOIN message m ON m.id = ma.message_id
+JOIN attachment_moderation_job job ON job.attachment_id = ma.id
+WHERE ma.id = $1
+  AND m.sender_id = $2
+  AND ma.moderation_status = 'failed'
+  AND job.status = 'done'
+FOR UPDATE OF ma, job
+`
+
+type LockFailedAttachmentForRetryParams struct {
+	AttachmentID int64
+	SenderID     *int32
+}
+
+type LockFailedAttachmentForRetryRow struct {
+	MessageID      int64
+	ConversationID int64
+}
+
+func (q *Queries) LockFailedAttachmentForRetry(ctx context.Context, arg LockFailedAttachmentForRetryParams) (LockFailedAttachmentForRetryRow, error) {
+	row := q.db.QueryRow(ctx, lockFailedAttachmentForRetry, arg.AttachmentID, arg.SenderID)
+	var i LockFailedAttachmentForRetryRow
+	err := row.Scan(&i.MessageID, &i.ConversationID)
+	return i, err
+}
+
 const lockMessageAttachmentUploads = `-- name: LockMessageAttachmentUploads :many
 SELECT cu.object_key
 FROM chat_upload cu
@@ -1255,6 +1325,45 @@ WHERE status = 'processing'
 func (q *Queries) ReleaseStaleAttachmentJobs(ctx context.Context, lease pgtype.Interval) error {
 	_, err := q.db.Exec(ctx, releaseStaleAttachmentJobs, lease)
 	return err
+}
+
+const requeueFailedAttachmentModeration = `-- name: RequeueFailedAttachmentModeration :execrows
+UPDATE attachment_moderation_job
+SET status = 'queued',
+    next_attempt_at = now(),
+    decision = NULL,
+    category = NULL,
+    reason = NULL,
+    confidence = NULL,
+    frames_checked = NULL,
+    last_error = NULL,
+    updated_at = now()
+WHERE attachment_id = $1
+  AND status = 'done'
+`
+
+func (q *Queries) RequeueFailedAttachmentModeration(ctx context.Context, attachmentID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, requeueFailedAttachmentModeration, attachmentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const resetFailedAttachmentForRetry = `-- name: ResetFailedAttachmentForRetry :execrows
+UPDATE message_attachment
+SET moderation_status = 'pending',
+    moderation_reason = NULL
+WHERE id = $1
+  AND moderation_status = 'failed'
+`
+
+func (q *Queries) ResetFailedAttachmentForRetry(ctx context.Context, attachmentID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, resetFailedAttachmentForRetry, attachmentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const retryAttachmentModeration = `-- name: RetryAttachmentModeration :exec

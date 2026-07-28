@@ -230,6 +230,9 @@ type ChatRepository interface {
 	// attachment moderation worker to publish a message that was withheld while
 	// its media was being checked.
 	GetMessageByID(ctx context.Context, messageID int64) (Message, error)
+	// RetryFailedAttachment atomically verifies ownership, returns a failed
+	// attachment to pending and requeues its existing moderation job.
+	RetryFailedAttachment(ctx context.Context, attachmentID int64, userID int32) (messageID, conversationID int64, ok bool, err error)
 	// GetMessageConversation returns the conversation a message belongs to.
 	// Used to reject a reply that quotes a message from another dialog.
 	GetMessageConversation(ctx context.Context, messageID int64) (int64, error)
