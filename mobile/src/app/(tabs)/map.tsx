@@ -228,7 +228,7 @@ export default function MapScreen() {
         0,
         0,
         0,
-        'none'
+        Animation.LINEAR,
       );
       // Wait a moment for layout to settle, then capture initial bbox
       setTimeout(() => {

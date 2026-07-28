@@ -100,10 +100,16 @@ func (r *AttachmentModerationRepo) SetAttachmentVideoMeta(ctx context.Context, a
 	})
 }
 
-// DeleteAttachment releases one message reference and returns both the upload
-// capability and immutable object only when this was their final durable
-// reference. The row lock is the same one CreateAttachment takes.
-func (r *AttachmentModerationRepo) DeleteAttachment(ctx context.Context, attachmentID int64) ([]string, error) {
+// RejectAttachment records the verdict and replaces the attachment with a
+// sender-only tombstone in one transaction. Object keys are returned only when
+// no other durable reference remains.
+func (r *AttachmentModerationRepo) RejectAttachment(
+	ctx context.Context,
+	jobID, attachmentID int64,
+	category, reason string,
+	confidence float32,
+	framesChecked int32,
+) ([]string, error) {
 	type TxBeginner interface {
 		Begin(ctx context.Context) (pgx.Tx, error)
 	}
@@ -120,6 +126,17 @@ func (r *AttachmentModerationRepo) DeleteAttachment(ctx context.Context, attachm
 	defer tx.Rollback(ctx)
 
 	qtx := r.q.WithTx(tx)
+	if err := qtx.CompleteAttachmentModeration(ctx, sqlc.CompleteAttachmentModerationParams{
+		Decision:      strPtrOrNil(string(domain.ImageModerationReject)),
+		Category:      strPtrOrNil(category),
+		Reason:        strPtrOrNil(reason),
+		Confidence:    &confidence,
+		FramesChecked: &framesChecked,
+		JobID:         jobID,
+	}); err != nil {
+		return nil, err
+	}
+
 	objectKey, err := qtx.LockAttachmentUpload(ctx, attachmentID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
@@ -128,7 +145,10 @@ func (r *AttachmentModerationRepo) DeleteAttachment(ctx context.Context, attachm
 		objectKey = ""
 	}
 
-	if err := qtx.DeleteAttachment(ctx, attachmentID); err != nil {
+	if err := qtx.RejectAttachment(ctx, sqlc.RejectAttachmentParams{
+		ModerationReason: reason,
+		AttachmentID:     attachmentID,
+	}); err != nil {
 		return nil, err
 	}
 

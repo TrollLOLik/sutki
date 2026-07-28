@@ -631,6 +631,7 @@ func toDomainAttachment(att sqlc.GetMessageAttachmentsRow) domain.MessageAttachm
 		Width:            att.Width,
 		Height:           att.Height,
 		ModerationStatus: att.ModerationStatus,
+		ModerationReason: derefString(att.ModerationReason),
 		DurationSeconds:  att.DurationSeconds,
 		ThumbnailURL:     derefString(att.ThumbnailUrl),
 	}

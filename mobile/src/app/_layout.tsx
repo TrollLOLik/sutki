@@ -21,7 +21,6 @@ import { darkVars, lightVars } from '@/theme/vars';
 import { useAuthGateStore } from '@/lib/requireAuth';
 import { AuthGateSheet } from '@/components/AuthGateSheet';
 import { ThemeTransitionOverlay } from '@/components/ThemeTransitionOverlay';
-import { YamapInstance } from 'react-native-yamap-plus';
 import { useNavigationRecovery } from '@/hooks/useNavigationRecovery';
 import { useNavigationHistoryTracker } from '@/hooks/useNavigationHistoryTracker';
 import { NavigationHistoryOverlay } from '@/components/NavigationHistoryOverlay';
@@ -50,21 +49,7 @@ Sentry.init({
   beforeBreadcrumb: (breadcrumb) => (breadcrumb.category === 'console' ? null : breadcrumb),
 });
 
-// Initialize Yandex Maps SDK on JS startup to prevent native crashes.
-const initYamap = async () => {
-  try {
-    await YamapInstance.setLocale('ru_RU');
-    await YamapInstance.init(process.env.EXPO_PUBLIC_YANDEX_MAPKIT_API_KEY || '');
-  } catch (err) {
-    console.warn('Yamap already initialized or failed to initialize:', err);
-  }
-};
-initYamap();
-
 SplashScreen.preventAutoHideAsync();
-
-
-
 
 function RootLayout() {
   const status = useSessionStore((s) => s.status);

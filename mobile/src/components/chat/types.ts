@@ -23,6 +23,10 @@ export function isPendingAttachment(att: ChatAttachment): boolean {
 	return att.moderation_status === 'pending';
 }
 
+export function isRejectedAttachment(att: ChatAttachment): boolean {
+	return att.moderation_status === 'rejected';
+}
+
 /**
  * Сообщение состоит только из изображений, без текста.
  * Такие рендерятся без пузыря — картинка сама себе фон, а время накладывается
@@ -34,7 +38,9 @@ export function isImageOnlyMessage(message: ChatMessage): boolean {
 	if (message.body) return false;
 	// Видео сюда не попадает: у него своя рамка с обложкой, и прозрачный пузырь с
 	// наложенным временем ей не подходит.
-	return attachments.every(isImageAttachment);
+	return attachments.every(
+		(att) => att.moderation_status !== 'rejected' && isImageAttachment(att),
+	);
 }
 
 /** Время сообщения в ленте: только часы и минуты. */

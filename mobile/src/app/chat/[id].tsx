@@ -752,7 +752,7 @@ export default function ChatDialogScreen() {
 
 			// Соседнее устройство или получатель: у сообщения убрали вложение.
 			// Обновляем ленту, чтобы пузырь не показывал то, чего уже нет.
-			if (payload.type === 'message.attachment_rejected') {
+			if (payload.type === 'message.attachment_changed') {
 				refetch();
 			}
 		});

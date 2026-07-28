@@ -203,6 +203,20 @@ export function mergeChatMessage(previous: ChatMessage, updated: ChatMessage): C
 		merged.reply_to = null;
 	}
 
+	// The shared conversation channel carries only recipient-safe attachments.
+	// Preserve sender-only rejection tombstones until the authoritative history
+	// refetch arrives, otherwise the reason briefly disappears on mixed albums.
+	const rejected = previous.attachments?.filter(
+		(att) => att.moderation_status === 'rejected',
+	);
+	if (rejected?.length && updated.attachments) {
+		const updatedIDs = new Set(updated.attachments.map((att) => att.id));
+		merged.attachments = [
+			...updated.attachments,
+			...rejected.filter((att) => !updatedIDs.has(att.id)),
+		];
+	}
+
 	return merged;
 }
 

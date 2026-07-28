@@ -3,6 +3,7 @@ import { Centrifuge } from 'centrifuge';
 import { env } from '@/lib/env';
 import { api } from '@/lib/api/client';
 import { queryClient } from '@/lib/query';
+import { appAlert } from '@/components/AppAlert';
 
 /** Machine-readable payload of a booking_status system message. */
 interface BookingStatusPayload {
@@ -60,6 +61,8 @@ interface ChatMessage {
 		 * чужое сервер вообще не отдаёт до вердикта.
 		 */
 		moderation_status?: 'pending' | 'approved' | 'rejected';
+		/** Sender-only explanation for a rejected image or video. */
+		moderation_reason?: string;
 		/** Длительность видео в секундах. */
 		duration_seconds?: number;
 		/** Подписанная обложка видео: в ленте показываем её, а не плеер. */
@@ -92,6 +95,8 @@ interface UserRealtimeEvent {
 	action?: string;
 	entity_id?: number;
 	conversation_id?: number;
+	message_id?: number;
+	reason?: string;
 }
 
 const PRESENCE_HEARTBEAT_INTERVAL_MS = 45_000;
@@ -195,7 +200,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
 		// Listen to server-side publications (like personal user#<id> channel events)
 		centrifuge.on('publication', (ctx) => {
-			invalidateRealtimeData(ctx.data as UserRealtimeEvent);
+			const payload = ctx.data as UserRealtimeEvent;
+			invalidateRealtimeData(payload);
+			if (payload.type === 'attachment.rejected' && payload.conversation_id != null) {
+				queryClient.invalidateQueries({
+					queryKey: ['chat', 'messages', payload.conversation_id],
+				});
+				queryClient.invalidateQueries({
+					queryKey: ['chat', 'images', payload.conversation_id],
+				});
+				if (get().activeConversationId === payload.conversation_id) {
+					appAlert.alert(
+						'Вложение не отправлено',
+						payload.reason || 'Вложение не прошло проверку модерации.',
+					);
+				}
+			}
 		});
 
 		centrifuge.connect();

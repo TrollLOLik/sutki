@@ -109,6 +109,9 @@ type MessageAttachment struct {
 	// ModerationStatus is pending/approved/rejected. Clients render a
 	// "Проверяется" placeholder for pending attachments of their own messages.
 	ModerationStatus string `json:"moderation_status"`
+	// ModerationReason is populated for rejected media and is returned only to
+	// the sender. The underlying object and URL are deleted first.
+	ModerationReason string `json:"moderation_reason,omitempty"`
 	// DurationSeconds is set for video only.
 	DurationSeconds *int32 `json:"duration_seconds,omitempty"`
 	// ThumbnailURL is a presigned cover image for video. The feed shows this

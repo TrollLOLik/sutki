@@ -55,9 +55,6 @@ type Querier interface {
 	CreateRequest(ctx context.Context, arg CreateRequestParams) (CreateRequestRow, error)
 	CreateReview(ctx context.Context, arg CreateReviewParams) (int32, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
-	// Забракованное вложение удаляется целиком: держать строку незачем, а объект из
-	// хранилища убирает usecase по ключу из задачи.
-	DeleteAttachment(ctx context.Context, id int64) error
 	DeleteAuthCode(ctx context.Context, arg DeleteAuthCodeParams) error
 	DeleteExpiredPendingRequests(ctx context.Context, before pgtype.Timestamp) error
 	DeleteHouseCategories(ctx context.Context, houseID int32) error
@@ -155,6 +152,9 @@ type Querier interface {
 	// Lock registered uploads in a stable order before removing references.
 	LockMessageAttachmentUploads(ctx context.Context, messageID int64) ([]string, error)
 	RegisterChatUpload(ctx context.Context, arg RegisterChatUploadParams) error
+	// Keep a sender-only tombstone with the reason, but detach every reference to
+	// the unsafe object before it is removed from storage.
+	RejectAttachment(ctx context.Context, arg RejectAttachmentParams) error
 	RejectRequest(ctx context.Context, arg RejectRequestParams) (RejectRequestRow, error)
 	// Возвращает в очередь задачи, которые воркер взял и не завершил: процесс мог
 	// умереть посреди нарезки кадров. Без этого задача залипает в processing

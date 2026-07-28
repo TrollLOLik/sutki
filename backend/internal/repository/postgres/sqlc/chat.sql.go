@@ -324,17 +324,6 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (C
 	return i, err
 }
 
-const deleteAttachment = `-- name: DeleteAttachment :exec
-DELETE FROM message_attachment WHERE id = $1
-`
-
-// Забракованное вложение удаляется целиком: держать строку незачем, а объект из
-// хранилища убирает usecase по ключу из задачи.
-func (q *Queries) DeleteAttachment(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteAttachment, id)
-	return err
-}
-
 const deleteMessageAttachments = `-- name: DeleteMessageAttachments :exec
 DELETE FROM message_attachment
 WHERE message_id = $1
@@ -573,7 +562,7 @@ func (q *Queries) GetConversationMessages(ctx context.Context, arg GetConversati
 
 const getMessageAttachments = `-- name: GetMessageAttachments :many
 SELECT id, message_id, url, file_name, mime_type, size_bytes, width, height,
-       moderation_status, duration_seconds, thumbnail_url
+       moderation_status, moderation_reason, duration_seconds, thumbnail_url
 FROM message_attachment
 WHERE message_id = ANY($1::bigint[])
 `
@@ -588,6 +577,7 @@ type GetMessageAttachmentsRow struct {
 	Width            *int32
 	Height           *int32
 	ModerationStatus string
+	ModerationReason *string
 	DurationSeconds  *int32
 	ThumbnailUrl     *string
 }
@@ -611,6 +601,7 @@ func (q *Queries) GetMessageAttachments(ctx context.Context, dollar_1 []int64) (
 			&i.Width,
 			&i.Height,
 			&i.ModerationStatus,
+			&i.ModerationReason,
 			&i.DurationSeconds,
 			&i.ThumbnailUrl,
 		); err != nil {
@@ -745,11 +736,18 @@ SELECT
     m.kind,
     m.deleted_at,
     LEFT(COALESCE(m.body, ''), $1::int)::text AS body_preview,
-    (SELECT COUNT(*) FROM message_attachment ma WHERE ma.message_id = m.id) AS attachment_count,
+    (
+        SELECT COUNT(*)
+        FROM message_attachment ma
+        WHERE ma.message_id = m.id
+          AND ma.moderation_status = 'approved'
+    ) AS attachment_count,
     COALESCE((
         SELECT ma.url
         FROM message_attachment ma
-        WHERE ma.message_id = m.id AND ma.mime_type LIKE 'image/%'
+        WHERE ma.message_id = m.id
+          AND ma.moderation_status = 'approved'
+          AND ma.mime_type LIKE 'image/%'
         ORDER BY ma.id
         LIMIT 1
     ), '')::text AS first_image_url
@@ -964,10 +962,49 @@ SELECT
     c.updated_at AS last_activity,
     cp.last_read_message_id,
     other_cp.last_read_message_id AS other_last_read_message_id,
-    (SELECT COUNT(*) FROM message m WHERE m.conversation_id = c.id AND m.id > cp.last_read_message_id) AS unread_count,
+    (
+        SELECT COUNT(*)
+        FROM message unread_m
+        WHERE unread_m.conversation_id = c.id
+          AND unread_m.id > cp.last_read_message_id
+          AND (
+            unread_m.sender_id = cp.user_id
+            OR unread_m.sender_id IS NULL
+            OR (
+              NOT EXISTS (
+                SELECT 1 FROM message_attachment pending_ma
+                WHERE pending_ma.message_id = unread_m.id
+                  AND pending_ma.moderation_status = 'pending'
+              )
+              AND (
+                NOT EXISTS (
+                  SELECT 1 FROM message_attachment any_ma
+                  WHERE any_ma.message_id = unread_m.id
+                )
+                OR EXISTS (
+                  SELECT 1 FROM message_attachment approved_ma
+                  WHERE approved_ma.message_id = unread_m.id
+                    AND approved_ma.moderation_status = 'approved'
+                )
+              )
+            )
+          )
+    ) AS unread_count,
     m.id AS last_message_id,
     CASE
         WHEN m.deleted_at IS NOT NULL THEN 'Сообщение удалено'
+        WHEN m.sender_id = cp.user_id
+          AND EXISTS (
+            SELECT 1 FROM message_attachment rejected_ma
+            WHERE rejected_ma.message_id = m.id
+              AND rejected_ma.moderation_status = 'rejected'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM message_attachment approved_ma
+            WHERE approved_ma.message_id = m.id
+              AND approved_ma.moderation_status = 'approved'
+          )
+          THEN COALESCE(m.body, '[Вложение не отправлено]')
         ELSE COALESCE(m.body, (
             SELECT CASE
                 -- Альбом: показываем количество, а не «[Изображение]» —
@@ -980,6 +1017,7 @@ SELECT
             END
             FROM message_attachment ma
             WHERE ma.message_id = m.id
+              AND ma.moderation_status = 'approved'
         ), '')
     END::text AS last_message_body,
     m.sender_id AS last_message_sender_id,
@@ -1007,7 +1045,31 @@ JOIN conversation_participant other_cp ON c.id = other_cp.conversation_id AND ot
 JOIN "user" other_u ON other_cp.user_id = other_u.id
 LEFT JOIN house h ON c.house_id = h.id
 LEFT JOIN message m ON m.conversation_id = c.id AND m.id = (
-    SELECT MAX(id) FROM message WHERE conversation_id = c.id
+    SELECT MAX(candidate.id)
+    FROM message candidate
+    WHERE candidate.conversation_id = c.id
+      AND (
+        candidate.sender_id = cp.user_id
+        OR candidate.sender_id IS NULL
+        OR (
+          NOT EXISTS (
+            SELECT 1 FROM message_attachment pending_ma
+            WHERE pending_ma.message_id = candidate.id
+              AND pending_ma.moderation_status = 'pending'
+          )
+          AND (
+            NOT EXISTS (
+              SELECT 1 FROM message_attachment any_ma
+              WHERE any_ma.message_id = candidate.id
+            )
+            OR EXISTS (
+              SELECT 1 FROM message_attachment approved_ma
+              WHERE approved_ma.message_id = candidate.id
+                AND approved_ma.moderation_status = 'approved'
+            )
+          )
+        )
+      )
 )
 WHERE cp.user_id = $1
 ORDER BY c.updated_at DESC
@@ -1153,6 +1215,28 @@ func (q *Queries) RegisterChatUpload(ctx context.Context, arg RegisterChatUpload
 		arg.SizeBytes,
 		arg.MimeType,
 	)
+	return err
+}
+
+const rejectAttachment = `-- name: RejectAttachment :exec
+UPDATE message_attachment
+SET moderation_status = 'rejected',
+    moderation_reason = LEFT($1, 500),
+    url = '',
+    thumbnail_url = NULL,
+    upload_key = NULL
+WHERE id = $2
+`
+
+type RejectAttachmentParams struct {
+	ModerationReason string
+	AttachmentID     int64
+}
+
+// Keep a sender-only tombstone with the reason, but detach every reference to
+// the unsafe object before it is removed from storage.
+func (q *Queries) RejectAttachment(ctx context.Context, arg RejectAttachmentParams) error {
+	_, err := q.db.Exec(ctx, rejectAttachment, arg.ModerationReason, arg.AttachmentID)
 	return err
 }
 

@@ -69,9 +69,9 @@ type Repository interface {
 	RetryAttachmentModeration(ctx context.Context, jobID int64, nextAttemptAt time.Time, lastError string) error
 	SetAttachmentModerationStatus(ctx context.Context, attachmentID int64, status string) error
 	SetAttachmentVideoMeta(ctx context.Context, attachmentID int64, durationSeconds *int32, thumbnailURL string) error
-	// DeleteAttachment removes one reference and returns the upload capability
-	// and sealed object only when no other message still references them.
-	DeleteAttachment(ctx context.Context, attachmentID int64) (orphanedObjectKeys []string, err error)
+	// RejectAttachment atomically completes the job and replaces the unsafe
+	// media reference with a sender-only tombstone carrying the reason.
+	RejectAttachment(ctx context.Context, jobID, attachmentID int64, category, reason string, confidence float32, framesChecked int32) (orphanedObjectKeys []string, err error)
 	CountPendingAttachments(ctx context.Context, messageID int64) (int64, error)
 }
 
@@ -459,17 +459,19 @@ func (s *Service) approve(ctx context.Context, job domain.AttachmentModerationJo
 }
 
 func (s *Service) reject(ctx context.Context, job domain.AttachmentModerationJob, result domain.ImageModerationResult, frames int32) {
-	// Record the verdict before deleting the row: the job holds the audit trail
-	// (category, reason, how many frames were checked) for complaint handling.
-	if err := s.repo.CompleteAttachmentModeration(ctx, job.ID, string(domain.ImageModerationReject), result.Category, result.Reason, result.Confidence, frames); err != nil {
-		log.Printf("attachment moderation: complete rejected job %d: %v", job.ID, err)
-	}
-
-	// Deleting the attachment row cascades the job away, so the object has to be
-	// removed via the key captured in the job.
-	orphanedKeys, err := s.repo.DeleteAttachment(ctx, job.AttachmentID)
+	reason := userFacingRejectionReason(result)
+	orphanedKeys, err := s.repo.RejectAttachment(
+		ctx,
+		job.ID,
+		job.AttachmentID,
+		result.Category,
+		reason,
+		result.Confidence,
+		frames,
+	)
 	if err != nil {
-		log.Printf("attachment moderation: delete rejected attachment %d: %v", job.AttachmentID, err)
+		log.Printf("attachment moderation: reject attachment %d: %v", job.AttachmentID, err)
+		return
 	}
 	for _, orphanedKey := range orphanedKeys {
 		if err := s.storage.Delete(ctx, orphanedKey); err != nil {
@@ -483,7 +485,30 @@ func (s *Service) reject(ctx context.Context, job domain.AttachmentModerationJob
 	}
 
 	if s.notifier != nil {
-		s.notifier.AttachmentRejected(ctx, job.ConversationID, job.MessageID, result.Reason)
+		s.notifier.AttachmentRejected(ctx, job.ConversationID, job.MessageID, reason)
+	}
+}
+
+func userFacingRejectionReason(result domain.ImageModerationResult) string {
+	if reason := strings.TrimSpace(result.Reason); reason != "" {
+		return reason
+	}
+
+	switch strings.TrimSpace(result.Category) {
+	case "sexual", "minor_safety":
+		return "Вложение содержит недопустимый откровенный контент."
+	case "violence", "weapons":
+		return "Вложение содержит недопустимый опасный контент."
+	case "drugs", "extremism", "illegal":
+		return "Вложение нарушает правила сервиса."
+	case "personal_data":
+		return "Во вложении обнаружены персональные данные."
+	case "too_long":
+		return "Видео превышает допустимую длительность."
+	case "invalid_media":
+		return "Не удалось обработать файл как изображение или видео."
+	default:
+		return "Вложение не прошло проверку модерации."
 	}
 }
 

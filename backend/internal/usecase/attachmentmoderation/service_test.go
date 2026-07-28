@@ -28,7 +28,8 @@ type fakeRepo struct {
 	completed       map[int64]string // jobID -> decision
 	completedFrames map[int64]int32
 	retried         map[int64]time.Time
-	deleted         map[int64]bool
+	rejected        map[int64]bool
+	rejectionReason map[int64]string
 	videoMeta       map[int64]string // attachmentID -> thumbnail key
 	orphanedKey     string
 	pendingCount    int64
@@ -41,7 +42,8 @@ func newFakeRepo() *fakeRepo {
 		completed:       map[int64]string{},
 		completedFrames: map[int64]int32{},
 		retried:         map[int64]time.Time{},
-		deleted:         map[int64]bool{},
+		rejected:        map[int64]bool{},
+		rejectionReason: map[int64]string{},
 		videoMeta:       map[int64]string{},
 		orphanedKey:     videoJob().ObjectKey,
 	}
@@ -98,10 +100,20 @@ func (r *fakeRepo) SetAttachmentVideoMeta(_ context.Context, attachmentID int64,
 	return nil
 }
 
-func (r *fakeRepo) DeleteAttachment(_ context.Context, attachmentID int64) ([]string, error) {
+func (r *fakeRepo) RejectAttachment(
+	_ context.Context,
+	jobID, attachmentID int64,
+	_, reason string,
+	_ float32,
+	frames int32,
+) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.deleted[attachmentID] = true
+	r.rejected[attachmentID] = true
+	r.rejectionReason[attachmentID] = reason
+	r.statuses[attachmentID] = domain.AttachmentModerationRejected
+	r.completed[jobID] = string(domain.ImageModerationReject)
+	r.completedFrames[jobID] = frames
 	if r.orphanedKey == "" {
 		return nil, nil
 	}
@@ -447,8 +459,11 @@ func TestRejectedVideoIsDeletedEverywhere(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	if !repo.deleted[job.AttachmentID] {
-		t.Fatal("expected the attachment row to be deleted")
+	if !repo.rejected[job.AttachmentID] {
+		t.Fatal("expected the attachment to become a rejected tombstone")
+	}
+	if repo.rejectionReason[job.AttachmentID] == "" {
+		t.Fatal("expected the rejection reason to be stored on the tombstone")
 	}
 	// The original object must go too, not just the database row.
 	foundOriginal := false
@@ -515,7 +530,7 @@ func TestReviewVerdictIsTreatedAsRejection(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	if !repo.deleted[job.AttachmentID] {
+	if !repo.rejected[job.AttachmentID] {
 		t.Fatal("expected an unresolved attachment to be dropped, not left pending")
 	}
 	if got := repo.statuses[job.AttachmentID]; got == domain.AttachmentModerationApproved {
@@ -536,7 +551,7 @@ func TestOverlongVideoIsRejectedWithoutModeration(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	if !repo.deleted[job.AttachmentID] {
+	if !repo.rejected[job.AttachmentID] {
 		t.Fatal("expected an over-length video to be rejected")
 	}
 	// No point paying for vision calls on a file that fails policy anyway.
@@ -557,7 +572,7 @@ func TestUnprobeableFileIsRejected(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	if !repo.deleted[job.AttachmentID] {
+	if !repo.rejected[job.AttachmentID] {
 		t.Fatal("expected an unprobeable file to be rejected")
 	}
 	if len(repo.retried) != 0 {
@@ -581,7 +596,7 @@ func TestTransientFailureRetriesAndKeepsPending(t *testing.T) {
 	if _, retried := repo.retried[job.ID]; !retried {
 		t.Fatal("expected the job to be rescheduled")
 	}
-	if repo.deleted[job.AttachmentID] {
+	if repo.rejected[job.AttachmentID] {
 		t.Fatal("a transient failure must not delete the attachment")
 	}
 	if got := repo.statuses[job.AttachmentID]; got == domain.AttachmentModerationApproved {
@@ -602,7 +617,7 @@ func TestExhaustedRetriesRejectAttachment(t *testing.T) {
 
 	svc.processJob(context.Background(), job)
 
-	if !repo.deleted[job.AttachmentID] {
+	if !repo.rejected[job.AttachmentID] {
 		t.Fatal("expected the attachment to be dropped after the retry budget")
 	}
 	if _, retried := repo.retried[job.ID]; retried {

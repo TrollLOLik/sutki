@@ -20,6 +20,7 @@ import {
 	type ChatAttachment,
 	isImageAttachment,
 	isVideoAttachment,
+	isRejectedAttachment,
 	isImageOnlyMessage,
 	formatMessageTime,
 } from './types';
@@ -93,7 +94,10 @@ export const MessageBubble = React.memo(function MessageBubble({
 	 * частью сообщения.
 	 */
 	const mediaEdgeToEdge =
-		!isDeleted && !!message.attachments?.some((att) => isImageAttachment(att) || isVideoAttachment(att));
+		!isDeleted &&
+		!!message.attachments?.some(
+			(att) => !isRejectedAttachment(att) && (isImageAttachment(att) || isVideoAttachment(att)),
+		);
 	const isRead = otherLastReadMessageID != null && message.id <= otherLastReadMessageID;
 	const holdScale = useSharedValue(1);
 	const highlightProgress = useSharedValue(0);

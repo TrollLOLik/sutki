@@ -522,12 +522,54 @@ func visibleAttachments(msg domain.Message, viewerID int32) []domain.MessageAtta
 	isSender := msg.SenderID != nil && *msg.SenderID == viewerID
 	out := make([]domain.MessageAttachment, 0, len(msg.Attachments))
 	for _, att := range msg.Attachments {
-		if att.IsPendingModeration() && !isSender {
+		if !isSender && att.ModerationStatus != domain.AttachmentModerationApproved {
 			continue
 		}
 		out = append(out, att)
 	}
 	return out
+}
+
+// messageVisibleToViewer hides a media message from its recipient until every
+// attachment has a verdict. If every media item was rejected, the caption is
+// hidden too: it was submitted as one message and must not turn into an
+// unexpected text-only delivery.
+func messageVisibleToViewer(msg domain.Message, viewerID int32) bool {
+	if msg.SenderID == nil || *msg.SenderID == viewerID || len(msg.Attachments) == 0 {
+		return true
+	}
+	if hasPendingAttachments(msg) {
+		return false
+	}
+	for _, att := range msg.Attachments {
+		if att.ModerationStatus == domain.AttachmentModerationApproved {
+			return true
+		}
+	}
+	return false
+}
+
+// messageForRecipient returns the sanitized copy safe to publish on the shared
+// conversation channel. Rejected tombstones remain sender-only.
+func messageForRecipient(msg domain.Message) (domain.Message, bool) {
+	if hasPendingAttachments(msg) {
+		return domain.Message{}, false
+	}
+	if len(msg.Attachments) == 0 {
+		return msg, true
+	}
+
+	approved := make([]domain.MessageAttachment, 0, len(msg.Attachments))
+	for _, att := range msg.Attachments {
+		if att.ModerationStatus == domain.AttachmentModerationApproved {
+			approved = append(approved, att)
+		}
+	}
+	if len(approved) == 0 {
+		return domain.Message{}, false
+	}
+	msg.Attachments = approved
+	return msg, true
 }
 
 // presignQuote turns the raw storage key of a quote thumbnail into a signed URL.
@@ -580,6 +622,14 @@ func (s *Service) GetConversationMessages(ctx context.Context, userID int32, con
 	if err != nil {
 		return nil, err
 	}
+
+	visible := msgs[:0]
+	for _, msg := range msgs {
+		if messageVisibleToViewer(msg, userID) {
+			visible = append(visible, msg)
+		}
+	}
+	msgs = visible
 
 	// Hydrate reply quotes server-side: history is paginated, so the quoted
 	// message is frequently outside the page the client just received.
@@ -892,8 +942,8 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	// Runs in background: presence check + enqueue must not delay the HTTP
 	// response. The notifier dedups per conversation within a quiet window,
 	// so message bursts produce at most one email.
-	if s.notifier != nil || s.userEvents != nil {
-		go s.notifyRecipient(context.Background(), msg)
+	if recipientMsg, deliverable := messageForRecipient(msg); deliverable && (s.notifier != nil || s.userEvents != nil) {
+		go s.notifyRecipient(context.Background(), recipientMsg)
 	}
 
 	return msg, nil
@@ -1435,23 +1485,24 @@ func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
 	// publishes the message once every attachment has passed
 	// (see PublishApprovedMessage). The sender already has it from the HTTP
 	// response, so nothing is lost for them.
-	if hasPendingAttachments(msg) {
+	publicMsg, deliverable := messageForRecipient(msg)
+	if !deliverable {
 		return
 	}
 
 	// 1. Publish to conversation channel (for users with chat open)
-	channel := fmt.Sprintf("chat:conv_%d", msg.ConversationID)
+	channel := fmt.Sprintf("chat:conv_%d", publicMsg.ConversationID)
 	payload := map[string]any{
 		"type":    "message.new",
-		"message": msg,
+		"message": publicMsg,
 	}
 	_ = s.centrifugoPublish(channel, payload)
 
 	// 2. Notify the recipient's personal channel (for conversation list updates)
-	if msg.SenderID == nil {
+	if publicMsg.SenderID == nil {
 		return // system messages publish personal-channel updates themselves
 	}
-	recipientID, err := s.repo.GetOtherParticipantID(ctx, msg.ConversationID, *msg.SenderID)
+	recipientID, err := s.repo.GetOtherParticipantID(ctx, publicMsg.ConversationID, *publicMsg.SenderID)
 	if err != nil {
 		log.Printf("chat: failed to get recipient for personal notification: %v", err)
 		return
@@ -1459,12 +1510,12 @@ func (s *Service) publishMessage(ctx context.Context, msg domain.Message) {
 	personalChannel := fmt.Sprintf("user:#%d", recipientID)
 	personalPayload := map[string]any{
 		"type":            "unread_update",
-		"conversation_id": msg.ConversationID,
+		"conversation_id": publicMsg.ConversationID,
 	}
 	_ = s.centrifugoPublish(personalChannel, personalPayload)
 	// The sender may have the app open on another device. Keep that device's
 	// conversation preview in sync even though its unread count stays zero.
-	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", *msg.SenderID), personalPayload)
+	_ = s.centrifugoPublish(fmt.Sprintf("user:#%d", *publicMsg.SenderID), personalPayload)
 }
 
 func (s *Service) publishReadEvent(convID int64, userID int32, messageID int64) {

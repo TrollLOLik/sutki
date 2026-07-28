@@ -31,20 +31,25 @@ func (s *Service) AttachmentApproved(ctx context.Context, conversationID, messag
 		return
 	}
 
-	for i := range msg.Attachments {
-		msg.Attachments[i] = s.presignAttachment(ctx, msg.Attachments[i])
+	publicMsg, deliverable := messageForRecipient(msg)
+	if !deliverable {
+		return
 	}
-	s.hydrateAndPresignQuote(ctx, &msg)
+	for i := range publicMsg.Attachments {
+		publicMsg.Attachments[i] = s.presignAttachment(ctx, publicMsg.Attachments[i])
+	}
+	s.hydrateAndPresignQuote(ctx, &publicMsg)
 
-	s.publishMessage(ctx, msg)
+	s.publishMessage(ctx, publicMsg)
 
 	// The recipient was never notified at send time (the message was invisible to
 	// them), so the email / notification-centre path runs now. Same function
 	// SendMessage uses, on a detached context because the worker's context may be
 	// cancelled as soon as the job finishes.
 	if s.notifier != nil || s.userEvents != nil {
-		go s.notifyRecipient(context.WithoutCancel(ctx), msg)
+		go s.notifyRecipient(context.WithoutCancel(ctx), publicMsg)
 	}
+	s.publishAttachmentChanged(conversationID, messageID)
 }
 
 // AttachmentRejected tells the sender their upload was dropped.
@@ -76,8 +81,23 @@ func (s *Service) AttachmentRejected(ctx context.Context, conversationID, messag
 	// Also fires on the conversation channel so an open chat updates in place
 	// instead of waiting for a refetch. Both participants receive it, but the
 	// payload carries no content — only that this message lost an attachment.
+	if publicMsg, deliverable := messageForRecipient(msg); deliverable {
+		for i := range publicMsg.Attachments {
+			publicMsg.Attachments[i] = s.presignAttachment(ctx, publicMsg.Attachments[i])
+		}
+		s.hydrateAndPresignQuote(ctx, &publicMsg)
+		s.publishMessage(ctx, publicMsg)
+		if s.notifier != nil || s.userEvents != nil {
+			go s.notifyRecipient(context.WithoutCancel(ctx), publicMsg)
+		}
+	}
+
+	s.publishAttachmentChanged(conversationID, messageID)
+}
+
+func (s *Service) publishAttachmentChanged(conversationID, messageID int64) {
 	_ = s.centrifugoPublish(fmt.Sprintf("chat:conv_%d", conversationID), map[string]any{
-		"type":       "message.attachment_rejected",
+		"type":       "message.attachment_changed",
 		"message_id": messageID,
 	})
 }

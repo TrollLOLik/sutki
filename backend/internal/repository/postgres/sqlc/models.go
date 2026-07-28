@@ -297,6 +297,7 @@ type MessageAttachment struct {
 	DurationSeconds  *int32
 	ThumbnailUrl     *string
 	UploadKey        *string
+	ModerationReason *string
 }
 
 type ModerationVerdict struct {

@@ -64,6 +64,7 @@ module.exports = {
     plugins: [
       "expo-router",
       "./plugins/with-rich-content-text-input",
+      "./plugins/with-yandex-mapkit-init",
       [
         "expo-splash-screen",
         {
