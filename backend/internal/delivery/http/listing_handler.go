@@ -322,6 +322,13 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	if !ListingUpdateLimiter.Allow(
+		"listing_update_user:"+strconv.FormatInt(int64(userID), 10),
+		listingUpdatesPerUserHour,
+	) {
+		writeRateLimitError(w, "Слишком много изменений объявлений. Попробуйте позже.")
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid id")

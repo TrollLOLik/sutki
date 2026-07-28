@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -38,6 +39,10 @@ func (h *MediaHandler) PresignUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if !MediaPresignLimiter.Allow("media_presign_user:"+strconv.FormatInt(int64(userID), 10), mediaPresignsPerUserHour) {
+		writeRateLimitError(w, "Слишком много загрузок. Попробуйте позже.")
 		return
 	}
 
@@ -159,6 +164,14 @@ func (h *MediaHandler) ModerateListingImages(w http.ResponseWriter, r *http.Requ
 	}
 	if h.publicStorage == nil || h.imageModerator == nil {
 		writeError(w, http.StatusServiceUnavailable, "image moderation is temporarily unavailable")
+		return
+	}
+	if !ListingPreviewMediaLimiter.AllowN(
+		"listing_preview_user:"+strconv.FormatInt(int64(userID), 10),
+		listingPreviewImagesPerUserHour,
+		len(req.Keys),
+	) {
+		writeRateLimitError(w, "Достигнут лимит проверок изображений. Попробуйте позже.")
 		return
 	}
 

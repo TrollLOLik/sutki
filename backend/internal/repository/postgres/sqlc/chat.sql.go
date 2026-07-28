@@ -1036,16 +1036,16 @@ SELECT
         WHEN m.deleted_at IS NOT NULL THEN 'Сообщение удалено'
         WHEN m.sender_id = cp.user_id
           AND EXISTS (
-            SELECT 1 FROM message_attachment rejected_ma
-            WHERE rejected_ma.message_id = m.id
-              AND rejected_ma.moderation_status IN ('rejected', 'failed')
+            SELECT 1 FROM message_attachment failed_ma
+            WHERE failed_ma.message_id = m.id
+              AND failed_ma.moderation_status = 'failed'
           )
           AND NOT EXISTS (
             SELECT 1 FROM message_attachment approved_ma
             WHERE approved_ma.message_id = m.id
               AND approved_ma.moderation_status = 'approved'
           )
-          THEN COALESCE(m.body, '[Вложение не отправлено]')
+          THEN COALESCE(m.body, '[Не удалось проверить вложение]')
         ELSE COALESCE(m.body, (
             SELECT CASE
                 -- Альбом: показываем количество, а не «[Изображение]» —
@@ -1090,7 +1090,20 @@ LEFT JOIN message m ON m.conversation_id = c.id AND m.id = (
     FROM message candidate
     WHERE candidate.conversation_id = c.id
       AND (
-        candidate.sender_id = cp.user_id
+        (
+          candidate.sender_id = cp.user_id
+          AND (
+            NOT EXISTS (
+              SELECT 1 FROM message_attachment sender_any_ma
+              WHERE sender_any_ma.message_id = candidate.id
+            )
+            OR EXISTS (
+              SELECT 1 FROM message_attachment sender_visible_ma
+              WHERE sender_visible_ma.message_id = candidate.id
+                AND sender_visible_ma.moderation_status <> 'rejected'
+            )
+          )
+        )
         OR candidate.sender_id IS NULL
         OR (
           NOT EXISTS (

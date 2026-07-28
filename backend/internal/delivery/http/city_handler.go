@@ -31,6 +31,10 @@ func (h *CityHandler) Suggest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"suggestions": []any{}})
 		return
 	}
+	if !CitySuggestLimiter.Allow("city_suggest_ip:"+getClientIP(r), citySuggestionsPerIPHour) {
+		writeRateLimitError(w, "Слишком много запросов поиска адреса. Попробуйте позже.")
+		return
+	}
 
 	// The upstream payload is a short {"query":..,"count":..} object. Cap the
 	// read so an unauthenticated caller cannot buffer nginx's 20 MiB limit

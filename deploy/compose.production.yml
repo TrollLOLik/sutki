@@ -1,5 +1,76 @@
 name: titop-arenda
 
+# Application processes receive an explicit allowlist instead of the complete
+# deployment env file. In particular, they must never see the PostgreSQL
+# superuser or GlitchTip database/Django secrets.
+x-app-environment: &app-environment
+  MEDIA_BASE_URL: ${MEDIA_BASE_URL:-}
+  GLITCHTIP_BACKEND_DSN: ${GLITCHTIP_BACKEND_DSN:-}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+  GLITCHTIP_TELEGRAM_WEBHOOK_SECRET: ${GLITCHTIP_TELEGRAM_WEBHOOK_SECRET:-}
+  TELEGRAM_TIMEOUT: ${TELEGRAM_TIMEOUT:-10s}
+  APP_ENV: ${APP_ENV:-production}
+  MIN_APP_VERSION: ${MIN_APP_VERSION:-}
+  APP_RELEASE: ${APP_RELEASE:-}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+  ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+  REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-720h}
+  AUTH_EXPOSE_CODE: ${AUTH_EXPOSE_CODE:-false}
+  HTTP_READ_TIMEOUT: ${HTTP_READ_TIMEOUT:-15s}
+  HTTP_WRITE_TIMEOUT: ${HTTP_WRITE_TIMEOUT:-75s}
+  SMTP_HOST: ${SMTP_HOST:-smtp.yandex.ru}
+  SMTP_PORT: ${SMTP_PORT:-465}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+  UCALLER_API_URL: ${UCALLER_API_URL:-https://api.ucaller.ru}
+  UCALLER_API_KEY: ${UCALLER_API_KEY:-}
+  UCALLER_SERVICE_ID: ${UCALLER_SERVICE_ID:-}
+  UCALLER_ENABLED: ${UCALLER_ENABLED:-false}
+  UCALLER_TIMEOUT: ${UCALLER_TIMEOUT:-10s}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-yookassa}
+  PAYMENT_API_URL: ${PAYMENT_API_URL:-https://api.yookassa.ru/v3}
+  PAYMENT_SHOP_ID: ${PAYMENT_SHOP_ID:-}
+  PAYMENT_SECRET: ${PAYMENT_SECRET:-}
+  PAYMENT_RETURN_URL: ${PAYMENT_RETURN_URL:-titop-arenda://payments/return}
+  PAYMENT_ADMIN_TOKEN: ${PAYMENT_ADMIN_TOKEN:-}
+  PAYMENT_ADMIN_TOKEN_PREVIOUS: ${PAYMENT_ADMIN_TOKEN_PREVIOUS:-}
+  PAYMENT_CAPTURE: ${PAYMENT_CAPTURE:-true}
+  PAYMENT_PROVIDER_TIMEOUT: ${PAYMENT_PROVIDER_TIMEOUT:-15s}
+  PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-}
+  EMAIL_UNSUBSCRIBE_SECRET: ${EMAIL_UNSUBSCRIBE_SECRET:-}
+  EMAIL_DAILY_LIMIT: ${EMAIL_DAILY_LIMIT:-500}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+  DADATA_API_KEY: ${DADATA_API_KEY:-}
+  OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+  OVERPASS_TIMEOUT: ${OVERPASS_TIMEOUT:-12s}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_GENERATION_MODEL: ${LLM_GENERATION_MODEL:-}
+  LLM_MODERATION_MODEL: ${LLM_MODERATION_MODEL:-}
+  LLM_REVIEW_MODERATION_MODEL: ${LLM_REVIEW_MODERATION_MODEL:-}
+  LLM_IMAGE_MODERATION_MODEL: ${LLM_IMAGE_MODERATION_MODEL:-Qwen/Qwen3.6-35B-A3B}
+  LLM_CHAT_SUGGEST_MODEL: ${LLM_CHAT_SUGGEST_MODEL:-}
+  LLM_TIMEOUT: ${LLM_TIMEOUT:-15s}
+  FFMPEG_PATH: ${FFMPEG_PATH:-ffmpeg}
+  FFPROBE_PATH: ${FFPROBE_PATH:-ffprobe}
+  FFMPEG_TIMEOUT: ${FFMPEG_TIMEOUT:-60s}
+  MEDIA_WORK_DIR: ${MEDIA_WORK_DIR:-}
+  MAX_VIDEO_SECONDS: ${MAX_VIDEO_SECONDS:-60}
+  MAX_VIDEO_MODERATION_FRAMES: ${MAX_VIDEO_MODERATION_FRAMES:-12}
+  CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:?set CENTRIFUGO_API_KEY}
+  CENTRIFUGO_HMAC_SECRET: ${CENTRIFUGO_HMAC_SECRET:?set CENTRIFUGO_HMAC_SECRET}
+  S3_ENDPOINT: ${S3_ENDPOINT:?set S3_ENDPOINT}
+  S3_PRESIGN_ENDPOINT: ${S3_PRESIGN_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:?set S3_REGION}
+  S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+  S3_PUBLIC_BUCKET: ${S3_PUBLIC_BUCKET:?set S3_PUBLIC_BUCKET}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+  S3_USE_PATH_STYLE: ${S3_USE_PATH_STYLE:-true}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -44,8 +115,8 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: ${ENV_FILE:-.env.production}
     environment:
+      <<: *app-environment
       HTTP_ADDR: :8080
       DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable
       CENTRIFUGO_URL: http://centrifugo:8000
@@ -85,8 +156,8 @@ services:
       context: ../backend
       dockerfile: Dockerfile.worker
     restart: unless-stopped
-    env_file: ${ENV_FILE:-.env.production}
     environment:
+      <<: *app-environment
       # No HTTP listener needed here; the loopback bind keeps it unreachable.
       HTTP_ADDR: 127.0.0.1:8081
       DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable

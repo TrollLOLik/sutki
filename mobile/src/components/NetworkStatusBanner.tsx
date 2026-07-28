@@ -11,12 +11,11 @@ import { useAppTheme } from '@/theme/useAppTheme';
 type BannerState = 'hidden' | 'offline' | 'restored';
 
 export function NetworkStatusBanner() {
-  const { palette } = useAppTheme();
+  const { isDark, palette } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [state, setState] = useState<BannerState>('hidden');
   const visibility = useRef(new Animated.Value(0)).current;
   const wasOffline = useRef<boolean | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((networkState) => {
@@ -24,10 +23,6 @@ export function NetworkStatusBanner() {
       onlineManager.setOnline(!offline);
 
       if (offline) {
-        if (hideTimer.current) {
-          clearTimeout(hideTimer.current);
-          hideTimer.current = null;
-        }
         wasOffline.current = true;
         setState('offline');
         return;
@@ -39,10 +34,6 @@ export function NetworkStatusBanner() {
         void queryClient.resumePausedMutations().then(() => {
           void queryClient.refetchQueries({ type: 'active' });
         });
-        hideTimer.current = setTimeout(() => {
-          hideTimer.current = null;
-          setState('hidden');
-        }, 1800);
         return;
       }
 
@@ -52,24 +43,41 @@ export function NetworkStatusBanner() {
       }
     });
 
-    return () => {
-      unsubscribe();
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
+    return unsubscribe;
   }, []);
 
+  // The restored banner owns its lifetime. Keeping this timer outside the
+  // NetInfo callback prevents duplicate Android connectivity events from
+  // cancelling or replacing the hide operation.
   useEffect(() => {
-    Animated.timing(visibility, {
+    if (state !== 'restored') return;
+
+    const timer = setTimeout(() => {
+      setState((current) => (current === 'restored' ? 'hidden' : current));
+    }, 1800);
+
+    return () => clearTimeout(timer);
+  }, [state]);
+
+  useEffect(() => {
+    const animation = Animated.timing(visibility, {
       toValue: state === 'hidden' ? 0 : 1,
       duration: state === 'hidden' ? 170 : 220,
       easing: state === 'hidden' ? Easing.in(Easing.ease) : Easing.out(Easing.cubic),
       useNativeDriver: false,
-    }).start();
+    });
+    animation.start(({ finished }) => {
+      if (finished && state === 'hidden') {
+        visibility.setValue(0);
+      }
+    });
+    return () => animation.stop();
   }, [state, visibility]);
 
   const restored = state === 'restored';
-  const color = '#FFFFFF';
-  const backgroundColor = restored ? palette.success : palette.danger;
+  const backgroundColor = isDark ? '#FFFFFF' : '#111216';
+  const textColor = isDark ? '#111216' : '#FFFFFF';
+  const statusColor = restored ? palette.success : palette.danger;
   const contentHeight = 30;
   const safeBottom = Math.min(insets.bottom, 8);
 
@@ -86,8 +94,6 @@ export function NetworkStatusBanner() {
             inputRange: [0, 1],
             outputRange: [0, contentHeight + safeBottom],
           }),
-          backgroundColor,
-          paddingBottom: safeBottom,
         },
       ]}>
       <Animated.View
@@ -95,6 +101,7 @@ export function NetworkStatusBanner() {
           styles.content,
           {
             minHeight: contentHeight,
+            backgroundColor,
             opacity: visibility,
             transform: [
               {
@@ -109,12 +116,13 @@ export function NetworkStatusBanner() {
         <Ionicons
           name={restored ? 'checkmark-circle-outline' : 'cloud-offline-outline'}
           size={15}
-          color={color}
+          color={statusColor}
         />
-        <Text style={[styles.label, { color }]}>
+        <Text style={[styles.label, { color: textColor }]}>
           {restored ? 'Соединение восстановлено' : 'Нет подключения'}
         </Text>
       </Animated.View>
+      {safeBottom > 0 ? <View style={{ height: safeBottom }} /> : null}
     </Animated.View>
   );
 }

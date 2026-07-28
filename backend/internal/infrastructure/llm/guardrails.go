@@ -33,8 +33,15 @@ const (
 // the payload, then the payload is wrapped in <untrusted_input> tags that the
 // system prompt instructs the model to treat as data, never as instructions.
 func WrapUntrusted(input string) string {
-	sanitized := strings.ReplaceAll(input, untrustedOpen, "")
-	sanitized = strings.ReplaceAll(sanitized, untrustedClose, "")
+	sanitized := input
+	for {
+		cleaned := strings.ReplaceAll(sanitized, untrustedOpen, "")
+		cleaned = strings.ReplaceAll(cleaned, untrustedClose, "")
+		if cleaned == sanitized {
+			break
+		}
+		sanitized = cleaned
+	}
 	return untrustedOpen + "\n" + sanitized + "\n" + untrustedClose
 }
 

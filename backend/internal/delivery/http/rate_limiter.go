@@ -32,8 +32,18 @@ func NewSlidingWindowLimiter(window time.Duration) *SlidingWindowLimiter {
 }
 
 func (l *SlidingWindowLimiter) Allow(key string, limit int) bool {
+	return l.AllowN(key, limit, 1)
+}
+
+// AllowN atomically spends cost units from a sliding-window budget.
+// It is used for endpoints where one HTTP request can fan out into several
+// paid operations (for example, moderating ten listing images).
+func (l *SlidingWindowLimiter) AllowN(key string, limit, cost int) bool {
 	if key == "" {
 		return true
+	}
+	if limit <= 0 || cost <= 0 || cost > limit {
+		return false
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -51,12 +61,14 @@ func (l *SlidingWindowLimiter) Allow(key string, limit int) bool {
 	}
 	timestamps = timestamps[:validCount]
 
-	if len(timestamps) >= limit {
+	if len(timestamps)+cost > limit {
 		l.records[key] = timestamps
 		return false
 	}
 
-	timestamps = append(timestamps, now)
+	for i := 0; i < cost; i++ {
+		timestamps = append(timestamps, now)
+	}
 	l.records[key] = timestamps
 	return true
 }
@@ -126,7 +138,64 @@ var (
 
 	ViewIdentityLimiter = NewSlidingWindowLimiter(time.Hour)
 	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)
+
+	// Public read/proxy endpoints.
+	PublicProfileLimiter = NewSlidingWindowLimiter(time.Hour)
+	GuestRequestsLimiter = NewSlidingWindowLimiter(time.Hour)
+	CitySuggestLimiter   = NewSlidingWindowLimiter(time.Hour)
+
+	// Account-factor changes. These are separate from login OTP buckets so a
+	// legitimate login does not consume the budget for changing an account.
+	EmailChangeUserLimiter   = NewSlidingWindowLimiter(time.Hour)
+	EmailChangeTargetLimiter = NewSlidingWindowLimiter(time.Hour)
+	EmailChangeIPLimiter     = NewSlidingWindowLimiter(time.Hour)
+	VoiceFallbackLimiter     = NewSlidingWindowLimiter(24 * time.Hour)
+
+	// Upload and paid moderation endpoints.
+	MediaPresignLimiter          = NewSlidingWindowLimiter(time.Hour)
+	ListingPreviewMediaLimiter   = NewSlidingWindowLimiter(time.Hour)
+	ChatAttachmentPresignLimiter = NewSlidingWindowLimiter(time.Hour)
+	ChatMessageLimiter           = NewSlidingWindowLimiter(time.Minute)
+	ChatMediaLimiter             = NewSlidingWindowLimiter(time.Hour)
+	ListingUpdateLimiter         = NewSlidingWindowLimiter(time.Hour)
 )
+
+const (
+	publicProfilesPerIPHour       = 300
+	guestRequestListsPerGuestHour = 60
+	guestRequestListsPerIPHour    = 180
+	citySuggestionsPerIPHour      = 300
+
+	emailChangeRequestsPerUserHour   = 5
+	emailChangeRequestsPerTargetHour = 5
+	emailChangeRequestsPerIPHour     = 15
+	voiceFallbacksPerIdentityDay     = 6
+	voiceFallbacksPerIPDay           = 20
+
+	mediaPresignsPerUserHour          = 120
+	listingPreviewImagesPerUserHour   = 40
+	chatAttachmentPresignsPerUserHour = 120
+	chatMessagesPerUserMinute         = 60
+	chatMediaItemsPerUserHour         = 100
+	listingUpdatesPerUserHour         = 20
+)
+
+func writeRateLimitError(w http.ResponseWriter, message string) {
+	w.Header().Set("Retry-After", "60")
+	writeError(w, http.StatusTooManyRequests, message)
+}
+
+func allowVoiceFallback(w http.ResponseWriter, r *http.Request, identity string) bool {
+	if !VoiceFallbackLimiter.Allow("voice_fallback_identity:"+identity, voiceFallbacksPerIdentityDay) {
+		writeRateLimitError(w, "Достигнут лимит голосовых звонков. Попробуйте позже.")
+		return false
+	}
+	if !VoiceFallbackLimiter.Allow("voice_fallback_ip:"+getClientIP(r), voiceFallbacksPerIPDay) {
+		writeRateLimitError(w, "Слишком много запросов голосового звонка с вашего IP. Попробуйте позже.")
+		return false
+	}
+	return true
+}
 
 // Verification budgets per hour. maxAttempts (5) codes' worth of guesses per
 // identifier leaves ordinary mistyping unaffected — a real user needs a handful

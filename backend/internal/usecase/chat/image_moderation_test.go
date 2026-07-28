@@ -30,7 +30,11 @@ func (r *imageChatRepo) CheckChatUploadOwnership(context.Context, int32, []strin
 func (r *imageChatRepo) GetChatUploads(_ context.Context, userID int32, keys []string) ([]domain.ChatUpload, error) {
 	uploads := make([]domain.ChatUpload, 0, len(keys))
 	for _, key := range keys {
-		uploads = append(uploads, domain.ChatUpload{ObjectKey: key, OwnerID: userID})
+		uploads = append(uploads, domain.ChatUpload{
+			ObjectKey: key,
+			OwnerID:   userID,
+			MimeType:  "image/jpeg",
+		})
 	}
 	return uploads, nil
 }

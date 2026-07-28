@@ -15,9 +15,9 @@ import (
 )
 
 func TestReviewEditAttemptsFlow(t *testing.T) {
-	dbURL := os.Getenv("DATABASE_URL")
+	dbURL := os.Getenv("REVIEW_TEST_DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:MadLust20@localhost:5432/ce76279_sutki?sslmode=disable"
+		t.Skip("REVIEW_TEST_DATABASE_URL is not set")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

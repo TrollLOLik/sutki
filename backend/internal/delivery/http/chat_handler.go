@@ -422,6 +422,19 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	limiterKey := strconv.FormatInt(int64(userID), 10)
+	if !ChatMessageLimiter.Allow("chat_message_user:"+limiterKey, chatMessagesPerUserMinute) {
+		writeRateLimitError(w, "Слишком много сообщений. Подождите немного.")
+		return
+	}
+	if len(req.Attachments) > 0 && !ChatMediaLimiter.AllowN(
+		"chat_media_user:"+limiterKey,
+		chatMediaItemsPerUserHour,
+		len(req.Attachments),
+	) {
+		writeRateLimitError(w, "Достигнут лимит отправки медиа. Попробуйте позже.")
+		return
+	}
 
 	msg, err := h.svc.SendMessage(r.Context(), userID, convID, req.Body, req.ReplyToMessageID, req.Attachments)
 	if err != nil {
@@ -436,6 +449,8 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Сообщение слишком длинное — не больше 4000 символов.")
 		case errors.Is(err, chat.ErrInvalidAttachment):
 			writeError(w, http.StatusBadRequest, "Некорректное вложение. Выберите файл ещё раз.")
+		case errors.Is(err, chat.ErrFileContentNotAllowed):
+			writeError(w, http.StatusUnprocessableEntity, "Содержимое файла не соответствует его типу или файл повреждён. Выберите другой файл.")
 		case errors.Is(err, chat.ErrAttachmentTooLarge):
 			writeError(w, http.StatusBadRequest, "Файл слишком большой: до 15 МБ для фото и документов, до 50 МБ для видео.")
 		case errors.Is(err, chat.ErrTooManyAttachments):
@@ -637,6 +652,13 @@ func (h *ChatHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if !ChatAttachmentPresignLimiter.Allow(
+		"chat_presign_user:"+strconv.FormatInt(int64(userID), 10),
+		chatAttachmentPresignsPerUserHour,
+	) {
+		writeRateLimitError(w, "Слишком много загрузок в чат. Попробуйте позже.")
 		return
 	}
 

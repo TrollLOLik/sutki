@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -59,6 +61,12 @@ func (c *Client) Send(ctx context.Context, text string) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			// url.Error includes the request URL, and Telegram puts the bot
+			// token in that URL. Keep only the underlying transport failure.
+			return fmt.Errorf("send telegram message: %w", urlErr.Err)
+		}
 		return fmt.Errorf("send telegram message: %w", err)
 	}
 	defer resp.Body.Close()

@@ -226,6 +226,37 @@ func (s *S3Storage) ReadObject(ctx context.Context, key string, maxBytes int64) 
 	return domain.ObjectData{Bytes: data, ContentType: contentType}, nil
 }
 
+// ReadObjectPrefix reads a bounded byte range from the beginning of an object.
+// Content sniffing needs only a few kilobytes and must not pull a 50 MB video
+// into the API process before it can decide how the object should be handled.
+func (s *S3Storage) ReadObjectPrefix(ctx context.Context, key string, maxBytes int64) (domain.ObjectData, error) {
+	if maxBytes <= 0 {
+		return domain.ObjectData{}, fmt.Errorf("invalid object prefix read limit")
+	}
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+		Range:  aws.String(fmt.Sprintf("bytes=0-%d", maxBytes-1)),
+	})
+	if err != nil {
+		return domain.ObjectData{}, err
+	}
+	defer out.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(out.Body, maxBytes+1))
+	if err != nil {
+		return domain.ObjectData{}, err
+	}
+	if int64(len(data)) > maxBytes {
+		return domain.ObjectData{}, fmt.Errorf("object prefix exceeds %d byte read limit", maxBytes)
+	}
+	contentType := ""
+	if out.ContentType != nil {
+		contentType = strings.TrimSpace(*out.ContentType)
+	}
+	return domain.ObjectData{Bytes: data, ContentType: contentType}, nil
+}
+
 func (s *S3Storage) PublicURL(key string) string {
 	key = strings.TrimLeft(strings.TrimSpace(key), "/")
 	if s.publicURL != "" {

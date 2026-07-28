@@ -94,6 +94,43 @@ func (r *PhoneChallengeRepo) BeginDelivery(ctx context.Context, challengeID, pro
 		return domain.PhoneChallengeDelivery{}, err
 	}
 	defer tx.Rollback(ctx)
+	if mode == domain.PhoneDeliveryModeVoice {
+		var phone string
+		err = tx.QueryRow(ctx, `SELECT phone_normalized
+FROM phone_auth_challenge
+WHERE id=$1::uuid AND status='ready_for_verification'
+FOR UPDATE`, challengeID).Scan(&phone)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.PhoneChallengeDelivery{}, domain.ErrCodeInvalid
+		}
+		if err != nil {
+			return domain.PhoneChallengeDelivery{}, err
+		}
+
+		// Serialize the number-wide daily budget across challenges and API
+		// replicas. Every provider attempt counts, including failed ones: the
+		// purpose is to prevent a caller from buying an unbounded call stream.
+		if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 7142026))`, phone); err != nil {
+			return domain.PhoneChallengeDelivery{}, err
+		}
+		var challengeCount, dailyPhoneCount int
+		if err = tx.QueryRow(ctx, `SELECT count(*)
+FROM phone_auth_delivery
+WHERE challenge_id=$1::uuid AND mode='voice'`, challengeID).Scan(&challengeCount); err != nil {
+			return domain.PhoneChallengeDelivery{}, err
+		}
+		if err = tx.QueryRow(ctx, `SELECT count(*)
+FROM phone_auth_delivery d
+JOIN phone_auth_challenge c ON c.id=d.challenge_id
+WHERE c.phone_normalized=$1
+  AND d.mode='voice'
+  AND d.created_at > now() - interval '24 hours'`, phone).Scan(&dailyPhoneCount); err != nil {
+			return domain.PhoneChallengeDelivery{}, err
+		}
+		if challengeCount >= 3 || dailyPhoneCount >= 6 {
+			return domain.PhoneChallengeDelivery{}, domain.ErrVoiceFallbackLimit
+		}
+	}
 	result, err := tx.Exec(ctx, `UPDATE phone_auth_challenge SET status='delivery_pending',delivery_mode=$2,pending_until=$3,updated_at=now() WHERE id=$1::uuid AND status='ready_for_verification'`, challengeID, mode, pendingUntil)
 	if err != nil {
 		return domain.PhoneChallengeDelivery{}, err

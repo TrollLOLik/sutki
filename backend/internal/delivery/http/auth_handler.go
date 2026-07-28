@@ -268,6 +268,10 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 // PublicProfile returns the non-sensitive fields used by public profile screens.
 func (h *AuthHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
+	if !PublicProfileLimiter.Allow("public_profile_ip:"+getClientIP(r), publicProfilesPerIPHour) {
+		writeRateLimitError(w, "Слишком много запросов профилей. Попробуйте позже.")
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid user id")
@@ -374,6 +378,8 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusTooManyRequests, "too many attempts")
 	case errors.Is(err, domain.ErrCodeRequestTooSoon):
 		writeError(w, http.StatusTooManyRequests, "please wait before requesting a new code")
+	case errors.Is(err, domain.ErrVoiceFallbackLimit):
+		writeRateLimitError(w, "Достигнут лимит голосовых звонков. Попробуйте позже.")
 	case errors.Is(err, domain.ErrTokenInvalid):
 		writeError(w, http.StatusUnauthorized, "invalid token")
 	case errors.Is(err, domain.ErrReauthRequired):
@@ -400,6 +406,20 @@ func (h *AuthHandler) RequestNewEmailCode(w http.ResponseWriter, r *http.Request
 	}
 	if !decodeJSON(w, r, &body) {
 		return
+	}
+	if !h.svc.ExposeCode() {
+		email, err := auth.NormalizeEmail(body.NewEmail)
+		if err != nil {
+			writeAuthError(w, r, err)
+			return
+		}
+		uid := strconv.FormatInt(int64(userID), 10)
+		if !EmailChangeUserLimiter.Allow("email_change_user:"+uid, emailChangeRequestsPerUserHour) ||
+			!EmailChangeTargetLimiter.Allow("email_change_target:"+email, emailChangeRequestsPerTargetHour) ||
+			!EmailChangeIPLimiter.Allow("email_change_ip:"+getClientIP(r), emailChangeRequestsPerIPHour) {
+			writeRateLimitError(w, "Слишком много запросов смены почты. Попробуйте позже.")
+			return
+		}
 	}
 	res, err := h.svc.RequestNewEmailCode(r.Context(), userID, body.TempToken, body.NewEmail)
 	if err != nil {
@@ -832,6 +852,16 @@ func (h *AuthHandler) fallbackCodePhone(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &body) {
 		return
 	}
+	if !h.svc.ExposeCode() {
+		phone, err := auth.NormalizePhone(body.Phone)
+		if err != nil {
+			writeAuthError(w, r, err)
+			return
+		}
+		if !allowVoiceFallback(w, r, "phone:"+phone) {
+			return
+		}
+	}
 	res, err := h.svc.RequestPhoneVoiceFallback(r.Context(), body.Phone, body.ChallengeID, domain.PhoneChallengePurposeLogin, nil)
 	if err != nil {
 		log.Printf("fallbackCodePhone error: %v", err)
@@ -932,6 +962,16 @@ func (h *AuthHandler) changePhoneFallback(w http.ResponseWriter, r *http.Request
 	}
 	if !decodeJSON(w, r, &body) {
 		return
+	}
+	if !h.svc.ExposeCode() {
+		phone, err := auth.NormalizePhone(body.Phone)
+		if err != nil {
+			writeAuthError(w, r, err)
+			return
+		}
+		if !allowVoiceFallback(w, r, "phone:"+phone) {
+			return
+		}
 	}
 	res, err := h.svc.RequestPhoneVoiceFallback(r.Context(), body.Phone, body.ChallengeID, domain.PhoneChallengePurposeChangePhone, &userID)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
@@ -230,7 +231,7 @@ type reviewVerdict struct {
 	Confidence float32 `json:"confidence"`
 }
 
-const reviewModerationPrompt = `Ты модерируешь отзывы и ответы владельцев на российской платформе аренды жилья. Верни только JSON: {"decision":"approve|approve_masked|reject|review","category":"clean|profanity|abuse|privacy|spam|off_topic","reason":"краткая причина","confidence":0.0}.
+const reviewModerationPrompt = `Ты модерируешь отзывы и ответы владельцев на российской платформе аренды жилья. Верни только JSON: {"decision":"approve|approve_masked|reject|review","category":"clean|profanity|abuse|privacy|spam|off_topic","reason":"краткая причина","confidence":0.95}. confidence — реальная уверенность в диапазоне 0.0–1.0, а не фиксированное значение.
 approve — безопасный содержательный текст. approve_masked — содержательный текст с легкой ненормативной лексикой, если система сообщила, что детерминированная маска доступна. reject — угрозы, травля, дискриминация, публикация контактов, спам либо текст, состоящий из оскорблений без полезного опыта. review используй только при реальной неоднозначности. Никогда не переписывай и не возвращай пользовательский текст.`
 
 func (s *Service) StartWorker(ctx context.Context) {
@@ -293,8 +294,15 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 	if err != nil {
 		return err
 	}
-	input := fmt.Sprintf("Тип: %s\nPrefilter: %s\nДетерминированная маска доступна: %t\n<user_content>\n%s\n</user_content>", target.TargetType, strings.Join(target.Categories, ","), target.MaskedBody != "" && target.MaskedBody != target.Body, target.Body)
-	answer, err := s.llm.Generate(ctx, reviewModerationPrompt, input, 220, 0)
+	input := fmt.Sprintf(
+		"Тип: %s\nPrefilter: %s\nДетерминированная маска доступна: %t\nТекст пользователя:\n%s",
+		target.TargetType,
+		strings.Join(target.Categories, ","),
+		target.MaskedBody != "" && target.MaskedBody != target.Body,
+		llm.WrapUntrusted(llm.ScrubPII(target.Body)),
+	)
+	systemPrompt := reviewModerationPrompt + llm.UntrustedInputRule
+	answer, err := s.llm.Generate(ctx, systemPrompt, input, 220, 0)
 	if err != nil {
 		return err
 	}
@@ -303,7 +311,7 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 		return err
 	}
 	if verdict.Decision == "review" {
-		second, secondErr := s.llm.Generate(ctx, reviewModerationPrompt+"\nЭто повторная строгая проверка. Выбери approve/reject/approve_masked, если это безопасно; review оставь только для действительно неразрешимого случая.", input, 220, 0)
+		second, secondErr := s.llm.Generate(ctx, systemPrompt+"\nЭто независимая повторная проверка. Не склоняйся к одобрению: при неоднозначности или уверенности ниже 0.8 оставь decision=review.", input, 220, 0)
 		if secondErr == nil {
 			if parsed, parseErr := parseReviewVerdict(second); parseErr == nil {
 				verdict = parsed
@@ -316,6 +324,7 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 		verdict.Category = "unsafe_mask"
 		verdict.Reason = "Текст содержит выражения, которые не удалось безопасно скрыть"
 	}
+	verdict = applyReviewConfidencePolicy(verdict)
 	raw, _ := json.Marshal(map[string]string{"answer": answer})
 	if err = s.repo.CompleteModeration(ctx, job, verdict.Decision, verdict.Category, verdict.Reason, verdict.Confidence, raw); err != nil {
 		return err
@@ -387,7 +396,19 @@ func parseReviewVerdict(answer string) (reviewVerdict, error) {
 	default:
 		return verdict, fmt.Errorf("invalid review decision %q", verdict.Decision)
 	}
+	if verdict.Confidence < 0 || verdict.Confidence > 1 {
+		return verdict, fmt.Errorf("invalid review confidence %v", verdict.Confidence)
+	}
 	return verdict, nil
+}
+
+func applyReviewConfidencePolicy(verdict reviewVerdict) reviewVerdict {
+	if (verdict.Decision == "approve" || verdict.Decision == "approve_masked") && verdict.Confidence < 0.8 {
+		verdict.Decision = "review"
+		verdict.Category = "low_confidence"
+		verdict.Reason = "Недостаточная уверенность автоматической проверки"
+	}
+	return verdict
 }
 
 func (s *Service) processSummaries(ctx context.Context) {

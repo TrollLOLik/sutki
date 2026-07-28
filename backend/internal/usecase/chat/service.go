@@ -108,6 +108,9 @@ var (
 	// ErrFileTypeNotAllowed is returned by PresignUpload for non-whitelisted
 	// content types.
 	ErrFileTypeNotAllowed = errors.New("file type not allowed")
+	// ErrFileContentNotAllowed is returned when the immutable object's bytes
+	// do not match the type registered when the upload capability was issued.
+	ErrFileContentNotAllowed = errors.New("file content does not match its declared type")
 	// ErrTooManyAttachments is returned when a single message carries more than
 	// maxAttachmentsPerMessage files.
 	ErrTooManyAttachments = errors.New("too many attachments in one message")
@@ -244,11 +247,8 @@ func (s *Service) SetAttachmentModerationQueue(queue AttachmentModerationQueue, 
 	s.attachmentWaker = waker
 }
 
-// moderationKind maps a verified content type to how it must be inspected, or
-// "" when no media check applies (documents).
-//
-// The content type comes from StatObject — what the bytes actually are — not
-// from the client's claim.
+// moderationKind maps a byte-sniffed content type to how it must be inspected,
+// or "" when no media check applies (documents).
 func moderationKind(contentType string) string {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
 	switch {
@@ -549,6 +549,12 @@ func visibleAttachments(msg domain.Message, viewerID int32) []domain.MessageAtta
 	isSender := msg.SenderID != nil && *msg.SenderID == viewerID
 	out := make([]domain.MessageAttachment, 0, len(msg.Attachments))
 	for _, att := range msg.Attachments {
+		// A policy rejection is reported through the sender-only realtime event
+		// and modal. It is retained in storage for audit, not rendered as a chat
+		// message that looks manually deletable.
+		if att.ModerationStatus == domain.AttachmentModerationRejected {
+			continue
+		}
 		if !isSender && att.ModerationStatus != domain.AttachmentModerationApproved {
 			continue
 		}
@@ -558,12 +564,20 @@ func visibleAttachments(msg domain.Message, viewerID int32) []domain.MessageAtta
 }
 
 // messageVisibleToViewer hides a media message from its recipient until every
-// attachment has a verdict. If every media item was rejected, the caption is
-// hidden too: it was submitted as one message and must not turn into an
-// unexpected text-only delivery.
+// attachment has a verdict. An all-rejected message is hidden from both sides:
+// the sender receives a modal explanation instead, and the caption must not
+// turn into an unexpected text-only delivery.
 func messageVisibleToViewer(msg domain.Message, viewerID int32) bool {
-	if msg.SenderID == nil || *msg.SenderID == viewerID || len(msg.Attachments) == 0 {
+	if msg.SenderID == nil || len(msg.Attachments) == 0 {
 		return true
+	}
+	if *msg.SenderID == viewerID {
+		for _, att := range msg.Attachments {
+			if att.ModerationStatus != domain.AttachmentModerationRejected {
+				return true
+			}
+		}
+		return false
 	}
 	if hasPendingAttachments(msg) {
 		return false
@@ -807,7 +821,10 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 			return domain.Message{}, ErrInvalidAttachment
 		}
 
-		var sealed media.SealedObject
+		var (
+			sealed            media.SealedObject
+			shouldPersistSeal bool
+		)
 		if upload.SealedKey != "" {
 			if upload.ContentETag == "" ||
 				!media.IsSealedOwnedKey(upload.SealedKey, sealedAttachmentKeyKind, userID) {
@@ -852,25 +869,35 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 				_ = s.storage.Delete(ctx, att.URL)
 				return domain.Message{}, ErrAttachmentTooLarge
 			}
-			if err := s.repo.SealChatUpload(
-				ctx,
-				userID,
-				att.URL,
-				sealed.Key,
-				sealed.Info.ETag,
-			); err != nil {
-				if sealed.Created {
-					_ = s.storage.Delete(ctx, sealed.Key)
-				}
-				if errors.Is(err, domain.ErrChatUploadNotOwned) {
-					return domain.Message{}, ErrInvalidAttachment
-				}
-				return domain.Message{}, err
-			}
-			sourceKeysToDelete = append(sourceKeysToDelete, att.URL)
+			shouldPersistSeal = true
 		}
 
 		info := sealed.Info
+		detectedType, err := detectStoredAttachmentType(
+			ctx,
+			s.storage,
+			sealed.Key,
+			info,
+			upload.MimeType,
+		)
+		if err != nil {
+			if errors.Is(err, ErrFileContentNotAllowed) {
+				// A newly created immutable snapshot has no legitimate reader
+				// yet, so remove both copies. Existing sealed objects may be
+				// referenced by older messages and must not be destroyed here.
+				if sealed.Created {
+					if delErr := s.storage.Delete(ctx, sealed.Key); delErr != nil {
+						log.Printf("[Chat] Failed to delete invalid sealed attachment %q: %v", sealed.Key, delErr)
+					}
+					if delErr := s.storage.Delete(ctx, att.URL); delErr != nil {
+						log.Printf("[Chat] Failed to delete invalid upload %q: %v", att.URL, delErr)
+					}
+				}
+			}
+			return domain.Message{}, fmt.Errorf("inspect chat attachment content: %w", err)
+		}
+		info.ContentType = detectedType
+
 		// Enforce the size limit against the actual uploaded object, not a
 		// client-claimed size. Presigned PUT cannot cap upload size, so a
 		// client could push an oversized object; reject it and delete the
@@ -894,6 +921,24 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 				log.Printf("[Chat] Failed to delete oversized upload %q: %v", att.URL, delErr)
 			}
 			return domain.Message{}, ErrAttachmentTooLarge
+		}
+		if shouldPersistSeal {
+			if err := s.repo.SealChatUpload(
+				ctx,
+				userID,
+				att.URL,
+				sealed.Key,
+				sealed.Info.ETag,
+			); err != nil {
+				if sealed.Created {
+					_ = s.storage.Delete(ctx, sealed.Key)
+				}
+				if errors.Is(err, domain.ErrChatUploadNotOwned) {
+					return domain.Message{}, ErrInvalidAttachment
+				}
+				return domain.Message{}, err
+			}
+			sourceKeysToDelete = append(sourceKeysToDelete, att.URL)
 		}
 		// Recipients and moderation read only the immutable object. UploadKey
 		// remains the ownership/refcount identity in the database.

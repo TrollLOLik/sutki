@@ -16,6 +16,9 @@ var (
 	// ErrCodeRequestTooSoon is returned when a code is re-requested within the cooldown.
 	ErrCodeRequestTooSoon   = errors.New("code requested too soon")
 	ErrPhoneChallengeActive = errors.New("phone challenge already active")
+	// ErrVoiceFallbackLimit is a durable provider-cost budget. Unlike the
+	// process-local HTTP limiter, it survives restarts and works across replicas.
+	ErrVoiceFallbackLimit = errors.New("voice fallback limit reached")
 	// ErrTokenInvalid is returned for an invalid/expired/revoked refresh token.
 	ErrTokenInvalid = errors.New("invalid token")
 	// ErrInvalidEmail is returned when an email fails validation.

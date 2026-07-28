@@ -141,23 +141,17 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Get("/me/email-preferences", emailHandler.GetPreferences)
 			r.Put("/me/email-preferences", emailHandler.UpdatePreferences)
 			r.Route("/requests", func(r chi.Router) {
-				// Authenticated sub-routes
-				r.Group(func(r chi.Router) {
-					r.Use(AuthMiddleware(authSvc.TokenManager(), authSvc))
-					r.Get("/", bookingHandler.listMine)
-					r.Get("/incoming", bookingHandler.listIncoming)
-					r.Post("/{id}/confirm", bookingHandler.confirm)
-					r.Post("/{id}/reject", bookingHandler.reject)
-					r.Post("/{id}/review", reviewHandler.Create)
-					r.Get("/{id}/review-eligibility", reviewHandler.Eligibility)
-				})
-
-				// Optional auth wildcard sub-routes (declared AFTER static sub-routes)
-				r.Group(func(r chi.Router) {
-					r.Use(OptionalAuthMiddleware(authSvc.TokenManager(), authSvc))
-					r.Get("/{id}", bookingHandler.get)
-					r.Post("/{id}/cancel", bookingHandler.cancel)
-				})
+				// The parent group is already authenticated. Keep every booking
+				// operation in that single security context so a later route
+				// refactor cannot accidentally expose wildcard endpoints.
+				r.Get("/", bookingHandler.listMine)
+				r.Get("/incoming", bookingHandler.listIncoming)
+				r.Post("/{id}/confirm", bookingHandler.confirm)
+				r.Post("/{id}/reject", bookingHandler.reject)
+				r.Post("/{id}/review", reviewHandler.Create)
+				r.Get("/{id}/review-eligibility", reviewHandler.Eligibility)
+				r.Get("/{id}", bookingHandler.get)
+				r.Post("/{id}/cancel", bookingHandler.cancel)
 			})
 			r.Route("/favorites", favoriteHandler.Routes)
 			r.Route("/chat", chatHandler.Routes)

@@ -219,7 +219,13 @@ export default function ChatDialogScreen() {
 	const { mutate: performDeleteMessage } = useDeleteMessage(convID);
 
 	const messages = React.useMemo(
-		() => data?.pages.flat().filter(Boolean) ?? [],
+		() =>
+			(data?.pages.flat().filter(Boolean) ?? []).filter((message) => {
+				if (!message.attachments?.length) return true;
+				return message.attachments.some(
+					(attachment) => attachment.moderation_status !== 'rejected',
+				);
+			}),
 		[data?.pages],
 	);
 
@@ -757,17 +763,14 @@ export default function ChatDialogScreen() {
 				return;
 			}
 
-			// Все изменения статуса вложения приходят только отправителю, пока
-			// файл не одобрен. Policy-reject дополнительно объясняем диалогом;
-			// временный сбой остаётся внутри пузыря с кнопкой повтора.
+			// Policy-reject объясняет глобальный AppAlert на личном канале.
+			// Здесь только обновляем ленту: отклонённый файл не должен оставаться
+			// отдельным сообщением. Временный сбой остаётся с кнопкой повтора.
 			if (
 				payload.type === 'attachment.rejected' ||
 				payload.type === 'attachment.failed' ||
 				payload.type === 'attachment.retrying'
 			) {
-				if (payload.type === 'attachment.rejected' && payload.reason) {
-					Alert.alert('Вложение не отправлено', payload.reason);
-				}
 				refetch();
 				return;
 			}

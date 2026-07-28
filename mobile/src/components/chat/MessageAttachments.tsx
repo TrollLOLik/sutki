@@ -121,38 +121,6 @@ export function FailedOverlay({
 	);
 }
 
-function RejectedAttachment({ attachment, isMine }: { attachment: ChatAttachment; isMine: boolean }) {
-	const { palette } = useAppTheme();
-	const isVideo = isVideoAttachment(attachment);
-	const title = isVideo ? 'Видео не отправлено' : 'Фото не отправлено';
-	const foreground = isMine ? '#FFFFFF' : palette.danger;
-	const secondary = isMine ? 'rgba(255,255,255,0.78)' : palette.inkSecondary;
-
-	return (
-		<View
-			style={[
-				styles.rejectedAttachment,
-				{
-					backgroundColor: isMine ? 'rgba(40, 10, 8, 0.24)' : palette.dangerLight,
-					borderColor: isMine ? 'rgba(255,255,255,0.24)' : palette.danger,
-				},
-			]}
-			accessibilityRole="alert"
-			accessibilityLabel={`${title}. ${attachment.moderation_reason || 'Вложение не прошло проверку модерации.'}`}
-		>
-			<View style={[styles.rejectedIcon, { backgroundColor: isMine ? 'rgba(255,255,255,0.12)' : palette.surface }]}>
-				<Ionicons name="alert-circle-outline" size={21} color={foreground} />
-			</View>
-			<View style={styles.rejectedCopy}>
-				<Text style={[styles.rejectedTitle, { color: foreground }]}>{title}</Text>
-				<Text style={[styles.rejectedReason, { color: secondary }]}>
-					{attachment.moderation_reason || 'Вложение не прошло проверку модерации.'}
-				</Text>
-			</View>
-		</View>
-	);
-}
-
 interface DocumentAttachmentProps {
 	attachment: ChatAttachment;
 	/** Своё сообщение — меняет контрастность на фоне primary-пузыря. */
@@ -250,26 +218,21 @@ export function MessageAttachments({
 	// Три группы вместо двух: видео показывается обложкой с Play, и в сетку
 	// альбома не идёт — обрезать кадр в квадрат и терять кнопку воспроизведения
 	// бессмысленно.
-	const { rejected, images, videos, documents } = React.useMemo(() => {
-		const rejected: ChatAttachment[] = [];
+	const { images, videos, documents } = React.useMemo(() => {
 		const images: ChatAttachment[] = [];
 		const videos: ChatAttachment[] = [];
 		const documents: ChatAttachment[] = [];
 		for (const att of attachments) {
-			if (isRejectedAttachment(att)) rejected.push(att);
+			if (isRejectedAttachment(att)) continue;
 			else if (isImageAttachment(att)) images.push(att);
 			else if (isVideoAttachment(att)) videos.push(att);
 			else documents.push(att);
 		}
-		return { rejected, images, videos, documents };
+		return { images, videos, documents };
 	}, [attachments]);
 
 	return (
 		<>
-			{rejected.map((att) => (
-				<RejectedAttachment key={att.id} attachment={att} isMine={isMine} />
-			))}
-
 			{images.length === 1 ? (
 				<ImageAttachment
 					attachment={images[0]}
@@ -372,36 +335,5 @@ const styles = StyleSheet.create({
 		color: '#FFFFFF',
 		fontSize: 11,
 		fontWeight: '800',
-	},
-	rejectedAttachment: {
-		width: 238,
-		minHeight: 76,
-		marginBottom: 4,
-		padding: 12,
-		borderRadius: 16,
-		borderWidth: 1,
-		flexDirection: 'row',
-		alignItems: 'flex-start',
-	},
-	rejectedIcon: {
-		width: 38,
-		height: 38,
-		borderRadius: 19,
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	rejectedCopy: {
-		flex: 1,
-		marginLeft: 10,
-	},
-	rejectedTitle: {
-		fontSize: 13,
-		fontWeight: '800',
-	},
-	rejectedReason: {
-		marginTop: 3,
-		fontSize: 11,
-		lineHeight: 15,
-		fontWeight: '500',
 	},
 });

@@ -204,10 +204,10 @@ export function mergeChatMessage(previous: ChatMessage, updated: ChatMessage): C
 	}
 
 	// The shared conversation channel carries only recipient-safe attachments.
-	// Preserve sender-only rejection tombstones until the authoritative history
-	// refetch arrives, otherwise the reason briefly disappears on mixed albums.
+	// Preserve retryable failed media until the authoritative history refetch
+	// arrives. Policy rejections are modal-only and must disappear from the chat.
 	const senderOnly = previous.attachments?.filter(
-		(att) => att.moderation_status === 'rejected' || att.moderation_status === 'failed',
+		(att) => att.moderation_status === 'failed',
 	);
 	if (senderOnly?.length && updated.attachments) {
 		const updatedIDs = new Set(updated.attachments.map((att) => att.id));

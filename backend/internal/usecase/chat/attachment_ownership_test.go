@@ -384,7 +384,7 @@ func TestPresignedUploadCanBeAttachedOnlyByItsRegisteredOwner(t *testing.T) {
 // the last two have no server-side source at send time and must be cleared —
 // thumbnail_url especially, since the recipient's device fetches it.
 func TestSendMessage_DropsClientSuppliedMediaMetadata(t *testing.T) {
-	repo := &fakeChatRepo{}
+	repo := &fakeChatRepo{defaultMimeType: "video/mp4"}
 	svc := &Service{repo: repo, storage: &fakeAttachmentStorage{contentType: "video/mp4"}}
 
 	lie := int32(999999)
@@ -474,7 +474,7 @@ func TestSendMessage_SizeLimitMatchesTheOneItSigned(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			key := attachmentKey(aliceID, strings.Repeat("a", 32), "")
-			repo := &fakeChatRepo{}
+			repo := &fakeChatRepo{defaultMimeType: tc.contentType}
 			storage := &fakeAttachmentStorage{contentType: tc.contentType, size: tc.size}
 			svc := &Service{repo: repo, storage: storage}
 
@@ -687,6 +687,7 @@ const fakeObjectSize int64 = 4096
 type fakeAttachmentStorage struct {
 	domain.FileStorage
 	contentType string
+	objectBytes []byte
 	size        int64 // 0 means fakeObjectSize
 	statCalls   int
 	deleted     []string
@@ -749,11 +750,13 @@ func (s *presignErrorStorage) PresignGet(_ context.Context, key string, _ time.D
 // be written.
 type fakeChatRepo struct {
 	domain.ChatRepository
-	persisted      []domain.MessageAttachment
-	uploads        map[string]int32
-	sealedKeys     map[string]string
-	sealedETags    map[string]string
-	enforceUploads bool
+	persisted       []domain.MessageAttachment
+	uploads         map[string]int32
+	uploadMimeTypes map[string]string
+	sealedKeys      map[string]string
+	sealedETags     map[string]string
+	defaultMimeType string
+	enforceUploads  bool
 }
 
 func (r *fakeChatRepo) CheckParticipantExists(_ context.Context, _ int64, _ int32) (bool, error) {
@@ -771,8 +774,10 @@ func (r *fakeChatRepo) GetOtherParticipantID(_ context.Context, _ int64, _ int32
 func (r *fakeChatRepo) RegisterChatUpload(_ context.Context, upload domain.ChatUpload) error {
 	if r.uploads == nil {
 		r.uploads = make(map[string]int32)
+		r.uploadMimeTypes = make(map[string]string)
 	}
 	r.uploads[upload.ObjectKey] = upload.OwnerID
+	r.uploadMimeTypes[upload.ObjectKey] = upload.MimeType
 	return nil
 }
 
@@ -786,9 +791,17 @@ func (r *fakeChatRepo) GetChatUploads(_ context.Context, userID int32, keys []st
 				continue
 			}
 		}
+		mimeType := r.uploadMimeTypes[key]
+		if mimeType == "" {
+			mimeType = r.defaultMimeType
+		}
+		if mimeType == "" {
+			mimeType = "image/jpeg"
+		}
 		uploads = append(uploads, domain.ChatUpload{
 			ObjectKey:   key,
 			OwnerID:     ownerID,
+			MimeType:    mimeType,
 			SealedKey:   r.sealedKeys[key],
 			ContentETag: r.sealedETags[key],
 		})

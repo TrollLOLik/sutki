@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,5 +47,21 @@ func TestClientSendReturnsTelegramError(t *testing.T) {
 	client := NewClient(Config{BotToken: "test-token", ChatID: "bad", Timeout: time.Second, BaseURL: server.URL})
 	if err := client.Send(context.Background(), "test"); err == nil {
 		t.Fatal("expected Telegram error")
+	}
+}
+
+func TestClientSendDoesNotExposeBotTokenOnTransportError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	baseURL := server.URL
+	server.Close()
+
+	const token = "super-secret-bot-token"
+	client := NewClient(Config{BotToken: token, ChatID: "-100123", Timeout: time.Second, BaseURL: baseURL})
+	err := client.Send(context.Background(), "test")
+	if err == nil {
+		t.Fatal("expected transport error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("transport error exposed bot token: %v", err)
 	}
 }

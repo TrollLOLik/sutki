@@ -25,6 +25,12 @@ type ObjectData struct {
 	ContentType string
 }
 
+// ObjectPrefixReader is an optional storage capability for content sniffing.
+// It avoids downloading an entire video merely to inspect its signature.
+type ObjectPrefixReader interface {
+	ReadObjectPrefix(ctx context.Context, key string, maxBytes int64) (ObjectData, error)
+}
+
 // FileStorage defines the port for S3-compatible object storage
 type FileStorage interface {
 	PresignUpload(ctx context.Context, key string, maxBytes int64, contentType string) (UploadTarget, error)

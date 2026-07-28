@@ -279,7 +279,11 @@ func (h *BookingHandler) listIncoming(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) get(w http.ResponseWriter, r *http.Request) {
-	userID, _ := userIDFromContext(r.Context())
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	guestID := r.Header.Get("X-Guest-Id")
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 {
@@ -327,7 +331,11 @@ func (h *BookingHandler) reject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookingHandler) cancel(w http.ResponseWriter, r *http.Request) {
-	userID, _ := userIDFromContext(r.Context())
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	guestID := r.Header.Get("X-Guest-Id")
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
 	if err != nil || id <= 0 {
@@ -346,6 +354,11 @@ func (h *BookingHandler) ListGuest(w http.ResponseWriter, r *http.Request) {
 	guestID := r.Header.Get("X-Guest-Id")
 	if guestID == "" {
 		writeError(w, http.StatusBadRequest, "X-Guest-Id header is required")
+		return
+	}
+	if !GuestRequestsLimiter.Allow("guest_requests_guest:"+guestID, guestRequestListsPerGuestHour) ||
+		!GuestRequestsLimiter.Allow("guest_requests_ip:"+getClientIP(r), guestRequestListsPerIPHour) {
+		writeRateLimitError(w, "Слишком много запросов заявок. Попробуйте позже.")
 		return
 	}
 	res, err := h.svc.ListGuest(r.Context(), guestID, parseInt32(r.URL.Query().Get("limit"), 0), parseInt32(r.URL.Query().Get("offset"), 0))
