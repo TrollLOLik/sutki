@@ -33,13 +33,41 @@ Never remove that volume on a populated server.
 
 ## Nginx and TLS
 
-Install host Nginx and Certbot, copy `nginx/titop-arenda.conf` to
+Install host Nginx and Certbot, copy `deploy/nginx/titop-arenda.conf` to
 `/etc/nginx/sites-available/titop-arenda`, symlink it into `sites-enabled`,
 then validate with `sudo nginx -t` and reload Nginx. Issue certificates only
 after both DNS records resolve to the VPS:
 
 ```bash
 sudo certbot --nginx -d arenda.titop.ru -d errors.titop.ru
+```
+
+After Certbot creates the HTTPS server blocks, install the shared TLS security
+snippet and include it inside **both** `listen 443 ssl` blocks:
+
+```bash
+sudo cp deploy/nginx/titop-arenda-tls-security.conf \
+  /etc/nginx/snippets/titop-arenda-tls-security.conf
+```
+
+On an existing server, do not copy the baseline HTTP config over the live
+Certbot-managed file. Edit `/etc/nginx/sites-available/titop-arenda` in place.
+Add this line near the certificate directives in both HTTPS blocks:
+
+```nginx
+include /etc/nginx/snippets/titop-arenda-tls-security.conf;
+```
+
+Do not add `includeSubDomains` or `preload`: `titop.ru` is shared with other
+products, and either directive would make HTTPS mandatory for all of their
+subdomains too. Validate and reload after editing:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+curl -fsSI https://arenda.titop.ru/healthz | grep -i strict-transport-security
+curl -fsSI https://errors.titop.ru/ | grep -i strict-transport-security
+sudo certbot renew --dry-run
 ```
 
 ## Health checks

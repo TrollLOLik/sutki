@@ -559,15 +559,15 @@ export default function SearchScreen() {
           )}
         />
       ) : isError ? (
-        <View style={{ paddingTop: listPaddingTop }} className="flex-1 gap-4 px-4">
+        <View style={{ paddingTop: listPaddingTop }} className="flex-1 px-4">
           <EmptyState
             icon="cloud-offline-outline"
             title="Не удалось загрузить"
             subtitle="Проверьте подключение и попробуйте снова."
+            action={
+              <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
+            }
           />
-          <View className="px-8">
-            <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
-          </View>
         </View>
       ) : similarPending ? (
         <FlatList

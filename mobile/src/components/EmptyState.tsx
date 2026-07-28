@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -8,9 +9,15 @@ interface EmptyStateProps {
   icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
+  action?: ReactNode;
 }
 
-export function EmptyState({ icon = 'sparkles-outline', title, subtitle }: EmptyStateProps) {
+export function EmptyState({
+  icon = 'sparkles-outline',
+  title,
+  subtitle,
+  action,
+}: EmptyStateProps) {
   const { palette } = useAppTheme();
   return (
     <View className="flex-1 items-center justify-center px-8">
@@ -19,6 +26,7 @@ export function EmptyState({ icon = 'sparkles-outline', title, subtitle }: Empty
       </MaterialSurface>
       <Text className="text-center text-lg font-extrabold text-ink">{title}</Text>
       {subtitle ? <Text className="mt-2 max-w-[320px] text-center text-sm leading-5 text-ink-secondary">{subtitle}</Text> : null}
+      {action ? <View className="mt-5 w-full max-w-[280px]">{action}</View> : null}
     </View>
   );
 }

@@ -19,6 +19,7 @@ export const secureStorage = {
 export const SECURE_KEYS = {
   accessToken: 'sutki.accessToken',
   refreshToken: 'sutki.refreshToken',
+  sessionUser: 'sutki.sessionUser',
   searchCityPreference: 'sutki.searchCityPreference',
   listingLayoutPreference: 'sutki.listingLayoutPreference',
   /**

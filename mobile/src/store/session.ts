@@ -11,6 +11,7 @@ import { clearLocalViewedListings, readLocalViewedListings } from '@/lib/localVi
 import { queryClient } from '@/lib/query';
 import type { User } from '@/types/user';
 import { useChatStore } from '@/store/chatStore';
+import { useNetworkStatusStore } from '@/store/networkStatus';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'onboarding' | 'guest' | 'unauthenticated';
 
@@ -57,14 +58,42 @@ async function persistTokens(accessToken: string, refreshToken: string) {
   ]);
 }
 
-async function clearTokens() {
+async function persistUser(user: User) {
+  await secureStorage.set(SECURE_KEYS.sessionUser, JSON.stringify(user));
+}
+
+function parsePersistedUser(value: string | null): User | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<User>;
+    if (typeof parsed.id !== 'number' || typeof parsed.name !== 'string') return null;
+    return parsed as User;
+  } catch {
+    return null;
+  }
+}
+
+async function clearSessionStorage() {
   await Promise.all([
     secureStorage.remove(SECURE_KEYS.accessToken),
     secureStorage.remove(SECURE_KEYS.refreshToken),
+    secureStorage.remove(SECURE_KEYS.sessionUser),
   ]);
 }
 
 export const useSessionStore = create<SessionState>((set, get) => {
+  let hydrationRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let hydrationOnlineUnsubscribe: (() => void) | null = null;
+
+  const cancelHydrationRetry = () => {
+    if (hydrationRetryTimer) {
+      clearTimeout(hydrationRetryTimer);
+      hydrationRetryTimer = null;
+    }
+    hydrationOnlineUnsubscribe?.();
+    hydrationOnlineUnsubscribe = null;
+  };
+
   const mergeLocalFavorites = async () => {
     try {
       const localIds = await readLocalFavorites();
@@ -97,23 +126,66 @@ export const useSessionStore = create<SessionState>((set, get) => {
   };
 
   const hydrateFn = async () => {
+    cancelHydrationRetry();
+
     const guestId = await initGuestId();
     set({ guestId });
 
-    const [accessToken, refreshToken, hasChosenGuest] = await Promise.all([
+    const [accessToken, refreshToken, hasChosenGuest, persistedUserValue] = await Promise.all([
       secureStorage.get(SECURE_KEYS.accessToken),
       secureStorage.get(SECURE_KEYS.refreshToken),
       secureStorage.get('sutki.hasChosenGuest'),
+      secureStorage.get(SECURE_KEYS.sessionUser),
     ]);
+    const persistedUser = parsePersistedUser(persistedUserValue);
 
     if (!accessToken && !refreshToken) {
-      set({ status: hasChosenGuest === 'true' ? 'guest' : 'unauthenticated' });
+      if (persistedUserValue) {
+        await secureStorage.remove(SECURE_KEYS.sessionUser);
+      }
+      set({
+        accessToken: null,
+        refreshToken: null,
+        user: null,
+        status: hasChosenGuest === 'true' ? 'guest' : 'unauthenticated',
+      });
       return;
     }
 
-    set({ accessToken, refreshToken });
+    const restoreLocalSession = () => {
+      set({
+        accessToken,
+        refreshToken,
+        user: persistedUser,
+        status: persistedUser && needsOnboarding(persistedUser) ? 'onboarding' : 'authenticated',
+      });
+      if (accessToken && useNetworkStatusStore.getState().status !== 'offline') {
+        useChatStore.getState().init(accessToken);
+      }
+    };
+
+    const scheduleHydrationRetry = () => {
+      cancelHydrationRetry();
+      if (useNetworkStatusStore.getState().status === 'offline') {
+        hydrationOnlineUnsubscribe = useNetworkStatusStore.subscribe((networkState) => {
+          if (networkState.status !== 'online') return;
+          cancelHydrationRetry();
+          void hydrateFn();
+        });
+        return;
+      }
+      hydrationRetryTimer = setTimeout(() => {
+        hydrationRetryTimer = null;
+        void hydrateFn();
+      }, 10_000);
+    };
+
+    set({ accessToken, refreshToken, user: persistedUser });
     try {
       const user = await fetchMe();
+      await persistUser(user).catch((error) => {
+        console.warn('Failed to cache user profile:', error);
+      });
       set({ user, status: needsOnboarding(user) ? 'onboarding' : 'authenticated' });
       if (accessToken) {
         useChatStore.getState().init(accessToken);
@@ -126,6 +198,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
         try {
           const res = await refreshTokens(refreshToken);
           await persistTokens(res.access_token, res.refresh_token);
+          await persistUser(res.user).catch((error) => {
+            console.warn('Failed to cache refreshed user profile:', error);
+          });
           set({
             accessToken: res.access_token,
             refreshToken: res.refresh_token,
@@ -136,11 +211,24 @@ export const useSessionStore = create<SessionState>((set, get) => {
           await mergeLocalFavorites();
           await mergeLocalViewedListings();
           return;
-        } catch {
-          // refresh failed
+        } catch (refreshError) {
+          if (!(refreshError instanceof ApiError) || refreshError.status !== 401) {
+            restoreLocalSession();
+            scheduleHydrationRetry();
+            return;
+          }
         }
       }
-      await clearTokens();
+
+      const sessionIsDefinitelyInvalid =
+        err instanceof ApiError && (err.status === 401 || err.status === 404);
+      if (!sessionIsDefinitelyInvalid) {
+        restoreLocalSession();
+        scheduleHydrationRetry();
+        return;
+      }
+
+      await clearSessionStorage();
       useChatStore.getState().disconnect();
       set({
         accessToken: null,
@@ -153,6 +241,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
 
   const beginSessionFn = async ({ accessToken, refreshToken }: Tokens, user: User) => {
     await persistTokens(accessToken, refreshToken);
+    await persistUser(user).catch((error) => {
+      console.warn('Failed to cache user profile:', error);
+    });
     const needsProfile = needsOnboarding(user);
     set({
       accessToken,
@@ -167,11 +258,12 @@ export const useSessionStore = create<SessionState>((set, get) => {
   };
 
   const signOutFn = async () => {
+    cancelHydrationRetry();
     const { refreshToken } = get();
     if (refreshToken) {
       await apiLogout(refreshToken).catch(() => undefined);
     }
-    await clearTokens();
+    await clearSessionStorage();
     useChatStore.getState().disconnect();
     const hasChosenGuest = await secureStorage.get('sutki.hasChosenGuest');
     set({
@@ -195,9 +287,19 @@ export const useSessionStore = create<SessionState>((set, get) => {
     beginSession: beginSessionFn,
     loginSuccess: beginSessionFn,
 
-    completeOnboarding: (user) => set({ user, status: 'authenticated' }),
+    completeOnboarding: (user) => {
+      set({ user, status: 'authenticated' });
+      void persistUser(user).catch((error) => {
+        console.warn('Failed to cache completed profile:', error);
+      });
+    },
 
-    setUser: (user) => set({ user }),
+    setUser: (user) => {
+      set({ user });
+      void persistUser(user).catch((error) => {
+        console.warn('Failed to cache updated user profile:', error);
+      });
+    },
 
     signOut: signOutFn,
     logout: signOutFn,

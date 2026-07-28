@@ -1,6 +1,7 @@
 import { env } from '@/lib/env';
 import { storeRef } from '@/lib/api/store-ref';
 import { useAppVersionStore } from '@/store/appVersion';
+import { useNetworkStatusStore } from '@/store/networkStatus';
 import { getDeviceMetadata } from '@/lib/device';
 import { getGuestId } from '@/lib/guestId';
 
@@ -95,9 +96,12 @@ let activeRefreshPromise: Promise<string | null> | null = null;
 
 async function networkFetch(input: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(input, init);
+    const response = await fetch(input, init);
+    useNetworkStatusStore.getState().reportOnline();
+    return response;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
+    useNetworkStatusStore.getState().reportOffline();
     throw new ApiError(0, 'Нет подключения к интернету.', { network_error: true });
   }
 }
@@ -155,22 +159,35 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
                 },
                 body: JSON.stringify({ refresh_token: refreshToken }),
               });
+              const refreshIsJson = refreshRes.headers.get('content-type')?.includes('application/json');
+              const refreshPayload = refreshIsJson
+                ? await refreshRes.json().catch(() => undefined)
+                : undefined;
               if (refreshRes.ok) {
-                const data = await refreshRes.json();
+                const data = refreshPayload;
                 await state.beginSession(
                   { accessToken: data.access_token, refreshToken: data.refresh_token },
                   data.user,
                 );
                 return data.access_token as string;
-              } else {
+              }
+
+              if (refreshRes.status === 401) {
                 await state.signOut();
                 return null;
               }
+
+              const errBody = refreshPayload as { message?: string; error?: string } | undefined;
+              const message =
+                errBody?.message ?? errBody?.error ?? `Request failed (${refreshRes.status})`;
+              throw new ApiError(
+                refreshRes.status,
+                localizeApiMessage(message, refreshRes.status),
+                refreshPayload,
+              );
             } catch (err) {
               console.error('Failed to auto-refresh token inside promise:', err);
-              if (err instanceof ApiError && err.status === 0) throw err;
-              await state.signOut();
-              return null;
+              throw err;
             } finally {
               activeRefreshPromise = null;
             }
@@ -203,6 +220,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         }
       } catch (refreshErr) {
         console.error('Failed to auto-refresh token:', refreshErr);
+        throw refreshErr;
       }
     }
   }

@@ -11,7 +11,7 @@ import { useSessionStore } from '@/store/session';
 import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { Button } from '@/components/ui';
+import { Button, Skeleton } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { formatRooms } from '@/lib/format';
@@ -24,6 +24,37 @@ const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
 	{ value: 'unread', label: 'Сначала непрочитанные', icon: 'mail-unread-outline' },
 ];
 
+function ConversationListSkeleton({ dividerColor }: { dividerColor: string }) {
+	return (
+		<View style={{ paddingTop: 2, paddingBottom: 110 }}>
+			{Array.from({ length: 6 }, (_, index) => (
+				<View key={index} style={{ paddingLeft: 18, flexDirection: 'row', alignItems: 'center' }}>
+					<Skeleton width={58} height={58} radius={29} />
+					<View
+						style={{
+							flex: 1,
+							minHeight: 90,
+							marginLeft: 14,
+							paddingVertical: 14,
+							paddingRight: 18,
+							borderBottomWidth: index === 5 ? 0 : StyleSheet.hairlineWidth,
+							borderBottomColor: dividerColor,
+						}}>
+						<View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+							<Skeleton width="54%" height={18} radius={5} />
+							<View style={{ flex: 1, alignItems: 'flex-end' }}>
+								<Skeleton width={42} height={11} radius={4} />
+							</View>
+						</View>
+						<Skeleton width="68%" height={11} radius={4} style={{ marginTop: 9 }} />
+						<Skeleton width="84%" height={14} radius={4} style={{ marginTop: 9 }} />
+					</View>
+				</View>
+			))}
+		</View>
+	);
+}
+
 export default function MessagesScreen() {
 	const { palette, isDark } = useAppTheme();
 	const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
@@ -31,7 +62,13 @@ export default function MessagesScreen() {
 	const router = useRouter();
 	const status = useSessionStore((state) => state.status);
 	const sessionUser = useSessionStore((state) => state.user);
-	const { data: conversations, isLoading, refetch, isFetching } = useConversations();
+	const {
+		data: conversations,
+		isLoading,
+		isError,
+		refetch,
+		isFetching,
+	} = useConversations();
 	const [searchQuery, setSearchQuery] = useState('');
 	const [sort, setSort] = useState<ConversationSort>('recent');
 	const [sortVisible, setSortVisible] = useState(false);
@@ -96,8 +133,34 @@ export default function MessagesScreen() {
 
 	if (isLoading) {
 		return (
-			<SafeAreaView edges={['top']} className="flex-1 bg-surface justify-center items-center">
-				<ActivityIndicator size="large" color={palette.primary} />
+			<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
+				<View className="px-5 pb-4 pt-4">
+					<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
+				</View>
+				<ConversationListSkeleton dividerColor={softBorder} />
+			</SafeAreaView>
+		);
+	}
+
+	if (isError && !conversations) {
+		return (
+			<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
+				<View className="px-5 pb-4 pt-4">
+					<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
+				</View>
+				<EmptyState
+					icon="cloud-offline-outline"
+					title="Не удалось загрузить сообщения"
+					subtitle="Проверьте подключение и попробуйте снова."
+					action={
+						<Button
+							label="Повторить"
+							variant="secondary"
+							loading={isFetching}
+							onPress={() => refetch()}
+						/>
+					}
+				/>
 			</SafeAreaView>
 		);
 	}
