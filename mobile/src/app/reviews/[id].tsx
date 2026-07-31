@@ -3,13 +3,15 @@ import { parseISO } from 'date-fns';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/EmptyState';
 import { Stars } from '@/components/Stars';
 import { BottomSheet, Button, IconButton, MaterialSurface } from '@/components/ui';
+import { useKeyboardAwareListFocus } from '@/hooks/useKeyboardAwareListFocus';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useReviews, useHostReviews, useCreateReviewReply } from '@/lib/api/reviews';
 import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
@@ -32,6 +34,7 @@ export default function ReviewsScreen() {
   const { id, isHost } = useLocalSearchParams<{ id: string; isHost?: string }>();
   const numericId = Number(id);
   const reviewsListRef = useRef<FlatList<Review>>(null);
+  const { handleFocus: handleReplyFocus } = useKeyboardAwareListFocus(reviewsListRef);
   const { data, isLoading, isError, refetch, isRefetching } = isHost === 'true'
     ? useHostReviews(numericId, { limit: 50 })
     : useReviews(numericId, { limit: 50 });
@@ -48,25 +51,14 @@ export default function ReviewsScreen() {
   const summary = data?.summary;
   const items = data?.items ?? [];
 
-  const scrollReplyAboveKeyboard = (inputHandle: number) => {
-    setTimeout(() => {
-      const responder = reviewsListRef.current?.getScrollResponder() as unknown as
-        | { scrollResponderScrollNativeHandleToKeyboard: (handle: number, offset: number, preventNegativeScrollOffset: boolean) => void }
-        | undefined;
-      responder?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
-    }, 300);
-  };
-
-
   return (
     <View className="flex-1" style={{ backgroundColor: headerBackground }}>
       <SafeAreaView edges={['top', 'bottom']} className="flex-1" style={{ backgroundColor: headerBackground }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="height"
+          automaticOffset
           className="flex-1"
-          style={{ backgroundColor: screenBackground }}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-        >
+          style={{ backgroundColor: screenBackground }}>
         <View style={styles.header}>
           <BlurView intensity={88} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' }]} />
@@ -112,11 +104,25 @@ export default function ReviewsScreen() {
                 />
               }
               keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
+              onScrollToIndexFailed={({ index, averageItemLength }) => {
+                reviewsListRef.current?.scrollToOffset({
+                  offset: Math.max(0, averageItemLength * index),
+                  animated: false,
+                });
+                requestAnimationFrame(() => {
+                  reviewsListRef.current?.scrollToIndex({
+                    index,
+                    animated: true,
+                    viewPosition: 0.12,
+                    viewOffset: 8,
+                  });
+                });
+              }}
+              renderItem={({ item, index }) => (
                 <ReviewRow
                   review={item}
                   canReply={isOwnListing}
-                  onReplyFocus={scrollReplyAboveKeyboard}
+                  onReplyFocus={() => handleReplyFocus(index)}
                 />
               )}
             />
@@ -211,7 +217,7 @@ const styles = StyleSheet.create({
   },
 });
 
-function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canReply: boolean; onReplyFocus: (inputHandle: number) => void }) {
+function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canReply: boolean; onReplyFocus: () => void }) {
   const { palette } = useAppTheme();
   const [replying,setReplying]=useState(false);
   const [replyBody,setReplyBody]=useState('');
@@ -290,7 +296,7 @@ function ListingReviewReplyEditor({
 }: {
   value: string;
   onChange: (value: string) => void;
-  onFocus: (inputHandle: number) => void;
+  onFocus: () => void;
   onCancel: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
@@ -306,7 +312,7 @@ function ListingReviewReplyEditor({
           autoFocus
           value={value}
           onChangeText={onChange}
-          onFocus={(event) => onFocus(event.nativeEvent.target)}
+          onFocus={onFocus}
           multiline
           maxLength={1500}
           placeholder="Ответ гостю"

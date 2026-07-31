@@ -9,12 +9,8 @@ import { MotiView } from 'moti';
 import { useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -22,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { z } from 'zod';
 
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import { Button, Input, MaterialSurface } from '@/components/ui';
 import { PhoneInput } from '@/components/PhoneInput'; // Shared component
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
@@ -275,13 +272,55 @@ export default function BookingScreen() {
         </View>
 
         {/* ── Content ───────────────────────────────────────────── */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1, backgroundColor: screenBackground }}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ gap: 22, paddingHorizontal: 16, paddingBottom: 30, paddingTop: 18 }}
-            keyboardShouldPersistTaps="handled">
+        <KeyboardAwareForm
+          rootStyle={{ backgroundColor: screenBackground }}
+          contentContainerStyle={{ gap: 22, paddingHorizontal: 16, paddingTop: 18 }}
+          footer={(
+            <View
+              style={{
+                backgroundColor: headerBackground,
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+                shadowColor: '#000',
+                shadowOpacity: isDark ? 0.28 : 0.08,
+                shadowRadius: 18,
+                shadowOffset: { width: 0, height: -8 },
+                elevation: 8,
+              }}>
+              {nights > 0 && listing ? (
+                <View
+                  style={{
+                    marginBottom: 12,
+                    paddingHorizontal: 2,
+                    paddingBottom: 2,
+                    gap: 4,
+                  }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: palette.ink }}>
+                      {range.start && range.end ? (() => {
+                        const start = range.start;
+                        const end = range.end;
+                        if (start.getMonth() === end.getMonth()) {
+                          return `${format(start, 'd', { locale: ru })}–${format(end, 'd MMMM', { locale: ru })}`;
+                        }
+                        return `${format(start, 'd MMMM', { locale: ru })} – ${format(end, 'd MMMM', { locale: ru })}`;
+                      })() : ''}
+                      {' · '}
+                      {formatNights(nights)}
+                    </Text>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: palette.ink }}>
+                      {formatRub(total)} ₽
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
+                    {formatRub(listing.price)} ₽ × {formatNights(nights)}
+                  </Text>
+                </View>
+              ) : null}
+              <Button label="Отправить заявку" loading={createBooking.isPending} onPress={onSubmit} />
+            </View>
+          )}>
 
             {listing ? (
               <MotiView
@@ -482,55 +521,7 @@ export default function BookingScreen() {
                 )}
               />
             </View>
-          </ScrollView>
-
-          <View
-            style={{
-              backgroundColor: headerBackground,
-              paddingHorizontal: 16,
-              paddingTop: 12,
-              paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-              shadowColor: '#000',
-              shadowOpacity: isDark ? 0.28 : 0.08,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: -8 },
-              elevation: 8,
-            }}
-          >
-            {nights > 0 && listing ? (
-              <View
-                style={{
-                  marginBottom: 12,
-                  paddingHorizontal: 2,
-                  paddingBottom: 2,
-                  gap: 4,
-                }}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: palette.ink }}>
-                    {range.start && range.end ? (() => {
-                      const start = range.start;
-                      const end = range.end;
-                      if (start.getMonth() === end.getMonth()) {
-                        return `${format(start, 'd', { locale: ru })}–${format(end, 'd MMMM', { locale: ru })}`;
-                      }
-                      return `${format(start, 'd MMMM', { locale: ru })} – ${format(end, 'd MMMM', { locale: ru })}`;
-                    })() : ''}
-                    {' · '}
-                    {formatNights(nights)}
-                  </Text>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: palette.ink }}>
-                    {formatRub(total)} ₽
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 12, color: palette.inkSecondary }}>
-                  {formatRub(listing.price)} ₽ × {formatNights(nights)}
-                </Text>
-              </View>
-            ) : null}
-            <Button label="Отправить заявку" loading={createBooking.isPending} onPress={onSubmit} />
-          </View>
-        </KeyboardAvoidingView>
+        </KeyboardAwareForm>
       </SafeAreaView>
     </View>
   );

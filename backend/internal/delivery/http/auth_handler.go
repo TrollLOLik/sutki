@@ -14,6 +14,23 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 )
 
+const minimumProfileAge = 18
+
+func latestBirthdayForAge(now time.Time, age int) time.Time {
+	year, month, day := now.Date()
+	targetYear := year - age
+	lastDayOfMonth := time.Date(targetYear, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
+	if day > lastDayOfMonth {
+		day = lastDayOfMonth
+	}
+	return time.Date(targetYear, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+func birthdayMeetsMinimumAge(birthday, now time.Time) bool {
+	birthdayDate := time.Date(birthday.Year(), birthday.Month(), birthday.Day(), 0, 0, 0, 0, time.UTC)
+	return !birthdayDate.After(latestBirthdayForAge(now.UTC(), minimumProfileAge))
+}
+
 // AuthHandler serves the email-code authentication API.
 type AuthHandler struct {
 	svc *auth.Service
@@ -322,6 +339,10 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid birthday format (expected YYYY-MM-DD)")
+			return
+		}
+		if !birthdayMeetsMinimumAge(t, time.Now()) {
+			writeError(w, http.StatusBadRequest, "Пользователю должно быть не менее 18 лет")
 			return
 		}
 		bday = &t

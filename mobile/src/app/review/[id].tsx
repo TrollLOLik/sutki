@@ -3,10 +3,7 @@ import { BlurView } from 'expo-blur';
 import { useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import { Button, MaterialSurface } from '@/components/ui';
 import { useCreateReview, useReviewEligibility } from '@/lib/api/reviews';
 import { ApiError } from '@/lib/api/client';
@@ -117,14 +115,34 @@ export default function LeaveReviewScreen() {
           <View style={styles.headerSpacer} />
         </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1, backgroundColor: screenBackground }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView
-            style={{ backgroundColor: screenBackground }}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
+        <KeyboardAwareForm
+          rootStyle={{ backgroundColor: screenBackground }}
+          contentContainerStyle={styles.scrollContent}
+          footer={(
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: isDark ? 'rgba(20,22,27,0.97)' : 'rgba(255,255,255,0.97)', borderColor: palette.line }]}>
+              <Text
+                className={error ? 'text-danger' : 'text-ink-muted'}
+                style={styles.footerHint}
+                numberOfLines={2}>
+                {error ?? (rating < 1 ? 'Поставьте оценку жилью' : body.trim().length === 0 ? 'Добавьте несколько слов о проживании' : 'Отзыв появится после проверки')}
+              </Text>
+              <Button
+                label={
+                  elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
+                    ? 'Сохранить изменения'
+                    : 'Отправить отзыв'
+                }
+                loading={createReview.isPending}
+                disabled={
+                  createReview.isPending ||
+                  eligibility.isLoading ||
+                  elig?.can_review !== true ||
+                  elig.request_id !== numericId
+                }
+                onPress={onSubmit}
+              />
+            </View>
+          )}>
 
             {elig?.review_status === 'rejected' && elig.rejection_reason ? (
               <MaterialSurface level="raised" radius={18} style={[styles.notice, { backgroundColor: isDark ? 'rgba(255,77,79,0.10)' : 'rgba(255,77,79,0.07)' }]}>
@@ -224,32 +242,7 @@ export default function LeaveReviewScreen() {
               </View>
             </MaterialSurface>
 
-          </ScrollView>
-
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: isDark ? 'rgba(20,22,27,0.97)' : 'rgba(255,255,255,0.97)', borderColor: palette.line }]}>
-            <Text
-              className={error ? 'text-danger' : 'text-ink-muted'}
-              style={styles.footerHint}
-              numberOfLines={2}>
-              {error ?? (rating < 1 ? 'Поставьте оценку жилью' : body.trim().length === 0 ? 'Добавьте несколько слов о проживании' : 'Отзыв появится после проверки')}
-            </Text>
-            <Button
-              label={
-                elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
-                  ? 'Сохранить изменения'
-                  : 'Отправить отзыв'
-              }
-              loading={createReview.isPending}
-              disabled={
-                createReview.isPending ||
-                eligibility.isLoading ||
-                elig?.can_review !== true ||
-                elig.request_id !== numericId
-              }
-              onPress={onSubmit}
-            />
-          </View>
-        </KeyboardAvoidingView>
+        </KeyboardAwareForm>
       </SafeAreaView>
     </View>
   );

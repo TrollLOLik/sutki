@@ -7,7 +7,6 @@ import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   Switch,
   Text,
   TextInput,
@@ -16,6 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DatePickerSheet } from '@/components/DatePickerSheet';
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import { Button, Chip, IconButton, MaterialSurface, RangeSlider } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useCategories, useServices } from '@/lib/api/create-listing';
@@ -334,11 +334,22 @@ export default function FiltersScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
-        style={{ backgroundColor: screenBackground }}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAwareForm
+        rootStyle={{ backgroundColor: screenBackground }}
         contentContainerStyle={{ gap: 16, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24 }}
-      >
+        footer={(
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: isDark ? 'rgba(255,255,255,0.09)' : palette.line,
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+              backgroundColor: isDark ? 'rgba(20,22,27,0.97)' : 'rgba(255,255,255,0.97)',
+            }}>
+            <Button label={ctaLabel} loading={!isMine && isCtaLoading} disabled={areaRangeInvalid} onPress={apply} />
+          </View>
+        )}>
         <MaterialSurface level="base" radius={20} style={{ gap: 12, padding: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Сортировка</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -807,21 +818,7 @@ export default function FiltersScreen() {
           )}
         </View>
         </MaterialSurface>
-      </ScrollView>
-
-      {/* Sticky footer action button */}
-      <View
-        style={{
-          borderTopWidth: 1,
-          borderTopColor: isDark ? 'rgba(255,255,255,0.09)' : palette.line,
-          paddingHorizontal: 16,
-          paddingTop: 12,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-          backgroundColor: isDark ? 'rgba(20,22,27,0.97)' : 'rgba(255,255,255,0.97)',
-        }}
-      >
-        <Button label={ctaLabel} loading={!isMine && isCtaLoading} disabled={areaRangeInvalid} onPress={apply} />
-      </View>
+      </KeyboardAwareForm>
 
       {/* City picker bottom sheet */}
       <CityPickerSheet

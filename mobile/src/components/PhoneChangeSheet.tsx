@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { PhoneInput } from '@/components/PhoneInput';
 import { BottomSheet, Button, MaterialSurface } from '@/components/ui';
 import {
@@ -27,13 +28,11 @@ interface PhoneChangeSheetProps {
 }
 
 /**
- * 'reauth' proves the user still controls the factor already on the account
- * before they may rebind the phone. It is not optional UX politeness: the
- * backend answers 403 to change-phone/request without the proof token this
- * step produces, because a session alone is not enough to hand over the
- * credential that grants passwordless login.
+ * 'confirm' keeps opening the sheet side-effect free. 'reauth' then proves the
+ * user still controls the factor already on the account before they may rebind
+ * the phone. The backend answers 403 to change-phone/request without this proof.
  */
-type Step = 'reauth' | 'input_phone' | 'verify_code' | 'success';
+type Step = 'confirm' | 'reauth' | 'input_phone' | 'verify_code' | 'success';
 
 function translateError(message: string): string {
   const clean = message.toLowerCase().trim();
@@ -84,7 +83,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
   const user = useSessionStore((state) => state.user);
   const setUser = useSessionStore((state) => state.setUser);
 
-  const [step, setStep] = useState<Step>('reauth');
+  const [step, setStep] = useState<Step>('confirm');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [mode, setMode] = useState('flash_call');
@@ -147,7 +146,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
   useEffect(() => {
     if (!visible) return;
     setPhone(user?.phone ? formatPhoneMask(normalizePhoneDigits(user.phone)) : '');
-    setStep('reauth');
+    setStep('confirm');
     setCode('');
     setMode('flash_call');
     setChallengeId('');
@@ -158,16 +157,18 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
     setTempToken('');
     setReauthFactor(null);
     setReauthSent(false);
-    void startReauth();
-    // Deliberately keyed on `visible` alone. Depending on user?.phone would
-    // re-run this when handleConfirm calls setUser() with the freshly bound
-    // number: the success screen would be replaced by a restarted re-auth and
-    // the provider would place another billable call.
+    // Opening the sheet is deliberately passive. Re-auth starts only after the
+    // explicit confirmation below, so an accidental tap cannot place a call.
+    // Depending on user?.phone would also re-run this after setUser().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   useEffect(() => {
-    if (!visible || (step !== 'verify_code' && step !== 'reauth')) return;
+    if (
+      !visible ||
+      (step !== 'verify_code' && step !== 'reauth') ||
+      (step === 'reauth' && !reauthSent)
+    ) return;
     const timer = setTimeout(() => hiddenInputRef.current?.focus(), 350);
     return () => clearTimeout(timer);
     // reauthSent is in the deps because the hidden input only mounts once the
@@ -312,30 +313,31 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
         : `Введите ${codeLength}-значный код, который продиктует робот`;
 
   const title =
-    step === 'reauth'
-      ? 'Подтвердите, что это вы'
-      : step === 'input_phone'
-        ? 'Номер телефона'
-        : step === 'verify_code'
-          ? 'Подтвердите номер'
-          : 'Номер подтверждён';
+    step === 'confirm'
+      ? 'Сменить номер телефона?'
+      : step === 'reauth'
+        ? 'Подтвердите, что это вы'
+        : step === 'input_phone'
+          ? 'Номер телефона'
+          : step === 'verify_code'
+            ? 'Подтвердите номер'
+            : 'Номер подтверждён';
   const subtitle =
-    step === 'reauth'
-      ? reauthSubtitle
-      : step === 'input_phone'
-        ? 'Позвоним на номер и покажем код без SMS'
-        : step === 'verify_code'
-          ? mode === 'flash_call'
-            ? `Введите последние ${codeLength} цифры входящего номера`
-            : `Введите ${codeLength}-значный код, который продиктует робот`
-          : 'Телефон привязан к вашему аккаунту';
+    step === 'confirm'
+      ? 'Проверка начнётся только после вашего подтверждения'
+      : step === 'reauth'
+        ? reauthSubtitle
+        : step === 'input_phone'
+          ? 'Позвоним на номер и покажем код без SMS'
+          : step === 'verify_code'
+            ? mode === 'flash_call'
+              ? `Введите последние ${codeLength} цифры входящего номера`
+              : `Введите ${codeLength}-значный код, который продиктует робот`
+            : 'Телефон привязан к вашему аккаунту';
 
   return (
     <BottomSheet visible={visible} onClose={onClose} height={630}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}>
-        <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
           <View className="flex-row items-center gap-3">
             <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-light">
               <Ionicons
@@ -356,7 +358,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
             </View>
           </View>
 
-          {step !== 'success' ? (
+          {step !== 'success' && step !== 'confirm' ? (
             <View className="mt-5 flex-row gap-2">
               <View className="h-1 flex-1 rounded-full bg-primary" />
               <View
@@ -380,11 +382,39 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
             </MaterialSurface>
           ) : null}
 
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <KeyboardAwareFormScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{ flexGrow: 1, paddingTop: 20, paddingBottom: 12 }}>
+            {step === 'confirm' ? (
+              <View className="flex-1 justify-center gap-4 pb-8">
+                <MaterialSurface level="raised" radius={20} style={{ padding: 16 }}>
+                  <View className="flex-row items-start gap-3">
+                    <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
+                      <Ionicons name="shield-checkmark-outline" size={21} color={palette.primary} />
+                    </View>
+                    <View className="min-w-0 flex-1 gap-2">
+                      <Text className="text-base font-extrabold text-ink">
+                        Подтвердим текущий способ входа
+                      </Text>
+                      <Text className="text-sm leading-5 text-ink-secondary">
+                        После продолжения код может прийти звонком на подтверждённый номер или на
+                        почту, привязанную к аккаунту.
+                      </Text>
+                    </View>
+                  </View>
+                </MaterialSurface>
+
+                {user?.phone ? (
+                  <View className="items-center gap-1 px-4">
+                    <Text className="text-xs font-bold uppercase text-ink-muted">Текущий номер</Text>
+                    <Text className="text-base font-extrabold text-ink">
+                      +7 {formatPhoneMask(normalizePhoneDigits(user.phone))}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             {step === 'reauth' && !reauthSent ? (
               <View className="flex-1 items-center justify-center gap-4 pb-8">
                 <Text className="text-center text-base leading-6 text-ink-secondary">
@@ -533,7 +563,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
                 </Text>
               </View>
             ) : null}
-          </ScrollView>
+          </KeyboardAwareFormScrollView>
 
           {step === 'verify_code' || (step === 'reauth' && reauthSent) ? (
             <TextInput
@@ -554,7 +584,20 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
           ) : null}
 
           <View className="flex-row gap-3 pt-2">
-            {step === 'reauth' ? (
+            {step === 'confirm' ? (
+              <>
+                <Button label="Отмена" variant="secondary" size="md" className="flex-1" onPress={onClose} />
+                <Button
+                  label="Продолжить"
+                  size="md"
+                  className="flex-1"
+                  onPress={() => {
+                    setStep('reauth');
+                    void startReauth();
+                  }}
+                />
+              </>
+            ) : step === 'reauth' ? (
               <>
                 <Button label="Закрыть" variant="secondary" size="md" className="flex-1" onPress={onClose} />
                 <Button
@@ -593,8 +636,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
               <Button label="Готово" size="md" className="w-full" onPress={onClose} />
             )}
           </View>
-        </View>
-      </KeyboardAvoidingView>
+      </View>
     </BottomSheet>
   );
 }

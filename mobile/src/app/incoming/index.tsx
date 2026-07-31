@@ -1,14 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
-  Easing,
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   Text,
@@ -20,6 +17,7 @@ import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 
 import { EmptyState } from '@/components/EmptyState';
+import { CountedTabs } from '@/components/CountedTabs';
 import { IncomingRequestCard } from '@/components/IncomingRequestCard';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { BottomSheet, Button } from '@/components/ui';
@@ -68,8 +66,6 @@ export default function IncomingBookingsScreen() {
   const [sort, setSort] = useState<IncomingSort>('newest');
   const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
-  const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
-  const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
   const { mutateAsync: findOrCreateConv } = useFindOrCreateConversation();
 
@@ -98,15 +94,6 @@ export default function IncomingBookingsScreen() {
       Alert.alert('Ошибка', err instanceof ApiError ? err.message : 'Не удалось открыть чат.');
     }
   };
-
-  useEffect(() => {
-    Animated.timing(tabAnim, {
-      toValue: tab === 'pending' ? 0 : 1,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: false,
-    }).start();
-  }, [tab]);
 
   const handleTabChange = (nextTab: Tab) => {
     collapsibleHeader.show();
@@ -200,54 +187,14 @@ export default function IncomingBookingsScreen() {
           onSortChange={setSort}
         />
 
-        <View
-          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          className="relative mx-4 mb-2 mt-4 h-12 flex-row rounded-pill bg-surface-muted p-1"
-          style={{ borderWidth: 1, borderColor: palette.line }}
-        >
-          <Animated.View
-            style={{
-              position: 'absolute',
-              top: 4,
-              left: 4,
-              bottom: 4,
-              width: (containerWidth - 8) / 2,
-              transform: [{
-                translateX: tabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, (containerWidth - 8) / 2],
-                })
-              }],
-              backgroundColor: palette.surface,
-              borderRadius: 9999,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          />
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'pending' }}
-            onPress={() => handleTabChange('pending')}
-            className="relative z-10 flex-1 items-center justify-center rounded-pill"
-          >
-            <Text className={`text-sm font-bold ${tab === 'pending' ? 'text-ink' : 'text-ink-secondary'}`}>
-              Ожидают
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'processed' }}
-            onPress={() => handleTabChange('processed')}
-            className="relative z-10 flex-1 items-center justify-center rounded-pill"
-          >
-            <Text className={`text-sm font-bold ${tab === 'processed' ? 'text-ink' : 'text-ink-secondary'}`}>
-              Обработанные
-            </Text>
-          </Pressable>
-        </View>
+        <CountedTabs
+          items={[
+            { value: 'pending', label: 'Ожидают', count: rawPendingItems.length },
+            { value: 'processed', label: 'Обработанные', count: rawProcessedItems.length },
+          ]}
+          value={tab}
+          onChange={handleTabChange}
+        />
 
         </CollapsibleHeader>
 

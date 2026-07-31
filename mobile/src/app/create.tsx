@@ -5,8 +5,6 @@ import { MotiView } from 'moti';
 import { useEffect, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
-	KeyboardAvoidingView,
-	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -16,6 +14,7 @@ import {
 	TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { moderateListingImages, presignMediaUpload, uploadToS3 } from '@/lib/api/media';
@@ -24,6 +23,7 @@ import { env } from '@/lib/env';
 import { storeRef } from '@/lib/api/store-ref';
 
 import { Button, Chip, Input } from '@/components/ui';
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import {
   useCategories,
   useCreateListing,
@@ -34,6 +34,7 @@ import {
 import { useListing } from '@/lib/api/listings';
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
 import { useCreateListingStore } from '@/store/create-listing';
+import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yamap-plus';
 import * as Location from 'expo-location';
@@ -54,6 +55,8 @@ const MAX_LISTING_AREA = 10_000;
 const MIN_LISTING_PRICE = 150;
 const MAX_LISTING_PRICE = 100_000_000;
 const MAX_LISTING_GUESTS = 100;
+const MIN_DESCRIPTION_INPUT_HEIGHT = 160;
+const MAX_DESCRIPTION_INPUT_HEIGHT = 320;
 
 type ValidationAnchor =
   | 'category'
@@ -129,6 +132,7 @@ const ListingPublishPreview = ListingPublishPreviewImpl;
 export default function CreateListingScreen() {
   const { palette, isDark } = useAppTheme();
   const draft = useCreateListingStore();
+  const profileCity = useSessionStore((state) => state.user?.city?.trim() ?? '');
   const { data: categories } = useCategories();
   const { data: services } = useServices();
   const createListing = useCreateListing();
@@ -142,7 +146,7 @@ export default function CreateListingScreen() {
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const formScrollRef = useRef<ScrollView>(null);
+  const formScrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const formScrollOffsetRef = useRef(0);
   const fieldRefsRef = useRef<Partial<Record<ValidationAnchor, View>>>({});
   const pendingErrorAnchorRef = useRef<ValidationAnchor | null>(null);
@@ -152,9 +156,12 @@ export default function CreateListingScreen() {
   const [previousDescription, setPreviousDescription] = useState('');
   const descriptionInputRef = useRef<TextInput>(null);
   const [descriptionFocused, setDescriptionFocused] = useState(false);
-  const [descriptionInputHeight, setDescriptionInputHeight] = useState(160);
+  const [descriptionInputHeight, setDescriptionInputHeight] = useState(
+    MIN_DESCRIPTION_INPUT_HEIGHT,
+  );
 
   const [loadedEdit, setLoadedEdit] = useState(false);
+  const profileCityAppliedRef = useRef(false);
   const [uploadStatuses, setUploadStatuses] = useState<
     Record<string, { progress: number; error: boolean; key?: string; moderating?: boolean }>
   >({});
@@ -320,10 +327,23 @@ export default function CreateListingScreen() {
 
   useEffect(() => {
     if (!isEditing) {
+      profileCityAppliedRef.current = false;
       draft.reset();
       setUploadStatuses({});
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditing || profileCityAppliedRef.current || !profileCity) return;
+
+    const currentDraft = useCreateListingStore.getState();
+    // Profile hydration may finish after this screen mounts. Fill only an
+    // untouched city field so a value entered by the owner always wins.
+    if (!currentDraft.city.trim()) {
+      currentDraft.setField('city', profileCity);
+    }
+    profileCityAppliedRef.current = true;
+  }, [isEditing, profileCity]);
 
   const uploadListingPhoto = async (uri: string) => {
     if (uploadStatuses[uri]?.key && !uploadStatuses[uri]?.error) {
@@ -999,6 +1019,33 @@ export default function CreateListingScreen() {
     );
   }
 
+  const formFooter = (
+    <View
+      style={{
+        borderTopWidth: 1,
+        borderTopColor: palette.line,
+        backgroundColor: headerBackground,
+        paddingHorizontal: 20,
+        paddingBottom: 10,
+        paddingTop: 12,
+      }}>
+      {step < TOTAL_STEPS - 1 ? (
+        <Button label="Далее" onPress={goNext} />
+      ) : (
+        <Button
+          label={
+            isEditing
+              ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
+              : 'Опубликовать'
+          }
+          variant={isEditing ? 'primary' : 'success'}
+          loading={isEditing ? updateListing.isPending : createListing.isPending}
+          onPress={handlePublish}
+        />
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView
       edges={['top', 'bottom']}
@@ -1089,16 +1136,11 @@ export default function CreateListingScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: screenBackground }}
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
+      <KeyboardAwareForm
           ref={formScrollRef}
-          className="flex-1"
+          rootStyle={{ backgroundColor: screenBackground }}
+          footer={formFooter}
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 28 }}
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           onScroll={(event) => {
             formScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
@@ -1466,9 +1508,15 @@ export default function CreateListingScreen() {
                   onChangeText={(t) => draft.setField('description', t)}
                   multiline
                   maxLength={1500}
-                  scrollEnabled={false}
+                  scrollEnabled={descriptionInputHeight >= MAX_DESCRIPTION_INPUT_HEIGHT}
                   onContentSizeChange={(event) => {
-                    const nextHeight = Math.max(160, Math.ceil(event.nativeEvent.contentSize.height));
+                    const nextHeight = Math.min(
+                      MAX_DESCRIPTION_INPUT_HEIGHT,
+                      Math.max(
+                        MIN_DESCRIPTION_INPUT_HEIGHT,
+                        Math.ceil(event.nativeEvent.contentSize.height),
+                      ),
+                    );
                     setDescriptionInputHeight((currentHeight) =>
                       Math.abs(currentHeight - nextHeight) > 1 ? nextHeight : currentHeight,
                     );
@@ -1789,34 +1837,7 @@ export default function CreateListingScreen() {
           )}
 
           </MotiView>
-        </ScrollView>
-
-        {/* Footer */}
-        <View
-          style={{
-            borderTopWidth: 1,
-            borderTopColor: palette.line,
-            backgroundColor: headerBackground,
-            paddingHorizontal: 20,
-            paddingBottom: 10,
-            paddingTop: 12,
-          }}>
-          {step < TOTAL_STEPS - 1 ? (
-            <Button label="Далее" onPress={goNext} />
-          ) : (
-            <Button
-              label={
-                isEditing
-                  ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
-                  : 'Опубликовать'
-              }
-              variant={isEditing ? 'primary' : 'success'}
-              loading={isEditing ? updateListing.isPending : createListing.isPending}
-              onPress={handlePublish}
-            />
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareForm>
     </SafeAreaView>
   );
 }

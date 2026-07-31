@@ -68,18 +68,14 @@ import {
 	MAX_ATTACHMENTS_PER_MESSAGE,
 	MAX_ATTACHMENT_BYTES,
 } from '@/hooks/useChatUploads';
+import { useKeyboardStickyStyle } from '@/hooks/useKeyboardStickyStyle';
 import { MAX_VIDEO_SECONDS } from '@/lib/video';
 import { hapticTapLight, hapticTapMedium, hapticSuccess } from '@/lib/haptics';
 import * as Clipboard from 'expo-clipboard';
 import Animated, {
-	Easing,
 	FadeIn,
 	FadeInDown,
-	useAnimatedStyle,
-	useSharedValue,
-	withTiming,
 } from 'react-native-reanimated';
-import { useKeyboardHandler } from 'react-native-keyboard-controller';
 
 const CHAT_LIST_CONTENT_STYLE = { paddingVertical: 18 } as const;
 const CHAT_LIST_BATCH_SIZE = 8;
@@ -128,65 +124,7 @@ export default function ChatDialogScreen() {
 	const [localVideoThumbnails, setLocalVideoThumbnails] = useState<Record<number, string>>({});
 	const [isOtherTyping, setIsOtherTyping] = useState(false);
 	const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
-	const keyboardHeight = useSharedValue(0);
-	const keyboardIsResizing = useSharedValue(false);
-
-	useKeyboardHandler(
-		{
-			onStart: (event) => {
-				'worklet';
-
-				// Opening and closing stay synchronized with the native IME.
-				// Only smooth an in-place height change, such as switching
-				// from Gboard's letters to its taller emoji panel.
-				keyboardIsResizing.value = keyboardHeight.value > 0 && event.height > 0;
-				if (keyboardIsResizing.value) {
-					keyboardHeight.value = withTiming(event.height, {
-						duration: 120,
-						easing: Easing.out(Easing.cubic),
-					});
-				}
-			},
-			onMove: (event) => {
-				'worklet';
-
-				if (!keyboardIsResizing.value) {
-					keyboardHeight.value = event.height;
-				}
-			},
-			onInteractive: (event) => {
-				'worklet';
-
-				keyboardIsResizing.value = false;
-				keyboardHeight.value = event.height;
-			},
-			onEnd: (event) => {
-				'worklet';
-
-				if (keyboardIsResizing.value) {
-					keyboardHeight.value = withTiming(event.height, {
-						duration: 80,
-						easing: Easing.out(Easing.cubic),
-					});
-				} else {
-					keyboardHeight.value = event.height;
-				}
-				keyboardIsResizing.value = false;
-			},
-		},
-		[],
-	);
-
-	const keyboardStickyStyle = useAnimatedStyle(
-		() => ({
-			transform: [
-				{
-					translateY: -Math.max(0, keyboardHeight.value - insets.bottom),
-				},
-			],
-		}),
-		[insets.bottom],
-	);
+	const keyboardStickyStyle = useKeyboardStickyStyle();
 	// Contextual anti-scam notice: shown in fresh dialogs (few user messages),
 	// dismissible for the rest of the session. Not a chat message — it never
 	// pollutes history or unread counters.

@@ -34,3 +34,37 @@ func TestPublicUserDTOIncludesCreatedAtWithoutEmail(t *testing.T) {
 		t.Fatalf("non-host phone leaked through public profile: %s", body)
 	}
 }
+
+func TestBirthdayMeetsMinimumAgeAtBoundary(t *testing.T) {
+	now := time.Date(2026, time.August, 1, 15, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		birthday time.Time
+		allowed  bool
+	}{
+		{
+			name:     "birthday before cutoff",
+			birthday: time.Date(2008, time.July, 31, 0, 0, 0, 0, time.UTC),
+			allowed:  true,
+		},
+		{
+			name:     "birthday on cutoff",
+			birthday: time.Date(2008, time.August, 1, 0, 0, 0, 0, time.UTC),
+			allowed:  true,
+		},
+		{
+			name:     "birthday after cutoff",
+			birthday: time.Date(2008, time.August, 2, 0, 0, 0, 0, time.UTC),
+			allowed:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := birthdayMeetsMinimumAge(tt.birthday, now); got != tt.allowed {
+				t.Fatalf("birthdayMeetsMinimumAge() = %v, want %v", got, tt.allowed)
+			}
+		})
+	}
+}

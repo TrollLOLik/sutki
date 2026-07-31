@@ -8,8 +8,6 @@ import {
   Animated,
   Dimensions,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,9 +15,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { CountedTabs } from '@/components/CountedTabs';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { BottomSheet, Button, IconButton, MaterialSurface } from '@/components/ui';
 import { useCreateReviewReply, useMyWrittenReviews, useMyReceivedReviews } from '@/lib/api/reviews';
@@ -27,6 +27,7 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { UserReview } from '@/types/review';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
+import { useKeyboardAwareListFocus } from '@/hooks/useKeyboardAwareListFocus';
 import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 
 type ReviewTab = 'written' | 'received';
@@ -102,11 +103,10 @@ export default function MyReviewsScreen() {
   const [sort, setSort] = useState<ReviewSort>('newest');
   const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
-  const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
-  const tabAnim = useRef(new Animated.Value(requestedFocusTab === 'received' ? 1 : 0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
   const writtenListRef = useRef<FlatList<UserReview>>(null);
   const receivedListRef = useRef<FlatList<UserReview>>(null);
+  const { handleFocus: handleReceivedReplyFocus } = useKeyboardAwareListFocus(receivedListRef);
   const handledFocusKeyRef = useRef('');
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewHighlight = useRef(new Animated.Value(0)).current;
@@ -127,16 +127,6 @@ export default function MyReviewsScreen() {
     writtenQuery.refetch();
     receivedQuery.refetch();
   };
-
-  useEffect(() => {
-    Animated.spring(tabAnim, {
-      toValue: tab === 'written' ? 0 : 1,
-      damping: 22,
-      stiffness: 240,
-      mass: 0.8,
-      useNativeDriver: false,
-    }).start();
-  }, [tab]);
 
   useEffect(() => {
     return () => {
@@ -166,7 +156,6 @@ export default function MyReviewsScreen() {
     handledFocusKeyRef.current = focusKey;
     showCollapsibleHeader();
     setTab(requestedFocusTab);
-    tabAnim.setValue(requestedFocusTab === 'received' ? 1 : 0);
     setHighlightedReviewId(requestedFocusReviewId);
     reviewHighlight.stopAnimation();
     reviewHighlight.setValue(0);
@@ -207,7 +196,6 @@ export default function MyReviewsScreen() {
     reviewHighlight,
     routeParams.notificationId,
     showCollapsibleHeader,
-    tabAnim,
     writtenItems,
   ]);
 
@@ -220,16 +208,7 @@ export default function MyReviewsScreen() {
     });
   };
 
-  const scrollReplyAboveKeyboard = (inputHandle: number) => {
-    setTimeout(() => {
-      const responder = receivedListRef.current?.getScrollResponder() as unknown as
-        | { scrollResponderScrollNativeHandleToKeyboard: (handle: number, offset: number, preventNegativeScrollOffset: boolean) => void }
-        | undefined;
-      responder?.scrollResponderScrollNativeHandleToKeyboard(inputHandle, 128, true);
-    }, 300);
-  };
-
-  const renderItem = ({ item, isWritten }: { item: UserReview; isWritten: boolean }) => {
+  const renderItem = ({ item, isWritten, index }: { item: UserReview; isWritten: boolean; index?: number }) => {
     const isHighlighted = highlightedReviewId === item.id;
     const highlightStyle = isHighlighted
       ? {
@@ -251,7 +230,7 @@ export default function MyReviewsScreen() {
     const card = !isWritten ? (
       <ReceivedReviewCard
         review={item}
-        onReplyFocus={scrollReplyAboveKeyboard}
+        onReplyFocus={() => handleReceivedReplyFocus(index ?? 0)}
       />
     ) : (
       <MaterialSurface level="raised" radius={20} className="gap-3 p-4">
@@ -294,6 +273,15 @@ export default function MyReviewsScreen() {
         <Text className="text-[15px] font-normal leading-6 text-ink">
           {item.body}
         </Text>
+        {item.reply?.status === 'active' ? (
+          <View className="rounded-2xl bg-primary-light p-3.5">
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color={palette.primary} />
+              <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
+            </View>
+            <Text className="mt-2 text-sm leading-5 text-ink-secondary">{item.reply.body}</Text>
+          </View>
+        ) : null}
         {item.status && item.status !== 'active' ? (
           <View className="self-start flex-row items-center gap-1.5 rounded-pill bg-primary-light px-3 py-1.5">
             <Ionicons name={item.status === 'rejected' ? 'close-circle-outline' : 'time-outline'} size={14} color={item.status === 'rejected' ? palette.danger : palette.primary} />
@@ -326,11 +314,10 @@ export default function MyReviewsScreen() {
     <View className="flex-1" style={{ backgroundColor: headerBackground }}>
       <SafeAreaView edges={['top']} className="flex-1" style={{ backgroundColor: headerBackground }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior="height"
+          automaticOffset
           className="flex-1"
-          style={{ backgroundColor: screenBackground }}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-        >
+          style={{ backgroundColor: screenBackground }}>
         <View style={screenStyles.header}>
           <BlurView intensity={88} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' }]} />
@@ -354,52 +341,14 @@ export default function MyReviewsScreen() {
           onSortChange={setSort}
         />
 
-        {/* Tab switch */}
-        <MaterialSurface
-          level="raised"
-          radius={18}
-          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          className="relative mx-4 mb-3 mt-3 h-12 flex-row p-1"
-          style={screenStyles.tabs}
-        >
-          <Animated.View
-            style={{
-              position: 'absolute',
-              top: 4,
-              left: 4,
-              bottom: 4,
-              width: (containerWidth - 8) / 2,
-              transform: [{
-                translateX: tabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, (containerWidth - 8) / 2],
-                })
-              }],
-              backgroundColor: palette.primaryLight,
-              borderRadius: 14,
-            }}
-          />
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'written' }}
-            onPress={() => handleTabChange('written')}
-            className="relative z-10 h-10 flex-1 items-center justify-center rounded-xl"
-          >
-            <Text className={`text-sm font-bold ${tab === 'written' ? 'text-primary' : 'text-ink-secondary'}`}>
-              Оставленные
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'received' }}
-            onPress={() => handleTabChange('received')}
-            className="relative z-10 h-10 flex-1 items-center justify-center rounded-xl"
-          >
-            <Text className={`text-sm font-bold ${tab === 'received' ? 'text-primary' : 'text-ink-secondary'}`}>
-              Полученные
-            </Text>
-          </Pressable>
-        </MaterialSurface>
+        <CountedTabs
+          items={[
+            { value: 'written', label: 'Оставленные', count: rawWrittenItems.length },
+            { value: 'received', label: 'Полученные', count: rawReceivedItems.length },
+          ]}
+          value={tab}
+          onChange={handleTabChange}
+        />
 
         </CollapsibleHeader>
 
@@ -463,9 +412,9 @@ export default function MyReviewsScreen() {
                       offset: Math.max(0, averageItemLength * index),
                       animated: false,
                     });
-                    setTimeout(() => {
+                    requestAnimationFrame(() => {
                       writtenListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.38 });
-                    }, 120);
+                    });
                   }}
                   ListFooterComponent={
                     writtenItems.length > 0 ? (
@@ -490,7 +439,7 @@ export default function MyReviewsScreen() {
                 <FlatList
                   ref={receivedListRef}
                   data={receivedItems}
-                  renderItem={({ item }) => renderItem({ item, isWritten: false })}
+                  renderItem={({ item, index }) => renderItem({ item, isWritten: false, index })}
                   keyExtractor={(item) => String(item.id)}
                   onScroll={collapsibleHeader.onScroll}
                   onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
@@ -505,9 +454,9 @@ export default function MyReviewsScreen() {
                       offset: Math.max(0, averageItemLength * index),
                       animated: false,
                     });
-                    setTimeout(() => {
+                    requestAnimationFrame(() => {
                       receivedListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.38 });
-                    }, 120);
+                    });
                   }}
                   ListFooterComponent={
                     receivedItems.length > 0 ? (
@@ -558,18 +507,9 @@ const screenStyles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  tabs: {
-    height: 48,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 12,
-    padding: 4,
-    flexDirection: 'row',
-    position: 'relative',
-  },
 });
 
-function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onReplyFocus: (inputHandle: number) => void }) {
+function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onReplyFocus: () => void }) {
   const { palette } = useAppTheme();
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
@@ -646,7 +586,7 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
             <TextInput
               value={replyBody}
               onChangeText={setReplyBody}
-              onFocus={(event) => onReplyFocus(event.nativeEvent.target)}
+              onFocus={onReplyFocus}
               multiline
               maxLength={1500}
               placeholder="Ответ гостю"

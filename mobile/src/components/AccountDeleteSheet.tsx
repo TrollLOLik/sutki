@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, ScrollView, ActivityIndicator } from 'react-native';
+import { Pressable, Text, TextInput, View, ActivityIndicator } from 'react-native';
 
+import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { BottomSheet, Button } from '@/components/ui';
 import {
   useCheckDeleteMe,
@@ -219,9 +220,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
         </View>
       ) : null}
 
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <KeyboardAwareFormScrollView
             className="flex-1 mb-4"
             contentContainerStyle={{ flexGrow: 1 }}
           >
@@ -353,7 +352,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
                 </View>
               </View>
             ) : null}
-          </ScrollView>
+          </KeyboardAwareFormScrollView>
 
           {/* Hidden input for verification */}
           {step === 'verify_code' ? (

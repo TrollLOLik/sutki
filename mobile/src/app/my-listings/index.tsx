@@ -3,10 +3,11 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyState } from '@/components/EmptyState';
+import { CountedTabs } from '@/components/CountedTabs';
 import { ListingCard } from '@/components/ListingCard';
 import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
@@ -231,53 +232,18 @@ export default function MyListingsScreen() {
             onLayoutToggle={() => toggleLayoutMode('mine')}
           />
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ height: 54, flexGrow: 0, flexShrink: 0 }}
-            contentContainerStyle={{ alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 12 }}
-          >
-            {QUICK_STATUSES.map((option) => {
-              const selected = isQuickStatusSelected(option.statuses);
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => selectQuickStatus(option.statuses)}
-                  className="active:opacity-80"
-                  style={{
-                    minHeight: 38,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 7,
-                    borderRadius: 19,
-                    borderWidth: 1,
-                    borderColor: selected ? palette.primary : palette.line,
-                    backgroundColor: selected ? palette.primaryLight : palette.surface,
-                    paddingHorizontal: 13,
-                  }}
-                >
-                  <Text style={{ color: selected ? palette.primary : palette.inkSecondary, fontSize: 13, fontWeight: '700' }}>
-                    {option.label}
-                  </Text>
-                  <View
-                    style={{
-                      minWidth: 22,
-                      height: 22,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 11,
-                      backgroundColor: selected ? palette.primary : palette.surfaceMuted,
-                      paddingHorizontal: 5,
-                    }}
-                  >
-                    <Text style={{ color: selected ? '#FFFFFF' : palette.inkMuted, fontSize: 11, fontWeight: '800' }}>
-                      {quickStatusCount(option.statuses)}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <CountedTabs
+            items={QUICK_STATUSES.map((option) => ({
+              value: option.key,
+              label: option.label,
+              count: quickStatusCount(option.statuses),
+            }))}
+            value={QUICK_STATUSES.find((option) => isQuickStatusSelected(option.statuses))?.key ?? null}
+            onChange={(key) => {
+              const option = QUICK_STATUSES.find((item) => item.key === key);
+              if (option) selectQuickStatus(option.statuses);
+            }}
+          />
           </CollapsibleHeader>
 
         {isLoading ? (

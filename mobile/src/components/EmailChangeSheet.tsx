@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, Text, TextInput, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Animated, Easing, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
+import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { Button } from '@/components/ui';
 import {
   requestReauthCode,
@@ -318,9 +320,9 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
       onShow={handleShow}
       onRequestClose={handleClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-end"
-      >
+        behavior="height"
+        automaticOffset
+        className="flex-1 justify-end">
         {/* Backdrop */}
         <Animated.View
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'black', opacity: fade }}
@@ -366,12 +368,9 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
             </Text>
           ) : null}
 
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <KeyboardAwareFormScrollView
             className="flex-1 mb-4"
-            contentContainerStyle={{ flexGrow: 1 }}
-          >
+            contentContainerStyle={{ flexGrow: 1 }}>
             {/* Step 1: Verify current email */}
             {step === 'verify_old' ? (
               <View className="gap-5">
@@ -559,7 +558,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                 </View>
               </View>
             ) : null}
-          </ScrollView>
+          </KeyboardAwareFormScrollView>
 
           {/* Hidden inputs for code verification steps */}
           {(step === 'verify_old' || step === 'verify_new') ? (

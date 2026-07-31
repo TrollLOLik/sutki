@@ -1,7 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
 	ActivityIndicator,
-	Animated,
 	FlatList,
 	Keyboard,
 	Pressable,
@@ -24,6 +23,7 @@ import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { Button, Skeleton } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
+import { CountedTabs } from '@/components/CountedTabs';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 import { formatRooms } from '@/lib/format';
@@ -95,21 +95,11 @@ export default function MessagesScreen() {
 	const [sort, setSort] = useState<ConversationSort>('recent');
 	const [sortVisible, setSortVisible] = useState(false);
 	const [tab, setTab] = useState<ConversationTab>('all');
-	const [tabContainerWidth, setTabContainerWidth] = useState(0);
-	const tabAnim = useRef(new Animated.Value(0)).current;
 
 	const handleTabChange = (nextTab: ConversationTab) => {
 		if (tab === nextTab) return;
-		const nextIndex = CONVERSATION_TABS.findIndex((item) => item.value === nextTab);
 		collapsibleHeader.show();
 		setTab(nextTab);
-		Animated.spring(tabAnim, {
-			toValue: Math.max(0, nextIndex),
-			damping: 22,
-			stiffness: 240,
-			mass: 0.8,
-			useNativeDriver: true,
-		}).start();
 	};
 
 	const handleConversationPress = (conv: ConversationSummary) => {
@@ -204,12 +194,19 @@ export default function MessagesScreen() {
 		);
 	}
 
-	const conversationsForTab = conversations?.filter((conversation) => {
-		if (tab === 'all') return true;
+	const allConversations = conversations ?? [];
+	const matchesConversationTab = (conversation: ConversationSummary, targetTab: ConversationTab) => {
+		if (targetTab === 'all') return true;
 		if (conversation.house_owner_id == null || sessionUser?.id == null) return false;
 		const isHosting = conversation.house_owner_id === sessionUser.id;
-		return tab === 'hosting' ? isHosting : !isHosting;
-	}) ?? [];
+		return targetTab === 'hosting' ? isHosting : !isHosting;
+	};
+	const conversationCounts: Record<ConversationTab, number> = {
+		all: allConversations.length,
+		renting: allConversations.filter((conversation) => matchesConversationTab(conversation, 'renting')).length,
+		hosting: allConversations.filter((conversation) => matchesConversationTab(conversation, 'hosting')).length,
+	};
+	const conversationsForTab = allConversations.filter((conversation) => matchesConversationTab(conversation, tab));
 
 	// Filter conversations by search query
 	const filteredConversations = conversationsForTab.filter((c) => {
@@ -369,74 +366,11 @@ export default function MessagesScreen() {
 				/>
 			) : null}
 
-				<View
-					onLayout={(event) => setTabContainerWidth(event.nativeEvent.layout.width)}
-					style={{
-						position: 'relative',
-						height: 48,
-						marginHorizontal: 18,
-						marginTop: 4,
-						marginBottom: 8,
-						padding: 4,
-						flexDirection: 'row',
-						borderRadius: 24,
-						borderWidth: 1,
-						borderColor: palette.line,
-						backgroundColor: palette.surfaceMuted,
-					}}
-				>
-					{tabContainerWidth > 8 ? (
-						<Animated.View
-							style={{
-								position: 'absolute',
-								top: 4,
-								bottom: 4,
-								left: 4,
-								width: (tabContainerWidth - 8) / CONVERSATION_TABS.length,
-								borderRadius: 20,
-								backgroundColor: palette.surface,
-								shadowColor: '#000',
-								shadowOffset: { width: 0, height: 2 },
-								shadowOpacity: isDark ? 0.22 : 0.08,
-								shadowRadius: 4,
-								elevation: 2,
-								transform: [{
-									translateX: tabAnim.interpolate({
-										inputRange: [0, 1, 2],
-										outputRange: [
-											0,
-											(tabContainerWidth - 8) / CONVERSATION_TABS.length,
-											((tabContainerWidth - 8) / CONVERSATION_TABS.length) * 2,
-										],
-									}),
-								}],
-							}}
-						/>
-					) : null}
-					{CONVERSATION_TABS.map((item) => {
-						const selected = tab === item.value;
-						return (
-							<Pressable
-								key={item.value}
-								accessibilityRole="tab"
-								accessibilityState={{ selected }}
-								onPress={() => handleTabChange(item.value)}
-								style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
-							>
-								<Text
-									numberOfLines={1}
-									style={{
-										fontSize: 13,
-										fontWeight: '700',
-										color: selected ? palette.ink : palette.inkSecondary,
-									}}
-								>
-									{item.label}
-								</Text>
-							</Pressable>
-						);
-					})}
-				</View>
+				<CountedTabs
+					items={CONVERSATION_TABS.map((item) => ({ ...item, count: conversationCounts[item.value] }))}
+					value={tab}
+					onChange={handleTabChange}
+				/>
 
 			</CollapsibleHeader>
 

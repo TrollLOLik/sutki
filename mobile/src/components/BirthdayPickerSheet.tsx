@@ -20,11 +20,10 @@ const MONTH_NAMES = [
   'декабря',
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
+const MINIMUM_AGE = 18;
+const YEARS_IN_PICKER = 100;
 const ROW_HEIGHT = 42;
 const WHEEL_PADDING = ROW_HEIGHT * 2;
-const MONTH_CYCLES = 7;
-const MIDDLE_MONTH_CYCLE = Math.floor(MONTH_CYCLES / 2);
 
 interface BirthdayPickerSheetProps {
   visible: boolean;
@@ -33,14 +32,40 @@ interface BirthdayPickerSheetProps {
   initialValue?: string;
 }
 
-function parseInitial(value?: string): { d: number; m: number; y: number } {
+function adultBirthdayCutoff(now = new Date()): Date {
+  const targetYear = now.getFullYear() - MINIMUM_AGE;
+  const lastDayOfTargetMonth = new Date(targetYear, now.getMonth() + 1, 0).getDate();
+  return new Date(targetYear, now.getMonth(), Math.min(now.getDate(), lastDayOfTargetMonth));
+}
+
+function clampBirthday(
+  value: { d: number; m: number; y: number },
+  cutoff: Date,
+): { d: number; m: number; y: number } {
+  const maxYear = cutoff.getFullYear();
+  const year = Math.min(value.y, maxYear);
+  const maxMonth = year === maxYear ? cutoff.getMonth() : 11;
+  const month = Math.max(0, Math.min(value.m, maxMonth));
+  const monthDays = new Date(year, month + 1, 0).getDate();
+  const maxDay = year === maxYear && month === cutoff.getMonth()
+    ? Math.min(monthDays, cutoff.getDate())
+    : monthDays;
+
+  return {
+    d: Math.max(1, Math.min(value.d, maxDay)),
+    m: month,
+    y: year,
+  };
+}
+
+function parseInitial(value: string | undefined, cutoff: Date): { d: number; m: number; y: number } {
   if (value) {
     const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
     if (Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)) {
-      return { d: day, m: month - 1, y: year };
+      return clampBirthday({ d: day, m: month - 1, y: year }, cutoff);
     }
   }
-  return { d: 12, m: 4, y: CURRENT_YEAR - 20 };
+  return clampBirthday({ d: 12, m: 4, y: cutoff.getFullYear() - 2 }, cutoff);
 }
 
 function indexFromOffset(offset: number, length: number) {
@@ -49,7 +74,9 @@ function indexFromOffset(offset: number, length: number) {
 
 export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }: BirthdayPickerSheetProps) {
   const { palette } = useAppTheme();
-  const initial = parseInitial(initialValue);
+  const cutoff = useMemo(() => adultBirthdayCutoff(), [visible]);
+  const maxYear = cutoff.getFullYear();
+  const initial = parseInitial(initialValue, cutoff);
   const [day, setDay] = useState(initial.d);
   const [month, setMonth] = useState(initial.m);
   const [year, setYear] = useState(initial.y);
@@ -57,16 +84,18 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
   const dayRef = useRef<ScrollView>(null);
   const monthRef = useRef<ScrollView>(null);
   const yearRef = useRef<ScrollView>(null);
-  const years = useMemo(() => Array.from({ length: 100 }, (_, index) => CURRENT_YEAR - index), []);
-  const monthItems = useMemo(
-    () =>
-      Array.from({ length: MONTH_NAMES.length * MONTH_CYCLES }, (_, index) => ({
-        index,
-        month: index % MONTH_NAMES.length,
-      })),
-    [],
+  const years = useMemo(
+    () => Array.from({ length: YEARS_IN_PICKER }, (_, index) => maxYear - index),
+    [maxYear],
   );
-  const daysCount = new Date(year, month + 1, 0).getDate();
+  const months = useMemo(
+    () => Array.from({ length: year === maxYear ? cutoff.getMonth() + 1 : 12 }, (_, index) => index),
+    [cutoff, maxYear, year],
+  );
+  const calendarDaysCount = new Date(year, month + 1, 0).getDate();
+  const daysCount = year === maxYear && month === cutoff.getMonth()
+    ? Math.min(calendarDaysCount, cutoff.getDate())
+    : calendarDaysCount;
   const days = useMemo(() => Array.from({ length: daysCount }, (_, index) => index + 1), [daysCount]);
 
   useEffect(() => {
@@ -77,35 +106,42 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
 
   useEffect(() => {
     if (!visible) return;
-    const next = parseInitial(initialValue);
+    const next = parseInitial(initialValue, cutoff);
     setDay(next.d);
     setMonth(next.m);
     setYear(next.y);
 
     const timer = setTimeout(() => {
       dayRef.current?.scrollTo({ y: (next.d - 1) * ROW_HEIGHT, animated: false });
-      monthRef.current?.scrollTo({
-        y: (MIDDLE_MONTH_CYCLE * MONTH_NAMES.length + next.m) * ROW_HEIGHT,
-        animated: false,
-      });
-      yearRef.current?.scrollTo({ y: Math.max(0, CURRENT_YEAR - next.y) * ROW_HEIGHT, animated: false });
+      monthRef.current?.scrollTo({ y: next.m * ROW_HEIGHT, animated: false });
+      yearRef.current?.scrollTo({ y: Math.max(0, maxYear - next.y) * ROW_HEIGHT, animated: false });
     }, 220);
     return () => clearTimeout(timer);
-  }, [visible, initialValue]);
+  }, [visible, initialValue, cutoff, maxYear]);
 
   const selectDay = (value: number) => {
     setDay(value);
     dayRef.current?.scrollTo({ y: (value - 1) * ROW_HEIGHT, animated: true });
   };
 
-  const selectMonth = (value: number, itemIndex: number) => {
-    setMonth(value);
-    monthRef.current?.scrollTo({ y: itemIndex * ROW_HEIGHT, animated: true });
+  const selectMonth = (value: number) => {
+    const next = clampBirthday({ d: day, m: value, y: year }, cutoff);
+    setDay(next.d);
+    setMonth(next.m);
+    monthRef.current?.scrollTo({ y: next.m * ROW_HEIGHT, animated: true });
+    if (next.d !== day) {
+      dayRef.current?.scrollTo({ y: (next.d - 1) * ROW_HEIGHT, animated: true });
+    }
   };
 
   const selectYear = (value: number) => {
-    setYear(value);
-    yearRef.current?.scrollTo({ y: (CURRENT_YEAR - value) * ROW_HEIGHT, animated: true });
+    const next = clampBirthday({ d: day, m: month, y: value }, cutoff);
+    setDay(next.d);
+    setMonth(next.m);
+    setYear(next.y);
+    yearRef.current?.scrollTo({ y: (maxYear - next.y) * ROW_HEIGHT, animated: true });
+    monthRef.current?.scrollTo({ y: next.m * ROW_HEIGHT, animated: true });
+    dayRef.current?.scrollTo({ y: (next.d - 1) * ROW_HEIGHT, animated: true });
   };
 
   const apply = () => {
@@ -173,20 +209,13 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
             style={{ flex: 1, minWidth: 132 }}
             contentContainerStyle={{ alignItems: 'center', paddingVertical: WHEEL_PADDING }}
             onMomentumScrollEnd={(event) => {
-              const itemIndex = indexFromOffset(event.nativeEvent.contentOffset.y, monthItems.length);
-              const nextMonth = monthItems[itemIndex].month;
-              setMonth(nextMonth);
-              requestAnimationFrame(() => {
-                monthRef.current?.scrollTo({
-                  y: (MIDDLE_MONTH_CYCLE * MONTH_NAMES.length + nextMonth) * ROW_HEIGHT,
-                  animated: false,
-                });
-              });
+              const itemIndex = indexFromOffset(event.nativeEvent.contentOffset.y, months.length);
+              selectMonth(months[itemIndex]);
             }}>
-            {monthItems.map((item) => (
+            {months.map((value) => (
               <Pressable
-                key={item.index}
-                onPress={() => selectMonth(item.month, item.index)}
+                key={value}
+                onPress={() => selectMonth(value)}
                 style={{ height: ROW_HEIGHT, width: '100%', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
                 <Text
                   numberOfLines={1}
@@ -196,10 +225,10 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
                     width: '100%',
                     textAlign: 'center',
                     fontSize: 18,
-                    fontWeight: month === item.month ? '800' : '500',
-                    color: month === item.month ? palette.primary : palette.inkSecondary,
+                    fontWeight: month === value ? '800' : '500',
+                    color: month === value ? palette.primary : palette.inkSecondary,
                   }}>
-                  {MONTH_NAMES[item.month]}
+                  {MONTH_NAMES[value]}
                 </Text>
               </Pressable>
             ))}
@@ -212,7 +241,7 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
             decelerationRate="fast"
             style={{ width: 94 }}
             contentContainerStyle={{ alignItems: 'center', paddingVertical: WHEEL_PADDING }}
-            onMomentumScrollEnd={(event) => setYear(years[indexFromOffset(event.nativeEvent.contentOffset.y, years.length)])}>
+            onMomentumScrollEnd={(event) => selectYear(years[indexFromOffset(event.nativeEvent.contentOffset.y, years.length)])}>
             {years.map((value) => (
               <Pressable
                 key={value}

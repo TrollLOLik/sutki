@@ -1,13 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Dimensions,
-  Easing,
   FlatList,
-  Pressable,
   RefreshControl,
   ScrollView,
   Text,
@@ -18,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookingCard } from '@/components/BookingCard';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { EmptyState } from '@/components/EmptyState';
+import { CountedTabs } from '@/components/CountedTabs';
 import { HistoryBookingCard } from '@/components/HistoryBookingCard';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
@@ -64,8 +61,6 @@ export default function MyBookingsScreen() {
   const [sort, setSort] = useState<BookingSort>('newest');
   const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
-  const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
-  const tabAnim = useRef(new Animated.Value(0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
   const { mutateAsync: findOrCreateConv } = useFindOrCreateConversation();
 
@@ -110,15 +105,6 @@ export default function MyBookingsScreen() {
     activeQuery.refetch();
     historyQuery.refetch();
   };
-
-  useEffect(() => {
-    Animated.timing(tabAnim, {
-      toValue: tab === 'active' ? 0 : 1,
-      duration: 200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: false,
-    }).start();
-  }, [tab]);
 
   const handleTabChange = (nextTab: Tab) => {
     collapsibleHeader.show();
@@ -204,54 +190,14 @@ export default function MyBookingsScreen() {
           onSortChange={setSort}
         />
 
-        <View
-          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-          className="relative mx-4 mb-2 mt-4 h-12 flex-row rounded-pill bg-surface-muted p-1"
-          style={{ borderWidth: 1, borderColor: palette.line }}
-        >
-          <Animated.View
-            style={{
-              position: 'absolute',
-              top: 4,
-              left: 4,
-              bottom: 4,
-              width: (containerWidth - 8) / 2,
-              transform: [{
-                translateX: tabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, (containerWidth - 8) / 2],
-                })
-              }],
-              backgroundColor: palette.surface,
-              borderRadius: 9999,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 4,
-              elevation: 2,
-            }}
-          />
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'active' }}
-            onPress={() => handleTabChange('active')}
-            className="relative z-10 flex-1 items-center justify-center rounded-pill"
-          >
-            <Text className={`text-sm font-bold ${tab === 'active' ? 'text-ink' : 'text-ink-secondary'}`}>
-              Активные
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'history' }}
-            onPress={() => handleTabChange('history')}
-            className="relative z-10 flex-1 items-center justify-center rounded-pill"
-          >
-            <Text className={`text-sm font-bold ${tab === 'history' ? 'text-ink' : 'text-ink-secondary'}`}>
-              История
-            </Text>
-          </Pressable>
-        </View>
+        <CountedTabs
+          items={[
+            { value: 'active', label: 'Активные', count: rawActiveItems.length },
+            { value: 'history', label: 'История', count: rawHistoryItems.length },
+          ]}
+          value={tab}
+          onChange={handleTabChange}
+        />
 
         </CollapsibleHeader>
 

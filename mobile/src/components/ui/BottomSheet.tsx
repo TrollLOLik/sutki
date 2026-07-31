@@ -3,14 +3,13 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   useWindowDimensions,
   View,
   type DimensionValue,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -146,7 +145,8 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
       onShow={animateOpen}
       onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="height"
+        automaticOffset
         className="flex-1 justify-end">
         <Animated.View
           style={{

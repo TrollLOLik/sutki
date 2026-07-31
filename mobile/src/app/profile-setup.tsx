@@ -1,15 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
-	Animated,
-	Easing,
 	Image,
-	Modal,
-	Pressable,
-	ScrollView,
 	Text,
 	TextInput,
 	TouchableOpacity,
@@ -19,8 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import * as ImagePicker from 'expo-image-picker';
 
-import { Button, ScreenContainer, BottomSheet } from '@/components/ui';
+import { Button, ScreenContainer } from '@/components/ui';
+import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import { useDeleteMe, useUpdateMe } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
@@ -34,24 +31,6 @@ import { appAlert as Alert } from '@/components/AppAlert';
 
 // Mock Premium Avatar URL
 const MOCK_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop';
-
-const MONTH_NAMES = [
-  'января',
-  'февраля',
-  'марта',
-  'апреля',
-  'мая',
-  'июня',
-  'июля',
-  'августа',
-  'сентября',
-  'октября',
-  'ноября',
-  'декабря',
-];
-
-const CURRENT_YEAR = new Date().getFullYear();
-
 
 const detectCityByIP = async (): Promise<string | null> => {
   try {
@@ -103,18 +82,9 @@ export default function ProfileSetupScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // ScrollRefs for Date Picker wheels
-  const dayScrollRef = useRef<ScrollView>(null);
-  const monthScrollRef = useRef<ScrollView>(null);
-  const yearScrollRef = useRef<ScrollView>(null);
-
   // Modal States
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
-
-  const [tempDay, setTempDay] = useState(12);
-  const [tempMonth, setTempMonth] = useState(4); // May (0-indexed)
-  const [tempYear, setTempYear] = useState(CURRENT_YEAR - 20);
 
 
 
@@ -134,46 +104,7 @@ export default function ProfileSetupScreen() {
   const cityVal = watch('city');
   const birthdayVal = watch('birthday');
 
-  // Centering the wheels once bottom sheet slide animation resolves
-  useEffect(() => {
-    if (datePickerVisible) {
-      const timer = setTimeout(() => {
-        if (birthdayVal) {
-          const parts = birthdayVal.split('.');
-          if (parts.length === 3) {
-            const d = parseInt(parts[0], 10);
-            const m = parseInt(parts[1], 10) - 1;
-            const y = parseInt(parts[2], 10);
-            dayScrollRef.current?.scrollTo({ y: (d - 1) * 40, animated: false });
-            monthScrollRef.current?.scrollTo({ y: m * 40, animated: false });
-            yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - y) * 40, animated: false });
-          }
-        } else {
-          dayScrollRef.current?.scrollTo({ y: (12 - 1) * 40, animated: false });
-          monthScrollRef.current?.scrollTo({ y: 4 * 40, animated: false });
-          yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - (CURRENT_YEAR - 20)) * 40, animated: false });
-        }
-      }, 350); // 350ms ensures bottom sheet open animation (250ms) has fully finished
-      return () => clearTimeout(timer);
-    }
-  }, [datePickerVisible, birthdayVal]);
-
   const openDatePicker = () => {
-    if (birthdayVal) {
-      const parts = birthdayVal.split('.');
-      if (parts.length === 3) {
-        const d = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1;
-        const y = parseInt(parts[2], 10);
-        if (!isNaN(d)) setTempDay(d);
-        if (!isNaN(m)) setTempMonth(m);
-        if (!isNaN(y)) setTempYear(y);
-      }
-    } else {
-      setTempDay(12);
-      setTempMonth(4);
-      setTempYear(CURRENT_YEAR - 20);
-    }
     setDatePickerVisible(true);
   };
 
@@ -251,17 +182,11 @@ export default function ProfileSetupScreen() {
         }
       }
 
-      let formattedBirthday = '';
-      if (birthday) {
-        const [d, m, y] = birthday.split('.');
-        formattedBirthday = `${y}-${m}-${d}`;
-      }
-
       const user = await updateMe.mutateAsync({
         name,
         surname: surname || undefined,
         city,
-        birthday: formattedBirthday || undefined,
+        birthday: birthday || undefined,
         avatar_url: finalAvatarUrl || '',
       });
 
@@ -277,43 +202,9 @@ export default function ProfileSetupScreen() {
     }
   });
 
-  const handleSelectDay = (d: number) => {
-    setTempDay(d);
-    dayScrollRef.current?.scrollTo({ y: (d - 1) * 40, animated: true });
-  };
-
-  const handleSelectMonth = (m: number) => {
-    setTempMonth(m);
-    monthScrollRef.current?.scrollTo({ y: m * 40, animated: true });
-  };
-
-  const handleSelectYear = (y: number) => {
-    setTempYear(y);
-    yearScrollRef.current?.scrollTo({ y: (CURRENT_YEAR - y) * 40, animated: true });
-  };
-
-  const handleApplyDate = () => {
-    const dStr = tempDay.toString().padStart(2, '0');
-    const mStr = (tempMonth + 1).toString().padStart(2, '0');
-    const bday = `${dStr}.${mStr}.${tempYear}`;
-    setValue('birthday', bday);
-    closeDatePicker();
-  };
-
   const handleSelectCity = (city: string) => {
     setValue('city', city);
     closeCityPicker();
-  };
-
-  const formatBirthdayForDisplay = (val: string) => {
-    if (!val) return '';
-    const parts = val.split('.');
-    if (parts.length !== 3) return val;
-    const d = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10);
-    const y = parts[2];
-    if (isNaN(d) || isNaN(m)) return val;
-    return `${d} ${MONTH_NAMES[m - 1]} ${y}`;
   };
 
   // 1. Redirection / Completion view
@@ -373,10 +264,18 @@ export default function ProfileSetupScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
+      <KeyboardAwareForm
         contentContainerClassName="flex-grow gap-6 px-4 pb-8"
-      >
+        footer={(
+          <View className="w-full bg-surface px-4 pb-6 pt-3">
+            <Button
+              label="Продолжить"
+              loading={isSubmitting || uploading}
+              onPress={onSubmit}
+              disabled={!nameVal || !cityVal || uploading}
+            />
+          </View>
+        )}>
         {/* Centered title & subtitle */}
         <View className="items-center gap-2 mt-2">
           <Text className="text-2xl font-bold text-ink text-center">Создание профиля</Text>
@@ -506,7 +405,7 @@ export default function ProfileSetupScreen() {
                   birthdayVal ? 'text-ink' : 'text-ink-muted'
                 }`}
               >
-                {birthdayVal ? formatBirthdayForDisplay(birthdayVal) : 'Дата рождения (необязательно)'}
+                {birthdayVal ? formatBirthday(birthdayVal) : 'Дата рождения (необязательно)'}
               </Text>
               {birthdayVal ? (
                 <TouchableOpacity onPress={() => setValue('birthday', '')}>
@@ -547,110 +446,17 @@ export default function ProfileSetupScreen() {
             ) : null}
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareForm>
 
-      {/* Footer Continue Button */}
-      <View className="w-full pb-6 px-4">
-        <Button
-          label="Продолжить"
-          loading={isSubmitting || uploading}
-          onPress={onSubmit}
-          disabled={!nameVal || !cityVal || uploading}
-        />
-      </View>
-
-      {/* Date Picker Bottom Sheet Modal */}
-      <BottomSheet visible={datePickerVisible} onClose={closeDatePicker}>
-        {/* Header */}
-        <View className="items-center pb-4 border-b border-line">
-          <View className="h-1 w-12 rounded-full bg-line mb-3" />
-          <Text className="text-lg font-bold text-ink">Выберите дату рождения</Text>
-        </View>
-
-        {/* Scrollable Wheels Container */}
-        <View className="flex-row justify-center py-6 h-48">
-          {/* Day Column */}
-          <ScrollView
-            ref={dayScrollRef}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
-            className="w-16"
-          >
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-              <TouchableOpacity
-                key={d}
-                onPress={() => handleSelectDay(d)}
-                style={{ height: 40 }}
-                className="w-full items-center justify-center"
-              >
-                <Text
-                  className={`text-lg ${
-                    tempDay === d ? 'font-bold text-primary' : 'text-ink-secondary'
-                  }`}
-                  style={tempDay === d ? { color: palette.primary } : {}}
-                >
-                  {d}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Month Column */}
-          <ScrollView
-            ref={monthScrollRef}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
-            className="flex-1"
-          >
-            {MONTH_NAMES.map((m, idx) => (
-              <TouchableOpacity
-                key={m}
-                onPress={() => handleSelectMonth(idx)}
-                style={{ height: 40 }}
-                className="w-full items-center justify-center"
-              >
-                <Text
-                  className={`text-lg capitalize ${
-                    tempMonth === idx ? 'font-bold text-primary' : 'text-ink-secondary'
-                  }`}
-                  style={tempMonth === idx ? { color: palette.primary } : {}}
-                >
-                  {m}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Year Column */}
-          <ScrollView
-            ref={yearScrollRef}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ alignItems: 'center', paddingVertical: 76 }}
-            className="w-24"
-          >
-            {Array.from({ length: 80 }, (_, i) => CURRENT_YEAR - i).map((y) => (
-              <TouchableOpacity
-                key={y}
-                onPress={() => handleSelectYear(y)}
-                style={{ height: 40 }}
-                className="w-full items-center justify-center"
-              >
-                <Text
-                  className={`text-lg ${
-                    tempYear === y ? 'font-bold text-primary' : 'text-ink-secondary'
-                  }`}
-                  style={tempYear === y ? { color: palette.primary } : {}}
-                >
-                  {y}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Apply Button */}
-        <Button label="Применить" onPress={handleApplyDate} />
-      </BottomSheet>
+      <BirthdayPickerSheet
+        visible={datePickerVisible}
+        onClose={closeDatePicker}
+        onApply={(isoDate) => {
+          setValue('birthday', isoDate);
+          closeDatePicker();
+        }}
+        initialValue={birthdayVal}
+      />
 
       {/* City Autocomplete Bottom Sheet Modal */}
       <CityPickerSheet

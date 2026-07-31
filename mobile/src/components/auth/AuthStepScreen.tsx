@@ -1,18 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { MotiView } from 'moti';
-import { useEffect, useState, type ReactNode } from 'react';
-import {
-  Keyboard,
-  Platform,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { type ReactNode } from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { ScreenContainer } from '@/components/ui';
+import { useKeyboardStickyStyle } from '@/hooks/useKeyboardStickyStyle';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface AuthStepScreenProps {
@@ -34,30 +29,7 @@ export function AuthStepScreen({
   fallback = '/welcome',
 }: AuthStepScreenProps) {
   const { palette } = useAppTheme();
-  const insets = useSafeAreaInsets();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    const safeAreaAdjustment = Platform.OS === 'ios' ? insets.bottom : 0;
-    const syncKeyboardMetrics = () => {
-      const metrics = Keyboard.metrics();
-      setKeyboardHeight(metrics ? Math.max(0, metrics.height - safeAreaAdjustment) : 0);
-    };
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSubscription = Keyboard.addListener(showEvent, (event) => {
-      setKeyboardHeight(Math.max(0, event.endCoordinates.height - safeAreaAdjustment));
-    });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    const metricsTimer = setTimeout(syncKeyboardMetrics, 0);
-    return () => {
-      clearTimeout(metricsTimer);
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, [insets.bottom]);
-
-  const footerOffset = keyboardHeight > 0 ? keyboardHeight + 10 : 0;
+  const keyboardStickyStyle = useKeyboardStickyStyle();
 
   return (
     <ScreenContainer centered>
@@ -72,7 +44,7 @@ export function AuthStepScreen({
           contentContainerStyle={{
             flexGrow: 1,
             paddingTop: 18,
-            paddingBottom: 116 + footerOffset,
+            paddingBottom: 116,
           }}>
           <MotiView
             from={{ opacity: 0, translateY: 14 }}
@@ -118,24 +90,27 @@ export function AuthStepScreen({
           </MotiView>
         </ScrollView>
 
-        <View
+        <Animated.View
           pointerEvents="box-none"
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: footerOffset,
-            paddingTop: 10,
-            paddingBottom: keyboardHeight > 0 ? 0 : 8,
-            backgroundColor: palette.surface,
-          }}>
+          style={[
+            {
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              paddingTop: 10,
+              paddingBottom: 8,
+              backgroundColor: palette.surface,
+            },
+            keyboardStickyStyle,
+          ]}>
           <MotiView
             from={{ opacity: 0, translateY: 10 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 180, delay: 80 }}>
             {footer}
           </MotiView>
-        </View>
+        </Animated.View>
       </View>
     </ScreenContainer>
   );
