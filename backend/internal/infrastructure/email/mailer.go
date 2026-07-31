@@ -2,10 +2,12 @@ package email
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 // OutboxMessage is a rendered email queued for delivery.
@@ -120,6 +122,7 @@ func (m *Mailer) Configured() bool { return m.sender.Configured() }
 func (m *Mailer) Enqueue(ctx context.Context, msg OutboxMessage) (bool, error) {
 	inserted, err := m.repo.Enqueue(ctx, msg)
 	if err != nil {
+		observability.CaptureException(ctx, fmt.Errorf("email outbox enqueue (%s): %w", msg.EventType, err))
 		return false, err
 	}
 	if inserted {
@@ -138,6 +141,7 @@ func (m *Mailer) Start(ctx context.Context) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("email worker: panic recovered, restarting: %v", r)
+				observability.CapturePanic(ctx, r)
 				// Restart the loop after a short pause so a poisoned row
 				// cannot take the worker down permanently.
 				time.Sleep(5 * time.Second)
@@ -164,6 +168,7 @@ func (m *Mailer) Start(ctx context.Context) {
 					lastPrune = time.Now()
 					if n, err := m.repo.Prune(ctx, time.Now().Add(-pruneAfter)); err != nil {
 						log.Printf("email worker: prune: %v", err)
+						observability.CaptureException(ctx, fmt.Errorf("email worker prune: %w", err))
 					} else if n > 0 {
 						log.Printf("email worker: pruned %d old outbox rows", n)
 					}
@@ -181,6 +186,7 @@ func (m *Mailer) processDue(ctx context.Context) {
 		items, err := m.repo.DueBatch(ctx, batchSize)
 		if err != nil {
 			log.Printf("email worker: load due batch: %v", err)
+			observability.CaptureException(ctx, fmt.Errorf("email worker load due batch: %w", err))
 			return
 		}
 		if len(items) == 0 {
@@ -199,6 +205,7 @@ func (m *Mailer) processDue(ctx context.Context) {
 				next := nextMidnight()
 				if err := m.repo.Postpone(ctx, item.ID, next); err != nil {
 					log.Printf("email worker: postpone id=%d: %v", item.ID, err)
+					observability.CaptureException(ctx, fmt.Errorf("email worker postpone: %w", err))
 					return // avoid a hot loop if postponing itself fails
 				}
 				log.Printf("email worker: daily limit %d reached, postponed %s to %s until %s",
@@ -233,6 +240,7 @@ func (m *Mailer) sentToday(ctx context.Context) int64 {
 	n, err := m.repo.CountSentSince(ctx, midnight)
 	if err != nil {
 		log.Printf("email worker: count sent today: %v", err)
+		observability.CaptureException(ctx, fmt.Errorf("email worker count sent today: %w", err))
 		return 0
 	}
 	return n
@@ -251,6 +259,7 @@ func (m *Mailer) deliver(ctx context.Context, item OutboxItem) {
 	if err == nil {
 		if err := m.repo.MarkSent(ctx, item.ID); err != nil {
 			log.Printf("email worker: mark sent id=%d: %v", item.ID, err)
+			observability.CaptureException(ctx, fmt.Errorf("email worker mark sent: %w", err))
 		}
 		log.Printf("email worker: sent %s to %s", item.EventType, domain.MaskEmail(item.Recipient))
 		return
@@ -260,15 +269,18 @@ func (m *Mailer) deliver(ctx context.Context, item OutboxItem) {
 	if attempt >= maxSendAttempts {
 		if mErr := m.repo.MarkFailed(ctx, item.ID, err.Error()); mErr != nil {
 			log.Printf("email worker: mark failed id=%d: %v", item.ID, mErr)
+			observability.CaptureException(ctx, fmt.Errorf("email worker mark failed: %w", mErr))
 		}
 		log.Printf("email worker: giving up on %s to %s after %d attempts: %v",
 			item.EventType, domain.MaskEmail(item.Recipient), attempt, err)
+		observability.CaptureException(ctx, fmt.Errorf("email delivery exhausted (%s): %w", item.EventType, err))
 		return
 	}
 
 	next := time.Now().Add(retryBackoff(attempt))
 	if mErr := m.repo.MarkRetry(ctx, item.ID, err.Error(), next); mErr != nil {
 		log.Printf("email worker: mark retry id=%d: %v", item.ID, mErr)
+		observability.CaptureException(ctx, fmt.Errorf("email worker mark retry: %w", mErr))
 	}
 	log.Printf("email worker: send %s to %s failed (attempt %d/%d), retry at %s: %v",
 		item.EventType, domain.MaskEmail(item.Recipient), attempt, maxSendAttempts,

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 type Publisher struct {
@@ -28,7 +29,12 @@ func NewPublisher(pool *pgxpool.Pool, url, apiKey string) *Publisher {
 	}
 }
 
-func (p *Publisher) PublishUserEvent(ctx context.Context, userID int32, event domain.UserEvent) error {
+func (p *Publisher) PublishUserEvent(ctx context.Context, userID int32, event domain.UserEvent) (err error) {
+	defer func() {
+		if err != nil {
+			observability.CaptureException(ctx, fmt.Errorf("realtime user event failed: %w", err))
+		}
+	}()
 	if userID <= 0 {
 		return nil
 	}

@@ -549,10 +549,12 @@ func (s *Service) handleFailure(ctx context.Context, job domain.AttachmentModera
 	}
 	if err := s.repo.RetryAttachmentModeration(ctx, job.ID, next, msg); err != nil {
 		log.Printf("attachment moderation: schedule retry for job %d: %v", job.ID, err)
+		observability.CaptureException(ctx, fmt.Errorf("attachment moderation schedule retry: %w", err))
 	}
 }
 
 func (s *Service) fail(ctx context.Context, job domain.AttachmentModerationJob, cause error) {
+	observability.CaptureException(ctx, fmt.Errorf("attachment moderation exhausted: %w", cause))
 	const reason = "Сервис проверки временно недоступен. Нажмите «Повторить»."
 	lastError := cause.Error()
 	if len(lastError) > 1000 {
@@ -560,6 +562,7 @@ func (s *Service) fail(ctx context.Context, job domain.AttachmentModerationJob, 
 	}
 	if err := s.repo.FailAttachment(ctx, job.ID, job.AttachmentID, reason, lastError); err != nil {
 		log.Printf("attachment moderation: mark attachment %d failed: %v", job.AttachmentID, err)
+		observability.CaptureException(ctx, fmt.Errorf("attachment moderation persist failure: %w", err))
 		return
 	}
 	if s.notifier != nil {

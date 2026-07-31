@@ -175,7 +175,11 @@ func (h *ReviewHandler) Eligibility(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.svc.Eligibility(r.Context(), int32(id), userID)
 	if err != nil {
-		writeError(w, http.StatusForbidden, "review not allowed")
+		if errors.Is(err, domain.ErrReviewNotAllowed) {
+			writeError(w, http.StatusForbidden, "review not allowed")
+		} else {
+			writeInternalError(w, r, err, "internal error")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, item)

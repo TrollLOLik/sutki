@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -69,12 +70,12 @@ func main() {
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("db connect: %v", err)
+		fatalTracked("db connect: %v", err)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("db ping: %v", err)
+		fatalTracked("db ping: %v", err)
 	}
 
 	privateStorage, err := storage.NewS3Storage(
@@ -88,7 +89,7 @@ func main() {
 		cfg.MediaBaseURL,
 	)
 	if err != nil {
-		log.Fatalf("failed to initialize private S3 storage: %v", err)
+		fatalTracked("failed to initialize private S3 storage: %v", err)
 	}
 
 	publicStorage, err := storage.NewS3Storage(
@@ -102,7 +103,7 @@ func main() {
 		cfg.MediaBaseURL,
 	)
 	if err != nil {
-		log.Fatalf("failed to initialize public S3 storage: %v", err)
+		fatalTracked("failed to initialize public S3 storage: %v", err)
 	}
 
 	queries := sqlc.New(pool)
@@ -139,7 +140,7 @@ func main() {
 		UnsubscribeSecret:  cfg.EmailUnsubscribeSecret,
 	})
 	if err != nil {
-		log.Fatalf("email templates: %v", err)
+		fatalTracked("email templates: %v", err)
 	}
 	emailHandler := httpdelivery.NewEmailHandler(emailPrefsRepo, cfg.EmailUnsubscribeSecret)
 
@@ -178,7 +179,7 @@ func main() {
 			Timeout: cfg.PaymentProviderTimeout,
 		})
 		if err != nil {
-			log.Fatalf("payment provider: %v", err)
+			fatalTracked("payment provider: %v", err)
 		}
 	} else {
 		paymentProvider = paymentinfra.NewMockProvider()
@@ -321,7 +322,7 @@ func main() {
 	go func() {
 		log.Printf("listening on %s", cfg.HTTPAddr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("server: %v", err)
+			fatalTracked("server: %v", err)
 		}
 	}()
 
@@ -333,8 +334,16 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
+		observability.CaptureException(shutdownCtx, fmt.Errorf("server shutdown: %w", err))
 	}
 	log.Println("stopped")
+}
+
+func fatalTracked(format string, args ...any) {
+	err := fmt.Errorf(format, args...)
+	observability.CaptureException(context.Background(), err)
+	observability.Flush(3 * time.Second)
+	log.Fatal(err)
 }
 
 func newErrorTrackingMiddleware(enabled bool) func(http.Handler) http.Handler {

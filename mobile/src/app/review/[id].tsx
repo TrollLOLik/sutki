@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useLocalSearchParams } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,6 +20,7 @@ import { ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import { reportInvariant } from '@/lib/observability';
 
 const MAX_BODY = 1500;
 
@@ -46,9 +47,11 @@ export default function LeaveReviewScreen() {
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const reportedRequestMismatch = useRef<string | null>(null);
 
   useEffect(() => {
     const canEditExisting =
+      elig?.request_id === numericId &&
       elig?.can_review === true &&
       (elig.review_status === 'rejected' || elig.review_status === 'moderation_review');
 
@@ -57,8 +60,23 @@ export default function LeaveReviewScreen() {
     setError(null);
   }, [numericId, elig?.request_id, elig?.review_id, elig?.review_status, elig?.can_review]);
 
+  useEffect(() => {
+    if (!elig || elig.request_id === numericId) return;
+    const reportKey = `${numericId}:${elig.request_id}`;
+    if (reportedRequestMismatch.current === reportKey) return;
+    reportedRequestMismatch.current = reportKey;
+    reportInvariant('Review eligibility returned a different request', {
+      component: 'leave-review',
+      operation: 'request-mismatch',
+    });
+  }, [elig, numericId]);
+
   const onSubmit = () => {
     setError(null);
+    if (!elig || elig.request_id !== numericId || !elig.can_review) {
+      setError('Для этой заявки сейчас нельзя оставить отзыв.');
+      return;
+    }
     if (rating < 1) {
       setError('Пожалуйста, поставьте оценку.');
       return;
@@ -74,16 +92,11 @@ export default function LeaveReviewScreen() {
           goBackOrReplace('/bookings');
         },
         onError: (err) => {
-          const msg = err instanceof ApiError ? err.message : '';
-          if (msg === 'review unchanged') {
-            setError('Текст отзыва не изменился.');
-          } else if (msg === 'review attempts exceeded') {
-            setError('Вы исчерпали лимит редактирования (максимум 3 раза).');
-          } else if (msg === 'review not allowed in current status') {
-            setError('Отзыв в текущем статусе нельзя редактировать.');
-          } else {
-            setError('Не удалось отправить отзыв. Пожалуйста, попробуйте еще раз.');
-          }
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : 'Не удалось отправить отзыв. Пожалуйста, попробуйте еще раз.',
+          );
         },
       },
     );
@@ -227,7 +240,12 @@ export default function LeaveReviewScreen() {
                   : 'Отправить отзыв'
               }
               loading={createReview.isPending}
-              disabled={createReview.isPending || eligibility.isLoading || elig?.can_review !== true}
+              disabled={
+                createReview.isPending ||
+                eligibility.isLoading ||
+                elig?.can_review !== true ||
+                elig.request_id !== numericId
+              }
               onPress={onSubmit}
             />
           </View>

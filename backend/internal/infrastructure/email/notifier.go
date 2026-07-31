@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/observability"
 )
 
 // NotifierConfig tunes preference gating and unsubscribe links.
@@ -385,6 +386,7 @@ func (n *Notifier) categoryEnabled(ctx context.Context, userID int32, cat domain
 	p, err := n.cfg.Prefs.Get(ctx, userID)
 	if err != nil {
 		log.Printf("email: prefs lookup for user %d failed, sending anyway: %v", userID, err)
+		observability.CaptureException(ctx, fmt.Errorf("email preferences lookup: %w", err))
 		return true, nil
 	}
 	switch cat {
@@ -432,6 +434,7 @@ func (n *Notifier) enqueue(ctx context.Context, msg OutboxMessage, data any) err
 
 	textBody, htmlBody, err := n.renderer.render(msg.EventType, data)
 	if err != nil {
+		observability.CaptureException(ctx, fmt.Errorf("email render (%s): %w", msg.EventType, err))
 		return err
 	}
 	msg.BodyText = textBody

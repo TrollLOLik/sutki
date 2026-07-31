@@ -4,6 +4,7 @@ import { useAppVersionStore } from '@/store/appVersion';
 import { useNetworkStatusStore } from '@/store/networkStatus';
 import { getDeviceMetadata } from '@/lib/device';
 import { getGuestId } from '@/lib/guestId';
+import { reportHandledError } from '@/lib/observability';
 
 export class ApiError extends Error {
   constructor(
@@ -54,6 +55,8 @@ const API_ERROR_TRANSLATIONS: Record<string, string> = {
   'review not allowed': 'Сейчас нельзя оставить отзыв.',
   'review not allowed in current status': 'Сейчас нельзя изменить этот отзыв.',
   'review attempts exceeded': 'Превышено количество попыток изменения отзыва.',
+  'review unchanged': 'Текст отзыва не изменился.',
+  'invalid review': 'Проверьте оценку и текст отзыва.',
   'reply not allowed in current status': 'Сейчас нельзя изменить ответ на отзыв.',
   'reply attempts exceeded': 'Превышено количество попыток изменения ответа.',
   'you can only message users you have a listing or booking relationship with':
@@ -115,8 +118,34 @@ async function networkFetch(input: string, init: RequestInit): Promise<Response>
   }
 }
 
+function normalizedEndpoint(path: string): string {
+  return path
+    .split('?', 1)[0]
+    .replace(/\/[0-9]+(?=\/|$)/g, '/:id')
+    .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':uuid');
+}
+
+function apiError(status: number, message: string, payload: unknown, method: string, path: string): ApiError {
+  const error = new ApiError(status, localizeApiMessage(message, status), payload);
+  if (status >= 500) {
+    const endpoint = normalizedEndpoint(path);
+    reportHandledError(error, {
+      component: 'api-client',
+      operation: 'server-response',
+      tags: {
+        http_status: String(status),
+        http_method: method,
+        endpoint,
+      },
+      fingerprint: ['mobile-api-error', method, endpoint, String(status)],
+    });
+  }
+  return error;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, auth = true, headers, ...rest } = options;
+  const method = String(rest.method ?? 'GET').toUpperCase();
   const metadata = getDeviceMetadata();
   const finalHeaders: Record<string, string> = {
     Accept: 'application/json',
@@ -189,11 +218,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
               const errBody = refreshPayload as { message?: string; error?: string } | undefined;
               const message =
                 errBody?.message ?? errBody?.error ?? `Request failed (${refreshRes.status})`;
-              throw new ApiError(
-                refreshRes.status,
-                localizeApiMessage(message, refreshRes.status),
-                refreshPayload,
-              );
+              throw apiError(refreshRes.status, message, refreshPayload, 'POST', '/api/v1/auth/refresh');
             } catch (err) {
               console.error('Failed to auto-refresh token inside promise:', err);
               throw err;
@@ -221,11 +246,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           }
           const errBody = retryPayload as { message?: string; error?: string } | undefined;
           const message = errBody?.message ?? errBody?.error ?? `Request failed (${retryRes.status})`;
-          throw new ApiError(
-            retryRes.status,
-            localizeApiMessage(message, retryRes.status),
-            retryPayload,
-          );
+          throw apiError(retryRes.status, message, retryPayload, method, path);
         }
       } catch (refreshErr) {
         console.error('Failed to auto-refresh token:', refreshErr);
@@ -249,7 +270,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       useAppVersionStore.getState().requireUpgrade(errBody?.minimum_supported_version ?? null);
     }
     const message = errBody?.message ?? errBody?.error ?? `Request failed (${res.status})`;
-    throw new ApiError(res.status, localizeApiMessage(message, res.status), payload);
+    throw apiError(res.status, message, payload, method, path);
   }
 
   return payload as T;

@@ -173,6 +173,7 @@ func (s *Service) notifyOwner(ctx context.Context, house domain.House, rev domai
 	owner, err := s.users.GetByID(ctx, house.OwnerID)
 	if err != nil {
 		log.Printf("review notify: owner %d lookup for review %d: %v", house.OwnerID, rev.ID, err)
+		observability.CaptureException(ctx, fmt.Errorf("review notification owner lookup: %w", err))
 		return
 	}
 	if owner.Email == "" {
@@ -352,6 +353,8 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 			if s.notifier != nil && s.users != nil {
 				go s.notifyOwner(context.Background(), house, domain.Review{ID: target.ReviewID, Rating: target.Rating})
 			}
+		} else {
+			observability.CaptureException(ctx, fmt.Errorf("review moderation listing lookup: %w", getErr))
 		}
 	}
 	return nil
@@ -370,6 +373,7 @@ func (s *Service) notifyAuthorModeration(ctx context.Context, target domain.Revi
 	author, err := s.users.GetByID(ctx, target.AuthorID)
 	if err != nil {
 		log.Printf("review moderation notify: author %d lookup for review %d: %v", target.AuthorID, target.ReviewID, err)
+		observability.CaptureException(ctx, fmt.Errorf("review moderation author lookup: %w", err))
 		return
 	}
 	if author.Email == "" {
@@ -423,10 +427,15 @@ func (s *Service) processSummaries(ctx context.Context) {
 	}
 	for _, houseID := range houses {
 		if err := s.regenerateReviewsSummary(ctx, houseID); err != nil {
-			_ = s.repo.RetrySummary(ctx, houseID, err.Error(), time.Now().Add(10*time.Minute))
+			observability.CaptureException(ctx, fmt.Errorf("review summary regeneration: %w", err))
+			if retryErr := s.repo.RetrySummary(ctx, houseID, err.Error(), time.Now().Add(10*time.Minute)); retryErr != nil {
+				observability.CaptureException(ctx, fmt.Errorf("review summary retry scheduling: %w", retryErr))
+			}
 			continue
 		}
-		_ = s.repo.CompleteSummary(ctx, houseID)
+		if err := s.repo.CompleteSummary(ctx, houseID); err != nil {
+			observability.CaptureException(ctx, fmt.Errorf("review summary completion: %w", err))
+		}
 	}
 }
 
