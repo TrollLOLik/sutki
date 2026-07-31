@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -84,20 +84,33 @@ function formatDate(dateStr: string): string {
 }
 
 export default function MyReviewsScreen() {
+  const routeParams = useLocalSearchParams<{
+    focusReviewId?: string;
+    focusTab?: ReviewTab;
+    notificationId?: string;
+  }>();
+  const requestedFocusReviewId = Number(routeParams.focusReviewId ?? 0);
+  const requestedFocusTab: ReviewTab = routeParams.focusTab === 'received' ? 'received' : 'written';
   const collapsibleHeader = useCollapsibleHeader();
+  const showCollapsibleHeader = collapsibleHeader.show;
   useActivityScopeSeen('reviews');
   const { palette, isDark } = useAppTheme();
   const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
   const headerBackground = isDark ? '#14161B' : '#FFFFFF';
-  const [tab, setTab] = useState<ReviewTab>('written');
+  const [tab, setTab] = useState<ReviewTab>(requestedFocusTab);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ReviewSort>('newest');
   const [sortVisible, setSortVisible] = useState(false);
   const pageWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(pageWidth - 32);
-  const tabAnim = useRef(new Animated.Value(0)).current;
+  const tabAnim = useRef(new Animated.Value(requestedFocusTab === 'received' ? 1 : 0)).current;
   const horizontalScrollRef = useRef<ScrollView>(null);
+  const writtenListRef = useRef<FlatList<UserReview>>(null);
   const receivedListRef = useRef<FlatList<UserReview>>(null);
+  const handledFocusKeyRef = useRef('');
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reviewHighlight = useRef(new Animated.Value(0)).current;
+  const [highlightedReviewId, setHighlightedReviewId] = useState<number | null>(null);
 
   const writtenQuery = useMyWrittenReviews({ limit: 100 });
   const receivedQuery = useMyReceivedReviews({ limit: 100 });
@@ -125,6 +138,79 @@ export default function MyReviewsScreen() {
     }).start();
   }, [tab]);
 
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      reviewHighlight.stopAnimation();
+    };
+  }, [reviewHighlight]);
+
+  useEffect(() => {
+    if (!Number.isFinite(requestedFocusReviewId) || requestedFocusReviewId <= 0 || isLoading) return;
+
+    const focusKey = `${routeParams.notificationId ?? 'direct'}:${requestedFocusReviewId}:${requestedFocusTab}`;
+    if (handledFocusKeyRef.current === focusKey) return;
+
+    const rawItems = requestedFocusTab === 'received' ? rawReceivedItems : rawWrittenItems;
+    if (!rawItems.some((item) => item.id === requestedFocusReviewId)) return;
+
+    if (query) {
+      setQuery('');
+      return;
+    }
+
+    const visibleItems = requestedFocusTab === 'received' ? receivedItems : writtenItems;
+    const targetIndex = visibleItems.findIndex((item) => item.id === requestedFocusReviewId);
+    if (targetIndex < 0) return;
+
+    handledFocusKeyRef.current = focusKey;
+    showCollapsibleHeader();
+    setTab(requestedFocusTab);
+    tabAnim.setValue(requestedFocusTab === 'received' ? 1 : 0);
+    setHighlightedReviewId(requestedFocusReviewId);
+    reviewHighlight.stopAnimation();
+    reviewHighlight.setValue(0);
+
+    requestAnimationFrame(() => {
+      horizontalScrollRef.current?.scrollTo({
+        x: requestedFocusTab === 'received' ? pageWidth : 0,
+        animated: false,
+      });
+    });
+
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      const listRef = requestedFocusTab === 'received' ? receivedListRef : writtenListRef;
+      listRef.current?.scrollToIndex({
+        index: targetIndex,
+        animated: true,
+        viewPosition: 0.38,
+      });
+      Animated.sequence([
+        Animated.timing(reviewHighlight, { toValue: 1, duration: 220, useNativeDriver: false }),
+        Animated.timing(reviewHighlight, { toValue: 0.35, duration: 420, useNativeDriver: false }),
+        Animated.timing(reviewHighlight, { toValue: 1, duration: 220, useNativeDriver: false }),
+        Animated.timing(reviewHighlight, { toValue: 0, duration: 700, useNativeDriver: false }),
+      ]).start(({ finished }) => {
+        if (finished) setHighlightedReviewId(null);
+      });
+    }, 180);
+  }, [
+    isLoading,
+    pageWidth,
+    query,
+    rawReceivedItems,
+    rawWrittenItems,
+    receivedItems,
+    requestedFocusReviewId,
+    requestedFocusTab,
+    reviewHighlight,
+    routeParams.notificationId,
+    showCollapsibleHeader,
+    tabAnim,
+    writtenItems,
+  ]);
+
   const handleTabChange = (nextTab: ReviewTab) => {
     collapsibleHeader.show();
     setTab(nextTab);
@@ -144,106 +230,55 @@ export default function MyReviewsScreen() {
   };
 
   const renderItem = ({ item, isWritten }: { item: UserReview; isWritten: boolean }) => {
-    if (!isWritten) {
-      return (
-        <ReceivedReviewCard
-          review={item}
-          onReplyFocus={scrollReplyAboveKeyboard}
-        />
-      );
-    }
-    if (isWritten) {
-      return (
-        <MaterialSurface level="raised" radius={20} className="mb-3 gap-3 p-4">
-          <View className="flex-row items-center gap-3">
-            {item.house_cover_url ? (
-              <Image
-                source={{ uri: item.house_cover_url }}
-                style={{ width: 68, height: 52, borderRadius: 13 }}
-                contentFit="cover"
-              />
-            ) : (
-              <View className="items-center justify-center rounded-xl bg-surface-muted" style={{ width: 68, height: 52 }}>
-                <Ionicons name="image-outline" size={20} color={palette.inkMuted} />
-              </View>
-            )}
-            <View className="flex-1 gap-0.5">
-              <Text className="text-sm font-bold text-ink" numberOfLines={1}>
-                {item.house_street}, {item.house_number}
-              </Text>
-              <Text className="text-xs text-ink-secondary">
-                {item.house_city}
-              </Text>
-            </View>
-          </View>
+    const isHighlighted = highlightedReviewId === item.id;
+    const highlightStyle = isHighlighted
+      ? {
+          borderColor: reviewHighlight.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['rgba(255, 101, 53, 0)', palette.primary],
+          }),
+          transform: [
+            {
+              scale: reviewHighlight.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 1.012],
+              }),
+            },
+          ],
+        }
+      : null;
 
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-0.5 rounded-full bg-primary-light px-2.5 py-1.5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Ionicons
-                  key={i}
-                  name={i < item.rating ? 'star' : 'star-outline'}
-                  size={16}
-                  color={i < item.rating ? palette.star : palette.inkMuted}
-                />
-              ))}
-            </View>
-            <Text className="text-xs text-ink-secondary">{formatDate(item.created_at)}</Text>
-          </View>
-
-          <Text className="text-[15px] font-normal leading-6 text-ink">
-            {item.body}
-          </Text>
-          {item.status && item.status !== 'active' ? (
-            <View className="self-start flex-row items-center gap-1.5 rounded-pill bg-primary-light px-3 py-1.5">
-              <Ionicons name={item.status === 'rejected' ? 'close-circle-outline' : 'time-outline'} size={14} color={item.status === 'rejected' ? palette.danger : palette.primary} />
-              <Text className="text-xs font-bold text-primary">
-                {item.status === 'rejected' ? 'Отклонён' : item.status === 'moderation_review' ? 'Дополнительная проверка' : 'На проверке'}
-              </Text>
-            </View>
-          ) : null}
-          {item.status === 'rejected' && item.rejection_reason ? <Text className="text-xs leading-4 text-danger">{item.rejection_reason}</Text> : null}
-          {item.request_id && (item.status === 'rejected' || item.status === 'moderation_review') ? (
-            <View className="mt-2 self-end" style={{ width: 140 }}>
-              <Button
-                label="Изменить"
-                size="md"
-                onPress={() => router.push({ pathname: '/review/[id]', params: { id: String(item.request_id) } })}
-              />
-            </View>
-          ) : null}
-        </MaterialSurface>
-      );
-    }
-
-    return (
-      <View className="mb-3 rounded-card border border-line bg-surface p-3 gap-3">
+    const card = !isWritten ? (
+      <ReceivedReviewCard
+        review={item}
+        onReplyFocus={scrollReplyAboveKeyboard}
+      />
+    ) : (
+      <MaterialSurface level="raised" radius={20} className="gap-3 p-4">
         <View className="flex-row items-center gap-3">
-          {item.author_avatar_url ? (
+          {item.house_cover_url ? (
             <Image
-              source={{ uri: item.author_avatar_url }}
-              style={{ width: 40, height: 40, borderRadius: 20 }}
+              source={{ uri: item.house_cover_url }}
+              style={{ width: 68, height: 52, borderRadius: 13 }}
               contentFit="cover"
             />
           ) : (
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
-              <Text className="text-sm font-bold text-primary">
-                {item.author_name ? item.author_name[0].toUpperCase() : 'Г'}
-              </Text>
+            <View className="items-center justify-center rounded-xl bg-surface-muted" style={{ width: 68, height: 52 }}>
+              <Ionicons name="image-outline" size={20} color={palette.inkMuted} />
             </View>
           )}
           <View className="flex-1 gap-0.5">
-            <Text className="text-sm font-bold text-ink">
-              {item.author_name || 'Гость'}
+            <Text className="text-sm font-bold text-ink" numberOfLines={1}>
+              {item.house_street}, {item.house_number}
             </Text>
-            <Text className="text-xs text-ink-secondary">{formatDate(item.created_at)}</Text>
+            <Text className="text-xs text-ink-secondary">
+              {item.house_city}
+            </Text>
           </View>
         </View>
 
-        <View className="h-px bg-line" />
-
         <View className="flex-row items-center justify-between">
-          <View className="flex-row gap-0.5">
+          <View className="flex-row items-center gap-0.5 rounded-full bg-primary-light px-2.5 py-1.5">
             {Array.from({ length: 5 }).map((_, i) => (
               <Ionicons
                 key={i}
@@ -253,17 +288,37 @@ export default function MyReviewsScreen() {
               />
             ))}
           </View>
-          <View className="bg-surface-muted px-2.5 py-1 rounded-pill border border-line" style={{ maxWidth: '60%' }}>
-            <Text className="text-xs text-ink-secondary font-medium" numberOfLines={1}>
-              {item.house_street}, {item.house_number}
-            </Text>
-          </View>
+          <Text className="text-xs text-ink-secondary">{formatDate(item.created_at)}</Text>
         </View>
 
-        <Text className="text-base text-ink leading-5 font-normal">
+        <Text className="text-[15px] font-normal leading-6 text-ink">
           {item.body}
         </Text>
-      </View>
+        {item.status && item.status !== 'active' ? (
+          <View className="self-start flex-row items-center gap-1.5 rounded-pill bg-primary-light px-3 py-1.5">
+            <Ionicons name={item.status === 'rejected' ? 'close-circle-outline' : 'time-outline'} size={14} color={item.status === 'rejected' ? palette.danger : palette.primary} />
+            <Text className="text-xs font-bold text-primary">
+              {item.status === 'rejected' ? 'Отклонён' : item.status === 'moderation_review' ? 'Дополнительная проверка' : 'На проверке'}
+            </Text>
+          </View>
+        ) : null}
+        {item.status === 'rejected' && item.rejection_reason ? <Text className="text-xs leading-4 text-danger">{item.rejection_reason}</Text> : null}
+        {item.request_id && (item.status === 'rejected' || item.status === 'moderation_review') ? (
+          <View className="mt-2 self-end" style={{ width: 140 }}>
+            <Button
+              label="Изменить"
+              size="md"
+              onPress={() => router.push({ pathname: '/review/[id]', params: { id: String(item.request_id) } })}
+            />
+          </View>
+        ) : null}
+      </MaterialSurface>
+    );
+
+    return (
+      <Animated.View style={[screenStyles.reviewCardFrame, highlightStyle]}>
+        {card}
+      </Animated.View>
     );
   };
 
@@ -391,6 +446,7 @@ export default function MyReviewsScreen() {
                 />
               ) : (
                 <FlatList
+                  ref={writtenListRef}
                   data={writtenItems}
                   renderItem={({ item }) => renderItem({ item, isWritten: true })}
                   keyExtractor={(item) => String(item.id)}
@@ -401,6 +457,15 @@ export default function MyReviewsScreen() {
                   scrollEventThrottle={16}
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
+                  onScrollToIndexFailed={({ index, averageItemLength }) => {
+                    writtenListRef.current?.scrollToOffset({
+                      offset: Math.max(0, averageItemLength * index),
+                      animated: false,
+                    });
+                    setTimeout(() => {
+                      writtenListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.38 });
+                    }, 120);
+                  }}
                   ListFooterComponent={
                     writtenItems.length > 0 ? (
                       <View className="py-6 items-center">
@@ -434,6 +499,15 @@ export default function MyReviewsScreen() {
                   contentContainerClassName="px-4 pb-6 pt-1"
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
+                  onScrollToIndexFailed={({ index, averageItemLength }) => {
+                    receivedListRef.current?.scrollToOffset({
+                      offset: Math.max(0, averageItemLength * index),
+                      animated: false,
+                    });
+                    setTimeout(() => {
+                      receivedListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.38 });
+                    }, 120);
+                  }}
                   ListFooterComponent={
                     receivedItems.length > 0 ? (
                       <View className="py-6 items-center">
@@ -454,6 +528,12 @@ export default function MyReviewsScreen() {
 }
 
 const screenStyles = StyleSheet.create({
+  reviewCardFrame: {
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderRadius: 22,
+  },
   header: {
     height: 68,
     flexShrink: 0,
@@ -513,7 +593,7 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
   };
 
   return (
-    <MaterialSurface level="raised" radius={20} className="mb-3 gap-3 p-4">
+    <MaterialSurface level="raised" radius={20} className="gap-3 p-4">
       <View className="flex-row items-center gap-3">
         {review.author_avatar_url ? (
           <Image source={{ uri: review.author_avatar_url }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />

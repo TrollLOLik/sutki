@@ -34,6 +34,8 @@ export interface ProfileActionItem {
 }
 
 interface ProfileHeroProps {
+  avatarActionIcon?: keyof typeof Ionicons.glyphMap | null;
+  avatarPressLabel?: string;
   avatarUri?: string | null;
   badge?: string;
   city?: string | null;
@@ -49,6 +51,8 @@ interface ProfileHeroProps {
 }
 
 export function ProfileHero({
+  avatarActionIcon = 'camera-outline',
+  avatarPressLabel = 'Изменить фото профиля',
   avatarUri,
   badge = 'Дом рядом',
   city,
@@ -74,7 +78,7 @@ export function ProfileHero({
         <AvatarWrapper
           {...(onAvatarPress
             ? {
-                accessibilityLabel: 'Изменить фото профиля',
+                accessibilityLabel: avatarPressLabel,
                 accessibilityRole: 'button' as const,
                 activeOpacity: 0.78,
                 disabled: uploadingAvatar,
@@ -99,7 +103,7 @@ export function ProfileHero({
             )}
           </View>
 
-          {onAvatarPress ? (
+          {onAvatarPress && avatarActionIcon ? (
             <View
               style={[
                 styles.avatarAction,
@@ -111,7 +115,7 @@ export function ProfileHero({
               {uploadingAvatar ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Ionicons name="camera-outline" size={15} color="#FFFFFF" />
+                <Ionicons name={avatarActionIcon} size={15} color="#FFFFFF" />
               )}
             </View>
           ) : null}

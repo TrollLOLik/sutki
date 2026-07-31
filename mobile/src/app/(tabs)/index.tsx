@@ -25,13 +25,15 @@ import { BlurView } from 'expo-blur';
 import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
+import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
 import { Button, Chip, BottomSheet } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
-import { useMyListings } from '@/lib/api/create-listing';
+import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
+import { ApiError } from '@/lib/api/client';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useViewedListingIds } from '@/lib/api/viewed-listings';
 import { filtersToListParams, similarFiltersToListParams, useListings } from '@/lib/api/listings';
@@ -45,6 +47,7 @@ import { useListingLayoutStore } from '@/store/listing-layout';
 import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
+import { appAlert as Alert } from '@/components/AppAlert';
 
 const QUICK_FILTERS: { label: string; value: 'all' | RoomFilter }[] = [
   { label: 'Все', value: 'all' },
@@ -157,10 +160,38 @@ export default function SearchScreen() {
   const { data: favoriteIds } = useFavoriteIds();
   const { data: viewedListingIds } = useViewedListingIds();
   const toggleFavorite = useToggleFavorite();
+  const publication = useListingPublication();
 
   const { status: authStatus, user } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
   const isGuest = authStatus === 'guest';
+
+  const unpublishListing = useCallback(
+    (id: number) => {
+      Alert.alert(
+        'Снять объявление с публикации?',
+        'Объявление исчезнет из поиска. Активное продвижение будет приостановлено.',
+        [
+          { text: 'Назад', style: 'cancel' },
+          {
+            text: 'Снять',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await publication.mutateAsync({ id, published: false });
+              } catch (error) {
+                Alert.alert(
+                  'Не удалось снять объявление',
+                  error instanceof ApiError ? error.message : 'Попробуйте ещё раз.',
+                );
+              }
+            },
+          },
+        ],
+      );
+    },
+    [publication],
+  );
 
   useEffect(() => {
     filters.applyProfileCityIfUnset(user?.city);
@@ -643,29 +674,68 @@ export default function SearchScreen() {
               tintColor={palette.primary}
             />
           }
-          renderItem={({ item }) => (
-            <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
-              <ListingCard
-                listing={item}
-                layout={layoutMode}
-                onPress={() => {
-                  if (useFiltersStore.getState().favoritesOnly) {
-                    useNavigationHistoryStore.getState().allowForwardRevisit();
+          renderItem={({ item }) => {
+            const isOwn = user?.id === item.owner_id;
+            const ownerActions = isOwn
+              ? getListingOwnerActionAvailability(item.status)
+              : undefined;
+
+            return (
+              <View style={layoutMode === 'grid' ? { width: '48%' } : undefined}>
+                <ListingCard
+                  listing={item}
+                  layout={layoutMode}
+                  onPress={() => {
+                    if (useFiltersStore.getState().favoritesOnly) {
+                      useNavigationHistoryStore.getState().allowForwardRevisit();
+                    }
+                    router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } });
+                  }}
+                  isFavorite={favoriteIds?.has(item.id) ?? false}
+                  isOwn={isOwn}
+                  isViewed={!isOwn && (viewedListingIds?.has(item.id) ?? false)}
+                  onToggleFavorite={() =>
+                    toggleFavorite.mutate({
+                      id: item.id,
+                      isFavorite: favoriteIds?.has(item.id) ?? false,
+                    })
                   }
-                  router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } });
-                }}
-                isFavorite={favoriteIds?.has(item.id) ?? false}
-                isOwn={user?.id === item.owner_id}
-                isViewed={user?.id !== item.owner_id && (viewedListingIds?.has(item.id) ?? false)}
-                onToggleFavorite={() =>
-                  toggleFavorite.mutate({
-                    id: item.id,
-                    isFavorite: favoriteIds?.has(item.id) ?? false,
-                  })
-                }
-              />
-            </View>
-          )}
+                  onEdit={
+                    ownerActions?.canEdit
+                      ? () =>
+                          router.push({
+                            pathname: '/create',
+                            params: { editId: String(item.id) },
+                          } as any)
+                      : undefined
+                  }
+                  onPromote={
+                    ownerActions?.canPromote
+                      ? () =>
+                          router.push({
+                            pathname: '/listing/[id]/promote' as any,
+                            params: { id: String(item.id) },
+                          })
+                      : undefined
+                  }
+                  onUnpublish={
+                    ownerActions?.canUnpublish
+                      ? () => unpublishListing(item.id)
+                      : undefined
+                  }
+                  onBook={
+                    !isOwn
+                      ? () =>
+                          router.push({
+                            pathname: '/booking/[id]',
+                            params: { id: String(item.id) },
+                          })
+                      : undefined
+                  }
+                />
+              </View>
+            );
+          }}
         />
       )}
 

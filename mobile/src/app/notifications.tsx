@@ -49,6 +49,13 @@ function stringPayload(item: UserNotification, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
+function reviewNotificationTab(item: UserNotification): 'written' | 'received' {
+  const targetType = stringPayload(item, 'target_type');
+  if (item.action === 'received') return 'received';
+  if (item.action === 'reply_published') return 'written';
+  return targetType === 'reply' ? 'received' : 'written';
+}
+
 function notificationPresentation(item: UserNotification): Presentation {
   const id = item.entity_id;
   if (item.scope === 'messages') {
@@ -381,6 +388,17 @@ export default function NotificationsScreen() {
 
   const openNotification = (item: UserNotification) => {
     if (!item.read_at) markRead.mutate(item.id);
+    if (item.scope === 'reviews' && item.entity_id) {
+      router.push({
+        pathname: '/my-reviews',
+        params: {
+          focusReviewId: String(item.entity_id),
+          focusTab: reviewNotificationTab(item),
+          notificationId: String(item.id),
+        },
+      });
+      return;
+    }
     const path = notificationPresentation(item).path;
     if (path) router.push(path as never);
   };

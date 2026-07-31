@@ -46,23 +46,6 @@ const (
 	SuggestionRoleGuest SuggestionRole = "guest"
 )
 
-// fallbackSuggestions are used whenever the model is unavailable: no API key
-// configured (the default in dev), a timeout, a refusal, or unparseable output.
-// The feature degrades to the canned chips the app shipped with rather than
-// showing an empty row.
-var fallbackSuggestions = map[SuggestionRole][]string{
-	SuggestionRoleHost: {
-		"Здравствуйте! Даты свободны",
-		"Уточните, пожалуйста, даты заезда и выезда",
-		"Напишу вам чуть позже",
-	},
-	SuggestionRoleGuest: {
-		"Здравствуйте! Квартира свободна на эти даты?",
-		"Во сколько можно заехать?",
-		"Подскажите, что входит в стоимость?",
-	},
-}
-
 // suggestionCacheEntry is one memoised set of suggestions.
 type suggestionCacheEntry struct {
 	suggestions []string
@@ -175,9 +158,11 @@ func (s *Service) Suggestions(ctx context.Context, userID int32, convID int64) (
 		role = SuggestionRoleHost
 	}
 
-	// General conversation, or no model configured: canned set.
+	// General conversation, or no model configured: the optional feature stays
+	// hidden. Static phrases look contextual in the UI but answer the wrong
+	// message and become especially confusing during a provider outage.
 	if sctx.HouseID == nil || s.suggestionGen == nil {
-		return SuggestionsResult{Suggestions: fallbackSuggestions[role], Generated: false}, nil
+		return SuggestionsResult{Suggestions: nil, Generated: false}, nil
 	}
 
 	if cached, ok := s.suggestionCache.get(convID, role, sctx.LastMessageID); ok {
@@ -187,7 +172,7 @@ func (s *Service) Suggestions(ctx context.Context, userID int32, convID int64) (
 	suggestions, err := s.generateSuggestions(ctx, role, userID, sctx)
 	if err != nil {
 		log.Printf("[Chat] Reply suggestions unavailable (conv=%d, role=%s): %v", convID, role, err)
-		return SuggestionsResult{Suggestions: fallbackSuggestions[role], Generated: false}, nil
+		return SuggestionsResult{Suggestions: nil, Generated: false}, nil
 	}
 
 	s.suggestionCache.put(convID, role, sctx.LastMessageID, suggestions)

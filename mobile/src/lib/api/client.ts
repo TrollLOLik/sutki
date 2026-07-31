@@ -93,15 +93,24 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 }
 
 let activeRefreshPromise: Promise<string | null> | null = null;
+let networkRequestSequence = 0;
+let latestSuccessfulNetworkRequest = 0;
 
 async function networkFetch(input: string, init: RequestInit): Promise<Response> {
+  const requestSequence = ++networkRequestSequence;
   try {
     const response = await fetch(input, init);
+    latestSuccessfulNetworkRequest = Math.max(latestSuccessfulNetworkRequest, requestSequence);
     useNetworkStatusStore.getState().reportOnline();
     return response;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
-    useNetworkStatusStore.getState().reportOffline();
+    // A slower request may fail after a newer one has already proved that the
+    // API is reachable. Do not let that stale result flip the whole app back
+    // to offline and start an online/offline render loop.
+    if (requestSequence >= latestSuccessfulNetworkRequest) {
+      useNetworkStatusStore.getState().reportOffline();
+    }
     throw new ApiError(0, 'Нет подключения к интернету.', { network_error: true });
   }
 }

@@ -1303,23 +1303,43 @@ export default function ChatDialogScreen() {
 	 * собеседник существует. Ограничения «первые N сообщений» тут нет — подсказки
 	 * полезны и в середине переписки, где как раз надо ответить на вопрос.
 	 */
+	const latestUserMessage = React.useMemo(
+		() =>
+			messages.find(
+				(message) =>
+					(!message.kind || message.kind === 'user') &&
+					!message.deleted_at,
+			),
+		[messages],
+	);
+	const suggestionTargetMessage =
+		sessionUser?.id != null &&
+		latestUserMessage?.sender_id != null &&
+		latestUserMessage.sender_id !== sessionUser.id
+			? latestUserMessage
+			: undefined;
 	const suggestionsEnabled =
 		!isLoading &&
 		!isDeletedUser &&
 		!editing &&
 		isInputEmpty &&
 		staged.length === 0 &&
-		!!activeConv?.house_id;
+		!!activeConv?.house_id &&
+		!!suggestionTargetMessage;
 
-	// Ключ запроса привязан к последнему сообщению: пришло новое — подсказки
-	// перегенерируются под него.
-	const lastMessageID = messages.length > 0 ? messages[0].id : 0;
+	// Suggestions answer the latest incoming human message. Own outgoing
+	// messages and booking status cards must not trigger another paid request.
+	const lastMessageID = suggestionTargetMessage?.id ?? 0;
 	const { data: suggestionsData, isLoading: suggestionsLoading } = useChatSuggestions(
 		convID,
 		lastMessageID,
 		suggestionsEnabled,
 	);
-	const showSuggestions = suggestionsEnabled && (suggestionsLoading || !!suggestionsData?.suggestions.length);
+	const showSuggestions =
+		suggestionsEnabled &&
+		!suggestionsLoading &&
+		suggestionsData?.generated === true &&
+		!!suggestionsData.suggestions.length;
 
 	// Долгое нажатие по чипу — отправить сразу, без правки.
 	const handleSuggestionSendNow = React.useCallback(
@@ -1577,7 +1597,6 @@ export default function ChatDialogScreen() {
 						<SuggestionChips
 							suggestions={suggestionsData?.suggestions ?? []}
 							generated={suggestionsData?.generated ?? false}
-							loading={suggestionsLoading}
 							onPick={handleInputChange}
 							onSendNow={handleSuggestionSendNow}
 						/>

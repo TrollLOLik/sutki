@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { queryClient } from '@/lib/query';
 import { useNetworkStatusStore } from '@/store/networkStatus';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -24,6 +23,7 @@ export function NetworkStatusBanner() {
       const offline =
         nativeState.isConnected === false || nativeState.isInternetReachable === false;
       if (offline) {
+        onlineManager.setOnline(false);
         useNetworkStatusStore.getState().reportOffline();
         return;
       }
@@ -33,6 +33,7 @@ export function NetworkStatusBanner() {
         (nativeState.isConnected === true &&
           useNetworkStatusStore.getState().status === 'unknown')
       ) {
+        onlineManager.setOnline(true);
         useNetworkStatusStore.getState().reportOnline();
       }
     });
@@ -42,7 +43,6 @@ export function NetworkStatusBanner() {
     if (networkStatus === 'unknown') return;
 
     const offline = networkStatus === 'offline';
-    onlineManager.setOnline(!offline);
 
     if (offline) {
       wasOffline.current = true;
@@ -53,9 +53,6 @@ export function NetworkStatusBanner() {
     if (wasOffline.current === true) {
       wasOffline.current = false;
       setState('restored');
-      void queryClient.resumePausedMutations().then(() => {
-        void queryClient.refetchQueries({ type: 'active' });
-      });
       return;
     }
 

@@ -23,6 +23,7 @@ import { ListingCard } from '@/components/ListingCard';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { ResilientImage } from '@/components/ResilientImage';
 import { Button, IconButton } from '@/components/ui';
+import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { ProfileHero, ProfileMetricGrid } from '@/components/profile/ProfileOverview';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
@@ -75,6 +76,7 @@ export default function PublicProfileScreen() {
   const toggleFavorite = useToggleFavorite();
   const layoutMode = useListingLayoutStore((state) => state.discovery);
   const toggleLayoutMode = useListingLayoutStore((state) => state.toggleMode);
+  const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
 
   useEffect(() => {
     if (sessionUserId != null && numericId === sessionUserId) {
@@ -280,10 +282,15 @@ export default function PublicProfileScreen() {
         scrollEventThrottle={16}
       >
         <ProfileHero
+          avatarActionIcon="expand-outline"
+          avatarPressLabel="Открыть фото профиля"
           avatarUri={publicAvatarUrl || null}
           city={displayCity}
           initials={getInitials()}
           name={displayName}
+          onAvatarPress={
+            publicAvatarUrl ? () => setAvatarViewerVisible(true) : undefined
+          }
           subtitle={memberSince}
         />
 
@@ -478,6 +485,15 @@ export default function PublicProfileScreen() {
                       isFavorite={itemIsFavorite}
                       onToggleFavorite={() => toggleFavorite.mutate({ id: item.id, isFavorite: itemIsFavorite })}
                       onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(item.id) } })}
+                      onBook={
+                        sessionUserId !== item.owner_id
+                          ? () =>
+                              router.push({
+                                pathname: '/booking/[id]',
+                                params: { id: String(item.id) },
+                              })
+                          : undefined
+                      }
                     />
                   </View>
                 );
@@ -535,6 +551,12 @@ export default function PublicProfileScreen() {
           </View>
         </View>
       </Animated.View>
+
+      <ImageViewerModal
+        visible={avatarViewerVisible}
+        images={publicAvatarUrl ? [publicAvatarUrl] : []}
+        onClose={() => setAvatarViewerVisible(false)}
+      />
     </View>
   );
 }

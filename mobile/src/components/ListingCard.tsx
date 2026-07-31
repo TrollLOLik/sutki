@@ -5,6 +5,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 import { ResilientImage } from '@/components/ResilientImage';
@@ -31,6 +32,7 @@ interface ListingCardProps {
   onPromote?: () => void;
   onUnpublish?: () => void;
   onPublish?: () => void;
+  onBook?: () => void;
   showOwnerStats?: boolean;
 }
 
@@ -45,6 +47,84 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
   unpublished: { label: 'Снято с публикации', bg: '#EEF0F3', fg: '#606873' },
 };
 
+function ListingBookingAction({
+  compact,
+  onPress,
+}: {
+  compact: boolean;
+  onPress: () => void;
+}) {
+  const { palette } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <View
+      style={{
+        marginTop: compact ? 9 : 10,
+        borderTopWidth: compact ? 1 : 0,
+        borderTopColor: compact ? 'rgba(128,128,128,0.18)' : 'transparent',
+        paddingTop: compact ? 8 : 0,
+      }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Оставить заявку"
+        onPress={(event) => {
+          event.stopPropagation();
+          onPress();
+        }}
+        onPressIn={() => {
+          scale.value = reduceMotion ? 1 : withTiming(0.97, { duration: 70 });
+        }}
+        onPressOut={() => {
+          scale.value = reduceMotion
+            ? 1
+            : withSpring(1, { damping: 18, stiffness: 300, mass: 0.55 });
+        }}>
+        <Animated.View
+          style={[
+            {
+              minHeight: compact ? 36 : 42,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              borderRadius: compact ? 12 : 14,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.18)',
+              backgroundColor: palette.primary,
+              paddingHorizontal: compact ? 5 : 10,
+              shadowColor: palette.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              elevation: 3,
+            },
+            animatedStyle,
+          ]}>
+          <Ionicons name="calendar-outline" size={compact ? 15 : 17} color="#FFFFFF" />
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={{
+              flexShrink: 1,
+              color: '#FFFFFF',
+              fontSize: compact ? 10 : 12,
+              lineHeight: compact ? 13 : 16,
+              fontWeight: '800',
+            }}>
+            Оставить заявку
+          </Text>
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
 export function ListingCard({
   listing,
   layout = 'list',
@@ -57,6 +137,7 @@ export function ListingCard({
   onPromote,
   onUnpublish,
   onPublish,
+  onBook,
   showOwnerStats = false,
 }: ListingCardProps) {
   const { palette, isDark } = useAppTheme();
@@ -305,6 +386,7 @@ export function ListingCard({
               onUnpublish={onUnpublish}
               style={{ marginTop: 9 }}
             />
+            {onBook ? <ListingBookingAction compact onPress={onBook} /> : null}
           </Pressable>
         </PromotionHighlightSurface>
       </Animated.View>
@@ -519,6 +601,7 @@ export function ListingCard({
         onUnpublish={onUnpublish}
         style={{ marginTop: 10 }}
       />
+      {onBook ? <ListingBookingAction compact={false} onPress={onBook} /> : null}
         </Pressable>
       </PromotionHighlightSurface>
     </Animated.View>

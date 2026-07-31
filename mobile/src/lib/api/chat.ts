@@ -301,8 +301,11 @@ export function useChatSuggestions(
 		enabled: enabled && convID != null && convID > 0,
 		// Пока беседа не изменилась, ключ тот же — данные считаем свежими и не
 		// перезапрашиваем при возврате на экран.
-		staleTime: 5 * 60 * 1000,
-		// Подсказки — украшение: молча остаёмся на прежних, а не показываем ошибку.
+		staleTime: 30 * 60 * 1000,
+		gcTime: 30 * 60 * 1000,
+		refetchOnMount: false,
+		refetchOnReconnect: false,
+		// Подсказки — необязательное улучшение: ошибка модели не должна влиять на чат.
 		retry: false,
 	});
 }

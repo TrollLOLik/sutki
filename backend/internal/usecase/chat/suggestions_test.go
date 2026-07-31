@@ -186,19 +186,3 @@ func TestSuggestionSystemPromptDiffersByRole(t *testing.T) {
 		t.Fatal("guest prompt must state the guest role")
 	}
 }
-
-func TestFallbackSuggestionsCoverBothRoles(t *testing.T) {
-	for _, role := range []SuggestionRole{SuggestionRoleHost, SuggestionRoleGuest} {
-		set := fallbackSuggestions[role]
-		if len(set) != SuggestionsCount {
-			t.Fatalf("role %s: expected %d fallbacks, got %d", role, SuggestionsCount, len(set))
-		}
-		// Fallbacks ship to users unchanged, so they must satisfy the same rules
-		// the model output is held to.
-		for _, item := range set {
-			if sanitizeSuggestion(item) != item {
-				t.Fatalf("role %s: fallback %q would not survive sanitisation", role, item)
-			}
-		}
-	}
-}

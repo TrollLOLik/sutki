@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -9,8 +9,6 @@ interface SuggestionChipsProps {
 	suggestions: string[];
 	/** Подсказки от модели, а не статичный набор — показываем это иконкой. */
 	generated: boolean;
-	/** Идёт первая загрузка: показываем скелетон вместо пустоты. */
-	loading: boolean;
 	/** Короткий тап — вставить в поле ввода с возможностью правки. */
 	onPick: (text: string) => void;
 	/** Долгое нажатие — отправить сразу, без правки. */
@@ -22,8 +20,8 @@ interface SuggestionChipsProps {
  *
  * Раньше это были четыре зашитые в экран фразы, показывавшиеся только владельцу.
  * Теперь набор приходит с сервера: под роль (владелец или гость) и с учётом
- * переписки, а при недоступной модели сервер сам отдаёт статичный набор — у
- * клиента нет отдельной ветки на этот случай.
+ * последнего входящего сообщения. Если модель недоступна, подсказки просто не
+ * показываются: статичная фраза может не соответствовать вопросу собеседника.
  *
  * Поведение чипа: короткий тап вставляет текст в поле, чтобы его можно было
  * поправить перед отправкой; долгое нажатие отправляет сразу. Вставка выбрана
@@ -34,21 +32,11 @@ interface SuggestionChipsProps {
 export const SuggestionChips = React.memo(function SuggestionChips({
 	suggestions,
 	generated,
-	loading,
 	onPick,
 	onSendNow,
 }: SuggestionChipsProps) {
 	const { palette } = useAppTheme();
 	const chatColors = useChatColors();
-
-	if (loading) {
-		return (
-			<View style={styles.loadingRow}>
-				<ActivityIndicator size="small" color={palette.inkMuted} />
-				<Text className="ml-2 text-[12px] text-ink-muted">Подбираем варианты ответа…</Text>
-			</View>
-		);
-	}
 
 	if (!suggestions.length) return null;
 
@@ -102,12 +90,5 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingTop: 8,
 		gap: 8,
-	},
-	loadingRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		paddingHorizontal: 16,
-		paddingTop: 12,
-		paddingBottom: 4,
 	},
 });

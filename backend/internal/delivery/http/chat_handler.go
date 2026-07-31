@@ -562,9 +562,9 @@ func writeMessageMutationError(w http.ResponseWriter, r *http.Request, userID in
 
 // suggestions returns quick reply chips for a conversation.
 //
-// Always answers 200: when the model is unavailable the service degrades to the
-// canned set, and a failed suggestion must never look like a broken chat. The
-// `generated` flag in the body tells the client which it got.
+// Always answers 200: when the model is unavailable the optional feature
+// returns an empty list and the chat remains fully usable. The `generated`
+// flag tells the client whether there is contextual model output to display.
 func (h *ChatHandler) suggestions(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userIDFromContext(r.Context())
 	if !ok {
