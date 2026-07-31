@@ -3,6 +3,7 @@ import {
 	ActivityIndicator,
 	Animated,
 	FlatList,
+	Keyboard,
 	Pressable,
 	RefreshControl,
 	StyleSheet,
@@ -349,12 +350,25 @@ export default function MessagesScreen() {
 
 	return (
 		<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
-			<View className="px-5 pb-4 pt-4">
+			<Pressable accessible={false} onPress={Keyboard.dismiss} className="px-5 pb-4 pt-4">
 				<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
-			</View>
+			</Pressable>
 
 			<View style={{ flex: 1, overflow: 'hidden' }}>
 			<CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
+			{conversations && conversations.length > 0 ? (
+				<PersonalListToolbar
+					query={searchQuery}
+					onQueryChange={setSearchQuery}
+					placeholder="Поиск по перепискам..."
+					sort={sort}
+					sortOptions={CONVERSATION_SORT_OPTIONS}
+					sortVisible={sortVisible}
+					onSortVisibleChange={setSortVisible}
+					onSortChange={setSort}
+				/>
+			) : null}
+
 				<View
 					onLayout={(event) => setTabContainerWidth(event.nativeEvent.layout.width)}
 					style={{
@@ -424,18 +438,6 @@ export default function MessagesScreen() {
 					})}
 				</View>
 
-			{conversations && conversations.length > 0 ? (
-				<PersonalListToolbar
-					query={searchQuery}
-					onQueryChange={setSearchQuery}
-					placeholder="Поиск по перепискам..."
-					sort={sort}
-					sortOptions={CONVERSATION_SORT_OPTIONS}
-					sortVisible={sortVisible}
-					onSortVisibleChange={setSortVisible}
-					onSortChange={setSort}
-				/>
-			) : null}
 			</CollapsibleHeader>
 
 			<FlatList
@@ -446,6 +448,8 @@ export default function MessagesScreen() {
 					? { flexGrow: 1, paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }
 					: { paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }}
 				showsVerticalScrollIndicator={false}
+				keyboardDismissMode="on-drag"
+				keyboardShouldPersistTaps="handled"
 				onScroll={(event) => {
 					collapsibleHeader.onScroll(event);
 					handleTabBarScroll(event);

@@ -419,6 +419,17 @@ export default function NotificationsScreen() {
 
       <View style={{ flex: 1, overflow: 'hidden' }}>
       <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
+      <PersonalListToolbar
+        query={search}
+        onQueryChange={setSearch}
+        placeholder="Поиск по уведомлениям"
+        sort={sort}
+        sortOptions={SORT_OPTIONS}
+        sortVisible={sortVisible}
+        onSortVisibleChange={setSortVisible}
+        onSortChange={setSort}
+      />
+
       {hasNotifications ? (
         <View style={styles.summaryWrap}>
           <NotificationSummary
@@ -430,16 +441,6 @@ export default function NotificationsScreen() {
         </View>
       ) : null}
 
-      <PersonalListToolbar
-        query={search}
-        onQueryChange={setSearch}
-        placeholder="Поиск по уведомлениям"
-        sort={sort}
-        sortOptions={SORT_OPTIONS}
-        sortVisible={sortVisible}
-        onSortVisibleChange={setSortVisible}
-        onSortChange={setSort}
-      />
       </CollapsibleHeader>
 
       {query.isLoading ? (

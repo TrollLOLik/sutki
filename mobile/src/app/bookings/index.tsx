@@ -193,6 +193,17 @@ export default function MyBookingsScreen() {
 
         <View className="flex-1 overflow-hidden">
         <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
+        <PersonalListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Адрес, город или владелец"
+          sort={sort}
+          sortOptions={SORT_OPTIONS}
+          sortVisible={sortVisible}
+          onSortVisibleChange={setSortVisible}
+          onSortChange={setSort}
+        />
+
         <View
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
           className="relative mx-4 mb-2 mt-4 h-12 flex-row rounded-pill bg-surface-muted p-1"
@@ -242,16 +253,6 @@ export default function MyBookingsScreen() {
           </Pressable>
         </View>
 
-        <PersonalListToolbar
-          query={query}
-          onQueryChange={setQuery}
-          placeholder="Адрес, город или владелец"
-          sort={sort}
-          sortOptions={SORT_OPTIONS}
-          sortVisible={sortVisible}
-          onSortVisibleChange={setSortVisible}
-          onSortChange={setSort}
-        />
         </CollapsibleHeader>
 
         {isLoading ? (

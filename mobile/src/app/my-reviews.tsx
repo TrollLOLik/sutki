@@ -343,6 +343,17 @@ export default function MyReviewsScreen() {
 
         <View className="flex-1 overflow-hidden">
         <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
+        <PersonalListToolbar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder="Текст, адрес или пользователь"
+          sort={sort}
+          sortOptions={SORT_OPTIONS}
+          sortVisible={sortVisible}
+          onSortVisibleChange={setSortVisible}
+          onSortChange={setSort}
+        />
+
         {/* Tab switch */}
         <MaterialSurface
           level="raised"
@@ -390,16 +401,6 @@ export default function MyReviewsScreen() {
           </Pressable>
         </MaterialSurface>
 
-        <PersonalListToolbar
-          query={query}
-          onQueryChange={setQuery}
-          placeholder="Текст, адрес или пользователь"
-          sort={sort}
-          sortOptions={SORT_OPTIONS}
-          sortVisible={sortVisible}
-          onSortVisibleChange={setSortVisible}
-          onSortChange={setSort}
-        />
         </CollapsibleHeader>
 
         {/* Content list */}
