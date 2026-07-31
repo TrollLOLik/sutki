@@ -25,6 +25,7 @@ export interface ConversationSummary {
 	other_user_avatar_url: string;
 	other_user_phone?: string;
 	other_user_deleted?: boolean;
+	house_owner_id?: number;
 	house_street?: string;
 	house_number?: string;
 	house_count_room?: string;

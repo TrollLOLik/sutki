@@ -83,6 +83,7 @@ import { useKeyboardHandler } from 'react-native-keyboard-controller';
 
 const CHAT_LIST_CONTENT_STYLE = { paddingVertical: 18 } as const;
 const CHAT_LIST_BATCH_SIZE = 8;
+const CHAT_VIDEO_UPLOADS_ENABLED = false;
 const keyExtractor = (item: ChatMessage) => String(item.id);
 
 export default function ChatDialogScreen() {
@@ -1672,7 +1673,9 @@ export default function ChatDialogScreen() {
 						{[
 							{ icon: 'camera-outline' as const, title: 'Камера', subtitle: 'Сделать снимок сейчас', action: takePhoto },
 							{ icon: 'image-outline' as const, title: 'Фото', subtitle: 'Выбрать из галереи', action: pickImage },
-						{ icon: 'videocam-outline' as const, title: 'Видео', subtitle: `До ${MAX_VIDEO_SECONDS} секунд, сжимается автоматически`, action: pickVideo },
+							...(CHAT_VIDEO_UPLOADS_ENABLED
+								? [{ icon: 'videocam-outline' as const, title: 'Видео', subtitle: `До ${MAX_VIDEO_SECONDS} секунд, сжимается автоматически`, action: pickVideo }]
+								: []),
 							{ icon: 'document-text-outline' as const, title: 'Документ', subtitle: 'PDF, DOC, XLS и другие файлы', action: pickDocument },
 						].map((item, index) => (
 							<TouchableOpacity

@@ -270,6 +270,7 @@ type ConversationSummary struct {
 	OtherUserAvatarUrl     string     `json:"other_user_avatar_url"`
 	OtherUserPhone         string     `json:"other_user_phone"`
 	OtherUserDeleted       bool       `json:"other_user_deleted"`
+	HouseOwnerID           *int32     `json:"house_owner_id,omitempty"`
 	HouseStreet            *string    `json:"house_street,omitempty"`
 	HouseNumber            *string    `json:"house_number,omitempty"`
 	HouseCountRoom         *string    `json:"house_count_room,omitempty"`

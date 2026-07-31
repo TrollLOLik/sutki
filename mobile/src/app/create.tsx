@@ -9,6 +9,7 @@ import {
 	Platform,
 	Pressable,
 	ScrollView,
+	StyleSheet,
 	Text,
 	TextInput,
 	View,
@@ -142,12 +143,16 @@ export default function CreateListingScreen() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const formScrollRef = useRef<ScrollView>(null);
+  const formScrollOffsetRef = useRef(0);
   const fieldRefsRef = useRef<Partial<Record<ValidationAnchor, View>>>({});
   const pendingErrorAnchorRef = useRef<ValidationAnchor | null>(null);
   const [published, setPublished] = useState(false);
   const [publishedListingId, setPublishedListingId] = useState<number | null>(null);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [previousDescription, setPreviousDescription] = useState('');
+  const descriptionInputRef = useRef<TextInput>(null);
+  const [descriptionFocused, setDescriptionFocused] = useState(false);
+  const [descriptionInputHeight, setDescriptionInputHeight] = useState(160);
 
   const [loadedEdit, setLoadedEdit] = useState(false);
   const [uploadStatuses, setUploadStatuses] = useState<
@@ -706,20 +711,18 @@ export default function CreateListingScreen() {
   const scrollToErrorAnchor = (anchor: ValidationAnchor) => {
     pendingErrorAnchorRef.current = anchor;
     const field = fieldRefsRef.current[anchor];
-    const scrollContentNode = formScrollRef.current?.getInnerViewNode?.();
-    if (!field || !scrollContentNode) return;
+    const scrollView = formScrollRef.current;
+    const nativeScrollView = scrollView?.getNativeScrollRef();
+    if (!field || !scrollView || !nativeScrollView) return;
 
     requestAnimationFrame(() => {
-      field.measureLayout(
-        scrollContentNode,
-        (_x, y) => {
-          formScrollRef.current?.scrollTo({ y: Math.max(0, y - 18), animated: true });
+      field.measureInWindow((_fieldX, fieldY) => {
+        nativeScrollView.measureInWindow((_scrollX, scrollY) => {
+          const targetY = formScrollOffsetRef.current + fieldY - scrollY - 18;
+          scrollView.scrollTo({ y: Math.max(0, targetY), animated: true });
           pendingErrorAnchorRef.current = null;
-        },
-        () => {
-          formScrollRef.current?.scrollTo({ y: 0, animated: true });
-        },
-      );
+        });
+      });
     });
   };
 
@@ -1094,7 +1097,13 @@ export default function CreateListingScreen() {
           ref={formScrollRef}
           className="flex-1"
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 22, paddingBottom: 28 }}
-          keyboardShouldPersistTaps="handled">
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          onScroll={(event) => {
+            formScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}>
           <MotiView
             key={step}
             from={{ opacity: 0, translateX: 12 }}
@@ -1448,17 +1457,40 @@ export default function CreateListingScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <View className="rounded-field border border-line bg-surface px-4 py-3">
+              <View className="relative rounded-field border border-line bg-surface px-4 py-3">
                 <TextInput
+                  ref={descriptionInputRef}
                   placeholder="Опишите квартиру, район, что рядом, правила заселения…"
                   placeholderTextColor={palette.inkMuted}
                   value={draft.description}
                   onChangeText={(t) => draft.setField('description', t)}
                   multiline
+                  maxLength={1500}
+                  scrollEnabled={false}
+                  onContentSizeChange={(event) => {
+                    const nextHeight = Math.max(160, Math.ceil(event.nativeEvent.contentSize.height));
+                    setDescriptionInputHeight((currentHeight) =>
+                      Math.abs(currentHeight - nextHeight) > 1 ? nextHeight : currentHeight,
+                    );
+                  }}
                   textAlignVertical="top"
                   editable={!isGeneratingDescription}
-                  style={{ minHeight: 160, fontSize: 15, color: isGeneratingDescription ? palette.inkMuted : palette.ink }}
+                  onFocus={() => setDescriptionFocused(true)}
+                  onBlur={() => setDescriptionFocused(false)}
+                  style={{
+                    height: descriptionInputHeight,
+                    fontSize: 15,
+                    color: isGeneratingDescription ? palette.inkMuted : palette.ink,
+                  }}
                 />
+                {!descriptionFocused && !isGeneratingDescription ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Редактировать описание"
+                    onPress={() => descriptionInputRef.current?.focus()}
+                    style={StyleSheet.absoluteFill}
+                  />
+                ) : null}
               </View>
               
               <View className="flex-row items-center justify-between">

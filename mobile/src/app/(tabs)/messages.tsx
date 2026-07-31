@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+	ActivityIndicator,
+	Animated,
+	FlatList,
+	Pressable,
+	RefreshControl,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -14,9 +24,18 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import { Button, Skeleton } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
+import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 import { formatRooms } from '@/lib/format';
+import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 
 type ConversationSort = 'recent' | 'oldest' | 'unread';
+type ConversationTab = 'all' | 'renting' | 'hosting';
+
+const CONVERSATION_TABS: { value: ConversationTab; label: string }[] = [
+	{ value: 'all', label: 'Все' },
+	{ value: 'renting', label: 'Я снимаю' },
+	{ value: 'hosting', label: 'Я сдаю' },
+];
 
 const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
 	{ value: 'recent', label: 'Сначала новые', icon: 'time-outline' },
@@ -56,6 +75,8 @@ function ConversationListSkeleton({ dividerColor }: { dividerColor: string }) {
 }
 
 export default function MessagesScreen() {
+	const collapsibleHeader = useCollapsibleHeader();
+	const handleTabBarScroll = useScrollHideTabBar();
 	const { palette, isDark } = useAppTheme();
 	const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
 	const softBorder = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(18,24,32,0.07)';
@@ -72,6 +93,23 @@ export default function MessagesScreen() {
 	const [searchQuery, setSearchQuery] = useState('');
 	const [sort, setSort] = useState<ConversationSort>('recent');
 	const [sortVisible, setSortVisible] = useState(false);
+	const [tab, setTab] = useState<ConversationTab>('all');
+	const [tabContainerWidth, setTabContainerWidth] = useState(0);
+	const tabAnim = useRef(new Animated.Value(0)).current;
+
+	const handleTabChange = (nextTab: ConversationTab) => {
+		if (tab === nextTab) return;
+		const nextIndex = CONVERSATION_TABS.findIndex((item) => item.value === nextTab);
+		collapsibleHeader.show();
+		setTab(nextTab);
+		Animated.spring(tabAnim, {
+			toValue: Math.max(0, nextIndex),
+			damping: 22,
+			stiffness: 240,
+			mass: 0.8,
+			useNativeDriver: true,
+		}).start();
+	};
 
 	const handleConversationPress = (conv: ConversationSummary) => {
 		router.push({
@@ -165,13 +203,20 @@ export default function MessagesScreen() {
 		);
 	}
 
+	const conversationsForTab = conversations?.filter((conversation) => {
+		if (tab === 'all') return true;
+		if (conversation.house_owner_id == null || sessionUser?.id == null) return false;
+		const isHosting = conversation.house_owner_id === sessionUser.id;
+		return tab === 'hosting' ? isHosting : !isHosting;
+	}) ?? [];
+
 	// Filter conversations by search query
-	const filteredConversations = (conversations?.filter((c) => {
+	const filteredConversations = conversationsForTab.filter((c) => {
 		const fullName = `${c.other_user_name} ${c.other_user_surname}`.toLowerCase();
 		const body = c.last_message_body.toLowerCase();
 		const query = searchQuery.toLowerCase();
 		return fullName.includes(query) || body.includes(query);
-	}) ?? []).sort((a, b) => {
+	}).sort((a, b) => {
 		if (sort === 'unread') {
 			const unreadDifference = b.unread_count - a.unread_count;
 			if (unreadDifference !== 0) return unreadDifference;
@@ -179,6 +224,21 @@ export default function MessagesScreen() {
 		const activityDifference = new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime();
 		return sort === 'oldest' ? -activityDifference : activityDifference;
 	});
+	const emptyTitle = searchQuery.trim()
+		? 'Ничего не найдено'
+		: tab === 'hosting'
+			? 'Чатов по вашим объявлениям пока нет'
+			: tab === 'renting'
+				? 'Чатов с владельцами пока нет'
+				: 'Сообщений пока нет';
+	const emptySubtitle = searchQuery.trim()
+		? 'Попробуйте изменить запрос или имя собеседника.'
+		: tab === 'hosting'
+			? 'Здесь появятся переписки с гостями по вашим объявлениям.'
+			: tab === 'renting'
+				? 'Здесь появятся переписки по объявлениям, которые вы рассматриваете.'
+				: 'Здесь появятся ваши переписки по объявлениям и заявкам.';
+
 	const renderItem = ({ item, index }: { item: ConversationSummary; index: number }) => {
 		const hasUnread = item.unread_count > 0;
 		const hasPreview = !!item.last_message_body;
@@ -293,6 +353,77 @@ export default function MessagesScreen() {
 				<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
 			</View>
 
+			<View style={{ flex: 1, overflow: 'hidden' }}>
+			<CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
+				<View
+					onLayout={(event) => setTabContainerWidth(event.nativeEvent.layout.width)}
+					style={{
+						position: 'relative',
+						height: 48,
+						marginHorizontal: 18,
+						marginTop: 4,
+						marginBottom: 8,
+						padding: 4,
+						flexDirection: 'row',
+						borderRadius: 24,
+						borderWidth: 1,
+						borderColor: palette.line,
+						backgroundColor: palette.surfaceMuted,
+					}}
+				>
+					{tabContainerWidth > 8 ? (
+						<Animated.View
+							style={{
+								position: 'absolute',
+								top: 4,
+								bottom: 4,
+								left: 4,
+								width: (tabContainerWidth - 8) / CONVERSATION_TABS.length,
+								borderRadius: 20,
+								backgroundColor: palette.surface,
+								shadowColor: '#000',
+								shadowOffset: { width: 0, height: 2 },
+								shadowOpacity: isDark ? 0.22 : 0.08,
+								shadowRadius: 4,
+								elevation: 2,
+								transform: [{
+									translateX: tabAnim.interpolate({
+										inputRange: [0, 1, 2],
+										outputRange: [
+											0,
+											(tabContainerWidth - 8) / CONVERSATION_TABS.length,
+											((tabContainerWidth - 8) / CONVERSATION_TABS.length) * 2,
+										],
+									}),
+								}],
+							}}
+						/>
+					) : null}
+					{CONVERSATION_TABS.map((item) => {
+						const selected = tab === item.value;
+						return (
+							<Pressable
+								key={item.value}
+								accessibilityRole="tab"
+								accessibilityState={{ selected }}
+								onPress={() => handleTabChange(item.value)}
+								style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
+							>
+								<Text
+									numberOfLines={1}
+									style={{
+										fontSize: 13,
+										fontWeight: '700',
+										color: selected ? palette.ink : palette.inkSecondary,
+									}}
+								>
+									{item.label}
+								</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+
 			{conversations && conversations.length > 0 ? (
 				<PersonalListToolbar
 					query={searchQuery}
@@ -305,23 +436,29 @@ export default function MessagesScreen() {
 					onSortChange={setSort}
 				/>
 			) : null}
+			</CollapsibleHeader>
 
 			<FlatList
 				data={filteredConversations}
 				keyExtractor={(item) => String(item.conversation_id)}
 				renderItem={renderItem}
 				contentContainerStyle={filteredConversations.length === 0
-					? { flexGrow: 1, paddingTop: 2, paddingBottom: 110 }
-					: { paddingTop: 2, paddingBottom: 110 }}
+					? { flexGrow: 1, paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }
+					: { paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }}
 				showsVerticalScrollIndicator={false}
+				onScroll={(event) => {
+					collapsibleHeader.onScroll(event);
+					handleTabBarScroll(event);
+				}}
+				onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+				onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+				scrollEventThrottle={16}
 				ListEmptyComponent={
 					<View className="flex-1 justify-center px-6">
 						<EmptyState
 							icon="chatbubble-ellipses-outline"
-							title={searchQuery ? 'Ничего не найдено' : 'Сообщений пока нет'}
-							subtitle={searchQuery
-								? 'Попробуйте изменить запрос или имя собеседника.'
-								: 'Здесь появятся ваши переписки по объявлениям и заявкам.'}
+							title={emptyTitle}
+							subtitle={emptySubtitle}
 						/>
 					</View>
 				}
@@ -331,10 +468,11 @@ export default function MessagesScreen() {
 						onRefresh={refetch}
 						tintColor={palette.primary}
 						colors={[palette.primary]}
-						progressViewOffset={72}
+						progressViewOffset={collapsibleHeader.height}
 					/>
 				}
 			/>
+			</View>
 		</SafeAreaView>
 	);
 }

@@ -1069,6 +1069,7 @@ SELECT
     other_u.avatar_url AS other_user_avatar_url,
     other_u.phone AS other_user_phone,
     other_u.deleted AS other_user_deleted,
+    h.owner_id AS house_owner_id,
     h.street AS house_street,
     h.house_number AS house_number,
     h.count_room AS house_count_room,
@@ -1146,6 +1147,7 @@ type ListUserConversationsRow struct {
 	OtherUserAvatarUrl     *string
 	OtherUserPhone         *string
 	OtherUserDeleted       bool
+	HouseOwnerID           *int32
 	HouseStreet            *string
 	HouseNumber            *string
 	HouseCountRoom         *string
@@ -1180,6 +1182,7 @@ func (q *Queries) ListUserConversations(ctx context.Context, userID int32) ([]Li
 			&i.OtherUserAvatarUrl,
 			&i.OtherUserPhone,
 			&i.OtherUserDeleted,
+			&i.HouseOwnerID,
 			&i.HouseStreet,
 			&i.HouseNumber,
 			&i.HouseCountRoom,
