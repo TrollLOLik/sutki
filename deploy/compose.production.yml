@@ -225,8 +225,3 @@ services:
 volumes:
   postgres_data:
   glitchtip_uploads:
-  
-postgres:
-  image: postgres:16-alpine
-  ports:
-    - "127.0.0.1:15432:5432"
