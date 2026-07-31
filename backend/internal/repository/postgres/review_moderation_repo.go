@@ -293,10 +293,11 @@ func (r *ReviewRepo) CompleteModeration(ctx context.Context, j domain.ReviewMode
 	case "reject":
 		status = "rejected"
 	}
+	publicRejectionReason := reviewRejectionReason(status, reason)
 	if j.TargetType == "review" {
-		_, err = tx.Exec(ctx, `UPDATE review SET status=$2,published_body=$3,rejection_reason=NULLIF($4,''),moderated_at=now(),updated_at=now() WHERE id=$1 AND status='pending_moderation'`, j.TargetID, status, published, reason)
+		_, err = tx.Exec(ctx, `UPDATE review SET status=$2,published_body=$3,rejection_reason=NULLIF($4,''),moderated_at=now(),updated_at=now() WHERE id=$1 AND status='pending_moderation'`, j.TargetID, status, published, publicRejectionReason)
 	} else {
-		_, err = tx.Exec(ctx, `UPDATE review_reply SET status=$2,published_body=$3,rejection_reason=NULLIF($4,''),moderated_at=now(),updated_at=now() WHERE id=$1 AND status='pending_moderation'`, j.TargetID, status, published, reason)
+		_, err = tx.Exec(ctx, `UPDATE review_reply SET status=$2,published_body=$3,rejection_reason=NULLIF($4,''),moderated_at=now(),updated_at=now() WHERE id=$1 AND status='pending_moderation'`, j.TargetID, status, published, publicRejectionReason)
 	}
 	if err != nil {
 		return err
@@ -316,6 +317,13 @@ func (r *ReviewRepo) CompleteModeration(ctx context.Context, j domain.ReviewMode
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func reviewRejectionReason(status, reason string) string {
+	if status != "rejected" {
+		return ""
+	}
+	return reason
 }
 
 func (r *ReviewRepo) RetryModeration(ctx context.Context, j domain.ReviewModerationJob, lastError string, next time.Time) error {

@@ -15,7 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, MaterialSurface } from '@/components/ui';
-import { useCreateReview, useMyReviewEligibility } from '@/lib/api/reviews';
+import { useCreateReview, useReviewEligibility } from '@/lib/api/reviews';
 import { ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
@@ -39,8 +39,8 @@ export default function LeaveReviewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const createReview = useCreateReview(numericId);
-  const eligibility = useMyReviewEligibility();
-  const elig = eligibility.data?.items?.find((item) => item.request_id === numericId);
+  const eligibility = useReviewEligibility(numericId);
+  const elig = eligibility.data;
 
   const [rating, setRating] = useState(0);
   const [body, setBody] = useState('');
@@ -48,11 +48,14 @@ export default function LeaveReviewScreen() {
   const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
-    if (elig && elig.review_body && body === '' && rating === 0) {
-      setRating(elig.review_rating ?? 0);
-      setBody(elig.review_body);
-    }
-  }, [elig]);
+    const canEditExisting =
+      elig?.can_review === true &&
+      (elig.review_status === 'rejected' || elig.review_status === 'moderation_review');
+
+    setRating(canEditExisting ? (elig.review_rating ?? 0) : 0);
+    setBody(canEditExisting ? (elig.review_body ?? '') : '');
+    setError(null);
+  }, [numericId, elig?.request_id, elig?.review_id, elig?.review_status, elig?.can_review]);
 
   const onSubmit = () => {
     setError(null);
@@ -110,7 +113,7 @@ export default function LeaveReviewScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
 
-            {elig?.rejection_reason ? (
+            {elig?.review_status === 'rejected' && elig.rejection_reason ? (
               <MaterialSurface level="raised" radius={18} style={[styles.notice, { backgroundColor: isDark ? 'rgba(255,77,79,0.10)' : 'rgba(255,77,79,0.07)' }]}>
                 <Text className="text-sm font-extrabold text-danger">Причина отклонения предыдущего отзыва:</Text>
                 <Text className="text-xs text-danger/90 leading-relaxed">{elig.rejection_reason}</Text>
@@ -224,7 +227,7 @@ export default function LeaveReviewScreen() {
                   : 'Отправить отзыв'
               }
               loading={createReview.isPending}
-              disabled={createReview.isPending}
+              disabled={createReview.isPending || eligibility.isLoading || elig?.can_review !== true}
               onPress={onSubmit}
             />
           </View>

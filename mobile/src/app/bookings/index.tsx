@@ -132,7 +132,7 @@ export default function MyBookingsScreen() {
   const repeat = (b: Booking) =>
     router.push({ pathname: '/booking/[id]', params: { id: String(b.house_id) } });
   const review = (b: Booking) =>
-    router.push({ pathname: '/review/[id]', params: { id: String(b.house_id) } });
+    router.push({ pathname: '/review/[id]', params: { id: String(b.id) } });
   const open = (b: Booking) =>
     router.push({ pathname: '/bookings/[id]', params: { id: String(b.id) } });
 

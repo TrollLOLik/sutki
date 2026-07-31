@@ -75,7 +75,18 @@ export function useCreateReview(requestId: number) {
       // (now changed) aggregate rating.
       qc.invalidateQueries({ queryKey: reviewKeys.all });
       qc.invalidateQueries({ queryKey: listingKeys.all });
+      qc.invalidateQueries({ queryKey: ['review-eligibility'] });
+      qc.invalidateQueries({ queryKey: myReviewKeys.all });
     },
+  });
+}
+
+export function useReviewEligibility(requestId: number) {
+  return useQuery({
+    queryKey: ['review-eligibility', requestId],
+    queryFn: () => api.get<ReviewEligibility>(`/api/v1/requests/${requestId}/review-eligibility`),
+    enabled: Number.isInteger(requestId) && requestId > 0,
+    staleTime: 30_000,
   });
 }
 
