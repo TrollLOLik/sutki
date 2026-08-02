@@ -19,7 +19,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/titop-arenda-api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/wigaj-arenda-api ./cmd/api
 
 FROM alpine:3.21
 
@@ -34,7 +34,7 @@ RUN apk add --no-cache ffmpeg tini ca-certificates \
 # touch persistent storage.
 RUN mkdir -p /var/tmp/media-work && chown nonroot:nonroot /var/tmp/media-work
 
-COPY --from=build /out/titop-arenda-api /titop-arenda-api
+COPY --from=build /out/wigaj-arenda-api /wigaj-arenda-api
 
 USER nonroot
 
@@ -42,4 +42,4 @@ ENV MEDIA_WORK_DIR=/var/tmp/media-work \
     FFMPEG_PATH=/usr/bin/ffmpeg \
     FFPROBE_PATH=/usr/bin/ffprobe
 
-ENTRYPOINT ["/sbin/tini", "--", "/titop-arenda-api"]
+ENTRYPOINT ["/sbin/tini", "--", "/wigaj-arenda-api"]

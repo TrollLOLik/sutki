@@ -5,12 +5,12 @@
 
 module.exports = {
   expo: {
-    name: "Дом рядом",
-    slug: "titop-arenda",
+    name: "ВИГАЖ",
+    slug: "wigaj-arenda",
     version: "1.1.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: "titop-arenda",
+    scheme: "wigaj-arenda",
     userInterfaceStyle: "automatic",
     ios: {
       supportsTablet: true,
@@ -32,7 +32,7 @@ module.exports = {
         foregroundImage: "./assets/images/android-icon-foreground.png",
       },
       predictiveBackGestureEnabled: false,
-      package: "ru.titop.arenda",
+      package: "ru.wigaj.arenda",
       intentFilters: [
         {
           action: "VIEW",
@@ -98,6 +98,8 @@ module.exports = {
         "@sentry/react-native/expo",
         {
           url: process.env.SENTRY_URL || "https://errors.wigaj.ru",
+          organization: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
         },
       ],

@@ -56,7 +56,7 @@ func main() {
 	if err != nil {
 		// If no users exist, create a dummy test user
 		err = db.QueryRow("INSERT INTO \"user\" (email, password_hash, name, surname, phone, role) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-			"guest_test@sutki.ru", "dummy_hash", "Иван", "Петров", "+79998887766", "guest").Scan(&authorID)
+			"guest_test@wigaj.ru", "dummy_hash", "Иван", "Петров", "+79998887766", "guest").Scan(&authorID)
 		if err != nil {
 			log.Fatalf("Error getting or creating author user: %v", err)
 		}

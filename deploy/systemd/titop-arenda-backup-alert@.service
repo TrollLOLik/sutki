@@ -1,5 +1,5 @@
 [Unit]
-Description=Report Titop Arenda backup failure to GlitchTip
+Description=Report WIGAJ Arenda backup failure to GlitchTip
 After=network-online.target
 Wants=network-online.target
 

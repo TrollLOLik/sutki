@@ -1377,7 +1377,7 @@ func (s *Service) completePhoneCall(ctx context.Context, c domain.PhoneChallenge
 		return RequestCodeResult{}, err
 	}
 	delivery, err := s.phoneCaller.StartCall(ctx, domain.PhoneCallRequest{Phone: c.PhoneNormalized, Code: requestedCode,
-		Mode: d.Mode, IdempotencyID: d.IdempotencyID, Client: "sutkiru-auth"})
+		Mode: d.Mode, IdempotencyID: d.IdempotencyID, Client: "wigaj-auth"})
 	if err != nil {
 		var netErr net.Error
 		if !errors.As(err, &netErr) || !netErr.Timeout() {

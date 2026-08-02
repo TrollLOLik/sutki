@@ -54,7 +54,7 @@ export function ProfileHero({
   avatarActionIcon = 'camera-outline',
   avatarPressLabel = 'Изменить фото профиля',
   avatarUri,
-  badge = 'Дом рядом',
+  badge = 'ВИГАЖ',
   city,
   initials,
   name,

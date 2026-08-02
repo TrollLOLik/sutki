@@ -5,7 +5,7 @@ import { secureStorage } from '@/lib/secure-storage';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
-const THEME_KEY = 'sutki.themePreference';
+const THEME_KEY = 'wigaj.themePreference';
 
 function isThemePreference(v: string | null): v is ThemePreference {
   return v === 'light' || v === 'dark' || v === 'system';

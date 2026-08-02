@@ -1,6 +1,6 @@
-# sutki backend
+# WIGAJ Arenda backend
 
-Go API for the «Дом рядом» mobile app. Clean Architecture over the existing
+Go API for the WIGAJ mobile app. Clean Architecture over the existing
 PostgreSQL database (migrated from the legacy Symfony/Doctrine web project).
 
 ## Stack

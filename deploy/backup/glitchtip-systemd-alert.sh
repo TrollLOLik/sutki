@@ -76,7 +76,7 @@ printf '%s\n%s\n%s\n' \
     --show-error \
     --connect-timeout 5 \
     --max-time 15 \
-    --header "X-Sentry-Auth: Sentry sentry_version=7, sentry_key=${public_key}, sentry_client=titop-systemd/1.0" \
+    --header "X-Sentry-Auth: Sentry sentry_version=7, sentry_key=${public_key}, sentry_client=wigaj-systemd/1.0" \
     --header 'Content-Type: application/x-sentry-envelope' \
     --data-binary @- \
     "${endpoint}" >/dev/null

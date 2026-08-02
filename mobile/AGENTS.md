@@ -1,7 +1,7 @@
 # Mobile app — agent notes
 
-Expo (React Native) + TypeScript app for **«Дом рядом»**, посуточная аренда квартир (Россия).
-Part of the `sutki` monorepo: `mobile/` (this app), `backend/` (Go API, WIP), `pages_maket/` (макеты-референс).
+Expo (React Native) + TypeScript app for **«ВИГАЖ»**, посуточная аренда квартир (Россия).
+Part of the WIGAJ monorepo: `mobile/` (this app), `backend/` (Go API, WIP), `pages_maket/` (макеты-референс).
 
 ## Stack (pinned, do not bump without reason)
 

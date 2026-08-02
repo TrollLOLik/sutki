@@ -53,7 +53,7 @@ export default function WelcomeScreen() {
               <Ionicons name="home-outline" size={19} color={palette.primary} />
             </View>
             <Text style={{ color: palette.ink, fontSize: 17, fontWeight: '800' }}>
-              TiTop Аренда
+              ВИГАЖ
             </Text>
           </View>
 
@@ -115,7 +115,7 @@ export default function WelcomeScreen() {
               }}>
               <Ionicons name="location-outline" size={17} color={palette.primary} />
               <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
-                Дом рядом
+                ВИГАЖ
               </Text>
             </View>
           </MaterialSurface>

@@ -228,7 +228,7 @@ export default function ProfileSetupScreen() {
           <View className="items-center gap-2">
             <Text className="text-2xl font-bold text-ink">Профиль создан</Text>
             <Text className="text-center text-base text-ink-secondary">
-              Добро пожаловать в «Дом рядом»
+              Добро пожаловать в «ВИГАЖ»
             </Text>
           </View>
         </View>

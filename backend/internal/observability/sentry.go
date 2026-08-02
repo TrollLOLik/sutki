@@ -70,9 +70,9 @@ func CaptureSmokeTest(ctx context.Context, runID string) {
 		hub = sentry.CurrentHub()
 	}
 	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetFingerprint([]string{"titop-arenda-backend-smoke-test", runID})
+		scope.SetFingerprint([]string{"wigaj-arenda-backend-smoke-test", runID})
 		scope.SetTag("smoke_test_id", runID)
-		hub.CaptureException(errors.New("titop-arenda backend smoke test"))
+		hub.CaptureException(errors.New("wigaj-arenda backend smoke test"))
 	})
 }
 

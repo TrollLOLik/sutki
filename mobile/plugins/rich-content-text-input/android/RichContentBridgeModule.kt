@@ -1,4 +1,4 @@
-package ru.titop.arenda.chat
+package ru.wigaj.arenda.chat
 
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -97,7 +97,7 @@ class RichContentBridgeModule(
 
   private companion object {
     const val MODULE_NAME = "RichContentBridge"
-    const val EVENT_NAME = "titop.keyboardMedia"
+    const val EVENT_NAME = "wigaj.keyboardMedia"
     val SUPPORTED_MIME_TYPES = arrayOf("image/gif")
   }
 }

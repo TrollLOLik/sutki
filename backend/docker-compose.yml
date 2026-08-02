@@ -1,29 +1,29 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: sutki-pg
+    container_name: wigaj-pg
     environment:
-      POSTGRES_USER: sutki
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sutki}
-      POSTGRES_DB: sutki
+      POSTGRES_USER: wigaj
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wigaj}
+      POSTGRES_DB: wigaj
     ports:
       # Bind to loopback only: publishing on 0.0.0.0 exposes the database to
       # the whole network (Docker port-publishing also bypasses common
       # host-firewall setups). The backend connects via localhost.
       - "127.0.0.1:5432:5432"
     volumes:
-      - sutki_pg_data:/var/lib/postgresql/data
+      - wigaj_pg_data:/var/lib/postgresql/data
       # Baseline schema is applied automatically on first container start.
       - ./db/baseline/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sutki -d sutki"]
+      test: ["CMD-SHELL", "pg_isready -U wigaj -d wigaj"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   centrifugo:
     image: centrifugo/centrifugo:v6
-    container_name: sutki-centrifugo
+    container_name: wigaj-centrifugo
     environment:
       # Secrets are injected from the environment (shared with the backend via
       # CENTRIFUGO_API_KEY / CENTRIFUGO_HMAC_SECRET). Compose fails fast if unset.
@@ -36,4 +36,4 @@ services:
     command: centrifugo -c config.json
 
 volumes:
-  sutki_pg_data:
+  wigaj_pg_data:

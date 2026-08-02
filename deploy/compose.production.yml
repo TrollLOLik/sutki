@@ -1,4 +1,4 @@
-name: titop-arenda
+name: wigaj-arenda
 
 # Application processes receive an explicit allowlist instead of the complete
 # deployment env file. In particular, they must never see the PostgreSQL
@@ -33,7 +33,7 @@ x-app-environment: &app-environment
   PAYMENT_API_URL: ${PAYMENT_API_URL:-https://api.yookassa.ru/v3}
   PAYMENT_SHOP_ID: ${PAYMENT_SHOP_ID:-}
   PAYMENT_SECRET: ${PAYMENT_SECRET:-}
-  PAYMENT_RETURN_URL: ${PAYMENT_RETURN_URL:-titop-arenda://payments/return}
+  PAYMENT_RETURN_URL: ${PAYMENT_RETURN_URL:-wigaj-arenda://payments/return}
   PAYMENT_ADMIN_TOKEN: ${PAYMENT_ADMIN_TOKEN:-}
   PAYMENT_ADMIN_TOKEN_PREVIOUS: ${PAYMENT_ADMIN_TOKEN_PREVIOUS:-}
   PAYMENT_CAPTURE: ${PAYMENT_CAPTURE:-true}
@@ -223,5 +223,9 @@ services:
     mem_limit: 900m
 
 volumes:
+  # Keep the existing production volumes attached while the Compose project
+  # itself is renamed. These are persistence identifiers, not public branding.
   postgres_data:
+    name: titop-arenda_postgres_data
   glitchtip_uploads:
+    name: titop-arenda_glitchtip_uploads

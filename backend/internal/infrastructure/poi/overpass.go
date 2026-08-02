@@ -76,7 +76,7 @@ nwr(around:%d,%.6f,%.6f)["tourism"~"^(attraction|museum)$"]["name"];
 		return nil, fmt.Errorf("create overpass request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "sutkiru-location-enrichment/1.0")
+	req.Header.Set("User-Agent", "wigaj-location-enrichment/1.0")
 	if err := o.waitForTurn(ctx); err != nil {
 		return nil, fmt.Errorf("wait for overpass rate limit: %w", err)
 	}

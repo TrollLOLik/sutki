@@ -1,4 +1,4 @@
--- Minimal public reference data for a new Titop Arenda installation.
+-- Minimal public reference data for a new WIGAJ Arenda installation.
 -- Listings, users, bookings, and reviews are intentionally not seeded.
 
 INSERT INTO house_category (name, deleted, created_at, updated_at)

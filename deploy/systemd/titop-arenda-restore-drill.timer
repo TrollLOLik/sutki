@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Titop Arenda PostgreSQL restore drill monthly
+Description=Run WIGAJ Arenda PostgreSQL restore drill monthly
 
 [Timer]
 OnCalendar=*-*-01 02:00:00 UTC

@@ -1,5 +1,5 @@
 [Unit]
-Description=Titop Arenda PostgreSQL backup
+Description=WIGAJ Arenda PostgreSQL backup
 Requires=docker.service
 After=docker.service
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Titop Arenda monthly PostgreSQL restore drill
+Description=WIGAJ Arenda monthly PostgreSQL restore drill
 Requires=docker.service
 After=docker.service
 OnFailure=titop-arenda-backup-alert@%n.service

@@ -56,7 +56,7 @@ export const RichContentTextInput = React.forwardRef<TextInput, RichContentTextI
 		React.useEffect(() => {
 			if (Platform.OS !== 'android') return;
 			const subscription = DeviceEventEmitter.addListener(
-				'titop.keyboardMedia',
+				'wigaj.keyboardMedia',
 				(event: KeyboardMediaEvent) => {
 					if (event.viewTag === viewTagRef.current) {
 						onKeyboardMediaRef.current?.(event);

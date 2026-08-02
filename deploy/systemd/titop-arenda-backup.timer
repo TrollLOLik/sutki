@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Titop Arenda PostgreSQL backup daily
+Description=Run WIGAJ Arenda PostgreSQL backup daily
 
 [Timer]
 OnCalendar=*-*-* 00:30:00 UTC

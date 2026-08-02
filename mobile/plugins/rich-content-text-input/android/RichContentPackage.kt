@@ -1,4 +1,4 @@
-package ru.titop.arenda.chat
+package ru.wigaj.arenda.chat
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -11,7 +11,7 @@ class RichContentPackage : ReactPackage {
   ): List<NativeModule> =
     listOf(
       RichContentBridgeModule(reactContext),
-      TitopDownloadModule(reactContext),
+      WigajDownloadModule(reactContext),
     )
 
   override fun createViewManagers(

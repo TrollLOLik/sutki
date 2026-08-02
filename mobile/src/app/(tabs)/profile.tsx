@@ -984,7 +984,7 @@ export default function ProfileScreen() {
                                   {sessionsData.current.location || 'Неизвестно'} • {sessionsData.current.ip_address}
                                 </Text>
                                 <Text className="mt-0.5 text-[10px] leading-4 text-ink-muted">
-                                  Дом рядом v{sessionsData.current.app_version || '1.0.0'} • {sessionsData.current.device_os}
+                                  ВИГАЖ v{sessionsData.current.app_version || '1.0.0'} • {sessionsData.current.device_os}
                                 </Text>
                               </View>
                             </View>

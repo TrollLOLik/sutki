@@ -5,8 +5,8 @@ const {
 	withMainApplication,
 } = require('@expo/config-plugins');
 
-const PACKAGE_PATH = path.join('ru', 'titop', 'arenda', 'chat');
-const IMPORT_LINE = 'import ru.titop.arenda.chat.RichContentPackage';
+const PACKAGE_PATH = path.join('ru', 'wigaj', 'arenda', 'chat');
+const IMPORT_LINE = 'import ru.wigaj.arenda.chat.RichContentPackage';
 const ADD_LINE = '          add(RichContentPackage())';
 
 function withRichContentSources(config) {

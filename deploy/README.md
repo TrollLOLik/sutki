@@ -1,4 +1,4 @@
-# Titop Arenda production deployment
+# WIGAJ Arenda production deployment
 
 This deployment starts a clean PostgreSQL cluster with separate databases for
 the application and GlitchTip. Postgres is never published to the host network.
@@ -31,10 +31,27 @@ public entry point.
 The Postgres initialization scripts only run when `postgres_data` is empty.
 Never remove that volume on a populated server.
 
+### Existing TiTop Compose migration
+
+The Compose project is now named `wigaj-arenda`. Its volume declarations are
+explicitly pinned to the existing production volumes, so PostgreSQL and
+GlitchTip data stay attached. On the first deployment after this rename, stop
+the old project before starting the new one to avoid loopback port conflicts:
+
+```bash
+sudo systemctl start titop-arenda-backup.service
+sudo docker compose -p titop-arenda --env-file deploy/.env.production \
+  -f deploy/compose.production.yml down
+sudo docker compose --env-file deploy/.env.production \
+  -f deploy/compose.production.yml up -d --build
+```
+
+Do not add `-v` to the `down` command.
+
 ## Nginx and TLS
 
-Install host Nginx and Certbot, copy `deploy/nginx/titop-arenda.conf` to
-`/etc/nginx/sites-available/titop-arenda`, symlink it into `sites-enabled`,
+Install host Nginx and Certbot, copy `deploy/nginx/wigaj-arenda.conf` to
+`/etc/nginx/sites-available/wigaj-arenda`, symlink it into `sites-enabled`,
 then validate with `sudo nginx -t` and reload Nginx. Issue certificates only
 after both DNS records resolve to the VPS:
 
@@ -46,16 +63,16 @@ After Certbot creates the HTTPS server blocks, install the shared TLS security
 snippet and include it inside **both** `listen 443 ssl` blocks:
 
 ```bash
-sudo cp deploy/nginx/titop-arenda-tls-security.conf \
-  /etc/nginx/snippets/titop-arenda-tls-security.conf
+sudo cp deploy/nginx/wigaj-arenda-tls-security.conf \
+  /etc/nginx/snippets/wigaj-arenda-tls-security.conf
 ```
 
 On an existing server, do not copy the baseline HTTP config over the live
-Certbot-managed file. Edit `/etc/nginx/sites-available/titop-arenda` in place.
+Certbot-managed file. Edit `/etc/nginx/sites-available/wigaj-arenda` in place.
 Add this line near the certificate directives in both HTTPS blocks:
 
 ```nginx
-include /etc/nginx/snippets/titop-arenda-tls-security.conf;
+include /etc/nginx/snippets/wigaj-arenda-tls-security.conf;
 ```
 
 Do not add `includeSubDomains` or `preload`: `wigaj.ru` is shared with other

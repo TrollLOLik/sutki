@@ -162,7 +162,7 @@ UPDATE house SET deleted = true, updated_at = now() WHERE owner_id = $1;
 
 -- name: AnonymizeUser :exec
 UPDATE "user" SET
-    email = 'deleted_' || id || '@deleted.sutki.ru',
+    email = 'deleted_' || id || '@deleted.wigaj.ru',
     name = 'Удаленный пользователь',
     surname = '',
     patronymic = '',

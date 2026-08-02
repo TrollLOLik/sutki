@@ -68,7 +68,7 @@ export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps)
   if (!visible) return null;
 
   let title = 'Требуется вход в аккаунт';
-  let description = 'Войдите, чтобы пользоваться всеми функциями приложения «Дом Рядом».';
+  let description = 'Войдите, чтобы пользоваться всеми функциями приложения «ВИГАЖ».';
   let iconName: keyof typeof Ionicons.glyphMap = 'lock-closed-outline';
 
   switch (context) {

@@ -33,7 +33,7 @@ func TestGlitchTipTelegramWebhook(t *testing.T) {
 			"title_link":"https://errors.example/issue/1",
 			"text":"query timeout",
 			"fields":[
-				{"title":"Project","value":"titop-arenda-api"},
+				{"title":"Project","value":"wigaj-arenda-api"},
 				{"title":"Environment","value":"production"},
 				{"title":"Release","value":"abc123"}
 			]
@@ -47,7 +47,7 @@ func TestGlitchTipTelegramWebhook(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	for _, want := range []string{"<b>Ошибка в ВИГАЖ Аренда</b>", "database &lt;failed&gt;", "query timeout", "<b>Проект:</b> titop-arenda-api", "<b>Окружение:</b> production", "<b>Релиз:</b> abc123", `<a href="https://errors.example/issue/1">Открыть в GlitchTip</a>`} {
+	for _, want := range []string{"<b>Ошибка в ВИГАЖ Аренда</b>", "database &lt;failed&gt;", "query timeout", "<b>Проект:</b> wigaj-arenda-api", "<b>Окружение:</b> production", "<b>Релиз:</b> abc123", `<a href="https://errors.example/issue/1">Открыть в GlitchTip</a>`} {
 		if !strings.Contains(sender.message, want) {
 			t.Fatalf("message %q does not contain %q", sender.message, want)
 		}

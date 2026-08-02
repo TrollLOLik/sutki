@@ -17,15 +17,15 @@ export const secureStorage = {
 };
 
 export const SECURE_KEYS = {
-  accessToken: 'sutki.accessToken',
-  refreshToken: 'sutki.refreshToken',
-  sessionUser: 'sutki.sessionUser',
-  searchCityPreference: 'sutki.searchCityPreference',
-  listingLayoutPreference: 'sutki.listingLayoutPreference',
+  accessToken: 'wigaj.accessToken',
+  refreshToken: 'wigaj.refreshToken',
+  sessionUser: 'wigaj.sessionUser',
+  searchCityPreference: 'wigaj.searchCityPreference',
+  listingLayoutPreference: 'wigaj.listingLayoutPreference',
   /**
    * Recent city searches (JSON string[]). Not sensitive, but stored here to
    * reuse the existing wrapper and avoid pulling in AsyncStorage as a new
    * native dependency (which would require a fresh build, not an OTA update).
    */
-  recentSearches: 'sutki.recentSearches',
+  recentSearches: 'wigaj.recentSearches',
 } as const;

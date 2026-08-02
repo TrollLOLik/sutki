@@ -44,7 +44,7 @@ func TestPaymentPlatformMockRoundTrip(t *testing.T) {
 
 	repo := postgres.NewPaymentRepo(pool)
 	mock := provider.NewMockProvider()
-	svc := paymentuc.New(repo, fixedPaymentUser{domain.User{ID: userID, Email: email, Phone: phone}}, mock, nil, paymentuc.Config{ReturnURL: "sutki://payments/return", Capture: true})
+	svc := paymentuc.New(repo, fixedPaymentUser{domain.User{ID: userID, Email: email, Phone: phone}}, mock, nil, paymentuc.Config{ReturnURL: "wigaj-arenda://payments/return", Capture: true})
 	svc.StartWebhookWorker(ctx)
 	result, err := svc.CheckoutReferenced(ctx, userID, "listing_boost_1d", testUUID(t), map[string]string{
 		"promotion_id": "integration-test",

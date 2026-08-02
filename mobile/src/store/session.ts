@@ -134,7 +134,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     const [accessToken, refreshToken, hasChosenGuest, persistedUserValue] = await Promise.all([
       secureStorage.get(SECURE_KEYS.accessToken),
       secureStorage.get(SECURE_KEYS.refreshToken),
-      secureStorage.get('sutki.hasChosenGuest'),
+      secureStorage.get('wigaj.hasChosenGuest'),
       secureStorage.get(SECURE_KEYS.sessionUser),
     ]);
     const persistedUser = parsePersistedUser(persistedUserValue);
@@ -265,7 +265,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
     }
     await clearSessionStorage();
     useChatStore.getState().disconnect();
-    const hasChosenGuest = await secureStorage.get('sutki.hasChosenGuest');
+    const hasChosenGuest = await secureStorage.get('wigaj.hasChosenGuest');
     set({
       accessToken: null,
       refreshToken: null,
@@ -306,7 +306,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
 
     continueAsGuest: async () => {
       const guestId = await initGuestId();
-      await secureStorage.set('sutki.hasChosenGuest', 'true');
+      await secureStorage.set('wigaj.hasChosenGuest', 'true');
       set({ status: 'guest', guestId });
     },
   };

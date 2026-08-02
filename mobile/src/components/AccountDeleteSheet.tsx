@@ -253,7 +253,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
             {step === 'confirm_warning' ? (
               <View className="gap-5 py-2">
                 <Text className="text-base text-ink-secondary text-center px-4 leading-6 font-semibold">
-                  Вы собираетесь удалить свой профиль в приложении «Дом Рядом»
+                  Вы собираетесь удалить свой профиль в приложении «ВИГАЖ»
                 </Text>
 
                 <View className="bg-surface-muted rounded-card p-4 gap-3 border border-line">

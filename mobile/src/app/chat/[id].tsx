@@ -988,7 +988,7 @@ export default function ChatDialogScreen() {
 						.replace(/[\\/:*?"<>|]/g, '_')
 						.replace(/^\.+/, '') || `document_${attachment.id}`;
 
-				const nativeDownloader = NativeModules.TitopDownload as
+				const nativeDownloader = NativeModules.WigajDownload as
 					| {
 							downloadAndOpen?: (
 								url: string,
@@ -1007,7 +1007,7 @@ export default function ChatDialogScreen() {
 					if (!result?.opened) {
 						Alert.alert(
 							'Файл сохранён',
-							`${safeName} сохранён в папке Download/Titop Arenda. Подходящее приложение для открытия не найдено.`,
+							`${safeName} сохранён в папке Download/WIGAJ. Подходящее приложение для открытия не найдено.`,
 						);
 					}
 				} else {

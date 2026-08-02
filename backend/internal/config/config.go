@@ -180,7 +180,7 @@ func Load() (Config, error) {
 		PaymentAPIURL:             getEnv("PAYMENT_API_URL", "https://api.yookassa.ru/v3"),
 		PaymentShopID:             getEnv("PAYMENT_SHOP_ID", ""),
 		PaymentSecret:             getEnv("PAYMENT_SECRET", ""),
-		PaymentReturnURL:          getEnv("PAYMENT_RETURN_URL", "sutki://payments/return"),
+		PaymentReturnURL:          getEnv("PAYMENT_RETURN_URL", "wigaj-arenda://payments/return"),
 		PaymentAdminToken:         getEnv("PAYMENT_ADMIN_TOKEN", ""),
 		PaymentAdminTokenPrevious: getEnv("PAYMENT_ADMIN_TOKEN_PREVIOUS", ""),
 		PaymentCapture:            getBool("PAYMENT_CAPTURE", true),

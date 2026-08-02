@@ -1,4 +1,4 @@
-package ru.titop.arenda.chat
+package ru.wigaj.arenda.chat
 
 import android.content.ContentValues
 import android.content.Intent
@@ -16,7 +16,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
-class TitopDownloadModule(
+class WigajDownloadModule(
   private val context: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(context) {
   private val executor = Executors.newCachedThreadPool()
@@ -125,8 +125,8 @@ class TitopDownloadModule(
   }
 
   private companion object {
-    const val MODULE_NAME = "TitopDownload"
-    const val DOWNLOAD_FOLDER = "Titop Arenda"
+    const val MODULE_NAME = "WigajDownload"
+    const val DOWNLOAD_FOLDER = "WIGAJ"
     const val BUFFER_SIZE = 64 * 1024
     const val MAX_DOWNLOAD_BYTES = 50L * 1024L * 1024L
   }

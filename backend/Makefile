@@ -1,4 +1,4 @@
-DATABASE_URL ?= postgres://sutki:sutki@localhost:5432/sutki?sslmode=disable
+DATABASE_URL ?= postgres://wigaj:wigaj@localhost:5432/wigaj?sslmode=disable
 MIGRATIONS_DIR := db/migrations
 
 .PHONY: help db-up db-down migrate-up migrate-down sqlc build run tidy

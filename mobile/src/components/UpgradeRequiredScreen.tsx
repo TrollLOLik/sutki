@@ -24,7 +24,7 @@ export function UpgradeRequiredScreen() {
     const url =
       Platform.OS === 'ios'
         ? 'itms-apps://apps.apple.com/app/id0000000000'
-        : 'https://apps.rustore.ru/app/ru.titop.arenda';
+        : 'https://apps.rustore.ru/app/ru.wigaj.arenda';
     Linking.openURL(url).catch(() => {});
   };
 
@@ -38,7 +38,7 @@ export function UpgradeRequiredScreen() {
           Необходимо обновить приложение
         </Text>
         <Text className="text-center text-base leading-6 text-ink-secondary">
-          Эта версия «Дом Рядом» больше не поддерживается. Обновите приложение, чтобы продолжить
+          Эта версия «ВИГАЖ» больше не поддерживается. Обновите приложение, чтобы продолжить
           пользоваться сервисом.
         </Text>
         {minimum ? (
