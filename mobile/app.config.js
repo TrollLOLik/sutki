@@ -40,12 +40,12 @@ module.exports = {
           data: [
             {
               scheme: "https",
-              host: "arenda.titop.ru",
+              host: "arenda.wigaj.ru",
               pathPrefix: "/listing/",
             },
             {
               scheme: "https",
-              host: "arenda.titop.ru",
+              host: "arenda.wigaj.ru",
               pathPrefix: "/profile/",
             },
           ],
@@ -97,7 +97,7 @@ module.exports = {
       [
         "@sentry/react-native/expo",
         {
-          url: process.env.SENTRY_URL || "https://errors.titop.ru",
+          url: process.env.SENTRY_URL || "https://errors.wigaj.ru",
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
         },
       ],

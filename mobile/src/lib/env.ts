@@ -28,4 +28,6 @@ export const env = {
   apiUrl: process.env.EXPO_PUBLIC_API_URL ?? getLocalHost(),
   /** Base URL of the Centrifugo WebSocket connection. */
   wsUrl: process.env.EXPO_PUBLIC_WS_URL ?? getCentrifugoHost(),
+  /** Public website/deep-link origin used in shared listing and profile URLs. */
+  appUrl: (process.env.EXPO_PUBLIC_APP_URL ?? 'https://arenda.wigaj.ru').replace(/\/+$/, ''),
 } as const;

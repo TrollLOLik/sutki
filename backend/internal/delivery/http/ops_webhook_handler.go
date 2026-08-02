@@ -104,7 +104,7 @@ func captureOpsWebhookToken(next http.Handler) http.Handler {
 }
 
 func formatGlitchTipAlert(payload glitchTipWebhook) string {
-	header := "<b>Ошибка в TiTop Arenda</b>"
+	header := "<b>Ошибка в ВИГАЖ Аренда</b>"
 	blocks := make([]string, 0, len(payload.Attachments)+1)
 	for _, attachment := range payload.Attachments {
 		lines := make([]string, 0, len(attachment.Fields)+3)

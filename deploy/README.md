@@ -39,7 +39,7 @@ then validate with `sudo nginx -t` and reload Nginx. Issue certificates only
 after both DNS records resolve to the VPS:
 
 ```bash
-sudo certbot --nginx -d arenda.titop.ru -d errors.titop.ru
+sudo certbot --nginx -d arenda.wigaj.ru -d errors.wigaj.ru
 ```
 
 After Certbot creates the HTTPS server blocks, install the shared TLS security
@@ -58,15 +58,15 @@ Add this line near the certificate directives in both HTTPS blocks:
 include /etc/nginx/snippets/titop-arenda-tls-security.conf;
 ```
 
-Do not add `includeSubDomains` or `preload`: `titop.ru` is shared with other
+Do not add `includeSubDomains` or `preload`: `wigaj.ru` is shared with other
 products, and either directive would make HTTPS mandatory for all of their
 subdomains too. Validate and reload after editing:
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
-curl -fsSI https://arenda.titop.ru/healthz | grep -i strict-transport-security
-curl -fsSI https://errors.titop.ru/ | grep -i strict-transport-security
+curl -fsSI https://arenda.wigaj.ru/healthz | grep -i strict-transport-security
+curl -fsSI https://errors.wigaj.ru/ | grep -i strict-transport-security
 sudo certbot renew --dry-run
 ```
 
@@ -74,12 +74,12 @@ sudo certbot renew --dry-run
 
 ```bash
 curl -fsS http://127.0.0.1:8080/healthz
-curl -fsS https://arenda.titop.ru/healthz
+curl -fsS https://arenda.wigaj.ru/healthz
 ```
 
 The public API is also monitored externally by Timeweb Cloud Monitoring:
 
-- URL: `https://arenda.titop.ru/healthz`
+- URL: `https://arenda.wigaj.ru/healthz`
 - method: `GET`
 - interval: one minute
 - timeout: ten seconds
@@ -186,7 +186,7 @@ exposes an authenticated GlitchTip-to-Telegram bridge. Configure this Generic
 Webhook recipient in each GlitchTip project alert:
 
 ```text
-https://arenda.titop.ru/internal/webhooks/glitchtip/telegram?token=<webhook-secret>
+https://arenda.wigaj.ru/internal/webhooks/glitchtip/telegram?token=<webhook-secret>
 ```
 
 GlitchTip rejects private webhook targets, so the callback uses the public

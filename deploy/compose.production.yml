@@ -197,11 +197,11 @@ services:
     environment:
       DATABASE_URL: postgres://${GLITCHTIP_DB_USER:-titop_glitchtip}:${GLITCHTIP_DB_PASSWORD}@postgres:5432/${GLITCHTIP_DB_NAME:-titop_glitchtip}
       SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?set GLITCHTIP_SECRET_KEY}
-      GLITCHTIP_DOMAIN: https://errors.titop.ru
-      ALLOWED_HOSTS: errors.titop.ru
-      CSRF_TRUSTED_ORIGINS: https://errors.titop.ru
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-https://errors.wigaj.ru}
+      ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:-errors.wigaj.ru}
+      CSRF_TRUSTED_ORIGINS: ${GLITCHTIP_CSRF_TRUSTED_ORIGINS:-https://errors.wigaj.ru}
       EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?set GLITCHTIP_EMAIL_URL}
-      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL:-notifications@titop.ru}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL:-notifications@wigaj.ru}
       SERVER_ROLE: all_in_one
       VALKEY_URL: ""
       GLITCHTIP_RETENTION_DAYS: "30"

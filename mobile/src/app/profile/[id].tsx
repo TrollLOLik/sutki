@@ -42,6 +42,7 @@ import { requireAuth } from '@/lib/requireAuth';
 import { useSessionStore } from '@/store/session';
 import { appAlert as Alert } from '@/components/AppAlert';
 import { useListingLayoutStore } from '@/store/listing-layout';
+import { env } from '@/lib/env';
 
 export default function PublicProfileScreen() {
   const { palette } = useAppTheme();
@@ -230,8 +231,8 @@ export default function PublicProfileScreen() {
 
   const handleShare = async () => {
     try {
-      const url = `https://arenda.titop.ru/profile/${numericId}`;
-      const message = `Профиль ${displayName} в Дом рядом\nРейтинг: ${ratingNum > 0 ? ratingNum.toFixed(1) + ' ★' : 'Нет оценок'}\n🔗 ${url}`;
+      const url = `${env.appUrl}/profile/${numericId}`;
+      const message = `Профиль ${displayName} в ВИГАЖ\nРейтинг: ${ratingNum > 0 ? ratingNum.toFixed(1) + ' ★' : 'Нет оценок'}\n🔗 ${url}`;
       await Share.share({
         message,
         url,

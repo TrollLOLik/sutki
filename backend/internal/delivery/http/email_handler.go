@@ -116,10 +116,10 @@ func unsubscribePage(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`<!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ДомРядом</title></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ВИГАЖ</title></head>
 <body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#F5F2F0;display:flex;min-height:100vh;align-items:center;justify-content:center;">
 <div style="background:#FFFFFF;border-radius:12px;padding:32px;max-width:420px;margin:16px;">
-<p style="margin:0 0 12px;font-size:18px;font-weight:bold;color:#FF5A1F;">ДомРядом</p>
+<p style="margin:0 0 12px;font-size:18px;font-weight:bold;color:#FF5A1F;">ВИГАЖ</p>
 <p style="margin:0;font-size:15px;line-height:1.5;color:#2B2320;">` + message + `</p>
 </div></body></html>`))
 }

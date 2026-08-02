@@ -41,6 +41,7 @@ import { listingKeys, recordListingView, useListing, useListings, type ListListi
 import { generateSecureUUID } from '@/lib/guestId';
 import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { formatRating, formatReviewsCount, formatRub } from '@/lib/format';
+import { env } from '@/lib/env';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
@@ -284,7 +285,7 @@ export default function ListingDetailScreen() {
       const title = getListingTitle();
       const address = getListingSubtitle();
       const priceFormatted = formatRub(data.price);
-      const url = `https://arenda.titop.ru/listing/${numericId}`;
+      const url = `${env.appUrl}/listing/${numericId}`;
       const message = `${title}\n📍 ${address}\n💵 ${priceFormatted} ₽ / сутки\n\n🔗 ${url}`;
 
       await Share.share({

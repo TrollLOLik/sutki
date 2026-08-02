@@ -67,7 +67,7 @@ func (n *Notifier) SendLoginCode(ctx context.Context, email, code string, ttl ti
 		// enforced by the auth service, not the outbox).
 		Recipient: email,
 		EventType: EventOTPCode,
-		Subject:   "Код подтверждения для приложения Дом Рядом",
+		Subject:   "Код подтверждения для приложения ВИГАЖ",
 	}, data)
 }
 
@@ -89,7 +89,7 @@ func (n *Notifier) NotifyBookingRequested(ctx context.Context, ownerEmail string
 		DedupKey:  fmt.Sprintf("%s:%d", EventBookingNew, b.ID),
 		Recipient: ownerEmail,
 		EventType: EventBookingNew,
-		Subject:   "Новая заявка на бронирование — Дом Рядом",
+		Subject:   "Новая заявка на бронирование — ВИГАЖ",
 	}, data)
 }
 
@@ -153,7 +153,7 @@ func (n *Notifier) NotifyBookingCancelled(ctx context.Context, ownerID int32, ow
 		UserID:    ownerID,
 		Recipient: ownerEmail,
 		EventType: EventBookingCancelled,
-		Subject:   "Гость отменил заявку на бронирование — ДомРядом",
+		Subject:   "Гость отменил заявку на бронирование — ВИГАЖ",
 	}, data)
 }
 
@@ -191,7 +191,7 @@ func (n *Notifier) NotifyChatMessage(ctx context.Context, recipientID int32, rec
 		UserID:    recipientID,
 		Recipient: recipientEmail,
 		EventType: EventChatDigest,
-		Subject:   "Новое сообщение в чате — ДомРядом",
+		Subject:   "Новое сообщение в чате — ВИГАЖ",
 	}, data)
 }
 
@@ -206,7 +206,7 @@ func (n *Notifier) SendWelcome(ctx context.Context, userID int32, email string) 
 		UserID:    userID,
 		Recipient: email,
 		EventType: EventWelcome,
-		Subject:   "Добро пожаловать в «ДомРядом»!",
+		Subject:   "Добро пожаловать в «ВИГАЖ»!",
 	}, data)
 }
 
@@ -226,7 +226,7 @@ func (n *Notifier) NotifyFactorChanged(ctx context.Context, userID int32, email,
 		UserID:    userID,
 		Recipient: email,
 		EventType: EventFactorChanged,
-		Subject:   "Изменены данные для входа в «ДомРядом»",
+		Subject:   "Изменены данные для входа в «ВИГАЖ»",
 	}, data)
 }
 
@@ -255,7 +255,7 @@ func (n *Notifier) NotifyReviewReceived(ctx context.Context, ownerID int32, owne
 		UserID:    ownerID,
 		Recipient: ownerEmail,
 		EventType: EventReviewReceived,
-		Subject:   "У вас новый отзыв — ДомРядом",
+		Subject:   "У вас новый отзыв — ВИГАЖ",
 	}, data)
 }
 
@@ -275,16 +275,16 @@ func (n *Notifier) NotifyReviewModerated(ctx context.Context, authorID int32, au
 	}
 	title := "Материал ожидает дополнительной проверки"
 	message := "Мы сообщим о результате после завершения проверки."
-	subject := "Материал ожидает проверки — ДомРядом"
+	subject := "Материал ожидает проверки — ВИГАЖ"
 	switch status {
 	case "active":
 		title = "Ваш " + contentName + " опубликован"
 		message = "Теперь он доступен другим пользователям в приложении."
-		subject = title + " — ДомРядом"
+		subject = title + " — ВИГАЖ"
 	case "rejected":
 		title = "Ваш " + contentName + " не прошёл проверку"
 		message = "Исправьте текст с учётом причины и отправьте его повторно."
-		subject = title + " — ДомРядом"
+		subject = title + " — ВИГАЖ"
 	}
 
 	data := struct {
@@ -322,7 +322,7 @@ func (n *Notifier) NotifyListingApproved(ctx context.Context, ownerID int32, own
 		UserID:    ownerID,
 		Recipient: ownerEmail,
 		EventType: EventListingApproved,
-		Subject:   "Ваше объявление опубликовано — ДомРядом",
+		Subject:   "Ваше объявление опубликовано — ВИГАЖ",
 	}, data)
 }
 
@@ -340,7 +340,7 @@ func (n *Notifier) NotifyListingRejected(ctx context.Context, ownerID int32, own
 		UserID:    ownerID,
 		Recipient: ownerEmail,
 		EventType: EventListingRejected,
-		Subject:   "Объявление не прошло проверку — ДомРядом",
+		Subject:   "Объявление не прошло проверку — ВИГАЖ",
 	}, data)
 }
 
@@ -372,7 +372,7 @@ func (a *AdminNotifier) SendAdminAlert(ctx context.Context, dedupKey, subject, b
 		DedupKey:  EventAdminAlert + ":" + dedupKey,
 		Recipient: a.email,
 		EventType: EventAdminAlert,
-		Subject:   subject + " — ДомРядом",
+		Subject:   subject + " — ВИГАЖ",
 	}, data)
 }
 

@@ -79,6 +79,9 @@ func (s *SMTPSender) Send(to, subject, textBody, htmlBody string) error {
 	if err != nil {
 		return fmt.Errorf("parse sender address: %w", err)
 	}
+	// Keep the sender identity controlled by the application instead of the
+	// mailbox profile configured in the SMTP provider.
+	fromParsed.Name = brandName
 
 	if err = client.Mail(fromParsed.Address); err != nil {
 		return fmt.Errorf("mail: %w", err)
@@ -160,7 +163,7 @@ func messageID(fromAddr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	domainPart := "domryadom.local"
+	domainPart := "wigaj.local"
 	if i := strings.LastIndex(fromAddr, "@"); i >= 0 && i+1 < len(fromAddr) {
 		domainPart = fromAddr[i+1:]
 	}
