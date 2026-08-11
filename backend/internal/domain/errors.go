@@ -7,6 +7,7 @@ var ErrNotFound = errors.New("not found")
 
 // Auth-related errors.
 var (
+	ErrLegalConsentRequired = errors.New("legal consent required")
 	// ErrCodeInvalid is returned when an email login code is wrong or absent.
 	ErrCodeInvalid = errors.New("invalid code")
 	// ErrCodeExpired is returned when an email login code has expired.

@@ -80,8 +80,8 @@ export default function CodeScreen() {
     setError(null);
     try {
       const response = phone
-        ? await requestPhoneCode(phone)
-        : await requestEmailCode(email ?? '');
+        ? await requestPhoneCode(phone, true)
+        : await requestEmailCode(email ?? '', true);
       if (phone) {
         setMode(response.delivery_mode ?? 'flash_call');
       }

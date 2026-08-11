@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
+import { LegalAcceptance } from '@/components/auth/LegalAcceptance';
 import { Button, Input } from '@/components/ui';
 import { useRequestEmailCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
@@ -23,11 +25,19 @@ export default function EmailScreen() {
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: '' } });
   const requestCode = useRequestEmailCode();
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPersonalData, setAcceptPersonalData] = useState(false);
+  const [legalError, setLegalError] = useState<string>();
 
   const onSubmit = handleSubmit(async ({ email }) => {
+    if (!acceptTerms || !acceptPersonalData) {
+      setLegalError('Подтвердите оба документа, чтобы получить код.');
+      return;
+    }
+    setLegalError(undefined);
     const normalized = email.trim().toLowerCase();
     try {
-      const res = await requestCode.mutateAsync(normalized);
+      const res = await requestCode.mutateAsync({ email: normalized, accepted: true });
       router.push({
         pathname: '/code',
         params: {
@@ -77,6 +87,13 @@ export default function EmailScreen() {
             error={errors.email?.message}
           />
         )}
+      />
+      <LegalAcceptance
+        acceptTerms={acceptTerms}
+        acceptPersonalData={acceptPersonalData}
+        onAcceptTermsChange={setAcceptTerms}
+        onAcceptPersonalDataChange={setAcceptPersonalData}
+        error={legalError}
       />
     </AuthStepScreen>
   );

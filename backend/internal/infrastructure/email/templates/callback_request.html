@@ -1,0 +1,8 @@
+{{define "content"}}
+<h1 style="margin:0 0 20px;font-size:24px;line-height:1.25;color:#201A18;">Новый запрос обратного звонка</h1>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.5;color:#403936;"><strong>Имя:</strong> {{.Name}}</p>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.5;color:#403936;"><strong>Телефон:</strong> <a href="tel:{{.Phone}}" style="color:#FF5A1F;">{{.Phone}}</a></p>
+<p style="margin:0 0 8px;font-size:16px;line-height:1.5;color:#403936;"><strong>Комментарий:</strong></p>
+<p style="margin:0 0 20px;white-space:pre-wrap;font-size:16px;line-height:1.5;color:#403936;">{{.Message}}</p>
+<p style="margin:0;font-size:12px;line-height:1.5;color:#8A817D;">IP отправителя: {{.ClientIP}}</p>
+{{end}}

@@ -16,8 +16,12 @@ import type { User } from '@/types/user';
  */
 
 /** Request a 6-digit login code for an email (no SMTP yet — see dev_code). */
-export function requestEmailCode(email: string): Promise<RequestCodeResponse> {
-  return api.post<RequestCodeResponse>('/api/v1/auth/email/request', { email }, { auth: false });
+export function requestEmailCode(email: string, accepted = false): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/auth/email/request', {
+    email,
+    accept_terms: accepted,
+    accept_personal_data: accepted,
+  }, { auth: false });
 }
 
 /** Verify a login code → issue access/refresh tokens + user. */
@@ -46,7 +50,9 @@ export function updateMe(body: UpdateProfileBody): Promise<User> {
 }
 
 export function useRequestEmailCode() {
-  return useMutation({ mutationFn: (email: string) => requestEmailCode(email) });
+  return useMutation({
+    mutationFn: ({ email, accepted }: { email: string; accepted: boolean }) => requestEmailCode(email, accepted),
+  });
 }
 
 export function useVerifyEmailCode() {
@@ -218,8 +224,12 @@ export function useRevokeSession() {
 }
 
 /** Start the primary Flash Call challenge for a phone number. */
-export function requestPhoneCode(phone: string): Promise<RequestCodeResponse> {
-  return api.post<RequestCodeResponse>('/api/v1/auth/phone/request', { phone }, { auth: false });
+export function requestPhoneCode(phone: string, accepted = false): Promise<RequestCodeResponse> {
+  return api.post<RequestCodeResponse>('/api/v1/auth/phone/request', {
+    phone,
+    accept_terms: accepted,
+    accept_personal_data: accepted,
+  }, { auth: false });
 }
 
 export function requestPhoneVoiceFallback(phone: string, challengeId: string): Promise<RequestCodeResponse> {
@@ -266,8 +276,58 @@ export function confirmPhoneChange(
 
 export function useRequestPhoneCode() {
   return useMutation({
-    mutationFn: ({ phone }: { phone: string }) => requestPhoneCode(phone),
+    mutationFn: ({ phone, accepted }: { phone: string; accepted: boolean }) => requestPhoneCode(phone, accepted),
   });
+}
+
+export function acceptDataDissemination(): Promise<void> {
+  return api.post<void>('/api/v1/me/legal-consents/dissemination', { accepted: true });
+}
+
+export type LegalDocumentType =
+  | 'user_agreement'
+  | 'personal_data'
+  | 'personal_data_dissemination';
+
+export interface LegalConsentItem {
+  type: LegalDocumentType;
+  version: string;
+  sha256: string;
+  accepted: boolean;
+}
+
+export interface LegalConsentStatus {
+  items: LegalConsentItem[];
+  public_profile_visible: boolean;
+}
+
+export const legalConsentKeys = {
+  status: ['legal-consents', 'status'] as const,
+};
+
+export function fetchLegalConsentStatus(): Promise<LegalConsentStatus> {
+  return api.get<LegalConsentStatus>('/api/v1/me/legal-consents');
+}
+
+export function revokeDataDissemination(reason = 'Отозвано пользователем в приложении'): Promise<void> {
+  return api.delete<void>('/api/v1/me/legal-consents/dissemination', { reason });
+}
+
+export function useLegalConsentStatus(enabled = true) {
+  return useQuery({
+    queryKey: legalConsentKeys.status,
+    queryFn: fetchLegalConsentStatus,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useAcceptDataDissemination() {
+  return useMutation({ mutationFn: acceptDataDissemination });
+}
+
+export function useRevokeDataDissemination() {
+  return useMutation({ mutationFn: () => revokeDataDissemination() });
 }
 
 export function useVerifyPhoneCode() {

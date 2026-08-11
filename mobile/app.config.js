@@ -7,7 +7,7 @@ module.exports = {
   expo: {
     name: "ВИГАЖ",
     slug: "wigaj-arenda",
-    version: "1.1.0",
+    version: "1.2.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "wigaj-arenda",
@@ -24,6 +24,7 @@ module.exports = {
       },
     },
     android: {
+      versionCode: 2,
       // Keep the chat composer above keyboards of different heights,
       // including Gboard's emoji panel.
       softwareKeyboardLayoutMode: "resize",

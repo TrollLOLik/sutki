@@ -24,7 +24,6 @@ import { PhoneInput } from '@/components/PhoneInput'; // Shared component
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
 import { ApiError } from '@/lib/api/client';
-import { requestPhoneCode } from '@/lib/api/auth';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { useSessionStore } from '@/store/session';
@@ -180,22 +179,7 @@ export default function BookingScreen() {
       if (isGuest) {
         // The request remains hidden as pending_verification until this exact
         // phone number is verified and linked to the newly created account.
-        try {
-          const res = await requestPhoneCode(fullPhone);
-          router.replace({
-            pathname: '/code',
-            params: {
-              phone: fullPhone,
-              challengeId: res.challenge_id ?? '',
-              deliveryMode: res.delivery_mode ?? 'flash_call',
-              codeLength: String(res.code_length ?? 4),
-              devCode: res.dev_code ?? '',
-              fromBooking: 'true',
-            },
-          } as any);
-        } catch {
-          router.replace({ pathname: '/phone', params: { phone: fullPhone, fromBooking: 'true' } } as any);
-        }
+        router.replace({ pathname: '/phone', params: { phone: fullPhone, fromBooking: 'true' } } as any);
         return;
       }
 

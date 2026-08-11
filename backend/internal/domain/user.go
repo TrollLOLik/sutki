@@ -8,23 +8,24 @@ import (
 // User is an application account. It maps onto the legacy `user` table;
 // nullable legacy columns are flattened to empty strings here.
 type User struct {
-	ID              int32
-	Email           string
-	Name            string
-	Surname         string
-	Patronymic      string
-	Phone           string
-	PhoneNormalized string
-	PhoneVerifiedAt *time.Time
-	City            string
-	AvatarURL       string
-	IsVerified      bool
-	Birthday        *time.Time
-	CreatedAt       time.Time
-	ListingsCount   int32
-	Rating          float64
-	ReviewsCount    int32
-	VKID            string
+	ID                   int32
+	Email                string
+	Name                 string
+	Surname              string
+	Patronymic           string
+	Phone                string
+	PhoneNormalized      string
+	PhoneVerifiedAt      *time.Time
+	City                 string
+	AvatarURL            string
+	IsVerified           bool
+	Birthday             *time.Time
+	CreatedAt            time.Time
+	ListingsCount        int32
+	Rating               float64
+	ReviewsCount         int32
+	VKID                 string
+	PublicProfileVisible bool
 }
 
 // AuthCode is a short-lived, hashed passwordless code for authentication channels.

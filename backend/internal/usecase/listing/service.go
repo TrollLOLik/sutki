@@ -756,6 +756,9 @@ func (s *Service) formatHouseMedia(ctx context.Context, h domain.House) domain.H
 		h.OwnerAvatarURL = s.storage.PublicURL(h.OwnerAvatarURL)
 	}
 	for i := range h.Photos {
+		if h.Photos[i].Key == "" {
+			h.Photos[i].Key = h.Photos[i].Path
+		}
 		if h.Photos[i].Path != "" && !strings.Contains(h.Photos[i].Path, "upload_files/") && !strings.HasPrefix(h.Photos[i].Path, "http://") && !strings.HasPrefix(h.Photos[i].Path, "https://") {
 			h.Photos[i].Path = s.storage.PublicURL(h.Photos[i].Path)
 		}

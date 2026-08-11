@@ -479,6 +479,11 @@ func (s *Service) ListForHostWithSummary(ctx context.Context, hostID, limit, off
 	if err != nil {
 		return ListResult{}, err
 	}
+	for i := range items {
+		if items[i].Reply != nil && items[i].Reply.Status != "active" {
+			items[i].Reply = nil
+		}
+	}
 	total, err := s.repo.CountForHost(ctx, hostID)
 	if err != nil {
 		return ListResult{}, err

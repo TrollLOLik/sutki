@@ -150,9 +150,9 @@ func (r *ReviewRepo) Eligibility(ctx context.Context, requestID, userID int32) (
 		FROM request rq 
 		LEFT JOIN review rv ON rv.request_id=rq.id 
 		WHERE rq.id=$1 AND rq.user_id=$2`, requestID, userID).Scan(
-			&e.RequestID, &e.HouseID, &checkout, &e.ReviewID, &e.ReviewStatus, &e.CanReview,
-			&e.ReviewRating, &e.ReviewBody, &e.RejectionReason, &e.EditAttempts,
-		)
+		&e.RequestID, &e.HouseID, &checkout, &e.ReviewID, &e.ReviewStatus, &e.CanReview,
+		&e.ReviewRating, &e.ReviewBody, &e.RejectionReason, &e.EditAttempts,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return e, domain.ErrReviewNotAllowed
 	}
@@ -225,6 +225,7 @@ func (r *ReviewRepo) ListForHost(ctx context.Context, userID, limit, offset int3
 			AuthorAvatarURL: row.AuthorAvatarUrl,
 			Rating:          row.Rating,
 			Body:            row.Body,
+			Status:          "active",
 			CreatedAt:       row.CreatedAt.Time,
 			HouseStreet:     row.HouseStreet,
 			HouseNumber:     row.HouseNumber,
@@ -232,10 +233,37 @@ func (r *ReviewRepo) ListForHost(ctx context.Context, userID, limit, offset int3
 			HouseCoverPath:  row.HouseCoverPath,
 		})
 	}
-	if err := r.attachReplies(ctx, out); err != nil {
+	if err := r.attachOwnerReplies(ctx, userID, out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (r *ReviewRepo) attachOwnerReplies(ctx context.Context, ownerID int32, reviews []domain.Review) error {
+	if len(reviews) == 0 {
+		return nil
+	}
+	ids := make([]int32, len(reviews))
+	positions := make(map[int32]int, len(reviews))
+	for i, review := range reviews {
+		ids[i] = review.ID
+		positions[review.ID] = i
+	}
+	rows, err := r.pool.Query(ctx, `SELECT id,review_id,owner_id,COALESCE(published_body,original_body,''),status,COALESCE(rejection_reason,''),created_at FROM review_reply WHERE review_id=ANY($1) AND owner_id=$2`, ids, ownerID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var reply domain.ReviewReply
+		if err := rows.Scan(&reply.ID, &reply.ReviewID, &reply.OwnerID, &reply.Body, &reply.Status, &reply.RejectionReason, &reply.CreatedAt); err != nil {
+			return err
+		}
+		if pos, ok := positions[reply.ReviewID]; ok {
+			reviews[pos].Reply = &reply
+		}
+	}
+	return rows.Err()
 }
 
 func (r *ReviewRepo) attachReplies(ctx context.Context, reviews []domain.Review) error {

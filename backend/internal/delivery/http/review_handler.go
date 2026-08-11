@@ -349,7 +349,7 @@ func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
 		RequestID:       rv.RequestID,
 	}
 	if rv.Reply != nil {
-		dto := reviewReplyDTO{ID: rv.Reply.ID, Body: rv.Reply.Body, Status: rv.Reply.Status, CreatedAt: rv.Reply.CreatedAt.UTC().Format(time.RFC3339)}
+		dto := reviewReplyDTO{ID: rv.Reply.ID, Body: rv.Reply.Body, Status: rv.Reply.Status, RejectionReason: rv.Reply.RejectionReason, CreatedAt: rv.Reply.CreatedAt.UTC().Format(time.RFC3339)}
 		out.Reply = &dto
 	}
 	return out

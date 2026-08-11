@@ -75,6 +75,9 @@ type Photo struct {
 	ID       int32
 	Path     string
 	Position int32
+	// Key preserves the storage key after Path is formatted as a public URL.
+	// It is used only by owner-facing edit flows.
+	Key      string
 }
 
 // Ref is a lightweight id/name pair (categories, services).

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	legaluc "github.com/TrollLOLik/sutki/backend/internal/usecase/legal"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 )
 
@@ -20,7 +21,12 @@ var viewEventIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-
 // ListingHandler serves the public listings read API.
 type ListingHandler struct {
 	svc          *listing.Service
+	legalSvc     *legaluc.Service
 	mediaBaseURL string
+}
+
+func (h *ListingHandler) SetLegalService(service *legaluc.Service) {
+	h.legalSvc = service
 }
 
 func NewListingHandler(svc *listing.Service, mediaBaseURL string) *ListingHandler {
@@ -62,6 +68,9 @@ type photoDTO struct {
 	ID       int32  `json:"id"`
 	URL      string `json:"url"`
 	Position int32  `json:"position"`
+	// Key is returned only to the owner. Public clients need the resolved URL,
+	// while owner edit forms must send the original S3 key back to PUT /listings.
+	Key string `json:"key,omitempty"`
 }
 
 type listingCardDTO struct {
@@ -258,6 +267,9 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	if !h.requireDisseminationConsent(w, r, userID) {
+		return
+	}
 	var body createListingRequest
 	if !decodeJSON(w, r, &body) {
 		return
@@ -312,7 +324,7 @@ func (h *ListingHandler) create(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, http.StatusCreated, h.detailDTO(hs, true)) // owner always sees exact coords
+	writeJSON(w, http.StatusCreated, h.detailDTO(hs, true, true)) // owner always sees exact coords
 }
 
 // update handles PUT /api/v1/listings/{id}: the authenticated user updates their own listing.
@@ -391,7 +403,7 @@ func (h *ListingHandler) update(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, h.detailDTO(hs, true)) // owner always sees exact coords
+	writeJSON(w, http.StatusOK, h.detailDTO(hs, true, true)) // owner always sees exact coords
 }
 
 func (h *ListingHandler) unpublish(w http.ResponseWriter, r *http.Request) {
@@ -406,6 +418,9 @@ func (h *ListingHandler) setPublished(w http.ResponseWriter, r *http.Request, pu
 	ownerID, ok := userIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if published && !h.requireDisseminationConsent(w, r, ownerID) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
@@ -425,7 +440,22 @@ func (h *ListingHandler) setPublished(w http.ResponseWriter, r *http.Request, pu
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, h.detailDTO(house, true))
+	writeJSON(w, http.StatusOK, h.detailDTO(house, true, true))
+}
+
+func (h *ListingHandler) requireDisseminationConsent(w http.ResponseWriter, r *http.Request, userID int32) bool {
+	if h.legalSvc == nil {
+		return true
+	}
+	if err := h.legalSvc.RequireDissemination(r.Context(), userID); err != nil {
+		if errors.Is(err, domain.ErrLegalConsentRequired) {
+			writeError(w, http.StatusPreconditionRequired, "personal data dissemination consent required")
+			return false
+		}
+		writeInternalError(w, r, err, "failed to verify legal consent")
+		return false
+	}
+	return true
 }
 
 // listMine handles GET /api/v1/listings/mine: the authenticated user's own
@@ -517,7 +547,7 @@ func (h *ListingHandler) get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	dto := h.detailDTO(hs, exactCoords)
+	dto := h.detailDTO(hs, exactCoords, isAuthed && callerID == hs.OwnerID)
 	if isAuthed && callerID == hs.OwnerID {
 		dto.Status = hs.Status
 		dto.RejectionReason = hs.RejectionReason
@@ -619,10 +649,14 @@ func fuzzedCoords(hs domain.House) (lat, lng *float64, radius float64) {
 	return &fl, &flng, domain.FuzzRadius
 }
 
-func (h *ListingHandler) detailDTO(hs domain.House, exactCoords bool) listingDetailDTO {
+func (h *ListingHandler) detailDTO(hs domain.House, exactCoords bool, exposePhotoKeys bool) listingDetailDTO {
 	photos := make([]photoDTO, 0, len(hs.Photos))
 	for _, p := range hs.Photos {
-		photos = append(photos, photoDTO{ID: p.ID, URL: resolveMediaURL(p.Path), Position: p.Position})
+		photo := photoDTO{ID: p.ID, URL: resolveMediaURL(p.Path), Position: p.Position}
+		if exposePhotoKeys {
+			photo.Key = p.Key
+		}
+		photos = append(photos, photo)
 	}
 
 	// Build the card with correct coordinate privacy.
@@ -635,6 +669,12 @@ func (h *ListingHandler) detailDTO(hs domain.House, exactCoords bool) listingDet
 
 	if card.CoverURL == "" && len(photos) > 0 {
 		card.CoverURL = photos[0].URL
+	}
+	if exposePhotoKeys {
+		// The owner form needs the current relation IDs to preserve selections
+		// when an existing listing is edited. Public detail responses omit them.
+		card.ServiceIDs = refIDs(hs.Services)
+		card.CategoryIDs = refIDs(hs.Categories)
 	}
 	return listingDetailDTO{
 		listingCardDTO:     card,

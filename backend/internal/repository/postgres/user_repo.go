@@ -181,6 +181,14 @@ func (r *UserRepo) AnonymizeAndRevoke(ctx context.Context, id int32, emailHash s
 		return err
 	}
 
+	if _, err := tx.Exec(ctx, `
+		UPDATE legal_consent
+		SET revoked_at = COALESCE(revoked_at, now()),
+		    revocation_reason = COALESCE(revocation_reason, 'account_deleted')
+		WHERE user_id = $1 AND revoked_at IS NULL`, id); err != nil {
+		return err
+	}
+
 	if err := qtx.SoftDeleteUserHouses(ctx, id); err != nil {
 		return err
 	}

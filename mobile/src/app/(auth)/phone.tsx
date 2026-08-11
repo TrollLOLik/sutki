@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
+import { LegalAcceptance } from '@/components/auth/LegalAcceptance';
 import { Button } from '@/components/ui';
 import { PhoneInput } from '@/components/PhoneInput';
 import { useRequestPhoneCode } from '@/lib/api/auth';
@@ -24,13 +26,21 @@ export default function PhoneScreen() {
     defaultValues: { phone: formatPhoneMask(normalizePhoneDigits(initialPhone ?? '')) },
   });
   const requestPhoneCode = useRequestPhoneCode();
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPersonalData, setAcceptPersonalData] = useState(false);
+  const [legalError, setLegalError] = useState<string>();
 
   const onSubmit = handleSubmit(async ({ phone }) => {
+    if (!acceptTerms || !acceptPersonalData) {
+      setLegalError('Подтвердите оба документа, чтобы получить код.');
+      return;
+    }
+    setLegalError(undefined);
     const fullPhone = toFullPhone(phone);
     let response: RequestCodeResponse;
 
     try {
-      response = await requestPhoneCode.mutateAsync({ phone: fullPhone });
+      response = await requestPhoneCode.mutateAsync({ phone: fullPhone, accepted: true });
     } catch (err) {
       console.error('[phone-auth] Failed to request phone challenge', err);
       setError('phone', {
@@ -85,6 +95,13 @@ export default function PhoneScreen() {
             error={errors.phone?.message}
           />
         )}
+      />
+      <LegalAcceptance
+        acceptTerms={acceptTerms}
+        acceptPersonalData={acceptPersonalData}
+        onAcceptTermsChange={setAcceptTerms}
+        onAcceptPersonalDataChange={setAcceptPersonalData}
+        error={legalError}
       />
     </AuthStepScreen>
   );

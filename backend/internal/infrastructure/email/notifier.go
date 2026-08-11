@@ -344,6 +344,30 @@ func (n *Notifier) NotifyListingRejected(ctx context.Context, ownerID int32, own
 	}, data)
 }
 
+// SendCallbackRequest queues a lead from the public website. It is deliberately
+// not deduplicated: rate limiting belongs to the HTTP boundary, while two
+// legitimate requests from the same number must remain two distinct messages.
+func (n *Notifier) SendCallbackRequest(ctx context.Context, recipient, name, phone, message, clientIP string) error {
+	data := struct {
+		commonData
+		Name     string
+		Phone    string
+		Message  string
+		ClientIP string
+	}{
+		Name:     name,
+		Phone:    phone,
+		Message:  message,
+		ClientIP: clientIP,
+	}
+
+	return n.enqueue(ctx, OutboxMessage{
+		Recipient: recipient,
+		EventType: EventCallbackRequest,
+		Subject:   "Запрос обратного звонка с wigaj.ru",
+	}, data)
+}
+
 // AdminNotifier wraps a Notifier with a fixed admin recipient for
 // operational alerts. Satisfies moderation.AdminAlerter.
 type AdminNotifier struct {

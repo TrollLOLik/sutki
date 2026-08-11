@@ -3,8 +3,10 @@ import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
 import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
 	ActivityIndicator,
+	Linking,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -40,6 +42,11 @@ import YaMap, { Marker, Search, AddressKind, Animation } from 'react-native-yama
 import * as Location from 'expo-location';
 import { appAlert as Alert } from '@/components/AppAlert';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import {
+  legalConsentKeys,
+  useAcceptDataDissemination,
+  useLegalConsentStatus,
+} from '@/lib/api/auth';
 
 const TOTAL_STEPS = 6;
 const ROOM_OPTIONS = [
@@ -131,6 +138,7 @@ const ListingPublishPreview = ListingPublishPreviewImpl;
 
 export default function CreateListingScreen() {
   const { palette, isDark } = useAppTheme();
+  const queryClient = useQueryClient();
   const draft = useCreateListingStore();
   const profileCity = useSessionStore((state) => state.user?.city?.trim() ?? '');
   const { data: categories } = useCategories();
@@ -143,6 +151,12 @@ export default function CreateListingScreen() {
 
   const { data: editListing, isLoading: isEditLoading } = useListing(editListingId);
   const updateListing = useUpdateListing();
+  const { data: legalConsentStatus } = useLegalConsentStatus(!isEditing);
+  const acceptDisseminationMutation = useAcceptDataDissemination();
+  const hasDisseminationConsent = legalConsentStatus?.items.some(
+    (item) => item.type === 'personal_data_dissemination' && item.accepted,
+  ) ?? false;
+  const needsDisseminationConsent = !isEditing && !hasDisseminationConsent;
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +166,7 @@ export default function CreateListingScreen() {
   const pendingErrorAnchorRef = useRef<ValidationAnchor | null>(null);
   const [published, setPublished] = useState(false);
   const [publishedListingId, setPublishedListingId] = useState<number | null>(null);
+  const [acceptDissemination, setAcceptDissemination] = useState(false);
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [previousDescription, setPreviousDescription] = useState('');
   const descriptionInputRef = useRef<TextInput>(null);
@@ -904,6 +919,14 @@ export default function CreateListingScreen() {
     }
 
     try {
+      if (needsDisseminationConsent && !acceptDissemination) {
+        setError('Подтвердите согласие на публикацию данных объявления.');
+        return;
+      }
+      if (needsDisseminationConsent) {
+        await acceptDisseminationMutation.mutateAsync();
+        await queryClient.invalidateQueries({ queryKey: legalConsentKeys.status });
+      }
       const created = await createListing.mutateAsync(payload);
       setPublishedListingId(created.id);
       setPublished(true);
@@ -1032,16 +1055,48 @@ export default function CreateListingScreen() {
       {step < TOTAL_STEPS - 1 ? (
         <Button label="Далее" onPress={goNext} />
       ) : (
-        <Button
-          label={
-            isEditing
-              ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
-              : 'Опубликовать'
-          }
-          variant={isEditing ? 'primary' : 'success'}
-          loading={isEditing ? updateListing.isPending : createListing.isPending}
-          onPress={handlePublish}
-        />
+        <View style={{ gap: 10 }}>
+          {needsDisseminationConsent ? (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: acceptDissemination }}
+                onPress={() => setAcceptDissemination((value) => !value)}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 7,
+                  borderWidth: 1,
+                  borderColor: acceptDissemination ? palette.primary : palette.line,
+                  backgroundColor: acceptDissemination ? palette.primary : headerBackground,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                {acceptDissemination ? <Ionicons name="checkmark" size={17} color="#FFFFFF" /> : null}
+              </Pressable>
+              <Text style={{ flex: 1, color: palette.inkSecondary, fontSize: 12, lineHeight: 17 }}>
+                Разрешаю публикацию данных объявления и принимаю{' '}
+                <Text
+                  onPress={() => void Linking.openURL('https://wigaj.ru/legal/personal-data-dissemination-consent')}
+                  style={{ color: palette.primary, fontWeight: '700' }}>
+                  согласие на распространение персональных данных
+                </Text>
+              </Text>
+            </View>
+          ) : null}
+          <Button
+            label={
+              isEditing
+                ? (updateListing.isPending ? 'Сохранение…' : 'Сохранить изменения')
+                : 'Опубликовать'
+            }
+            variant={isEditing ? 'primary' : 'success'}
+            loading={isEditing
+              ? updateListing.isPending
+              : createListing.isPending || acceptDisseminationMutation.isPending}
+            onPress={handlePublish}
+          />
+        </View>
       )}
     </View>
   );

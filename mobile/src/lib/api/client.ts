@@ -151,6 +151,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     Accept: 'application/json',
     'X-Device-Name': metadata.deviceName,
     'X-Device-OS': metadata.deviceOS,
+    'X-Client-Platform': 'android',
     // Omitted when the platform cannot tell us the version (web, Expo Go).
     // The server's minimum-version gate fails open on a missing header, so
     // omitting is correct; sending an empty or invented value is not.
@@ -284,6 +285,6 @@ export const api = {
     request<T>(path, { ...options, method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
-  delete: <T>(path: string, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: 'DELETE' }),
+  delete: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'DELETE', body }),
 };

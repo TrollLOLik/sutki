@@ -10,53 +10,42 @@
 - `/legal/privacy`;
 - `/legal/terms`;
 - `/legal/personal-data-consent`;
-- `/legal/personal-data-dissemination-consent`;
-- `/legal/advertising-consent`;
-- `/legal/requisites`.
+- `/legal/personal-data-dissemination-consent`.
 
 Контент должен отдаваться по HTTPS с номером версии, датой вступления в силу и
 контрольной суммой.
 
 ## 2. Модель данных
 
-Рекомендуемая схема:
+Реализованная схема создается миграцией
+`000047_legal_consents_retention`:
 
 ```sql
-CREATE TABLE legal_document (
-    id bigserial PRIMARY KEY,
-    kind varchar(64) NOT NULL,
-    version varchar(32) NOT NULL,
-    content_hash varchar(64) NOT NULL,
-    public_url text NOT NULL,
-    effective_at timestamptz NOT NULL,
-    required boolean NOT NULL DEFAULT false,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (kind, version)
-);
-
-CREATE TABLE legal_acceptance (
+CREATE TABLE legal_consent (
     id bigserial PRIMARY KEY,
     user_id integer REFERENCES "user"(id) ON DELETE SET NULL,
-    auth_attempt_id varchar(128),
-    document_id bigint NOT NULL REFERENCES legal_document(id),
-    action varchar(32) NOT NULL
-        CHECK (action IN ('accepted', 'withdrawn')),
-    selections jsonb NOT NULL DEFAULT '{}'::jsonb,
+    registration_id varchar(128),
+    document_type varchar(64) NOT NULL,
+    document_version varchar(32) NOT NULL,
+    document_sha256 char(64) NOT NULL,
+    accepted_at timestamptz NOT NULL DEFAULT now(),
     ip_address inet,
-    device_name varchar(255),
-    device_os varchar(64),
-    app_version varchar(32),
-    accepted_at timestamptz NOT NULL DEFAULT now()
+    user_agent text,
+    app_version varchar(64),
+    source varchar(16) NOT NULL CHECK (source IN ('web', 'android')),
+    revoked_at timestamptz,
+    revocation_reason text,
+    CHECK (user_id IS NOT NULL OR registration_id IS NOT NULL)
 );
 
-CREATE INDEX legal_acceptance_user_timeline_idx
-    ON legal_acceptance (user_id, accepted_at DESC);
+CREATE INDEX legal_consent_user_timeline_idx
+    ON legal_consent (user_id, accepted_at DESC);
 ```
 
-Для согласия на распространение `selections` хранит разрешенные поля, условия и
-запреты. Для рекламы — выбранные каналы.
-
-Запись нельзя физически перезаписывать: отзыв оформляется новой строкой.
+Сервер не принимает текст или hash документа от клиента: действующая версия и
+SHA-256 задаются конфигурацией. До подтверждения OTP запись связана с
+`registration_id`, после подтверждения — с `user_id`. При отзыве доказательные
+поля не изменяются: сервер заполняет только `revoked_at` и причину отзыва.
 
 ## 3. Регистрация
 
@@ -84,12 +73,8 @@ CREATE INDEX legal_acceptance_user_timeline_idx
 Перед первой публикацией объявления или открытием публичного профиля:
 
 1. показать отдельное согласие на распространение;
-2. дать выбрать разрешенные публичные поля;
-3. не разрешать публичный телефон, email, дату рождения и текущую геолокацию;
-4. сохранить условия и запреты;
-5. только после успешной записи согласия публиковать данные.
-
-Изменение набора публичных полей создает новую запись согласия.
+2. не публиковать телефон, email, дату рождения и текущую геолокацию;
+3. только после успешной записи согласия публиковать профиль или объявление.
 
 ## 5. Существующие пользователи
 
@@ -106,11 +91,13 @@ CREATE INDEX legal_acceptance_user_timeline_idx
 
 В настройках должны быть отдельные действия:
 
-- управление публичными полями;
 - отзыв согласия на распространение;
-- отказ от каждого рекламного канала;
 - запрос по персональным данным;
 - удаление аккаунта.
+
+Отзыв фиксируется в журнале, скрывает публичный профиль и снимает активные
+объявления с публикации. Для юридических обращений используется
+`legal@wigaj.ru`.
 
 Отзыв не должен удалять платежные, фискальные или иные записи, которые
 обрабатываются на основании закона. Интерфейс обязан объяснять последствия.
@@ -131,12 +118,10 @@ CREATE INDEX legal_acceptance_user_timeline_idx
 ## 8. Проверки перед релизом
 
 - ни один обязательный документ не содержит `{{ПЛЕЙСХОЛДЕР}}`;
-- опубликованный hash совпадает с hash в `legal_document`;
+- опубликованный hash совпадает с hash, настроенным для `legal_consent`;
 - регистрация без обязательного принятия отклоняется сервером;
-- рекламный флажок по умолчанию выключен;
 - согласие на распространение не объединено с другими документами;
 - отзыв отражается на публичных DTO и кэше;
 - юридические маршруты доступны без аккаунта и из RuStore;
 - все времена сохраняются в UTC;
 - журнал принятия включен в резервное копирование и аудит доступа.
-

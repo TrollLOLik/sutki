@@ -97,6 +97,14 @@ type Config struct {
 	// AdminEmail receives operational alerts (moderation degraded mode,
 	// review queue growth). Empty disables admin alerts.
 	AdminEmail string
+	// SupportEmail receives public callback requests submitted through the
+	// website. Empty disables the endpoint rather than silently dropping leads.
+	SupportEmail string
+
+	LegalDocumentVersion         string
+	LegalUserAgreementSHA256     string
+	LegalPersonalDataSHA256      string
+	LegalDataDisseminationSHA256 string
 
 	DadataAPIKey    string
 	OverpassURL     string
@@ -186,10 +194,15 @@ func Load() (Config, error) {
 		PaymentCapture:            getBool("PAYMENT_CAPTURE", true),
 		PaymentProviderTimeout:    getDuration("PAYMENT_PROVIDER_TIMEOUT", 15*time.Second),
 
-		PublicAPIBaseURL:       getEnv("PUBLIC_API_BASE_URL", ""),
-		EmailUnsubscribeSecret: getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
-		EmailDailyLimit:        getInt("EMAIL_DAILY_LIMIT", 500),
-		AdminEmail:             getEnv("ADMIN_EMAIL", ""),
+		PublicAPIBaseURL:             getEnv("PUBLIC_API_BASE_URL", ""),
+		EmailUnsubscribeSecret:       getEnv("EMAIL_UNSUBSCRIBE_SECRET", ""),
+		EmailDailyLimit:              getInt("EMAIL_DAILY_LIMIT", 500),
+		AdminEmail:                   getEnv("ADMIN_EMAIL", ""),
+		SupportEmail:                 getEnv("SUPPORT_EMAIL", ""),
+		LegalDocumentVersion:         getEnv("LEGAL_DOCUMENT_VERSION", "2026-08-10"),
+		LegalUserAgreementSHA256:     strings.ToLower(getEnv("LEGAL_USER_AGREEMENT_SHA256", "")),
+		LegalPersonalDataSHA256:      strings.ToLower(getEnv("LEGAL_PERSONAL_DATA_SHA256", "")),
+		LegalDataDisseminationSHA256: strings.ToLower(getEnv("LEGAL_DATA_DISSEMINATION_SHA256", "")),
 
 		DadataAPIKey:    os.Getenv("DADATA_API_KEY"),
 		OverpassURL:     getEnv("OVERPASS_URL", "https://overpass-api.de/api/interpreter"),
@@ -235,6 +248,9 @@ func Load() (Config, error) {
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+	if cfg.SupportEmail == "" {
+		cfg.SupportEmail = cfg.SMTPUsername
 	}
 	if cfg.UCallerEnabled && (cfg.UCallerAPIKey == "" || cfg.UCallerServiceID == "") {
 		return Config{}, fmt.Errorf("UCALLER_API_KEY and UCALLER_SERVICE_ID are required when UCALLER_ENABLED=true")
@@ -304,12 +320,39 @@ func Load() (Config, error) {
 	if cfg.EmailUnsubscribeSecret == "" {
 		cfg.EmailUnsubscribeSecret = cfg.JWTSecret
 	}
+	if cfg.AppEnvironment != "production" {
+		const developmentDocumentHash = "0000000000000000000000000000000000000000000000000000000000000000"
+		if cfg.LegalUserAgreementSHA256 == "" {
+			cfg.LegalUserAgreementSHA256 = developmentDocumentHash
+		}
+		if cfg.LegalPersonalDataSHA256 == "" {
+			cfg.LegalPersonalDataSHA256 = developmentDocumentHash
+		}
+		if cfg.LegalDataDisseminationSHA256 == "" {
+			cfg.LegalDataDisseminationSHA256 = developmentDocumentHash
+		}
+	}
 
 	// --- Production hardening -------------------------------------------
 	// Deliberately scoped to production: development keeps its convenience
 	// defaults, while a misconfigured production deployment refuses to start
 	// rather than starting insecurely.
 	if cfg.AppEnvironment == "production" {
+		if strings.TrimSpace(cfg.LegalDocumentVersion) == "" {
+			return Config{}, fmt.Errorf("LEGAL_DOCUMENT_VERSION is required in production")
+		}
+		for _, document := range []struct{ name, hash string }{
+			{"LEGAL_USER_AGREEMENT_SHA256", cfg.LegalUserAgreementSHA256},
+			{"LEGAL_PERSONAL_DATA_SHA256", cfg.LegalPersonalDataSHA256},
+			{"LEGAL_DATA_DISSEMINATION_SHA256", cfg.LegalDataDisseminationSHA256},
+		} {
+			if len(document.hash) != 64 {
+				return Config{}, fmt.Errorf("%s must contain the lowercase SHA-256 of the published document", document.name)
+			}
+			if _, err := hex.DecodeString(document.hash); err != nil {
+				return Config{}, fmt.Errorf("%s must be a lowercase hexadecimal SHA-256", document.name)
+			}
+		}
 		if cfg.PaymentProvider == "mock" {
 			return Config{}, fmt.Errorf("PAYMENT_PROVIDER=mock is not allowed when APP_ENV=production")
 		}

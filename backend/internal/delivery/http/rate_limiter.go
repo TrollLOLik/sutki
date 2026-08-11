@@ -140,9 +140,10 @@ var (
 	ViewIPLimiter       = NewSlidingWindowLimiter(time.Hour)
 
 	// Public read/proxy endpoints.
-	PublicProfileLimiter = NewSlidingWindowLimiter(time.Hour)
-	GuestRequestsLimiter = NewSlidingWindowLimiter(time.Hour)
-	CitySuggestLimiter   = NewSlidingWindowLimiter(time.Hour)
+	PublicProfileLimiter   = NewSlidingWindowLimiter(time.Hour)
+	GuestRequestsLimiter   = NewSlidingWindowLimiter(time.Hour)
+	CitySuggestLimiter     = NewSlidingWindowLimiter(time.Hour)
+	CallbackRequestLimiter = NewSlidingWindowLimiter(time.Hour)
 
 	// Account-factor changes. These are separate from login OTP buckets so a
 	// legitimate login does not consume the budget for changing an account.
@@ -165,6 +166,10 @@ const (
 	guestRequestListsPerGuestHour = 60
 	guestRequestListsPerIPHour    = 180
 	citySuggestionsPerIPHour      = 300
+	// The web BFF may share one egress IP across visitors, so the IP bucket is
+	// intentionally coarse; the normalized phone bucket is the primary guard.
+	callbackRequestsPerIPHour    = 60
+	callbackRequestsPerPhoneHour = 3
 
 	emailChangeRequestsPerUserHour   = 5
 	emailChangeRequestsPerTargetHour = 5

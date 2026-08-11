@@ -26,6 +26,7 @@ const (
 	EventListingRejected  = "listing_rejected"
 	EventAdminAlert       = "admin_alert"
 	EventFactorChanged    = "factor_changed"
+	EventCallbackRequest  = "callback_request"
 )
 
 var eventTypes = []string{
@@ -42,6 +43,7 @@ var eventTypes = []string{
 	EventListingRejected,
 	EventAdminAlert,
 	EventFactorChanged,
+	EventCallbackRequest,
 }
 
 // renderer holds pre-parsed HTML and plain-text template sets per event.

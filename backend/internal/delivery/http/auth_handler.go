@@ -12,6 +12,7 @@ import (
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
+	legaluc "github.com/TrollLOLik/sutki/backend/internal/usecase/legal"
 )
 
 const minimumProfileAge = 18
@@ -33,11 +34,16 @@ func birthdayMeetsMinimumAge(birthday, now time.Time) bool {
 
 // AuthHandler serves the email-code authentication API.
 type AuthHandler struct {
-	svc *auth.Service
+	svc      *auth.Service
+	legalSvc *legaluc.Service
 }
 
 func NewAuthHandler(svc *auth.Service) *AuthHandler {
 	return &AuthHandler{svc: svc}
+}
+
+func (h *AuthHandler) SetLegalService(service *legaluc.Service) {
+	h.legalSvc = service
 }
 
 // Routes registers the public auth endpoints.
@@ -164,19 +170,25 @@ func toAuthResponse(res auth.AuthResult) authResponse {
 
 func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Email string `json:"email"`
+		Email              string `json:"email"`
+		AcceptTerms        bool   `json:"accept_terms"`
+		AcceptPersonalData bool   `json:"accept_personal_data"`
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !body.AcceptTerms || !body.AcceptPersonalData {
+		writeError(w, http.StatusPreconditionRequired, "legal consent required")
+		return
+	}
+	emailClean, err := auth.NormalizeEmail(body.Email)
+	if err != nil {
+		writeAuthError(w, r, err)
 		return
 	}
 
 	if !h.svc.ExposeCode() {
 		// Same key as the service's own lookup — see verifyCode.
-		emailClean, err := auth.NormalizeEmail(body.Email)
-		if err != nil {
-			writeAuthError(w, r, err)
-			return
-		}
 		guestID := r.Header.Get("X-Guest-Id")
 		clientIP := getClientIP(r)
 
@@ -192,6 +204,9 @@ func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
 			return
 		}
+	}
+	if !h.acceptLoginConsents(w, r) {
+		return
 	}
 
 	res, err := h.svc.RequestCode(r.Context(), body.Email)
@@ -232,6 +247,7 @@ func (h *AuthHandler) verifyCode(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, r, err)
 		return
 	}
+	h.bindLoginConsents(r, res.User.ID)
 	writeJSON(w, http.StatusOK, toAuthResponse(res))
 }
 
@@ -285,6 +301,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 // PublicProfile returns the non-sensitive fields used by public profile screens.
 func (h *AuthHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	if !PublicProfileLimiter.Allow("public_profile_ip:"+getClientIP(r), publicProfilesPerIPHour) {
 		writeRateLimitError(w, "Слишком много запросов профилей. Попробуйте позже.")
 		return
@@ -293,6 +310,17 @@ func (h *AuthHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil || id <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid user id")
 		return
+	}
+	if h.legalSvc != nil {
+		visible, visibilityErr := h.legalSvc.PublicProfileVisible(r.Context(), int32(id))
+		if visibilityErr != nil && !errors.Is(visibilityErr, domain.ErrNotFound) {
+			writeInternalError(w, r, visibilityErr, "internal error")
+			return
+		}
+		if !visible {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
 	}
 	user, err := h.svc.GetUser(r.Context(), int32(id))
 	if err != nil {
@@ -812,10 +840,16 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) requestCodePhone(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Phone   string `json:"phone"`
-		Channel string `json:"channel"`
+		Phone              string `json:"phone"`
+		Channel            string `json:"channel"`
+		AcceptTerms        bool   `json:"accept_terms"`
+		AcceptPersonalData bool   `json:"accept_personal_data"`
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !body.AcceptTerms || !body.AcceptPersonalData {
+		writeError(w, http.StatusPreconditionRequired, "legal consent required")
 		return
 	}
 
@@ -841,6 +875,9 @@ func (h *AuthHandler) requestCodePhone(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusTooManyRequests, "Слишком много запросов с вашего IP. Пожалуйста, попробуйте позже.")
 			return
 		}
+	}
+	if !h.acceptLoginConsents(w, r) {
+		return
 	}
 
 	res, err := h.svc.RequestPhoneCode(r.Context(), body.Phone, body.Channel)
@@ -925,7 +962,142 @@ func (h *AuthHandler) verifyCodePhone(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, r, err)
 		return
 	}
+	h.bindLoginConsents(r, res.User.ID)
 	writeJSON(w, http.StatusOK, toAuthResponse(res))
+}
+
+func (h *AuthHandler) LegalDocuments(w http.ResponseWriter, _ *http.Request) {
+	if h.legalSvc == nil {
+		writeError(w, http.StatusServiceUnavailable, "legal documents are not configured")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": h.legalSvc.Documents()})
+}
+
+func (h *AuthHandler) LegalConsentStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.legalSvc == nil {
+		writeError(w, http.StatusServiceUnavailable, "legal consent service unavailable")
+		return
+	}
+	status, err := h.legalSvc.Status(r.Context(), userID)
+	if err != nil {
+		writeInternalError(w, r, err, "failed to read legal consent status")
+		return
+	}
+	items := make([]map[string]any, 0, len(status.Documents))
+	for _, item := range status.Documents {
+		items = append(items, map[string]any{
+			"type": item.Document.Type, "version": item.Document.Version,
+			"sha256": item.Document.SHA256, "accepted": item.Accepted,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items, "public_profile_visible": status.PublicProfileVisible,
+	})
+}
+
+func (h *AuthHandler) AcceptDissemination(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Accepted bool `json:"accepted"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !body.Accepted || h.legalSvc == nil {
+		writeError(w, http.StatusPreconditionRequired, "personal data dissemination consent required")
+		return
+	}
+	requestContext, err := legalRequestContext(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err = h.legalSvc.AcceptDissemination(r.Context(), userID, requestContext); err != nil {
+		writeInternalError(w, r, err, "failed to record legal consent")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) RevokeDissemination(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if h.legalSvc == nil {
+		writeError(w, http.StatusServiceUnavailable, "legal consent service unavailable")
+		return
+	}
+	if err := h.legalSvc.RevokeDissemination(r.Context(), userID, body.Reason); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "active consent not found")
+			return
+		}
+		writeInternalError(w, r, err, "failed to revoke legal consent")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandler) acceptLoginConsents(w http.ResponseWriter, r *http.Request) bool {
+	if h.legalSvc == nil {
+		return true
+	}
+	requestContext, err := legalRequestContext(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	if err = h.legalSvc.AcceptLogin(r.Context(), requestContext); err != nil {
+		if errors.Is(err, domain.ErrLegalConsentRequired) {
+			writeError(w, http.StatusPreconditionRequired, "legal consent required")
+			return false
+		}
+		writeInternalError(w, r, err, "failed to record legal consent")
+		return false
+	}
+	return true
+}
+
+func (h *AuthHandler) bindLoginConsents(r *http.Request, userID int32) {
+	if h.legalSvc == nil {
+		return
+	}
+	if err := h.legalSvc.BindLogin(r.Context(), r.Header.Get("X-Guest-Id"), userID); err != nil {
+		// Authentication already succeeded and the proof remains durably stored
+		// under the registration id. Do not consume a valid OTP without issuing
+		// the session; the next successful login retries the binding.
+		log.Printf("legal consent: bind registration to user %d: %v", userID, err)
+	}
+}
+
+func legalRequestContext(r *http.Request) (legaluc.RequestContext, error) {
+	source := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Client-Platform")))
+	if source != domain.LegalConsentSourceWeb && source != domain.LegalConsentSourceAndroid {
+		return legaluc.RequestContext{}, errors.New("X-Client-Platform must be web or android")
+	}
+	return legaluc.RequestContext{
+		RegistrationID: strings.TrimSpace(r.Header.Get("X-Guest-Id")),
+		IPAddress:      getClientIP(r), UserAgent: r.UserAgent(),
+		AppVersion: strings.TrimSpace(r.Header.Get("X-App-Version")), Source: source,
+	}, nil
 }
 
 func (h *AuthHandler) changePhoneRequest(w http.ResponseWriter, r *http.Request) {

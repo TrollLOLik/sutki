@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// Remove the internal webhook secret before middleware.Logger sees the URL.
@@ -86,6 +86,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 
 		r.Get("/services", listingHandler.ListServices)
 		r.Get("/categories", listingHandler.ListCategories)
+		r.Get("/legal/documents", authHandler.LegalDocuments)
 		r.Route("/auth", authHandler.Routes)
 		r.Post("/cities/suggest", cityHandler.Suggest)
 		r.Get("/cities/iplocate", cityHandler.IPLocate)
@@ -97,6 +98,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Get("/guest/requests", bookingHandler.ListGuest)
 		// Login-free unsubscribe link from email footers (HMAC-signed).
 		r.Get("/email/unsubscribe", emailHandler.Unsubscribe)
+		r.Post("/support/callback-requests", supportHandler.CallbackRequest)
 		r.Get("/payment-products", paymentHandler.Products)
 		r.Post("/webhooks/yookassa", paymentHandler.Webhook)
 		r.Post("/admin/payments/{id}/refunds", paymentHandler.Refund)
@@ -115,6 +117,9 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Post("/me/notifications/{id}/read", activityHandler.markNotificationRead)
 			r.Patch("/me", authHandler.UpdateMe)
 			r.Delete("/me", authHandler.DeleteMe)
+			r.Get("/me/legal-consents", authHandler.LegalConsentStatus)
+			r.Post("/me/legal-consents/dissemination", authHandler.AcceptDissemination)
+			r.Delete("/me/legal-consents/dissemination", authHandler.RevokeDissemination)
 			r.Get("/me/sessions", authHandler.ListSessions)
 			r.Delete("/me/sessions", authHandler.RevokeOtherSessions)
 			r.Delete("/me/sessions/{id}", authHandler.RevokeSession)

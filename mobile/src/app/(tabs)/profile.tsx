@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Animated, Dimensions, Easing, Image, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { Animated, Dimensions, Easing, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
@@ -18,7 +19,17 @@ import {
   ProfileMetricGrid,
 } from '@/components/profile/ProfileOverview';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
-import { useUpdateMe, fetchMe, useSessions, useRevokeSession, useRevokeOtherSessions, Session } from '@/lib/api/auth';
+import {
+  fetchMe,
+  legalConsentKeys,
+  Session,
+  useLegalConsentStatus,
+  useRevokeDataDissemination,
+  useRevokeOtherSessions,
+  useRevokeSession,
+  useSessions,
+  useUpdateMe,
+} from '@/lib/api/auth';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ApiError } from '@/lib/api/client';
@@ -157,6 +168,7 @@ function PhonePickerField({ value, onPress }: { value?: string | null; onPress: 
 
 export default function ProfileScreen() {
   const { palette } = useAppTheme();
+  const queryClient = useQueryClient();
   const tabNavigation = useNavigation();
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
@@ -192,6 +204,16 @@ export default function ProfileScreen() {
   } = useHostResponseStats(user?.id, status === 'authenticated');
   const revokeSession = useRevokeSession();
   const revokeOtherSessions = useRevokeOtherSessions();
+  const revokeDissemination = useRevokeDataDissemination();
+  const {
+    data: legalConsentStatus,
+    isLoading: legalConsentStatusLoading,
+    isError: legalConsentStatusError,
+    refetch: refetchLegalConsentStatus,
+  } = useLegalConsentStatus(status === 'authenticated');
+  const disseminationConsentActive = legalConsentStatus?.items.some(
+    (item) => item.type === 'personal_data_dissemination' && item.accepted,
+  ) ?? false;
 
   const handleRevokeOther = () => {
     Alert.alert(
@@ -309,6 +331,38 @@ export default function ProfileScreen() {
       return result.assets[0].uri;
     }
     return undefined;
+  };
+
+  const handleRevokeDissemination = () => {
+    Alert.alert(
+      'Скрыть публичные данные?',
+      'Публичный профиль станет недоступен, а активные объявления будут сняты с публикации. Вернуть их можно будет после нового отдельного согласия.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Отозвать согласие',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await revokeDissemination.mutateAsync();
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: legalConsentKeys.status }),
+                queryClient.invalidateQueries({ queryKey: ['listings'] }),
+              ]);
+              Alert.alert(
+                'Публичные данные скрыты',
+                'Отзыв зафиксирован. По юридическим вопросам можно написать на legal@wigaj.ru.',
+              );
+            } catch (err) {
+              Alert.alert(
+                'Не удалось отозвать согласие',
+                err instanceof ApiError ? err.message : 'Проверьте подключение и попробуйте ещё раз.',
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   const pickAvatar = async () => {
@@ -953,6 +1007,79 @@ export default function ProfileScreen() {
                       </View>
                     </Pressable>
                   </MaterialSurface>
+
+                  <View className="gap-3">
+                    <Text className="text-lg font-extrabold text-ink">Публичность данных</Text>
+                    <MaterialSurface level="raised" radius={22} style={{ padding: 16, gap: 14 }}>
+                      {legalConsentStatusLoading ? (
+                        <ActivityIndicator size="small" color={palette.primary} />
+                      ) : legalConsentStatusError ? (
+                        <View className="items-start gap-3">
+                          <Text className="text-sm leading-5 text-ink-secondary">
+                            Не удалось проверить состояние согласия.
+                          </Text>
+                          <Button
+                            label="Повторить"
+                            variant="secondary"
+                            size="md"
+                            onPress={() => void refetchLegalConsentStatus()}
+                          />
+                        </View>
+                      ) : (
+                        <>
+                          <View className="flex-row items-start gap-3">
+                            <View className={`h-11 w-11 items-center justify-center rounded-full ${disseminationConsentActive ? 'bg-success-light' : 'bg-surface-muted'}`}>
+                              <Ionicons
+                                name={disseminationConsentActive ? 'eye-outline' : 'eye-off-outline'}
+                                size={21}
+                                color={disseminationConsentActive ? palette.success : palette.inkMuted}
+                              />
+                            </View>
+                            <View className="flex-1">
+                              <Text className="text-base font-extrabold text-ink">
+                                {disseminationConsentActive ? 'Согласие действует' : 'Публичные данные скрыты'}
+                              </Text>
+                              <Text className="mt-1 text-sm leading-5 text-ink-secondary">
+                                {disseminationConsentActive
+                                  ? 'Профиль и опубликованные объявления могут отображаться другим пользователям.'
+                                  : 'Перед следующей публикацией приложение отдельно запросит согласие.'}
+                              </Text>
+                            </View>
+                          </View>
+                          {disseminationConsentActive ? (
+                            <Button
+                              label="Отозвать согласие"
+                              icon="eye-off-outline"
+                              variant="danger"
+                              size="md"
+                              loading={revokeDissemination.isPending}
+                              onPress={handleRevokeDissemination}
+                            />
+                          ) : null}
+                        </>
+                      )}
+                      <View className="h-px bg-line" />
+                      {[
+                        ['Пользовательское соглашение', 'https://wigaj.ru/legal/terms'],
+                        ['Обработка персональных данных', 'https://wigaj.ru/legal/personal-data-consent'],
+                        ['Распространение персональных данных', 'https://wigaj.ru/legal/personal-data-dissemination-consent'],
+                      ].map(([label, url]) => (
+                        <Pressable
+                          key={url}
+                          onPress={() => void Linking.openURL(url)}
+                          className="min-h-10 flex-row items-center active:opacity-65">
+                          <Text className="flex-1 text-sm font-bold text-ink">{label}</Text>
+                          <Ionicons name="open-outline" size={17} color={palette.inkMuted} />
+                        </Pressable>
+                      ))}
+                      <Pressable
+                        onPress={() => void Linking.openURL('mailto:legal@wigaj.ru')}
+                        className="min-h-10 flex-row items-center active:opacity-65">
+                        <Text className="flex-1 text-sm font-bold text-primary">legal@wigaj.ru</Text>
+                        <Ionicons name="mail-outline" size={17} color={palette.primary} />
+                      </Pressable>
+                    </MaterialSurface>
+                  </View>
 
                   <View className="gap-3">
                     <Text className="text-lg font-extrabold text-ink">Устройства входа</Text>

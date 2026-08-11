@@ -379,7 +379,7 @@ func (r *ListingRepo) ListPhotos(ctx context.Context, houseID int32) ([]domain.P
 	}
 	photos := make([]domain.Photo, 0, len(rows))
 	for _, row := range rows {
-		photos = append(photos, domain.Photo{ID: row.ID, Path: row.Path, Position: row.Position})
+		photos = append(photos, domain.Photo{ID: row.ID, Path: row.Path, Key: row.Path, Position: row.Position})
 	}
 	return photos, nil
 }

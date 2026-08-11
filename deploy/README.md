@@ -94,6 +94,22 @@ curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS https://arenda.wigaj.ru/healthz
 ```
 
+## Website deployment
+
+The Symfony/Twig website from `public_html/` is deployed separately to Timeweb
+virtual hosting. It is not part of this VPS Compose project and never receives
+database credentials. Its production document root must point to
+`public_html/public`, and `BACKEND_API_BASE_URL` must be
+`https://arenda.wigaj.ru/api/v1`.
+
+The checked deployment script updates only the VPS services. With
+`RUN_PUBLIC_SMOKE=1`, the smoke test also verifies the separately hosted public
+website:
+
+```bash
+sudo env RUN_PUBLIC_SMOKE=1 sh deploy/scripts/deploy-production.sh
+```
+
 The public API is also monitored externally by Timeweb Cloud Monitoring:
 
 - URL: `https://arenda.wigaj.ru/healthz`
@@ -114,6 +130,38 @@ Review release notes before changing major image tags. For routine application
 updates, pull the repository, then run the same `docker compose up -d --build`
 command. The API migration service applies pending additive migrations before
 the API is allowed to start. GlitchTip manages its own migrations on startup.
+
+## Legal document evidence and retention
+
+The API is fail-closed in production until the published legal document
+version and SHA-256 values are configured. The website calculates each hash
+from the fully resolved Markdown document and returns it in an HTTP header:
+
+```bash
+curl -fsSI https://wigaj.ru/legal/terms | grep -i x-legal-document-sha256
+curl -fsSI https://wigaj.ru/legal/personal-data-consent | grep -i x-legal-document-sha256
+curl -fsSI https://wigaj.ru/legal/personal-data-dissemination-consent | grep -i x-legal-document-sha256
+```
+
+Copy the values into `deploy/.env.production` as
+`LEGAL_USER_AGREEMENT_SHA256`, `LEGAL_PERSONAL_DATA_SHA256`, and
+`LEGAL_DATA_DISSEMINATION_SHA256`. Set `LEGAL_DOCUMENT_VERSION` to the same
+published edition shown by the website. Changing any resolved document text
+requires a new version and new hashes before deployment.
+
+Migration `000047_legal_consents_retention` creates the consent evidence
+journal and the retention-run journal. The API runs retention once at startup
+and then daily. Verify its latest execution after deployment:
+
+```bash
+sudo docker compose --env-file deploy/.env.production -f deploy/compose.production.yml \
+  exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT started_at, finished_at, status, counters, error FROM data_retention_run ORDER BY id DESC LIMIT 5;"'
+```
+
+The database worker cannot expire provider-managed backup objects. Keep the
+Timeweb lifecycle rule below enabled for `postgres/`; its 90-day expiry is the
+enforcement mechanism for deleted data remaining in encrypted backups.
 
 ## PostgreSQL backups
 

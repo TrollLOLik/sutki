@@ -38,10 +38,12 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/chat"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/favorite"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/imagemoderation"
+	legaluc "github.com/TrollLOLik/sutki/backend/internal/usecase/legal"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/listing"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/moderation"
 	paymentuc "github.com/TrollLOLik/sutki/backend/internal/usecase/payment"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/promotion"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/retention"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/review"
 )
 
@@ -143,6 +145,7 @@ func main() {
 		fatalTracked("email templates: %v", err)
 	}
 	emailHandler := httpdelivery.NewEmailHandler(emailPrefsRepo, cfg.EmailUnsubscribeSecret)
+	supportHandler := httpdelivery.NewSupportHandler(notifier, cfg.SupportEmail)
 
 	// Listing moderation: synchronous prefilter on create/update plus a
 	// background LLM verdict worker with circuit breaker + degraded mode.
@@ -214,6 +217,28 @@ func main() {
 	})
 	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
+	legalSvc, err := legaluc.New(postgres.NewLegalConsentRepo(pool), legaluc.Config{
+		Documents: map[string]domain.LegalDocument{
+			domain.LegalDocumentUserAgreement: {
+				Version: cfg.LegalDocumentVersion,
+				SHA256:  cfg.LegalUserAgreementSHA256,
+			},
+			domain.LegalDocumentPersonalData: {
+				Version: cfg.LegalDocumentVersion,
+				SHA256:  cfg.LegalPersonalDataSHA256,
+			},
+			domain.LegalDocumentDataDissemination: {
+				Version: cfg.LegalDocumentVersion,
+				SHA256:  cfg.LegalDataDisseminationSHA256,
+			},
+		},
+	})
+	if err != nil {
+		fatalTracked("legal consent service: %v", err)
+	}
+	authHandler.SetLegalService(legalSvc)
+	listingHandler.SetLegalService(legalSvc)
+	retention.New(postgres.NewRetentionRepo(pool), privateStorage, publicStorage).Start(ctx)
 
 	// Chat is constructed before booking: booking posts system status cards
 	// into owner-guest conversations via the ChatSystemPoster interface.
@@ -306,7 +331,7 @@ func main() {
 	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.MinAppVersion, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.MinAppVersion, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

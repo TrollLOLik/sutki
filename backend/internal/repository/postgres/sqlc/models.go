@@ -5,6 +5,8 @@
 package sqlc
 
 import (
+	"net/netip"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -91,6 +93,15 @@ type ConversationParticipant struct {
 	UserID            int32
 	LastReadAt        pgtype.Timestamptz
 	LastReadMessageID *int64
+}
+
+type DataRetentionRun struct {
+	ID         int64
+	StartedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+	Status     string
+	Counters   []byte
+	Error      *string
 }
 
 type DeviceToken struct {
@@ -212,6 +223,22 @@ type HouseHouseCategory struct {
 type HouseHouseService struct {
 	HouseID   int32
 	ServiceID int32
+}
+
+type LegalConsent struct {
+	ID               int64
+	UserID           *int32
+	RegistrationID   string
+	DocumentType     string
+	DocumentVersion  string
+	DocumentSha256   string
+	AcceptedAt       pgtype.Timestamptz
+	IpAddress        *netip.Addr
+	UserAgent        *string
+	AppVersion       *string
+	Source           string
+	RevokedAt        pgtype.Timestamptz
+	RevocationReason *string
 }
 
 type ListingPromotion struct {
@@ -595,31 +622,32 @@ type SessionIpAddress struct {
 }
 
 type User struct {
-	ID              int32
-	Name            *string
-	Surname         *string
-	Patronymic      *string
-	Email           *string
-	Password        *string
-	Roles           []byte
-	Deleted         bool
-	IsVerified      bool
-	GoogleID        *string
-	Phone           *string
-	Locale          *string
-	City            *string
-	Enable          bool
-	CreatedAt       pgtype.Timestamp
-	UpdatedAt       pgtype.Timestamp
-	Code            *string
-	DateCode        pgtype.Timestamp
-	RejectionReason *string
-	VkID            *string
-	AvatarUrl       *string
-	Birthday        pgtype.Date
-	PhoneNormalized *string
-	PhoneVerifiedAt pgtype.Timestamptz
-	LastSeenAt      pgtype.Timestamptz
+	ID                   int32
+	Name                 *string
+	Surname              *string
+	Patronymic           *string
+	Email                *string
+	Password             *string
+	Roles                []byte
+	Deleted              bool
+	IsVerified           bool
+	GoogleID             *string
+	Phone                *string
+	Locale               *string
+	City                 *string
+	Enable               bool
+	CreatedAt            pgtype.Timestamp
+	UpdatedAt            pgtype.Timestamp
+	Code                 *string
+	DateCode             pgtype.Timestamp
+	RejectionReason      *string
+	VkID                 *string
+	AvatarUrl            *string
+	Birthday             pgtype.Date
+	PhoneNormalized      *string
+	PhoneVerifiedAt      pgtype.Timestamptz
+	LastSeenAt           pgtype.Timestamptz
+	PublicProfileVisible bool
 }
 
 type UserActivityEvent struct {
