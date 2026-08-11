@@ -51,13 +51,8 @@ func (r *LegalConsentRepo) AcceptRegistration(ctx context.Context, consents []do
 				registration_id, document_type, document_version, document_sha256,
 				accepted_at, ip_address, user_agent, app_version, source
 			)
-			SELECT $1, $2, $3, $4, $5, NULLIF($6, '')::inet, NULLIF($7, ''), NULLIF($8, ''), $9
-			WHERE NOT EXISTS (
-				SELECT 1 FROM legal_consent
-				WHERE registration_id = $1 AND document_type = $2
-				  AND user_id IS NULL AND revoked_at IS NULL
-				  AND document_version = $3 AND document_sha256 = $4
-			)`,
+			VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::inet, NULLIF($7, ''), NULLIF($8, ''), $9)
+			ON CONFLICT DO NOTHING`,
 			consent.RegistrationID, consent.Document.Type, consent.Document.Version,
 			consent.Document.SHA256, consent.AcceptedAt, stringValue(consent.IPAddress),
 			stringValue(consent.UserAgent), stringValue(consent.AppVersion), consent.Source,
@@ -149,12 +144,8 @@ func (r *LegalConsentRepo) AcceptForUser(ctx context.Context, consent domain.Leg
 			user_id, registration_id, document_type, document_version, document_sha256,
 			accepted_at, ip_address, user_agent, app_version, source
 		)
-		SELECT $1, $2, $3, $4, $5, $6, NULLIF($7, '')::inet, NULLIF($8, ''), NULLIF($9, ''), $10
-		WHERE NOT EXISTS (
-			SELECT 1 FROM legal_consent
-			WHERE user_id = $1 AND document_type = $3 AND revoked_at IS NULL
-			  AND document_version = $4 AND document_sha256 = $5
-		)`, *consent.UserID, consent.RegistrationID, consent.Document.Type,
+		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, '')::inet, NULLIF($8, ''), NULLIF($9, ''), $10)
+		ON CONFLICT DO NOTHING`, *consent.UserID, consent.RegistrationID, consent.Document.Type,
 		consent.Document.Version, consent.Document.SHA256, consent.AcceptedAt,
 		stringValue(consent.IPAddress), stringValue(consent.UserAgent),
 		stringValue(consent.AppVersion), consent.Source); err != nil {
