@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
@@ -36,6 +37,9 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func writeInternalError(w http.ResponseWriter, r *http.Request, err error, message string) {
+	// Keep the root cause available in container logs when the external error
+	// reporter is unavailable. Never log request bodies or query parameters.
+	log.Printf("http internal error: %s %s: %s: %v", r.Method, r.URL.Path, message, err)
 	observability.CaptureException(r.Context(), err)
 	writeError(w, http.StatusInternalServerError, message)
 }
