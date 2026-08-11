@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 
 import { Button } from '@/components/ui';
@@ -111,7 +111,12 @@ export function GuestProfile({
         </View>
         <View className="flex-row justify-between border-b border-line py-3">
           <Text className="text-sm text-ink-secondary">Поддержка</Text>
-          <Text className="text-sm font-bold text-primary">support@domryadom.ru</Text>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL('mailto:support@wigaj.ru')}
+            hitSlop={8}>
+            <Text className="text-sm font-bold text-primary">support@wigaj.ru</Text>
+          </Pressable>
         </View>
         <View className="flex-row justify-between pt-3">
           <Text className="text-sm text-ink-secondary">Язык</Text>

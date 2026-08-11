@@ -763,7 +763,12 @@ export default function ProfileScreen() {
             </View>
             <View className="flex-row justify-between border-b border-line py-3">
               <Text className="text-sm text-ink-secondary">Поддержка</Text>
-              <Text className="text-sm font-bold text-primary">support@domryadom.ru</Text>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL('mailto:support@wigaj.ru')}
+                hitSlop={8}>
+                <Text className="text-sm font-bold text-primary">support@wigaj.ru</Text>
+              </Pressable>
             </View>
             <View className="flex-row justify-between pt-3">
               <Text className="text-sm text-ink-secondary">Язык</Text>

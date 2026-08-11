@@ -24,13 +24,15 @@ module.exports = {
       },
     },
     android: {
-      versionCode: 2,
+      versionCode: 3,
+      icon: "./assets/images/android-icon-foreground.png",
       // Keep the chat composer above keyboards of different heights,
       // including Gboard's emoji panel.
       softwareKeyboardLayoutMode: "resize",
       adaptiveIcon: {
-        backgroundColor: "#FF5A1F",
+        backgroundColor: "#15171B",
         foregroundImage: "./assets/images/android-icon-foreground.png",
+        monochromeImage: "./assets/images/android-icon-monochrome.png",
       },
       predictiveBackGestureEnabled: false,
       package: "ru.wigaj.arenda",
@@ -69,9 +71,9 @@ module.exports = {
       [
         "expo-splash-screen",
         {
-          backgroundColor: "#FF5A1F",
-          image: "./assets/images/splash-icon.png",
-          imageWidth: 160,
+          backgroundColor: "#15171B",
+          image: "./assets/images/brand-mark.png",
+          imageWidth: 49,
         },
       ],
       "expo-secure-store",

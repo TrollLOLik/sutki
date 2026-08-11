@@ -100,7 +100,7 @@ func (r *RetentionRepo) RunRetention(ctx context.Context, now time.Time, deleted
 		{"chat_upload_registry", `DELETE FROM chat_upload WHERE object_key = ANY($1::text[]) AND NOT EXISTS (SELECT 1 FROM message_attachment WHERE upload_key = chat_upload.object_key)`, []any{deletedChatObjectKeys}},
 		{"chat_messages", `UPDATE message SET body = '', deleted_at = COALESCE(deleted_at, $2), edited_at = NULL WHERE created_at < $1 AND body <> ''`, []any{chatCutoff, now}},
 		{"refresh_tokens", `DELETE FROM refresh_token WHERE COALESCE(revoked_at, expires_at) < $1`, []any{now.AddDate(-1, 0, 0)}},
-		{"email_codes", `DELETE FROM email_login_code WHERE created_at < $1`, []any{now.AddDate(-1, 0, 0)}},
+		{"auth_codes", `DELETE FROM auth_code WHERE created_at < $1`, []any{now.AddDate(-1, 0, 0)}},
 		{"phone_challenges", `DELETE FROM phone_auth_challenge WHERE created_at < $1`, []any{now.AddDate(-1, 0, 0)}},
 		{"reauth_challenges", `DELETE FROM reauth_challenge WHERE created_at < $1`, []any{now.AddDate(-1, 0, 0)}},
 		{"listing_views", `DELETE FROM listing_view_event WHERE created_at < $1`, []any{now.AddDate(-1, 0, 0)}},

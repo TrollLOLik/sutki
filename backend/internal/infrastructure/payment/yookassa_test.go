@@ -47,7 +47,7 @@ func TestYookassaCreatePaymentContract(t *testing.T) {
 	}
 	out, err := p.CreatePayment(context.Background(), domain.ProviderCreatePayment{
 		IdempotencyKey: "idem", Money: domain.Money{AmountKopecks: 19900, Currency: "RUB"},
-		ReturnURL: "domryadom://payment/return", Metadata: map[string]string{"local_payment_id": "42"},
+		ReturnURL: "wigaj-arenda://payment/return", Metadata: map[string]string{"local_payment_id": "42"},
 		Receipt: &domain.Receipt{Customer: domain.ReceiptCustomer{Email: "a@example.com"}, Items: []domain.ReceiptItem{{Description: "Публикация", Quantity: "1.00", AmountKopecks: 19900, Currency: "RUB", VATCode: 1, PaymentSubject: "service", PaymentMode: "full_payment"}}},
 	})
 	if err != nil {

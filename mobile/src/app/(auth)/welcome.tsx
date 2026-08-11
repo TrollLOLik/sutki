@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { MotiView } from 'moti';
@@ -6,6 +5,9 @@ import { useEffect } from 'react';
 import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
 import WelcomeImage from '@/assets/images/welcome_screen.png';
+import BrandLogoDark from '@/assets/images/brand-logo-dark.png';
+import BrandLogoLight from '@/assets/images/brand-logo-light.png';
+import BrandMark from '@/assets/images/brand-mark.png';
 import { Button, MaterialSurface, ScreenContainer } from '@/components/ui';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -15,7 +17,7 @@ export default function WelcomeScreen() {
   const status = useSessionStore((s) => s.status);
   const continueAsGuest = useSessionStore((s) => s.continueAsGuest);
   const { height } = useWindowDimensions();
-  const { palette } = useAppTheme();
+  const { palette, isDark } = useAppTheme();
   const heroHeight = Math.min(268, Math.max(190, Math.round(height * 0.27)));
 
   // Auto-redirect if user is already authenticated
@@ -40,22 +42,12 @@ export default function WelcomeScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'spring', damping: 19, stiffness: 175 }}
           style={{ width: '100%', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: palette.primaryLight,
-              }}>
-              <Ionicons name="home-outline" size={19} color={palette.primary} />
-            </View>
-            <Text style={{ color: palette.ink, fontSize: 17, fontWeight: '800' }}>
-              ВИГАЖ
-            </Text>
-          </View>
+          <Image
+            source={isDark ? BrandLogoDark : BrandLogoLight}
+            accessibilityLabel="ВИГАЖ"
+            style={{ width: 126, height: 30 }}
+            contentFit="contain"
+          />
 
           <Text
             style={{
@@ -113,7 +105,12 @@ export default function WelcomeScreen() {
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.14)',
               }}>
-              <Ionicons name="location-outline" size={17} color={palette.primary} />
+              <Image
+                source={BrandMark}
+                accessibilityIgnoresInvertColors
+                style={{ width: 13, height: 15 }}
+                contentFit="contain"
+              />
               <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '700' }}>
                 ВИГАЖ
               </Text>

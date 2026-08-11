@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -26,6 +26,7 @@ import { useNavigationHistoryTracker } from '@/hooks/useNavigationHistoryTracker
 import { NavigationHistoryOverlay } from '@/components/NavigationHistoryOverlay';
 import { AppAlertHost } from '@/components/AppAlert';
 import { NetworkStatusBanner } from '@/components/NetworkStatusBanner';
+import { AppLaunchSplash } from '@/components/AppLaunchSplash';
 import { UpgradeRequiredScreen } from '@/components/UpgradeRequiredScreen';
 import { useAppVersionStore } from '@/store/appVersion';
 import { checkMinAppVersion } from '@/lib/api/appVersion';
@@ -52,6 +53,9 @@ Sentry.init({
 SplashScreen.preventAutoHideAsync();
 
 function RootLayout() {
+  const [startupReady, setStartupReady] = useState(false);
+  const [showLaunchSplash, setShowLaunchSplash] = useState(true);
+  const [launchAnimationStarted, setLaunchAnimationStarted] = useState(false);
   const status = useSessionStore((s) => s.status);
   const hydrate = useSessionStore((s) => s.hydrate);
   const hydrateTheme = useThemeStore((s) => s.hydrate);
@@ -76,8 +80,25 @@ function RootLayout() {
       })(),
       hydrateTheme(),
       hydrateListingLayout(),
-    ]).finally(() => SplashScreen.hideAsync());
+    ]).finally(() => setStartupReady(true));
   }, [hydrate, hydrateListingLayout, hydrateSearchCity, hydrateTheme]);
+
+  const appIsReady =
+    startupReady &&
+    status !== 'loading' &&
+    themeHydrated &&
+    searchCityHydrated &&
+    listingLayoutHydrated;
+
+  useEffect(() => {
+    if (!appIsReady) return;
+
+    // The branded React overlay is already committed when this effect runs,
+    // so hiding the native splash cannot expose a blank frame.
+    void SplashScreen.hideAsync().finally(() => setLaunchAnimationStarted(true));
+  }, [appIsReady]);
+
+  const finishLaunchSplash = useCallback(() => setShowLaunchSplash(false), []);
 
   useEffect(() => {
     // Ask up front rather than waiting for some request to fail: an
@@ -86,12 +107,19 @@ function RootLayout() {
     void checkMinAppVersion();
   }, []);
 
-  if (
-    status === 'loading' ||
-    !themeHydrated ||
-    !searchCityHydrated ||
-    !listingLayoutHydrated
-  ) return null;
+  if (!appIsReady) return null;
+
+  if (showLaunchSplash) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#15171B' }}>
+        <StatusBar style="light" />
+        <AppLaunchSplash
+          playing={launchAnimationStarted}
+          onFinished={finishLaunchSplash}
+        />
+      </GestureHandlerRootView>
+    );
+  }
 
   // Rendered above everything, with no way past it: behind this screen every
   // request would fail with 426 anyway.
