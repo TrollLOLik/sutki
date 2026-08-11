@@ -13,9 +13,9 @@ import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActi
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { Button } from '@/components/ui';
-import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
+import { useMyListings } from '@/lib/api/create-listing';
 import { useIncomingBookings } from '@/lib/api/bookings';
-import { ApiError } from '@/lib/api/client';
+import { useListingPublicationFlow } from '@/hooks/useListingPublicationFlow';
 import { useFavoriteIds } from '@/lib/api/favorites';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
@@ -29,7 +29,6 @@ import {
   type MyListingStatus,
   type RoomFilter,
 } from '@/store/filters';
-import { appAlert as Alert } from '@/components/AppAlert';
 import { useListingLayoutStore } from '@/store/listing-layout';
 
 const SORT_OPTIONS: SortOption<ListingSort>[] = [
@@ -118,7 +117,7 @@ export default function MyListingsScreen() {
   }, [data?.items, favoriteIds, filters, query, sort, unavailableHouseIds]);
   const filterCount = countActiveFilters(filters) + filters.statuses.length + Number(filters.favoritesOnly);
   const insets = useSafeAreaInsets();
-  const publication = useListingPublication();
+  const publicationFlow = useListingPublicationFlow();
   const statusCounts = useMemo(() => {
     const counts: Record<MyListingStatus, number> = {
       active: 0,
@@ -147,27 +146,6 @@ export default function MyListingsScreen() {
   const quickStatusCount = (statuses: MyListingStatus[]) => {
     if (statuses.length === 0) return data?.items.length ?? 0;
     return statuses.reduce((total, status) => total + statusCounts[status], 0);
-  };
-
-  const changePublication = (id: number, published: boolean) => {
-    const title = published ? 'Опубликовать объявление снова?' : 'Снять объявление с публикации?';
-    const message = published
-      ? 'Объявление снова появится в поиске.'
-      : 'Объявление исчезнет из поиска. Активное продвижение будет приостановлено.';
-    Alert.alert(title, message, [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: published ? 'Опубликовать' : 'Снять',
-        style: published ? 'default' : 'destructive',
-        onPress: async () => {
-          try {
-            await publication.mutateAsync({ id, published });
-          } catch (error) {
-            Alert.alert('Не удалось изменить статус', error instanceof ApiError ? error.message : 'Попробуйте ещё раз.');
-          }
-        },
-      },
-    ]);
   };
 
   return (
@@ -325,8 +303,8 @@ export default function MyListingsScreen() {
                     onPromote={actions.canPromote
                       ? () => router.push({ pathname: '/listing/[id]/promote' as any, params: { id: String(item.id) } })
                       : undefined}
-                    onUnpublish={actions.canUnpublish ? () => changePublication(item.id, false) : undefined}
-                    onPublish={actions.canPublish ? () => changePublication(item.id, true) : undefined}
+                    onUnpublish={actions.canUnpublish ? () => publicationFlow.changePublication(item.id, false) : undefined}
+                    onPublish={actions.canPublish ? () => publicationFlow.changePublication(item.id, true) : undefined}
                   />
                 </View>
               );

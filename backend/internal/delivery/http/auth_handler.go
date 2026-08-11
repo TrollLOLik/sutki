@@ -311,17 +311,6 @@ func (h *AuthHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid user id")
 		return
 	}
-	if h.legalSvc != nil {
-		visible, visibilityErr := h.legalSvc.PublicProfileVisible(r.Context(), int32(id))
-		if visibilityErr != nil && !errors.Is(visibilityErr, domain.ErrNotFound) {
-			writeInternalError(w, r, visibilityErr, "internal error")
-			return
-		}
-		if !visible {
-			writeError(w, http.StatusNotFound, "user not found")
-			return
-		}
-	}
 	user, err := h.svc.GetUser(r.Context(), int32(id))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -332,6 +321,31 @@ func (h *AuthHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toPublicUserDTO(user))
+}
+
+// requirePublicProfileVisible applies the dissemination-consent visibility
+// gate to every public resource nested under /users/{id}, not only the main
+// profile response.
+func (h *AuthHandler) requirePublicProfileVisible(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 32)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid user id")
+			return
+		}
+		if h.legalSvc != nil {
+			visible, visibilityErr := h.legalSvc.PublicProfileVisible(r.Context(), int32(id))
+			if visibilityErr != nil && !errors.Is(visibilityErr, domain.ErrNotFound) {
+				writeInternalError(w, r, visibilityErr, "internal error")
+				return
+			}
+			if !visible {
+				writeError(w, http.StatusNotFound, "user not found")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // UpdateMe updates the authenticated user's profile (requires AuthMiddleware).

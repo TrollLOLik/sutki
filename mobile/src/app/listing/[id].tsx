@@ -30,12 +30,10 @@ import {
   ListingOwnerActions,
 } from '@/components/ListingOwnerActions';
 import { ResilientImage } from '@/components/ResilientImage';
-import { appAlert as Alert } from '@/components/AppAlert';
 import { Button, IconButton, MaterialSurface, Skeleton, materialSurfaceColor } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
-import { useListingPublication } from '@/lib/api/create-listing';
-import { ApiError } from '@/lib/api/client';
+import { useListingPublicationFlow } from '@/hooks/useListingPublicationFlow';
 import { useRememberViewedListing } from '@/lib/api/viewed-listings';
 import { listingKeys, recordListingView, useListing, useListings, type ListListingsParams } from '@/lib/api/listings';
 import { generateSecureUUID } from '@/lib/guestId';
@@ -55,7 +53,7 @@ export default function ListingDetailScreen() {
   const queryClient = useQueryClient();
   const { data: favoriteIds } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
-  const publication = useListingPublication();
+  const publicationFlow = useListingPublicationFlow();
   const rememberViewedListing = useRememberViewedListing();
   const isFavorite = favoriteIds?.has(numericId) ?? false;
   const insets = useSafeAreaInsets();
@@ -296,34 +294,6 @@ export default function ListingDetailScreen() {
     } catch (error) {
       console.log('Error sharing listing:', error);
     }
-  };
-
-  const changePublication = (published: boolean) => {
-    if (!data) return;
-    const title = published
-      ? 'Опубликовать объявление снова?'
-      : 'Снять объявление с публикации?';
-    const message = published
-      ? 'Объявление снова появится в поиске.'
-      : 'Объявление исчезнет из поиска. Активное продвижение будет приостановлено.';
-
-    Alert.alert(title, message, [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: published ? 'Опубликовать' : 'Снять',
-        style: published ? 'default' : 'destructive',
-        onPress: async () => {
-          try {
-            await publication.mutateAsync({ id: numericId, published });
-          } catch (error) {
-            Alert.alert(
-              'Не удалось изменить статус',
-              error instanceof ApiError ? error.message : 'Попробуйте ещё раз.',
-            );
-          }
-        },
-      },
-    ]);
   };
 
   const getListingTitle = () => {
@@ -995,10 +965,14 @@ export default function ListingDetailScreen() {
                     : undefined
                 }
                 onUnpublish={
-                  ownerActions.canUnpublish ? () => changePublication(false) : undefined
+                  ownerActions.canUnpublish
+                    ? () => publicationFlow.changePublication(numericId, false)
+                    : undefined
                 }
                 onPublish={
-                  ownerActions.canPublish ? () => changePublication(true) : undefined
+                  ownerActions.canPublish
+                    ? () => publicationFlow.changePublication(numericId, true)
+                    : undefined
                 }
               />
             ) : (

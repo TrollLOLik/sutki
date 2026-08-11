@@ -90,9 +90,9 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		r.Route("/auth", authHandler.Routes)
 		r.Post("/cities/suggest", cityHandler.Suggest)
 		r.Get("/cities/iplocate", cityHandler.IPLocate)
-		r.Get("/users/{id}", authHandler.PublicProfile)
-		r.Get("/users/{id}/reviews", reviewHandler.ListForUser)
-		r.Get("/users/{id}/host-response-stats", chatHandler.HostResponseStats)
+		r.With(authHandler.requirePublicProfileVisible).Get("/users/{id}", authHandler.PublicProfile)
+		r.With(authHandler.requirePublicProfileVisible).Get("/users/{id}/reviews", reviewHandler.ListForUser)
+		r.With(authHandler.requirePublicProfileVisible).Get("/users/{id}/host-response-stats", chatHandler.HostResponseStats)
 
 		// Public/Guest endpoints
 		r.Get("/guest/requests", bookingHandler.ListGuest)

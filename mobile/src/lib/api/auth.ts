@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api/client';
 import type {
@@ -323,11 +323,19 @@ export function useLegalConsentStatus(enabled = true) {
 }
 
 export function useAcceptDataDissemination() {
-  return useMutation({ mutationFn: acceptDataDissemination });
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: acceptDataDissemination,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: legalConsentKeys.status }),
+  });
 }
 
 export function useRevokeDataDissemination() {
-  return useMutation({ mutationFn: () => revokeDataDissemination() });
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => revokeDataDissemination(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: legalConsentKeys.status }),
+  });
 }
 
 export function useVerifyPhoneCode() {

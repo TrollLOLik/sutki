@@ -132,11 +132,11 @@ func (r *LegalConsentRepo) AcceptForUser(ctx context.Context, consent domain.Leg
 	}
 	if _, err = tx.Exec(ctx, `
 		UPDATE legal_consent
-		SET revoked_at = $6, revocation_reason = 'superseded'
-		WHERE user_id = $1 AND document_type = $3 AND revoked_at IS NULL
-		  AND (document_version <> $4 OR document_sha256 <> $5)`,
-		*consent.UserID, consent.RegistrationID, consent.Document.Type,
-		consent.Document.Version, consent.Document.SHA256, consent.AcceptedAt); err != nil {
+		SET revoked_at = $5, revocation_reason = 'superseded'
+		WHERE user_id = $1 AND document_type = $2 AND revoked_at IS NULL
+		  AND (document_version <> $3 OR document_sha256 <> $4)`,
+		*consent.UserID, consent.Document.Type, consent.Document.Version,
+		consent.Document.SHA256, consent.AcceptedAt); err != nil {
 		return err
 	}
 	if _, err = tx.Exec(ctx, `
@@ -205,10 +205,26 @@ func (r *LegalConsentRepo) Revoke(ctx context.Context, userID int32, documentTyp
 		if _, err = tx.Exec(ctx, `UPDATE "user" SET public_profile_visible = false WHERE id = $1`, userID); err != nil {
 			return err
 		}
+		// Moderation finalization locks the queue row before changing the house.
+		// Use the same order here so a verdict already in flight cannot publish
+		// the listing after the owner has withdrawn dissemination consent.
+		if _, err = tx.Exec(ctx, `
+			UPDATE moderation_verdict verdict
+			SET status = 'failed',
+			    last_error = 'data dissemination consent revoked',
+			    updated_at = $2
+			FROM house
+			WHERE verdict.house_id = house.id
+			  AND house.owner_id = $1
+			  AND verdict.status IN ('queued', 'processing')`, userID, at); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `
 			UPDATE house
-			SET status = 'unpublished', updated_at = $2
-			WHERE owner_id = $1 AND deleted = false AND status = 'active'`, userID, at); err != nil {
+			SET status = 'unpublished', rejection_reason = NULL, updated_at = $2
+			WHERE owner_id = $1
+			  AND deleted = false
+			  AND status IN ('active', 'pending_moderation', 'moderation_review')`, userID, at); err != nil {
 			return err
 		}
 	}

@@ -122,7 +122,7 @@ func (r *ModerationRepo) RescheduleLLM(ctx context.Context, id int64, nextAttemp
 	_, err := r.pool.Exec(ctx, `
 		UPDATE moderation_verdict
 		SET status = 'queued', next_attempt_at = $2, last_error = left($3, 2000), updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND status = 'processing'
 	`, id, nextAttempt, lastError)
 	return err
 }
