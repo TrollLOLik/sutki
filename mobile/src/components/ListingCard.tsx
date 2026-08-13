@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { ResilientImage } from '@/components/ResilientImage';
 import { ListingOwnerActions } from '@/components/ListingOwnerActions';
 import {
@@ -181,6 +182,7 @@ export function ListingCard({
   if (layout === 'grid') {
     return (
       <Animated.View style={[{ flex: 1, marginBottom: 12 }, animatedCardStyle]}>
+        <ComponentMarker kind="surface" name="ListingCard:grid" />
         <PromotionHighlightSurface active={isHighlighted} radius={19}>
           <Pressable
             accessibilityRole="button"
@@ -395,6 +397,7 @@ export function ListingCard({
 
   return (
     <Animated.View style={[{ marginBottom: 12 }, animatedCardStyle]}>
+      <ComponentMarker kind="surface" name="ListingCard:list" />
       <PromotionHighlightSurface active={isHighlighted} radius={20}>
         <Pressable
           onPress={onPress}

@@ -4,6 +4,7 @@ import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { ConversationSummary } from '@/lib/api/chat';
 import { formatRooms } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -39,6 +40,7 @@ export function ConversationRow({ conversation, currentUserId, isLast = false, s
 
   return (
     <TouchableOpacity activeOpacity={0.62} onPress={onPress} style={styles.touchable}>
+      <ComponentMarker kind="surface" name="ConversationRow" />
       <View style={styles.row}>
         <View style={styles.avatarWrap}>
           {conversation.other_user_avatar_url && !conversation.other_user_deleted ? (

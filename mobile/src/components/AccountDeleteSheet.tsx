@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View, ActivityIndicator } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { BottomSheet, Button } from '@/components/ui';
 import {
@@ -198,6 +199,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
             : 'primary'
       }>
 
+      <ComponentMarker kind="modal" name="AccountDeleteSheet" />
       {/* Errors display */}
       {error ? (
         <View className="mb-4 flex-row items-start gap-2 rounded-field border border-danger/20 bg-danger-light px-3 py-3">

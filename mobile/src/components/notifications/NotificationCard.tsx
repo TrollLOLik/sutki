@@ -4,6 +4,7 @@ import { ru } from 'date-fns/locale';
 import { useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -55,6 +56,7 @@ export function NotificationCard({ presentation, createdAt, unread = false, onPr
           : palette.primaryLight;
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
+      <ComponentMarker kind="surface" name="NotificationCard" />
       <MaterialSurface
         level="raised"
         radius={22}

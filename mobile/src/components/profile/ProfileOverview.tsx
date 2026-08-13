@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { Card, ListCell, MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -73,6 +74,7 @@ export function ProfileHero({
       level="raised"
       radius={26}
       style={[styles.hero, { shadowColor: isDark ? '#000000' : '#16181D' }]}>
+      <ComponentMarker kind="surface" name="ProfileHero" />
       <View style={styles.heroContent}>
         <AvatarWrapper
           {...(onAvatarPress
@@ -195,6 +197,7 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
 
   return (
     <Card level="raised" radius={24} padding="none" style={styles.metricGrid}>
+      <ComponentMarker kind="surface" name="ProfileMetricGrid" />
       {rows.map((row, rowIndex) => (
         <View
           key={`metric-row-${rowIndex}`}
@@ -272,6 +275,7 @@ export function ProfileActionGroup({
 
   return (
     <View style={styles.section}>
+      <ComponentMarker kind="surface" name="ProfileActionGroup" />
       {title ? <Text style={[styles.sectionTitle, { color: palette.ink }]}>{title}</Text> : null}
       <Card level="raised" radius={24} padding="none" style={styles.actionGroup}>
         {items.map((item, index) => {
@@ -317,6 +321,7 @@ export function ProfileInfoPanel({ children, title }: { children: ReactNode; tit
   const { palette } = useAppTheme();
   return (
     <View style={styles.section}>
+      <ComponentMarker kind="surface" name="ProfileInfoPanel" />
       {title ? <Text style={[styles.sectionTitle, { color: palette.ink }]}>{title}</Text> : null}
       <Card level="raised" radius={24} padding="md">
         {children}

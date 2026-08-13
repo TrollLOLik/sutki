@@ -2,6 +2,7 @@ import type { PropsWithChildren } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export type MaterialLevel = 'base' | 'raised' | 'floating';
 
@@ -45,6 +46,7 @@ export function MaterialSurface({
         style,
       ]}
       {...rest}>
+      <ComponentMarker kind="surface" name="MaterialSurface" />
       {children}
     </View>
   );

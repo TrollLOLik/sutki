@@ -10,6 +10,7 @@ import Animated, {
 	withSpring,
 } from 'react-native-reanimated';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useChatColors } from './useChatColors';
@@ -153,6 +154,7 @@ export const MessageBubble = React.memo(function MessageBubble({
 	if (isDeleted) {
 		return (
 			<View className={`flex-row my-1.5 px-4 ${isMine ? 'justify-end' : 'justify-start'}`}>
+				<ComponentMarker kind="surface" name="MessageBubble:deleted" />
 				<View
 					style={[
 						styles.messageBubble,
@@ -280,6 +282,7 @@ export const MessageBubble = React.memo(function MessageBubble({
 
 	return (
 		<View>
+			<ComponentMarker kind="surface" name="MessageBubble" />
 			<Animated.View
 				pointerEvents="none"
 				style={[

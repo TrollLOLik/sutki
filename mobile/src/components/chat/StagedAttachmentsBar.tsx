@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useChatColors } from './useChatColors';
 import type { StagedFile } from '@/hooks/useChatUploads';
@@ -135,6 +136,7 @@ export function StagedAttachmentsBar({
 
 	return (
 		<View style={[styles.container, { borderTopColor: chatColors.softBorder }]}>
+			<ComponentMarker kind="media" name="StagedAttachmentsBar" />
 			<ScrollView
 				horizontal
 				showsHorizontalScrollIndicator={false}

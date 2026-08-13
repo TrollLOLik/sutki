@@ -1,5 +1,6 @@
 import { MotiView } from 'moti';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface SkeletonProps {
@@ -17,7 +18,8 @@ export function Skeleton({ width = '100%', height = 16, radius = 8, style }: Ske
       from={{ opacity: 0.5 }}
       animate={{ opacity: 1 }}
       transition={{ type: 'timing', duration: 800, loop: true, repeatReverse: true }}
-      style={[{ width: width as number, height, borderRadius: radius, backgroundColor: palette.surfaceSkeleton }, style]}
-    />
+      style={[{ width: width as number, height, borderRadius: radius, backgroundColor: palette.surfaceSkeleton }, style]}>
+      <ComponentMarker kind="state" name="Skeleton" />
+    </MotiView>
   );
 }

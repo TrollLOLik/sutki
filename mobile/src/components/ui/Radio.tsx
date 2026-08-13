@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface RadioProps extends Omit<PressableProps, 'children' | 'style'> {
   selected: boolean;
@@ -34,6 +35,7 @@ export function Radio({ selected, onSelect, label, description, disabled, style,
         style,
       ]}
       {...rest}>
+      <ComponentMarker kind="button" name="Radio" />
       <View
         pointerEvents="none"
         style={{

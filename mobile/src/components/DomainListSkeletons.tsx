@@ -1,10 +1,12 @@
 import { StyleSheet, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { MaterialSurface, Skeleton } from '@/components/ui';
 
 export function BookingListSkeleton({ count = 3 }: { count?: number }) {
   return (
     <View style={styles.list}>
+      <ComponentMarker kind="state" name="BookingListSkeleton" />
       {Array.from({ length: count }, (_, index) => (
         <MaterialSurface key={index} level="raised" radius={24} style={styles.bookingCard}>
           <View style={styles.bookingTop}>
@@ -36,6 +38,7 @@ export function BookingListSkeleton({ count = 3 }: { count?: number }) {
 export function ReviewListSkeleton({ count = 3 }: { count?: number }) {
   return (
     <View style={styles.list}>
+      <ComponentMarker kind="state" name="ReviewListSkeleton" />
       {Array.from({ length: count }, (_, index) => (
         <MaterialSurface key={index} level="raised" radius={20} style={styles.reviewCard}>
           <View style={styles.reviewHead}>
@@ -57,6 +60,7 @@ export function ReviewListSkeleton({ count = 3 }: { count?: number }) {
 export function NotificationListSkeleton({ count = 5 }: { count?: number }) {
   return (
     <View style={styles.list}>
+      <ComponentMarker kind="state" name="NotificationListSkeleton" />
       {Array.from({ length: count }, (_, index) => (
         <MaterialSurface key={index} level="raised" radius={20} style={styles.notificationCard}>
           <Skeleton width={44} height={44} radius={15} />
@@ -75,6 +79,7 @@ export function NotificationListSkeleton({ count = 5 }: { count?: number }) {
 export function ConversationListSkeleton({ count = 6 }: { count?: number }) {
   return (
     <View style={styles.conversationList}>
+      <ComponentMarker kind="state" name="ConversationListSkeleton" />
       {Array.from({ length: count }, (_, index) => (
         <View key={index} style={styles.conversationRow}>
           <Skeleton width={58} height={58} radius={29} />

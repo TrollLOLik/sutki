@@ -1,5 +1,6 @@
 import { View, useWindowDimensions } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { Skeleton } from '@/components/ui';
 
 /** Placeholder for a listing card while the feed loads (TZ §2 skeletons). */
@@ -14,6 +15,7 @@ export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'gr
   if (layout === 'grid') {
     return (
       <View style={{ width: '100%' }} className="mb-3 rounded-card border border-line bg-surface p-2">
+        <ComponentMarker kind="state" name="ListingCardSkeleton:grid" />
         <Skeleton width="100%" height={116} radius={13} />
         <View className="gap-2 px-0.5 pb-1 pt-3">
           <View className="flex-row items-center justify-between">
@@ -34,6 +36,7 @@ export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'gr
 
   return (
     <View className="mb-3 rounded-card border border-line bg-surface p-3">
+      <ComponentMarker kind="state" name="ListingCardSkeleton:list" />
       {/* Top Part: Image & Details */}
       <View className="flex-row gap-3">
         {/* Left: Image Skeleton with exact size */}

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View, type PressableProps } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface ListCellProps extends Omit<PressableProps, 'children'> {
   before?: ReactNode;
@@ -57,6 +58,7 @@ export function ListCell({
         typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}>
+      <ComponentMarker kind="surface" name="ListCell" />
       <View
         pointerEvents="none"
         style={{

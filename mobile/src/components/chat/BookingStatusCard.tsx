@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { BookingStatusPayload } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -100,6 +101,7 @@ export const BookingStatusCard = React.memo(function BookingStatusCard({
 
 	return (
 		<View className="items-center my-2.5 px-5">
+			<ComponentMarker kind="surface" name="BookingStatusCard" />
 			<View
 				style={[
 					styles.card,

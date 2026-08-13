@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useChatColors } from './useChatColors';
@@ -33,6 +34,7 @@ export function EditPreviewBar({ message, onCancel }: EditPreviewBarProps) {
 			style={[styles.container, { borderTopColor: chatColors.softBorder }]}
 			accessibilityLabel={`Изменение сообщения: ${preview}`}
 		>
+			<ComponentMarker kind="surface" name="EditPreviewBar" />
 			<View style={[styles.bar, { backgroundColor: palette.primary }]} />
 
 			<Ionicons

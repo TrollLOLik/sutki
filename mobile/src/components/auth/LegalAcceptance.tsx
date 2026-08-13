@@ -1,5 +1,6 @@
 import { Linking, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { Checkbox } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -53,6 +54,7 @@ export function LegalAcceptance({
 
   return (
     <View style={{ marginTop: 22, gap: 14 }}>
+      <ComponentMarker kind="surface" name="LegalAcceptance" />
       <ConsentRow
         checked={acceptTerms}
         label="Я принимаю"

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface SwitchProps extends Omit<PressableProps, 'children' | 'style'> {
   value: boolean;
@@ -33,6 +34,7 @@ export function Switch({ value, onValueChange, label, description, leading, disa
         style,
       ]}
       {...rest}>
+      <ComponentMarker kind="button" name="Switch" />
       {leading ? <View pointerEvents="none" style={{ flexShrink: 0 }}>{leading}</View> : null}
       {label || description ? (
         <View pointerEvents="none" style={{ minWidth: 0, flex: 1, gap: 2 }}>

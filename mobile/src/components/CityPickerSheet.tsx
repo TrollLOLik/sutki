@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { BottomSheet, SearchField } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -70,6 +71,7 @@ export function CityPickerSheet({
       subtitle="Начните вводить название"
       icon="location-outline"
       bodyStyle={{ paddingHorizontal: 0, paddingTop: 16, paddingBottom: 0 }}>
+      <ComponentMarker kind="modal" name="CityPickerSheet" />
       <SearchField
         value={query}
         onChangeText={setQuery}

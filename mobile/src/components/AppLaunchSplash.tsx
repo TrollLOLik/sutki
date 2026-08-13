@@ -3,6 +3,7 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-nat
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import BrandLogo from '@/assets/images/brand-logo-dark.png';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 const LOGO_WIDTH = 236;
 const LOGO_HEIGHT = 55;
@@ -147,6 +148,7 @@ export function AppLaunchSplash({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[styles.screen, { opacity: screenOpacity }]}>
+      <ComponentMarker kind="state" name="AppLaunchSplash" />
       <View style={styles.stage}>
         <Animated.View
           style={[

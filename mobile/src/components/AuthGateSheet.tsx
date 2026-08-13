@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { BottomSheet, Button, DialogActions } from '@/components/ui';
 import type { AuthGateContext } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -66,6 +67,7 @@ export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps)
           primary={<Button label="Войти" size="md" onPress={handleSignIn} />}
         />
       }>
+      <ComponentMarker kind="modal" name="AuthGateSheet" />
       <View
         style={{
           flexDirection: 'row',

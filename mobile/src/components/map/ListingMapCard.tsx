@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { ResilientImage } from '@/components/ResilientImage';
 import { formatRating, formatRooms, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -47,6 +48,7 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
           exitTransition={{ type: 'timing', duration: 220 }}
           style={[styles.container, { marginBottom: insets.bottom + 96 }]}
         >
+          <ComponentMarker kind="surface" name="ListingMapCard" />
           <Pressable
             onPress={() => router.push(`/listing/${listing.id}`)}
             style={[styles.card, highlighted && styles.cardHighlighted]}

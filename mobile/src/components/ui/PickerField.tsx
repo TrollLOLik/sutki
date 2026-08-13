@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { Field } from '@/components/ui/Field';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface PickerFieldProps extends Omit<PressableProps, 'children' | 'style'> {
@@ -60,6 +61,7 @@ export function PickerField({
           style,
         ]}
         {...rest}>
+        <ComponentMarker kind="field" name="PickerField" placement="top-right" />
         <View
           style={{
             minHeight: 56,

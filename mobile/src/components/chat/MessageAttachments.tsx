@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, StyleSheet 
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { AlbumGrid } from './AlbumGrid';
 import { VideoAttachment } from './VideoAttachment';
@@ -50,6 +51,7 @@ export function ImageAttachment({ attachment, onPress, onRetry, retrying }: Imag
 			accessibilityRole="imagebutton"
 			accessibilityLabel={pending ? 'Открыть изображение, оно проверяется' : 'Открыть изображение'}
 		>
+			<ComponentMarker kind="media" name="ImageAttachment" />
 			<Image
 				source={{ uri: attachment.url }}
 				style={{ width: SINGLE_IMAGE_WIDTH, height }}
@@ -78,6 +80,7 @@ export function ImageAttachment({ attachment, onPress, onRetry, retrying }: Imag
 export function PendingOverlay() {
 	return (
 		<View style={styles.pendingOverlay}>
+			<ComponentMarker kind="state" name="PendingOverlay" />
 			<ActivityIndicator size="small" color="#fff" />
 			<Text style={styles.pendingText}>Проверяется</Text>
 		</View>
@@ -95,6 +98,7 @@ export function FailedOverlay({
 }) {
 	return (
 		<View style={styles.failedOverlay}>
+			<ComponentMarker kind="state" name="FailedOverlay" />
 			{retrying ? (
 				<ActivityIndicator size="small" color="#FFFFFF" />
 			) : (
@@ -150,6 +154,7 @@ export function DocumentAttachment({
 			accessibilityLabel={`Скачать документ ${attachment.file_name}`}
 			className={`flex-row items-center p-2.5 rounded-xl mb-1.5 w-[238px] ${isMine ? 'bg-white/10' : 'bg-background/40'} active:opacity-75`}
 		>
+			<ComponentMarker kind="media" name="DocumentAttachment" />
 			<View
 				className={`h-9 w-9 rounded-full items-center justify-center ${isMine ? 'bg-white/10' : 'bg-primary/10'}`}
 			>
@@ -233,6 +238,7 @@ export function MessageAttachments({
 
 	return (
 		<>
+			<ComponentMarker kind="media" name="MessageAttachments" />
 			{images.length === 1 ? (
 				<ImageAttachment
 					attachment={images[0]}

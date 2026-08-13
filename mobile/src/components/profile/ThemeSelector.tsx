@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { MaterialSurface, SegmentedControl } from '@/components/ui';
 import { useThemeStore, type ThemePreference } from '@/store/theme';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -24,6 +25,7 @@ export function ThemeSelector() {
 
   return (
     <MaterialSurface level="raised" radius={24} style={{ padding: 16 }}>
+      <ComponentMarker kind="surface" name="ThemeSelector" />
       <View className="mb-4 flex-row items-center gap-3">
         <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
           <Ionicons name="color-palette-outline" size={20} color={palette.primary} />

@@ -3,6 +3,7 @@ import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { ResilientImage } from '@/components/ResilientImage';
 import { Button, InlineAlert, MaterialSurface } from '@/components/ui';
 import { historyKind, historyMeta } from '@/lib/booking-history';
@@ -120,6 +121,7 @@ export function BookingCard({
 
   return (
     <MaterialSurface level="raised" radius={24} style={styles.card}>
+      <ComponentMarker kind="surface" name="BookingCard" />
       <TouchableOpacity accessibilityRole="button" activeOpacity={0.72} onPress={onPress} style={styles.main}>
         <View style={styles.topRow}>
           <View style={[styles.statusBadge, { backgroundColor: visual.background }]}>

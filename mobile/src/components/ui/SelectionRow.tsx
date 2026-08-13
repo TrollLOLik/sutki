@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface SelectionRowProps {
   label: string;
@@ -29,6 +30,7 @@ export function SelectionRow({ label, selected, onPress, icon }: SelectionRowPro
         paddingHorizontal: 10,
         paddingVertical: 5,
       }}>
+      <ComponentMarker kind="button" name="SelectionRow" />
       {icon ? (
         <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name={icon} size={20} color={palette.inkSecondary} />

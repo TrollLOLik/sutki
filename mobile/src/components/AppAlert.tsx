@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { create } from 'zustand';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { DialogHeader, type DialogTone } from '@/components/ui/DialogHeader';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -307,6 +308,7 @@ export function AppAlertHost() {
           paddingHorizontal: 24,
           paddingVertical: 32,
         }}>
+        <ComponentMarker kind="modal" name="AppAlert" />
         <Animated.View
           style={{
             position: 'absolute',

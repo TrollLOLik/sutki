@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Linking, Platform, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { Button } from '@/components/ui';
 import { useAppVersionStore } from '@/store/appVersion';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -30,6 +31,7 @@ export function UpgradeRequiredScreen() {
 
   return (
     <View className="flex-1 items-center justify-center gap-6 bg-surface px-8">
+      <ComponentMarker kind="state" name="UpgradeRequiredScreen" />
       <View className="h-20 w-20 items-center justify-center rounded-full bg-primary-light">
         <Ionicons name="cloud-download-outline" size={40} color={palette.primary} />
       </View>

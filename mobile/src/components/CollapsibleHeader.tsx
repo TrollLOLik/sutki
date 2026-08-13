@@ -10,6 +10,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
+
 type ScrollEvent = NativeSyntheticEvent<NativeScrollEvent>;
 
 export type CollapsibleHeaderController = {
@@ -161,6 +163,7 @@ export function CollapsibleHeader({ children, controller, style }: CollapsibleHe
         animatedStyle,
       ]}
     >
+      <ComponentMarker kind="navigation" name="CollapsibleHeader" />
       <View
         collapsable={false}
         style={styles.content}

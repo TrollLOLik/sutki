@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useThemeStore } from '@/store/theme';
 import { darkPalette, lightPalette } from '@/theme/tokens';
 
@@ -85,6 +86,7 @@ export function ThemeTransitionOverlay() {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <ComponentMarker kind="state" name="ThemeTransitionOverlay" />
       <Animated.View
         style={[
           {

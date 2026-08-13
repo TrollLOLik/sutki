@@ -17,6 +17,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
+
 interface PromotionHighlightSurfaceProps extends PropsWithChildren {
   active: boolean;
   radius?: number;
@@ -73,6 +75,7 @@ export function PromotionHighlightSurface({
         elevation: Platform.OS === 'android' ? 0 : 5,
       }}
     >
+      <ComponentMarker kind="surface" name="PromotionHighlightSurface" />
       <LinearGradient
         colors={['#FF5B35', '#FFB13B', '#FF426E', '#FF5B35']}
         locations={[0, 0.36, 0.72, 1]}
@@ -111,6 +114,7 @@ export function PromotionBadge({ highlighted }: PromotionBadgeProps) {
         end={{ x: 1, y: 1 }}
         style={styles.highlightBadge}
       >
+        <ComponentMarker kind="text" name="PromotionBadge" />
         <Ionicons name="sparkles" size={11} color="#FFFFFF" />
         <Text style={styles.badgeText}>ЛУЧШЕЕ</Text>
       </LinearGradient>
@@ -119,6 +123,7 @@ export function PromotionBadge({ highlighted }: PromotionBadgeProps) {
 
   return (
     <View style={styles.promotionBadge}>
+      <ComponentMarker kind="text" name="PromotionBadge" />
       <Ionicons name="trending-up" size={11} color="#FFFFFF" />
       <Text style={styles.badgeText}>ТОП</Text>
     </View>

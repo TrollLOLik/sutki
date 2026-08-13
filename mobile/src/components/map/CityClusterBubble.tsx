@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface CityClusterBubbleProps {
@@ -55,6 +56,7 @@ export function CityClusterBubble({ count }: CityClusterBubbleProps) {
 
   return (
     <View style={styles.halo}>
+      <ComponentMarker kind="surface" name="CityClusterBubble" />
       <View style={styles.bubble}>
         <Text style={styles.count}>{count}</Text>
       </View>

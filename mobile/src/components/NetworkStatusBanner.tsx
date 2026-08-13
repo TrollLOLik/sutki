@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useNetworkStatusStore } from '@/store/networkStatus';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -110,6 +111,7 @@ export function NetworkStatusBanner() {
           }),
         },
       ]}>
+      <ComponentMarker kind="state" name="NetworkStatusBanner" />
       <Animated.View
         style={[
           styles.content,

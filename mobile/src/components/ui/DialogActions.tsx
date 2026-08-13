@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface DialogActionsProps {
   reset?: ReactNode;
@@ -24,6 +25,7 @@ export function DialogActions({ reset, secondary, primary, style }: DialogAction
         },
         style,
       ]}>
+      <ComponentMarker kind="layout" name="DialogActions" />
       {reset ? <ActionSlot>{reset}</ActionSlot> : null}
       {secondary ? <ActionSlot>{secondary}</ActionSlot> : null}
       <ActionSlot>{primary}</ActionSlot>

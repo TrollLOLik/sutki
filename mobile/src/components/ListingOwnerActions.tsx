@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ListingOwnerActionAvailability {
@@ -171,6 +172,7 @@ export function ListingOwnerActions({
 
   return (
     <View style={[styles.actions, compact ? styles.compactActions : null, style]}>
+      <ComponentMarker kind="layout" name="ListingOwnerActions" />
       {actions.map((action) => (
         <OwnerActionButton key={action.id} action={action} compact={compact} />
       ))}

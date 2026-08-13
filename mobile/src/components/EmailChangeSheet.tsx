@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { BottomSheet, Button, Input, MaterialSurface } from '@/components/ui';
 import {
@@ -301,6 +302,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
       icon={step === 'success' ? 'checkmark-circle-outline' : 'mail-outline'}
       tone={step === 'success' ? 'success' : 'primary'}
       bodyStyle={{ paddingTop: 12 }}>
+      <ComponentMarker kind="modal" name="EmailChangeSheet" />
       <View className="flex-1">
 
           {/* Stepper bar */}

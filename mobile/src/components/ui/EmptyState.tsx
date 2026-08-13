@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
 import { MaterialSurface } from '@/components/ui/MaterialSurface';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface EmptyStateProps {
@@ -10,6 +11,7 @@ export interface EmptyStateProps {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  debugName?: string;
 }
 
 export function EmptyState({
@@ -17,11 +19,13 @@ export function EmptyState({
   title,
   subtitle,
   action,
+  debugName = 'EmptyState',
 }: EmptyStateProps) {
   const { palette } = useAppTheme();
 
   return (
     <View className="flex-1 items-center justify-center px-8">
+      <ComponentMarker kind="state" name={debugName} />
       <MaterialSurface
         level="raised"
         radius={32}

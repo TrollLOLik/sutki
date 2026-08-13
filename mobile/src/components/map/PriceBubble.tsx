@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
@@ -43,6 +44,7 @@ export function PriceBubble({ price, selected, promoted, highlighted, favorite, 
         selected && styles.bubbleSelected,
       ]}
     >
+      <ComponentMarker kind="surface" name="PriceBubble" />
       {highlighted ? (
         <Ionicons name="sparkles" size={12} color={selected ? palette.primary : '#FFFFFF'} />
       ) : favorite ? (

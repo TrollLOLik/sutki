@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { cn } from '@/lib/cn';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
@@ -167,6 +168,7 @@ export function Button({
       )}
       style={[{ height: metrics.height, borderRadius: metrics.radius }, style]}
       {...rest}>
+      <ComponentMarker kind="button" name="Button" />
       <Animated.View
         pointerEvents="none"
         style={[

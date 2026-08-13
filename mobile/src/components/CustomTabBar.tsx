@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useTabBarStore } from '@/store/tabbar';
 import { useNavigationHistoryStore } from '@/store/navigation-history';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -282,6 +283,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         { bottom: getTabBarBottomOffset(insets.bottom) },
         hideStyle,
       ]}>
+      <ComponentMarker kind="navigation" name="CustomTabBar" />
       <Animated.View style={[styles.shell, shellStyle]}>
         <Animated.View pointerEvents="none" style={[styles.materialClip, materialStyle]}>
           <BlurView

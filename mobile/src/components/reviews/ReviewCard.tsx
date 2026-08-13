@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ReviewReply } from '@/types/review';
@@ -72,6 +73,7 @@ export function ReviewCard({
 
   return (
     <MaterialSurface level="raised" radius={20} className={`gap-3 p-4 ${className ?? ''}`}>
+      <ComponentMarker kind="surface" name="ReviewCard" />
       {header.kind === 'listing' ? (
         <View className="flex-row items-center gap-3">
           {header.coverUrl ? (

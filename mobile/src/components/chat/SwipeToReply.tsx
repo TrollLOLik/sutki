@@ -12,6 +12,7 @@ import Animated, {
 
 import { useAppTheme } from '@/theme/useAppTheme';
 import { hapticTapLight } from '@/lib/haptics';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 /** Сдвиг, после которого жест считается ответом. */
 const TRIGGER_DISTANCE = 56;
@@ -124,6 +125,7 @@ export const SwipeToReply = React.memo(function SwipeToReply({
 
 	return (
 		<View>
+			<ComponentMarker kind="layout" name="SwipeToReply" />
 			<Animated.View
 				pointerEvents="none"
 				style={[styles.iconWrap, iconStyle]}

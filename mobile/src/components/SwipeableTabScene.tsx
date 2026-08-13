@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 const TAB_ORDER = ['index', 'map', 'messages', 'profile'] as const;
@@ -61,6 +62,7 @@ export function SwipeableTabScene({ children, routeName, navigate }: SwipeableTa
   if (routeName === 'map') {
     return (
       <View style={[styles.scene, { backgroundColor: palette.surface }]}>
+        <ComponentMarker kind="navigation" name="SwipeableTabScene" />
         {children}
         {routeIndex > 0 ? (
           <GestureDetector gesture={leftEdgeGesture}>
@@ -78,7 +80,10 @@ export function SwipeableTabScene({ children, routeName, navigate }: SwipeableTa
 
   return (
     <GestureDetector gesture={panGesture}>
-      <View style={[styles.scene, { backgroundColor: palette.surface }]}>{children}</View>
+      <View style={[styles.scene, { backgroundColor: palette.surface }]}>
+        <ComponentMarker kind="navigation" name="SwipeableTabScene" />
+        {children}
+      </View>
     </GestureDetector>
   );
 }

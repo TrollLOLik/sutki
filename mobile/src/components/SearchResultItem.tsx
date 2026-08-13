@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Text, TouchableOpacity, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -19,6 +20,7 @@ export function SearchResultItem({ icon, onPress, subtitle, title, tone = 'prima
 
   return (
     <MaterialSurface level="raised" radius={18} style={{ overflow: 'hidden' }}>
+      <ComponentMarker kind="surface" name="SearchResultItem" />
       <TouchableOpacity
         accessibilityRole="button"
         activeOpacity={0.7}

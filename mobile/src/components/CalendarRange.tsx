@@ -17,6 +17,7 @@ import { ru } from 'date-fns/locale';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { IconButton, MaterialSurface } from '@/components/ui';
 
@@ -91,6 +92,7 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
 
   return (
     <MaterialSurface level="raised" radius={22} style={{ paddingHorizontal: 12, paddingBottom: 14, paddingTop: 12 }}>
+      <ComponentMarker kind="field" name="CalendarRange" />
       <View className="flex-row items-center justify-between px-1 pb-3">
         <IconButton
           icon="chevron-back"

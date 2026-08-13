@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 type IconButtonTone = 'neutral' | 'primary' | 'danger';
 
@@ -83,6 +84,7 @@ export function IconButton({
         style,
       ]}
       {...rest}>
+      <ComponentMarker kind="icon" name="IconButton" />
       <Animated.View
         style={[
           {

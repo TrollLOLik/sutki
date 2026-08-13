@@ -1,6 +1,7 @@
 import { Pressable, Text } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 interface ChipProps {
   label: string;
@@ -25,6 +26,7 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
         backgroundColor: selected ? palette.primaryLight : palette.surfaceMuted,
         borderColor: selected ? palette.primary : palette.line,
       }}>
+      <ComponentMarker kind="button" name="Chip" />
       <Text
         numberOfLines={1}
         ellipsizeMode="tail"

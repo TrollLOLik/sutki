@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, useWindowDimensions, ActivityIndicat
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { type ChatAttachment, isFailedAttachment, isPendingAttachment } from './types';
 
 /**
@@ -110,6 +111,7 @@ export const AlbumGrid = React.memo(function AlbumGrid({
 		const size = (albumWidth - GAP) / 2;
 		return (
 			<View style={[styles.row, { width: albumWidth }]}>
+				<ComponentMarker kind="media" name="AlbumGrid" />
 				<Tile attachment={images[0]} width={size} height={size} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[0].id} />
 				<Tile attachment={images[1]} width={size} height={size} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[1].id} />
 			</View>
@@ -122,6 +124,7 @@ export const AlbumGrid = React.memo(function AlbumGrid({
 		const sideHeight = (mainWidth - GAP) / 2;
 		return (
 			<View style={[styles.row, { width: albumWidth }]}>
+				<ComponentMarker kind="media" name="AlbumGrid" />
 				<Tile attachment={images[0]} width={mainWidth} height={mainWidth} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[0].id} />
 				<View style={styles.column}>
 					<Tile attachment={images[1]} width={sideWidth} height={sideHeight} onPress={onPress} onRetry={onRetry} retrying={retryingAttachmentID === images[1].id} />
@@ -138,6 +141,7 @@ export const AlbumGrid = React.memo(function AlbumGrid({
 
 	return (
 		<View style={[styles.grid, { width: albumWidth }]}>
+			<ComponentMarker kind="media" name="AlbumGrid" />
 			{visible.map((att, index) => (
 				<Tile
 					key={att.id}

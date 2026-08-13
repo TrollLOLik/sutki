@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
+import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { BottomSheet, SearchField, SelectionRow } from '@/components/ui';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import type { ListingLayoutMode } from '@/store/listing-layout';
@@ -57,6 +58,7 @@ export function PersonalListToolbar<T extends string>({
           paddingTop: 4,
           paddingBottom: 12,
         }}>
+        <ComponentMarker kind="navigation" name="PersonalListToolbar" />
         <SearchField
           value={query}
           onChangeText={onQueryChange}
