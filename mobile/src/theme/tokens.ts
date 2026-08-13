@@ -101,6 +101,46 @@ export const radii = {
 } as const;
 
 /**
+ * Shared mobile typography scale. Components may add layout styles, but font
+ * size, line height and weight should come from one of these variants.
+ */
+export const typography = {
+  display: { fontSize: 32, lineHeight: 38, fontWeight: '900' },
+  screenTitle: { fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  title: { fontSize: 20, lineHeight: 25, fontWeight: '800' },
+  sectionTitle: { fontSize: 18, lineHeight: 23, fontWeight: '800' },
+  body: { fontSize: 16, lineHeight: 22, fontWeight: '400' },
+  bodyStrong: { fontSize: 16, lineHeight: 22, fontWeight: '700' },
+  label: { fontSize: 14, lineHeight: 18, fontWeight: '700' },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  captionStrong: { fontSize: 12, lineHeight: 16, fontWeight: '700' },
+  button: { fontSize: 16, lineHeight: 20, fontWeight: '800' },
+  price: { fontSize: 22, lineHeight: 28, fontWeight: '900' },
+} as const;
+
+export type TypographyVariant = keyof typeof typography;
+
+export const iconSizes = {
+  xs: 14,
+  sm: 18,
+  md: 20,
+  lg: 24,
+  xl: 28,
+} as const;
+
+export type IconSizeToken = keyof typeof iconSizes;
+
+export const pressMotion = {
+  scale: 0.97,
+  inDuration: 70,
+  spring: {
+    damping: 17,
+    stiffness: 280,
+    mass: 0.55,
+  },
+} as const;
+
+/**
  * Shadows intentionally use a fixed near-black color rather than `ink`:
  * in dark mode ink is near-white, and a light shadow color would render as a
  * glow. Dark-mode "elevation" is instead conveyed by surfaceMuted layering.
