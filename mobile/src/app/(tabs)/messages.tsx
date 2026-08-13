@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
 	ActivityIndicator,
+	Animated,
+	Easing,
 	FlatList,
 	Keyboard,
 	Pressable,
@@ -20,7 +22,7 @@ import { Button, CountedTabs, EmptyState, LoadErrorState } from '@/components/ui
 import { ConversationListSkeleton } from '@/components/DomainListSkeletons';
 import { ConversationRow } from '@/components/chat/ConversationRow';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
+import { useCollapsibleHeader } from '@/components/CollapsibleHeader';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 
 type ConversationSort = 'recent' | 'oldest' | 'unread';
@@ -37,6 +39,52 @@ const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
 	{ value: 'oldest', label: 'Сначала старые', icon: 'hourglass-outline' },
 	{ value: 'unread', label: 'Сначала непрочитанные', icon: 'mail-unread-outline' },
 ];
+
+type CollapsibleSectionProps = {
+	expanded: boolean;
+	height: number;
+	children: React.ReactNode;
+};
+
+function CollapsibleSection({ expanded, height, children }: CollapsibleSectionProps) {
+	const [progress] = useState(() => new Animated.Value(expanded ? 1 : 0));
+
+	useEffect(() => {
+		const transition = Animated.timing(progress, {
+			toValue: expanded ? 1 : 0,
+			duration: expanded ? 280 : 240,
+			easing: Easing.out(Easing.cubic),
+			useNativeDriver: false,
+		});
+
+		transition.start();
+		return () => transition.stop();
+	}, [expanded, progress]);
+
+	return (
+		<Animated.View
+			pointerEvents={expanded ? 'auto' : 'none'}
+			style={{
+				height: progress.interpolate({
+					inputRange: [0, 1],
+					outputRange: [0, height],
+				}),
+				opacity: progress,
+				transform: [
+					{
+						translateY: progress.interpolate({
+							inputRange: [0, 1],
+							outputRange: [-8, 0],
+						}),
+					},
+				],
+				overflow: 'hidden',
+				flexShrink: 0,
+			}}>
+			{children}
+		</Animated.View>
+	);
+}
 
 export default function MessagesScreen() {
 	const collapsibleHeader = useCollapsibleHeader();
@@ -172,78 +220,85 @@ export default function MessagesScreen() {
 
 	return (
 		<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
-			<Pressable accessible={false} onPress={Keyboard.dismiss} className="px-5 pb-4 pt-4">
-				<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
-			</Pressable>
-
 			<View style={{ flex: 1, overflow: 'hidden' }}>
-			<CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>
-			{conversations && conversations.length > 0 ? (
-				<PersonalListToolbar
-					query={searchQuery}
-					onQueryChange={setSearchQuery}
-					placeholder="Поиск по перепискам..."
-					sort={sort}
-					sortOptions={CONVERSATION_SORT_OPTIONS}
-					sortVisible={sortVisible}
-					onSortVisibleChange={setSortVisible}
-					onSortChange={setSort}
-				/>
-			) : null}
-
-				<CountedTabs
-					items={CONVERSATION_TABS.map((item) => ({ ...item, count: conversationCounts[item.value] }))}
-					value={tab}
-					onChange={handleTabChange}
-				/>
-
-			</CollapsibleHeader>
-
-			<FlatList
-				data={filteredConversations}
-				keyExtractor={(item) => String(item.conversation_id)}
-				renderItem={({ item, index }) => (
-					<ConversationRow
-						conversation={item}
-						currentUserId={sessionUser?.id}
-						isLast={index === filteredConversations.length - 1}
-						screenBackground={screenBackground}
-						dividerColor={softBorder}
-						onPress={() => handleConversationPress(item)}
-					/>
-				)}
-				contentContainerStyle={filteredConversations.length === 0
-					? { flexGrow: 1, paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }
-					: { paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }}
-				showsVerticalScrollIndicator={false}
-				keyboardDismissMode="on-drag"
-				keyboardShouldPersistTaps="handled"
-				onScroll={(event) => {
-					collapsibleHeader.onScroll(event);
-					handleTabBarScroll(event);
-				}}
-				onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
-				onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
-				scrollEventThrottle={16}
-				ListEmptyComponent={
-					<View className="flex-1 justify-center px-6">
-						<EmptyState
-							icon="chatbubble-ellipses-outline"
-							title={emptyTitle}
-							subtitle={emptySubtitle}
+				<View
+					style={{
+						width: '100%',
+						flexShrink: 0,
+						zIndex: 20,
+						elevation: 8,
+						backgroundColor: screenBackground,
+					}}>
+					<CollapsibleSection expanded={collapsibleHeader.expanded} height={68}>
+						<Pressable accessible={false} onPress={Keyboard.dismiss} className="px-5 pb-4 pt-4">
+							<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
+						</Pressable>
+					</CollapsibleSection>
+					{conversations && conversations.length > 0 ? (
+						<PersonalListToolbar
+							query={searchQuery}
+							onQueryChange={setSearchQuery}
+							placeholder="Поиск по перепискам..."
+							sort={sort}
+							sortOptions={CONVERSATION_SORT_OPTIONS}
+							sortVisible={sortVisible}
+							onSortVisibleChange={setSortVisible}
+							onSortChange={setSort}
 						/>
-					</View>
-				}
-				refreshControl={
-					<RefreshControl
-						refreshing={isFetching}
-						onRefresh={refetch}
-						tintColor={palette.primary}
-						colors={[palette.primary]}
-						progressViewOffset={collapsibleHeader.height}
-					/>
-				}
-			/>
+					) : null}
+
+					<CollapsibleSection expanded={collapsibleHeader.expanded} height={54}>
+						<CountedTabs
+							items={CONVERSATION_TABS.map((item) => ({ ...item, count: conversationCounts[item.value] }))}
+							value={tab}
+							onChange={handleTabChange}
+						/>
+					</CollapsibleSection>
+				</View>
+
+				<FlatList
+					data={filteredConversations}
+					keyExtractor={(item) => String(item.conversation_id)}
+					renderItem={({ item, index }) => (
+						<ConversationRow
+							conversation={item}
+							currentUserId={sessionUser?.id}
+							isLast={index === filteredConversations.length - 1}
+							screenBackground={screenBackground}
+							dividerColor={softBorder}
+							onPress={() => handleConversationPress(item)}
+						/>
+					)}
+					contentContainerStyle={
+						filteredConversations.length === 0
+							? { flexGrow: 1, paddingTop: 2, paddingBottom: 110 }
+							: { paddingTop: 2, paddingBottom: 110 }
+					}
+					showsVerticalScrollIndicator={false}
+					keyboardDismissMode="on-drag"
+					keyboardShouldPersistTaps="handled"
+					onScroll={(event) => {
+						collapsibleHeader.onScroll(event);
+						handleTabBarScroll(event);
+					}}
+					onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
+					onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+					scrollEventThrottle={16}
+					ListEmptyComponent={
+						<View className="flex-1 justify-center px-6">
+							<EmptyState icon="chatbubble-ellipses-outline" title={emptyTitle} subtitle={emptySubtitle} />
+						</View>
+					}
+					refreshControl={
+						<RefreshControl
+							refreshing={isFetching}
+							onRefresh={refetch}
+							tintColor={palette.primary}
+							colors={[palette.primary]}
+							progressViewOffset={0}
+						/>
+					}
+				/>
 			</View>
 		</SafeAreaView>
 	);
