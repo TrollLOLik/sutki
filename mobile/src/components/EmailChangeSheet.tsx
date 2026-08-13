@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
-import { BottomSheet, Button, Input } from '@/components/ui';
+import { BottomSheet, Button, Input, MaterialSurface } from '@/components/ui';
 import {
   requestReauthCode,
   useRequestNewEmailCode,
@@ -264,8 +264,6 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
     setLocalEmailError(null);
   };
 
-  if (!visible) return null;
-
   // Always three steps now: prove the current factor, enter the new address,
   // confirm it. The old two-step variant existed only for accounts with no
   // email, which is exactly the case that must not skip the proof.
@@ -297,17 +295,17 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
     <BottomSheet
       visible={visible}
       onClose={handleClose}
-      height="72%"
+      height={630}
       title={sheetTitle}
       subtitle={sheetSubtitle}
       icon={step === 'success' ? 'checkmark-circle-outline' : 'mail-outline'}
       tone={step === 'success' ? 'success' : 'primary'}
-      bodyStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+      bodyStyle={{ paddingTop: 12 }}>
       <View className="flex-1">
 
           {/* Stepper bar */}
-          {step !== 'success' ? (
-            <View className="flex-row gap-2 mb-4 px-4">
+          {step !== 'success' && !(step === 'verify_old' && !codeSentOld) ? (
+            <View className="mt-5 flex-row gap-2">
               <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 1 ? 'bg-primary' : 'bg-line')} />
               <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 2 ? 'bg-primary' : 'bg-line')} />
               <View className={cn('h-1 flex-1 rounded-full', stepIndex >= 3 ? 'bg-primary' : 'bg-line')} />
@@ -316,33 +314,47 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
 
           {/* Error display */}
           {error ? (
-            <Text className="mb-4 text-center text-sm font-semibold text-danger px-4 leading-5">
-              {translateError(error)}
-            </Text>
+            <MaterialSurface level="raised" radius={18} style={{ marginTop: 16, padding: 14 }}>
+              <View className="flex-row items-start gap-3">
+                <Ionicons name="alert-circle-outline" size={20} color={palette.danger} />
+                <Text className="flex-1 text-sm font-semibold leading-5 text-danger">
+                  {translateError(error)}
+                </Text>
+              </View>
+            </MaterialSurface>
           ) : null}
 
           <KeyboardAwareFormScrollView
-            className="flex-1 mb-4"
-            contentContainerStyle={{ flexGrow: 1 }}>
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1, paddingTop: 20, paddingBottom: 12 }}>
             {/* Step 1: Verify current email */}
             {step === 'verify_old' ? (
               <View className="gap-5">
                 {!codeSentOld ? (
-                  <View className="gap-5 py-4">
-                    <Text className="text-base text-ink-secondary text-center px-4 leading-6">
-                      Для смены почты необходимо подтвердить владение аккаунтом.{'\n\n'}
-                      {user?.email
-                        ? 'Мы отправим код подтверждения на текущую почту:'
-                        : 'Мы позвоним на подтверждённый номер телефона и покажем код.'}
-                      {user?.email ? '\n' : ''}
-                      {user?.email ? <Text className="font-bold text-ink">{maskEmail(user.email)}</Text> : null}
-                    </Text>
-                    <Button
-                      label="Отправить код"
-                      loading={requestingOld}
-                      onPress={handleRequestOldCode}
-                      className="mt-2"
-                    />
+                  <View className="flex-1 justify-center gap-4 pb-8">
+                    <MaterialSurface level="raised" radius={20} style={{ padding: 16 }}>
+                      <View className="flex-row items-start gap-3">
+                        <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
+                          <Ionicons name="shield-checkmark-outline" size={21} color={palette.primary} />
+                        </View>
+                        <View className="min-w-0 flex-1 gap-2">
+                          <Text className="text-base font-extrabold text-ink">
+                            Подтвердим текущий способ входа
+                          </Text>
+                          <Text className="text-sm leading-5 text-ink-secondary">
+                            {user?.email
+                              ? 'После продолжения отправим код на почту, которая уже привязана к аккаунту.'
+                              : 'После продолжения позвоним на подтверждённый номер телефона и покажем код.'}
+                          </Text>
+                        </View>
+                      </View>
+                    </MaterialSurface>
+                    {user?.email ? (
+                      <View className="items-center gap-1 px-4">
+                        <Text className="text-xs font-bold uppercase text-ink-muted">Текущая почта</Text>
+                        <Text className="text-base font-extrabold text-ink">{maskEmail(user.email)}</Text>
+                      </View>
+                    ) : null}
                   </View>
                 ) : (
                   <View className="gap-5">
@@ -361,15 +373,20 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                       onPress={() => hiddenInputRef.current?.focus()}
                     >
                       {Array.from({ length: reauthCodeLength }).map((_, i) => (
-                        <View
+                        <MaterialSurface
                           key={i}
-                          className={cn(
-                            'h-14 flex-1 items-center justify-center rounded-field border bg-surface-muted',
-                            codeOld.length === i ? 'border-primary border-2 bg-surface' : 'border-line',
-                          )}
-                        >
+                          level="raised"
+                          radius={18}
+                          style={{
+                            height: 62,
+                            flex: 1,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: codeOld.length === i ? 2 : 1,
+                            borderColor: codeOld.length === i ? palette.primary : palette.line,
+                          }}>
                           <Text className="text-2xl font-extrabold text-ink">{codeOld[i] ?? ''}</Text>
-                        </View>
+                        </MaterialSurface>
                       ))}
                     </Pressable>
 
@@ -450,15 +467,20 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                   onPress={() => hiddenInputRef.current?.focus()}
                 >
                   {Array.from({ length: CODE_LENGTH }).map((_, i) => (
-                    <View
+                    <MaterialSurface
                       key={i}
-                      className={cn(
-                        'h-14 flex-1 items-center justify-center rounded-field border bg-surface-muted',
-                        codeNew.length === i ? 'border-primary border-2 bg-surface' : 'border-line',
-                      )}
-                    >
+                      level="raised"
+                      radius={18}
+                      style={{
+                        height: 62,
+                        flex: 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: codeNew.length === i ? 2 : 1,
+                        borderColor: codeNew.length === i ? palette.primary : palette.line,
+                      }}>
                       <Text className="text-2xl font-extrabold text-ink">{codeNew[i] ?? ''}</Text>
-                    </View>
+                    </MaterialSurface>
                   ))}
                 </Pressable>
 
@@ -494,7 +516,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
             {/* Success screen */}
             {step === 'success' ? (
               <View className="items-center justify-center py-6 gap-4 animate-fade-in">
-                <View className="h-16 w-16 items-center justify-center rounded-full bg-successLight">
+                <View className="h-16 w-16 items-center justify-center rounded-full bg-success-light">
                   <Ionicons name="checkmark-circle-outline" size={44} color={palette.success} />
                 </View>
                 <View className="gap-1 items-center">
@@ -543,13 +565,22 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
             {step !== 'success' ? (
               <>
                 {step === 'verify_old' && !codeSentOld ? (
-                  <Button
-                    label="Закрыть"
-                    variant="secondary"
-                    size="md"
-                    className="w-full"
-                    onPress={handleClose}
-                  />
+                  <>
+                    <Button
+                      label="Закрыть"
+                      variant="secondary"
+                      size="md"
+                      className="flex-1"
+                      onPress={handleClose}
+                    />
+                    <Button
+                      label="Продолжить"
+                      size="md"
+                      className="flex-1"
+                      loading={requestingOld}
+                      onPress={handleRequestOldCode}
+                    />
+                  </>
                 ) : (
                   <>
                     <Button
