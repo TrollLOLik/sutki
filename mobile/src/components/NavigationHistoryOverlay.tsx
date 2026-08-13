@@ -16,7 +16,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import {
   NAVIGATION_MENU_ROW_HEIGHT,
   type NavigationHistoryEntry,
@@ -88,7 +87,6 @@ export function NavigationHistoryOverlay() {
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <ComponentMarker kind="navigation" name="NavigationHistoryOverlay" />
       {open ? (
         <>
           <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(130)} style={styles.scrim} />

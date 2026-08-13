@@ -1,7 +1,6 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface CountedTabItem<T extends string> {
   value: T;
@@ -112,7 +111,6 @@ export function CountedTabs<T extends string>({
           paddingHorizontal: 16,
           paddingBottom: 12,
         }}>
-        <ComponentMarker kind="navigation" name="CountedTabs" />
         {items.map((item) => (
           <CountedTabButton
             key={item.value}
@@ -139,7 +137,6 @@ export function CountedTabs<T extends string>({
         paddingHorizontal: 16,
         paddingBottom: 12,
       }}>
-      <ComponentMarker kind="navigation" name="CountedTabs" />
       {items.map((item) => (
         <CountedTabButton
           key={item.value}

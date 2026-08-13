@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface SegmentedOption<T extends string> {
   value: T;
@@ -41,7 +40,6 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
         },
         style,
       ]}>
-      <ComponentMarker kind="navigation" name="SegmentedControl" />
       {options.map((option) => {
         const selected = option.value === value;
         return (

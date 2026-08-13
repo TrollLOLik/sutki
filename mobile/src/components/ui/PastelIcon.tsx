@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 interface PastelIconProps {
   name: keyof typeof Ionicons.glyphMap;
@@ -32,7 +31,6 @@ export function PastelIcon({
         justifyContent: 'center',
       }}
     >
-      <ComponentMarker kind="icon" name="PastelIcon" />
       <Ionicons name={name} size={size} color={iconColor} />
     </View>
   );

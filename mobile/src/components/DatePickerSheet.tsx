@@ -1,7 +1,6 @@
 import { addDays, format, parseISO } from 'date-fns';
 import { useLayoutEffect, useState } from 'react';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { CalendarRange, type DateRange } from '@/components/CalendarRange';
 import { BottomSheet, Button, DialogActions } from '@/components/ui';
 
@@ -60,7 +59,6 @@ export function DatePickerSheet({
           primary={<Button label="Применить" size="md" onPress={handleApply} />}
         />
       }>
-      <ComponentMarker kind="modal" name="DatePickerSheet" />
       <CalendarRange value={tempRange} onChange={setTempRange} isDateDisabled={isDateDisabled} />
     </BottomSheet>
   );

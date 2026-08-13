@@ -3,7 +3,6 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useChatColors } from './useChatColors';
@@ -48,7 +47,6 @@ export function ReplyPreviewBar({ message, authorName, onCancel }: ReplyPreviewB
 			style={[styles.container, { borderTopColor: chatColors.softBorder }]}
 			accessibilityLabel={`Ответ на сообщение: ${preview}`}
 		>
-			<ComponentMarker kind="surface" name="ReplyPreviewBar" />
 			<View style={[styles.bar, { backgroundColor: palette.primary }]} />
 
 			{firstImage ? (

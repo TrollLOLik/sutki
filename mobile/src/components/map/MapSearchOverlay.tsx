@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
@@ -194,7 +193,6 @@ export function MapSearchOverlay({
         className="flex-1 bg-surface"
       >
         <View className="flex-1 bg-surface" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
-          <ComponentMarker kind="modal" name="MapSearchOverlay" />
           <SearchOverlayHeader
             inputRef={searchInputRef}
             query={query}

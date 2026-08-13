@@ -1,7 +1,6 @@
 import { Text, View } from 'react-native';
 
 import { cn } from '@/lib/cn';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 type Tone = 'success' | 'info' | 'neutral' | 'primary';
 
@@ -16,7 +15,6 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Tone 
   const t = tones[tone];
   return (
     <View className={cn('max-w-full self-start rounded-pill px-2.5 py-1', t.bg)}>
-      <ComponentMarker kind="text" name="Badge" />
       <Text
         numberOfLines={1}
         ellipsizeMode="tail"

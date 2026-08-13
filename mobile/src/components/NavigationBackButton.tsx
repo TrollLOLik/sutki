@@ -6,7 +6,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { navigationMenuTop } from '@/components/NavigationHistoryOverlay';
 import { goBackOrReplace } from '@/lib/navigation';
 import { NAVIGATION_MENU_ROW_HEIGHT, useNavigationHistoryStore } from '@/store/navigation-history';
@@ -140,7 +139,6 @@ export function NavigationBackButton({
             : null,
           style,
         ]}>
-        <ComponentMarker kind="navigation" name="NavigationBackButton" />
         {children ?? <Ionicons name="chevron-back" size={24} color={palette.ink} />}
       </View>
     </GestureDetector>

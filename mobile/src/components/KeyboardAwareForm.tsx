@@ -13,7 +13,6 @@ import {
   type KeyboardAwareScrollViewRef,
 } from 'react-native-keyboard-controller';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useKeyboardStickyStyle } from '@/hooks/useKeyboardStickyStyle';
 
 type KeyboardAwareFormProps = Omit<
@@ -59,10 +58,8 @@ export const KeyboardAwareFormScrollView = forwardRef<
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       showsVerticalScrollIndicator={showsVerticalScrollIndicator}
-      {...props}>
-      <ComponentMarker kind="layout" name="KeyboardAwareFormScrollView" />
-      {props.children}
-    </KeyboardAwareScrollView>
+      {...props}
+    />
   );
 });
 
@@ -100,7 +97,6 @@ export const KeyboardAwareForm = forwardRef<
 
   return (
     <View style={[styles.root, rootStyle]}>
-      <ComponentMarker kind="layout" name="KeyboardAwareForm" />
       <KeyboardAwareScrollView
         ref={ref}
         mode="insets"

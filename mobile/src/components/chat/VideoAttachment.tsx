@@ -3,7 +3,6 @@ import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-nati
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { formatDuration } from '@/lib/video';
 import type { ChatAttachment } from './types';
@@ -58,7 +57,6 @@ export const VideoAttachment = React.memo(function VideoAttachment({
 				isPending ? 'Видео проверяется' : 'Воспроизвести видео'
 			}
 		>
-			<ComponentMarker kind="media" name="VideoAttachment" />
 			{thumbnail ? (
 				<Image source={{ uri: thumbnail }} style={StyleSheet.absoluteFill} contentFit="cover" />
 			) : (

@@ -3,7 +3,6 @@ import { View, Modal, StatusBar, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VideoView, useVideoPlayer } from 'expo-video';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { IconButton } from '@/components/ui';
 
 interface VideoPlayerModalProps {
@@ -59,7 +58,6 @@ export function VideoPlayerModal({ uri, onClose }: VideoPlayerModalProps) {
 			supportedOrientations={['portrait', 'landscape']}
 		>
 			<View style={styles.container}>
-				<ComponentMarker kind="modal" name="VideoPlayerModal" />
 				<StatusBar barStyle="light-content" translucent />
 
 				<VideoView

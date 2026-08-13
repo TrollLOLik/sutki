@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { ListingLayoutMode } from '@/store/listing-layout';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -40,7 +39,6 @@ export function ListingLayoutToggle({
         overflow: 'hidden',
       }}
     >
-      <ComponentMarker kind="button" name="ListingLayoutToggle" />
       <Pressable
         accessibilityLabel={nextModeLabel}
         accessibilityRole="button"

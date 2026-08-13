@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface InputProps extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -21,7 +20,6 @@ export interface InputProps extends TextInputProps {
   size?: 'md' | 'lg';
   containerStyle?: StyleProp<ViewStyle>;
   frameStyle?: StyleProp<ViewStyle>;
-  debugName?: string;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
@@ -34,7 +32,6 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     size = 'lg',
     containerStyle,
     frameStyle,
-    debugName = 'Input',
     className,
     onFocus,
     onBlur,
@@ -52,7 +49,6 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
   return (
     <View style={[{ width: '100%', opacity: editable ? 1 : 0.48 }, containerStyle]}>
-      <ComponentMarker kind="field" name={debugName} />
       <View
         style={[
           {

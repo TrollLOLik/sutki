@@ -1,7 +1,6 @@
 import { Text, View } from 'react-native';
 import { shadows } from '@/theme/tokens';
 import { Skeleton } from './Skeleton';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 interface MetricTileProps {
   label: string;
@@ -26,7 +25,6 @@ export function MetricTile({ label, value, loading = false, icon }: MetricTilePr
       className="flex-1 rounded-card border border-line bg-surface p-4"
       style={shadows.tile}
     >
-      <ComponentMarker kind="surface" name="MetricTile" />
       {icon ? <View className="mb-2 flex-row">{icon}</View> : null}
       {loading ? (
         <Skeleton width="65%" height={22} radius={6} />

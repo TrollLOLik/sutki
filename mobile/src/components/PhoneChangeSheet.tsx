@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { PhoneInput } from '@/components/PhoneInput';
 import { BottomSheet, Button, MaterialSurface } from '@/components/ui';
@@ -346,7 +345,6 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
       icon={step === 'success' ? 'checkmark' : step === 'reauth' ? 'shield-checkmark-outline' : 'call-outline'}
       tone={step === 'success' ? 'success' : 'primary'}
       bodyStyle={{ paddingTop: 12 }}>
-      <ComponentMarker kind="modal" name="PhoneChangeSheet" />
       <View style={{ flex: 1 }}>
           {step !== 'success' && step !== 'confirm' ? (
             <View className="mt-5 flex-row gap-2">

@@ -4,7 +4,6 @@ import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 
 import { Button } from '@/components/ui';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { ThemeSelector } from '@/components/profile/ThemeSelector';
@@ -38,7 +37,6 @@ export function GuestProfile({
       scrollEventThrottle={16}
       style={{ backgroundColor: palette.surface }}
       contentContainerStyle={{ paddingTop: topInset, paddingHorizontal: 16, paddingBottom: 112, gap: 16 }}>
-      <ComponentMarker kind="layout" name="GuestProfile" />
       <ProfileHero
         badge="Гостевой режим"
         initials="Г"

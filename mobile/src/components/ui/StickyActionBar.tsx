@@ -3,7 +3,6 @@ import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export function StickyActionBar({ children, style, includeSafeArea = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; includeSafeArea?: boolean }) {
   const { palette } = useAppTheme();
@@ -24,7 +23,6 @@ export function StickyActionBar({ children, style, includeSafeArea = true }: { c
         },
         style,
       ]}>
-      <ComponentMarker kind="layout" name="StickyActionBar" />
       {children}
     </View>
   );

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Text, View, type ViewProps } from 'react-native';
 
 import { cn } from '@/lib/cn';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface FieldProps extends ViewProps {
   label?: string;
@@ -26,7 +25,6 @@ export function Field({
 }: FieldProps) {
   return (
     <View className={cn('w-full gap-2', className)} {...rest}>
-      <ComponentMarker kind="text" name="Field" />
       {label || action ? (
         <View className="min-h-5 flex-row items-center justify-between gap-3 px-1">
           {label ? (

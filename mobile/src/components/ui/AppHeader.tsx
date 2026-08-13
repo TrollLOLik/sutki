@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { NavigationBackButton } from '@/components/NavigationBackButton';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface AppHeaderProps {
@@ -23,7 +22,6 @@ export function AppHeader({ title, subtitle, fallback = '/(tabs)', leading, acti
 
   return (
     <View style={[styles.root, showBorder ? { borderBottomWidth: 1, borderBottomColor: palette.line } : null, { backgroundColor: palette.surface }, style]}>
-      <ComponentMarker kind="navigation" name="AppHeader" />
       {blurred ? (
         <>
           <BlurView intensity={88} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />

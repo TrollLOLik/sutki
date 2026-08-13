@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Text, View, type ViewProps } from 'react-native';
 
 import { cn } from '@/lib/cn';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface FormSectionProps extends ViewProps {
   title: ReactNode;
@@ -30,7 +29,6 @@ export function FormSection({
 }: FormSectionProps) {
   return (
     <View className={cn('w-full gap-3', className)} {...rest}>
-      <ComponentMarker kind="layout" name="FormSection" />
       <View className="flex-row items-start justify-between gap-3 px-1">
         <View className="min-w-0 flex-1 gap-1">
           {renderCopy(title, 'text-lg font-extrabold text-ink')}

@@ -5,7 +5,6 @@ import {
   MaterialSurface,
   type MaterialLevel,
 } from '@/components/ui/MaterialSurface';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 type CardPadding = 'none' | 'sm' | 'md' | 'lg';
@@ -41,7 +40,6 @@ export function Card({
 
   return (
     <MaterialSurface level={level} radius={radius} style={style} {...rest}>
-      <ComponentMarker kind="surface" name="Card" placement="top-right" />
       {header ? (
         <View style={[styles.region, { padding: paddingValue }]}>{header}</View>
       ) : null}

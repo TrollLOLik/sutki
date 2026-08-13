@@ -24,7 +24,6 @@ export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }
 
   return (
     <Input
-      debugName="PhoneInput"
       ref={inputRef}
       autoFocus={autoFocus}
       value={value}

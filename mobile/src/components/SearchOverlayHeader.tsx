@@ -1,7 +1,6 @@
 import type { Ref } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { IconButton, SearchField } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -26,7 +25,6 @@ export function SearchOverlayHeader({
 
   return (
     <View style={{ paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: palette.line }}>
-      <ComponentMarker kind="navigation" name="SearchOverlayHeader" />
       <View style={{ height: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <IconButton accessibilityLabel="Закрыть поиск" icon="close" onPress={onClose} size={48} />
         <Text style={{ color: palette.ink, fontSize: 21, lineHeight: 26, fontWeight: '800' }}>Поиск</Text>

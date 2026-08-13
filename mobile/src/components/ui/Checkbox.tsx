@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface CheckboxProps extends Omit<PressableProps, 'children' | 'style'> {
   checked: boolean;
@@ -44,7 +43,6 @@ export function Checkbox({
         style,
       ]}
       {...rest}>
-      <ComponentMarker kind="button" name="Checkbox" />
       <View
         pointerEvents="none"
         style={{

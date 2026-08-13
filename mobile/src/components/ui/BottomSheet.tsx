@@ -16,7 +16,6 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DialogHeader, type DialogTone } from '@/components/ui/DialogHeader';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface BottomSheetProps {
@@ -213,7 +212,6 @@ export function BottomSheet({
             height ? { height } : null,
           ]}
         >
-          <ComponentMarker kind="modal" name="BottomSheet" />
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"

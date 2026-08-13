@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import Gallery, { type GalleryRef } from 'react-native-awesome-gallery';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 const THUMBNAIL_SIZE = 58;
@@ -84,7 +83,6 @@ const OpenImageViewer: React.FC<OpenImageViewerProps> = ({ images, initialIndex,
 			hardwareAccelerated
 		>
 			<View className="flex-1 bg-black">
-				<ComponentMarker kind="modal" name="ImageViewerModal" />
 				<StatusBar barStyle="light-content" translucent />
 
 				{/* Image Gallery */}

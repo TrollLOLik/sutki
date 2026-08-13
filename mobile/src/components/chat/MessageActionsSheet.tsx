@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { BottomSheet } from '@/components/ui';
@@ -146,7 +145,6 @@ export function MessageActionsSheet({
 			title="Действия с сообщением"
 			subtitle={message?.body || 'Вложение'}
 			icon="ellipsis-horizontal-outline">
-			<ComponentMarker kind="modal" name="MessageActionsSheet" />
 			<View className="pt-1 pb-2">
 				<View className="overflow-hidden rounded-[22px] border border-line bg-surface-muted">
 					{rows.map((row, index) => (

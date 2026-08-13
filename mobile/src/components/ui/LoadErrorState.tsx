@@ -18,7 +18,6 @@ export function LoadErrorState({
 }: LoadErrorStateProps) {
   return (
     <EmptyState
-      debugName="LoadErrorState"
       icon="cloud-offline-outline"
       title={title}
       subtitle={subtitle}

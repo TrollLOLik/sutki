@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 interface SearchFieldProps extends Omit<TextInputProps, 'style'> {
   containerStyle?: StyleProp<ViewStyle>;
@@ -50,7 +49,6 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
         },
         containerStyle,
       ]}>
-      <ComponentMarker kind="field" name="SearchField" />
       <Ionicons name="search" size={20} color={focused ? palette.primary : palette.inkMuted} />
       <TextInput
         ref={ref}

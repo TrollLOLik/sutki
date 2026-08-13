@@ -8,8 +8,6 @@ import {
 	type TextInputProps,
 } from 'react-native';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
-
 export interface KeyboardMedia {
 	uri: string;
 	fileName: string;
@@ -68,11 +66,6 @@ export const RichContentTextInput = React.forwardRef<TextInput, RichContentTextI
 			return () => subscription.remove();
 		}, []);
 
-		return (
-			<>
-				<ComponentMarker kind="field" name="RichContentTextInput" />
-				<TextInput ref={setInputRef} {...props} />
-			</>
-		);
+		return <TextInput ref={setInputRef} {...props} />;
 	},
 );

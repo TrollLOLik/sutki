@@ -3,7 +3,6 @@ import { StyleSheet, View, PanResponder } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 interface RangeSliderProps {
   min: number;
@@ -152,7 +151,6 @@ export function RangeSlider({
         trackWidthRef.current = w;
       }}
     >
-      <ComponentMarker kind="field" name="RangeSlider" />
       {/* Background Track */}
       <View style={styles.trackBackground} />
 

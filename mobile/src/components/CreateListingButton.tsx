@@ -14,8 +14,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
-
 interface CreateListingButtonProps {
   onPress: () => void;
   size?: number;
@@ -104,7 +102,6 @@ export function CreateListingButton({
       onPress={onPress}
       style={styles.pressable}
     >
-      <ComponentMarker kind="button" name="CreateListingButton" />
       <Animated.View
         style={[
           styles.pulse,

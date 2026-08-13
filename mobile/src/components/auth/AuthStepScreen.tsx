@@ -5,7 +5,6 @@ import { type ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { ScreenContainer } from '@/components/ui';
 import { useKeyboardStickyStyle } from '@/hooks/useKeyboardStickyStyle';
@@ -34,7 +33,6 @@ export function AuthStepScreen({
 
   return (
     <ScreenContainer centered>
-      <ComponentMarker kind="layout" name="AuthStepScreen" />
       <View style={{ flex: 1 }}>
         <View style={{ height: 72, justifyContent: 'center', alignItems: 'flex-start' }}>
           <NavigationBackButton fallback={fallback} size={48} variant="material" />

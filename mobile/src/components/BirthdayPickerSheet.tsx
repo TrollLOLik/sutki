@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { BottomSheet, Button, DialogActions, MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -164,7 +163,6 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
           primary={<Button label="Применить" size="md" onPress={apply} />}
         />
       }>
-      <ComponentMarker kind="modal" name="BirthdayPickerSheet" />
       <MaterialSurface
         level="raised"
         radius={24}

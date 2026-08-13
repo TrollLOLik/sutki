@@ -3,7 +3,6 @@ import { Image, type ImageProps } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface ResilientImageProps extends Omit<ImageProps, 'source' | 'style'> {
@@ -33,7 +32,6 @@ export function ResilientImage({
 
   return (
     <View style={[style, styles.container, { backgroundColor: palette.surfaceSkeleton }]}>
-      <ComponentMarker kind="media" name="ResilientImage" />
       {uri && !failed ? (
         <Image
           {...imageProps}

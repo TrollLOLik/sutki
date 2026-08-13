@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useChatColors } from './useChatColors';
 
@@ -43,7 +42,6 @@ export const SuggestionChips = React.memo(function SuggestionChips({
 
 	return (
 		<View>
-			<ComponentMarker kind="surface" name="SuggestionChips" />
 			{generated ? (
 				<View style={styles.header}>
 					<Ionicons name="sparkles-outline" size={12} color={palette.primary} />

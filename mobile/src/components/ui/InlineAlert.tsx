@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export type InlineAlertTone = 'info' | 'success' | 'warning' | 'danger';
 
@@ -45,7 +44,6 @@ export function InlineAlert({ tone = 'info', title, children, compact = false, s
         },
         style,
       ]}>
-      <ComponentMarker kind="state" name="InlineAlert" />
       <Ionicons name={icons[tone]} size={compact ? 19 : 21} color={color} />
       <View style={{ minWidth: 0, flex: 1, gap: title ? 3 : 0 }}>
         {typeof title === 'string' ? <Text style={{ color, fontSize: 14, fontWeight: '800', lineHeight: 19 }}>{title}</Text> : title}

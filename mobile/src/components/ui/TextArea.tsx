@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/theme/useAppTheme';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 
 export interface TextAreaProps extends Omit<TextInputProps, 'multiline'> {
   containerStyle?: StyleProp<ViewStyle>;
@@ -51,7 +50,6 @@ export const TextArea = forwardRef<TextInput, TextAreaProps>(function TextArea(
         },
         containerStyle,
       ]}>
-      <ComponentMarker kind="field" name="TextArea" />
       <TextInput
         ref={ref}
         {...rest}

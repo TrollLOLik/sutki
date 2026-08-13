@@ -3,7 +3,6 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import type { MessageQuote } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -101,7 +100,6 @@ export const QuotedMessage = React.memo(function QuotedMessage({
 			accessibilityLabel={`Перейти к сообщению: ${preview}`}
 			style={({ pressed }) => (pressed ? styles.pressed : undefined)}
 		>
-			<ComponentMarker kind="surface" name="QuotedMessage" />
 			{content}
 		</Pressable>
 	);

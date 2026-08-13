@@ -3,7 +3,6 @@ import { View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { cn } from '@/lib/cn';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { MAX_CONTENT_WIDTH } from '@/theme/tokens';
 
 interface ScreenContainerProps {
@@ -22,7 +21,6 @@ export function ScreenContainer({
 }: ScreenContainerProps) {
   return (
     <SafeAreaView edges={edges} className="flex-1 bg-surface">
-      <ComponentMarker kind="layout" name="ScreenContainer" />
       <View className={cn('flex-1', centered && 'items-center')}>
         <View
           className={cn('flex-1 w-full px-5', className)}

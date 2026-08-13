@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { IconButton } from '@/components/ui/IconButton';
-import { ComponentMarker } from '@/components/debug/ComponentMarker';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export type DialogTone = 'primary' | 'neutral' | 'success' | 'warning' | 'danger';
@@ -63,7 +62,6 @@ export function DialogHeader({
         },
         style,
       ]}>
-      <ComponentMarker kind="modal" name="DialogHeader" />
       {icon ? (
         <View
           style={{
