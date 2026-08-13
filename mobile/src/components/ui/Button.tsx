@@ -1,53 +1,69 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   Text,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { cn } from '@/lib/cn';
 import { useAppTheme } from '@/theme/useAppTheme';
 
-type Variant = 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
-type Size = 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'ghost';
+export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonMode = 'solid' | 'outline' | 'soft' | 'ghost';
+export type ButtonTone = 'primary' | 'neutral' | 'danger' | 'success' | 'warning';
 
-interface ButtonProps extends Omit<PressableProps, 'children' | 'style'> {
+export interface ButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   label: string;
   icon?: keyof typeof Ionicons.glyphMap;
-  variant?: Variant;
-  size?: Size;
+  startIcon?: keyof typeof Ionicons.glyphMap;
+  endIcon?: keyof typeof Ionicons.glyphMap;
+  variant?: ButtonVariant;
+  mode?: ButtonMode;
+  tone?: ButtonTone;
+  size?: ButtonSize;
+  stretched?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  className?: string;
 }
 
-const text: Record<Variant, string> = {
-  primary: 'text-white',
-  secondary: 'text-ink',
-  success: 'text-white',
-  danger: 'text-danger',
-  ghost: 'text-primary',
+const sizes: Record<ButtonSize, { height: number; radius: number; fontSize: number; iconSize: number }> = {
+  sm: { height: 42, radius: 14, fontSize: 14, iconSize: 18 },
+  md: { height: 48, radius: 16, fontSize: 15, iconSize: 19 },
+  lg: { height: 56, radius: 18, fontSize: 16, iconSize: 20 },
 };
 
-const sizes: Record<Size, string> = {
-  md: 'h-12',
-  lg: 'h-14',
-};
+function legacyAppearance(variant: ButtonVariant): { mode: ButtonMode; tone: ButtonTone } {
+  switch (variant) {
+    case 'secondary':
+      return { mode: 'soft', tone: 'neutral' };
+    case 'success':
+      return { mode: 'solid', tone: 'primary' };
+    case 'danger':
+      return { mode: 'soft', tone: 'danger' };
+    case 'ghost':
+      return { mode: 'ghost', tone: 'primary' };
+    default:
+      return { mode: 'solid', tone: 'primary' };
+  }
+}
 
 export function Button({
   label,
   icon,
+  startIcon,
+  endIcon,
   variant = 'primary',
+  mode,
+  tone,
   size = 'lg',
+  stretched = true,
   loading = false,
   disabled,
   className,
@@ -55,87 +71,101 @@ export function Button({
   onPressIn,
   onPressOut,
   ...rest
-}: ButtonProps & { className?: string }) {
+}: ButtonProps) {
   const { palette, isDark } = useAppTheme();
-  const isDisabled = disabled || loading;
-  const isVisuallyDisabled = Boolean(disabled) && !loading;
-  const isPrimaryAction = variant === 'primary' || variant === 'success';
-  const isSurfaceAction = variant === 'secondary' || variant === 'danger';
-  const surfaceColor = isDark ? '#202329' : '#F0F1F3';
-  const surfaceBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(18,24,32,0.07)';
-  const activeBackgroundColor = isPrimaryAction
-    ? palette.primary
-    : isSurfaceAction
-      ? surfaceColor
-      : 'transparent';
-  const backgroundColor = isVisuallyDisabled
-    ? isPrimaryAction
-      ? isDark
-        ? '#5A3022'
-        : '#F6C8B7'
-      : isSurfaceAction
-        ? surfaceColor
-        : 'transparent'
-    : activeBackgroundColor;
-  const borderColor = isPrimaryAction
-    ? isVisuallyDisabled
-      ? isDark
-        ? 'rgba(255,255,255,0.07)'
-        : 'rgba(157,92,71,0.12)'
-      : 'rgba(255,255,255,0.18)'
-    : isSurfaceAction
-      ? surfaceBorder
-      : 'transparent';
-  const activeForeground =
-    variant === 'primary' || variant === 'success'
-      ? '#FFFFFF'
-      : variant === 'danger'
-        ? palette.danger
-        : variant === 'ghost'
-          ? palette.primary
-          : palette.ink;
-  const foreground = isVisuallyDisabled
-    ? isPrimaryAction
-      ? isDark
-        ? '#B69A8F'
-        : '#9D5C47'
-      : palette.inkMuted
-    : activeForeground;
-  const reduceMotion = useReducedMotion();
-  const pressedScale = useSharedValue(1);
-  const animatedScale = useAnimatedStyle(() => ({
-    transform: [{ scale: pressedScale.value }],
-  }));
+  const fallback = legacyAppearance(variant);
+  const resolvedMode = mode ?? fallback.mode;
+  const resolvedTone = tone ?? fallback.tone;
+  const metrics = sizes[size];
+  const leadingIcon = startIcon ?? icon;
+  const isDisabled = Boolean(disabled || loading);
+  const [pressedScale] = useState(() => new Animated.Value(1));
+
+  const toneColor =
+    resolvedTone === 'danger'
+      ? palette.danger
+      : resolvedTone === 'success'
+        ? palette.success
+        : resolvedTone === 'warning'
+          ? palette.star
+          : resolvedTone === 'neutral'
+            ? palette.ink
+            : palette.primary;
+  const toneLight =
+    resolvedTone === 'danger'
+      ? palette.dangerLight
+      : resolvedTone === 'success'
+        ? palette.successLight
+        : resolvedTone === 'warning'
+          ? isDark
+            ? '#332B16'
+            : '#FFF7DE'
+          : resolvedTone === 'neutral'
+            ? palette.surfaceMuted
+            : palette.primaryLight;
+
+  const solidNeutral = resolvedMode === 'solid' && resolvedTone === 'neutral';
+  const backgroundColor =
+    resolvedMode === 'solid'
+      ? solidNeutral
+        ? palette.ink
+        : toneColor
+      : resolvedMode === 'soft'
+        ? toneLight
+        : resolvedMode === 'outline'
+          ? palette.surface
+          : 'transparent';
+  const foreground =
+    resolvedMode === 'solid'
+      ? solidNeutral
+        ? palette.surface
+        : '#FFFFFF'
+      : toneColor;
+  const borderColor =
+    resolvedMode === 'outline'
+      ? toneColor
+      : resolvedMode === 'soft'
+        ? resolvedTone === 'neutral'
+          ? palette.line
+          : toneLight
+        : resolvedMode === 'solid'
+          ? 'rgba(255,255,255,0.18)'
+          : 'transparent';
+  const elevated = resolvedMode === 'solid' && resolvedTone !== 'neutral' && !isDisabled;
 
   const handlePressIn: NonNullable<PressableProps['onPressIn']> = (event) => {
-    pressedScale.value = reduceMotion ? 1 : withTiming(0.965, { duration: 70 });
+    Animated.timing(pressedScale, {
+      toValue: 0.965,
+      duration: 70,
+      useNativeDriver: true,
+    }).start();
     onPressIn?.(event);
   };
 
   const handlePressOut: NonNullable<PressableProps['onPressOut']> = (event) => {
-    pressedScale.value = reduceMotion
-      ? 1
-      : withSpring(1, { damping: 17, stiffness: 280, mass: 0.55 });
+    Animated.spring(pressedScale, {
+      toValue: 1,
+      damping: 17,
+      stiffness: 280,
+      mass: 0.55,
+      useNativeDriver: true,
+    }).start();
     onPressOut?.(event);
   };
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: loading || undefined }}
       disabled={isDisabled}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       className={cn(
-        'relative w-full items-center justify-center active:opacity-85',
-        sizes[size],
+        'relative min-w-0 items-center justify-center',
+        stretched && 'w-full',
         className,
       )}
-      style={[
-        {
-          borderRadius: 18,
-        },
-        style,
-      ]}
+      style={[{ height: metrics.height, borderRadius: metrics.radius }, style]}
       {...rest}>
       <Animated.View
         pointerEvents="none"
@@ -146,35 +176,58 @@ export function Button({
             right: 0,
             bottom: 0,
             left: 0,
-            borderRadius: 18,
-            borderWidth: variant === 'ghost' ? 0 : 1,
+            borderRadius: metrics.radius,
+            borderWidth: resolvedMode === 'ghost' ? 0 : 1,
             borderColor,
             backgroundColor,
-            shadowColor: isPrimaryAction ? palette.primary : '#000',
-            shadowOpacity: isVisuallyDisabled || variant === 'ghost' ? 0 : isPrimaryAction ? 0.2 : 0.08,
-            shadowRadius: 12,
+            opacity: isDisabled ? 0.48 : 1,
+            shadowColor: elevated ? toneColor : '#000000',
+            shadowOpacity: elevated ? 0.2 : 0,
+            shadowRadius: elevated ? 12 : 0,
             shadowOffset: { width: 0, height: 6 },
-            elevation: isVisuallyDisabled || variant === 'ghost' ? 0 : 3,
+            elevation: elevated ? 3 : 0,
           },
-          animatedScale,
+          { transform: [{ scale: pressedScale }] },
         ]}
       />
       <Animated.View
         pointerEvents="none"
         style={[
-          { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-          animatedScale,
+          {
+            minWidth: 0,
+            maxWidth: '100%',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingHorizontal: 14,
+            opacity: isDisabled ? 0.64 : 1,
+          },
+          { transform: [{ scale: pressedScale }] },
         ]}>
         {loading ? (
           <ActivityIndicator color={foreground} />
         ) : (
           <>
-            {icon ? <Ionicons name={icon} size={20} color={foreground} /> : null}
+            {leadingIcon ? (
+              <Ionicons name={leadingIcon} size={metrics.iconSize} color={foreground} />
+            ) : null}
             <Text
-              className={cn('text-base font-bold', !isVisuallyDisabled && text[variant])}
-              style={isVisuallyDisabled ? { color: foreground } : undefined}>
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              style={{
+                minWidth: 0,
+                flexShrink: 1,
+                color: foreground,
+                fontSize: metrics.fontSize,
+                fontWeight: '800',
+              }}>
               {label}
             </Text>
+            {endIcon ? (
+              <Ionicons name={endIcon} size={metrics.iconSize} color={foreground} />
+            ) : null}
           </>
         )}
       </Animated.View>

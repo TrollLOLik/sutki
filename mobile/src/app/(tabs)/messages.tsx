@@ -5,28 +5,22 @@ import {
 	Keyboard,
 	Pressable,
 	RefreshControl,
-	StyleSheet,
 	Text,
-	TouchableOpacity,
 	View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { differenceInDays, format, isToday, isYesterday } from 'date-fns';
-import { ru } from 'date-fns/locale';
 
 import { useSessionStore } from '@/store/session';
 import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { Button, Skeleton } from '@/components/ui';
-import { EmptyState } from '@/components/EmptyState';
-import { CountedTabs } from '@/components/CountedTabs';
+import { Button, CountedTabs, EmptyState, LoadErrorState } from '@/components/ui';
+import { ConversationListSkeleton } from '@/components/DomainListSkeletons';
+import { ConversationRow } from '@/components/chat/ConversationRow';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
 import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
-import { formatRooms } from '@/lib/format';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 
 type ConversationSort = 'recent' | 'oldest' | 'unread';
@@ -43,37 +37,6 @@ const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
 	{ value: 'oldest', label: 'Сначала старые', icon: 'hourglass-outline' },
 	{ value: 'unread', label: 'Сначала непрочитанные', icon: 'mail-unread-outline' },
 ];
-
-function ConversationListSkeleton({ dividerColor }: { dividerColor: string }) {
-	return (
-		<View style={{ paddingTop: 2, paddingBottom: 110 }}>
-			{Array.from({ length: 6 }, (_, index) => (
-				<View key={index} style={{ paddingLeft: 18, flexDirection: 'row', alignItems: 'center' }}>
-					<Skeleton width={58} height={58} radius={29} />
-					<View
-						style={{
-							flex: 1,
-							minHeight: 90,
-							marginLeft: 14,
-							paddingVertical: 14,
-							paddingRight: 18,
-							borderBottomWidth: index === 5 ? 0 : StyleSheet.hairlineWidth,
-							borderBottomColor: dividerColor,
-						}}>
-						<View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-							<Skeleton width="54%" height={18} radius={5} />
-							<View style={{ flex: 1, alignItems: 'flex-end' }}>
-								<Skeleton width={42} height={11} radius={4} />
-							</View>
-						</View>
-						<Skeleton width="68%" height={11} radius={4} style={{ marginTop: 9 }} />
-						<Skeleton width="84%" height={14} radius={4} style={{ marginTop: 9 }} />
-					</View>
-				</View>
-			))}
-		</View>
-	);
-}
 
 export default function MessagesScreen() {
 	const collapsibleHeader = useCollapsibleHeader();
@@ -113,24 +76,6 @@ export default function MessagesScreen() {
 		});
 	};
 
-	const formatRelativeTime = (timeStr: string) => {
-		try {
-			const date = new Date(timeStr);
-			if (isToday(date)) {
-				return format(date, 'HH:mm');
-			}
-			if (isYesterday(date)) {
-				return 'Вчера';
-			}
-			if (differenceInDays(new Date(), date) < 7) {
-				return format(date, 'EEEE', { locale: ru });
-			}
-			return format(date, 'd MMM', { locale: ru });
-		} catch {
-			return '';
-		}
-	};
-
 	if (status === 'loading') {
 		return (
 			<SafeAreaView edges={['top']} className="flex-1 bg-surface justify-center items-center">
@@ -166,7 +111,7 @@ export default function MessagesScreen() {
 				<View className="px-5 pb-4 pt-4">
 					<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
 				</View>
-				<ConversationListSkeleton dividerColor={softBorder} />
+				<ConversationListSkeleton />
 			</SafeAreaView>
 		);
 	}
@@ -177,19 +122,7 @@ export default function MessagesScreen() {
 				<View className="px-5 pb-4 pt-4">
 					<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
 				</View>
-				<EmptyState
-					icon="cloud-offline-outline"
-					title="Не удалось загрузить сообщения"
-					subtitle="Проверьте подключение и попробуйте снова."
-					action={
-						<Button
-							label="Повторить"
-							variant="secondary"
-							loading={isFetching}
-							onPress={() => refetch()}
-						/>
-					}
-				/>
+				<LoadErrorState title="Не удалось загрузить сообщения" loading={isFetching} onRetry={() => refetch()} />
 			</SafeAreaView>
 		);
 	}
@@ -237,114 +170,6 @@ export default function MessagesScreen() {
 				? 'Здесь появятся переписки по объявлениям, которые вы рассматриваете.'
 				: 'Здесь появятся ваши переписки по объявлениям и заявкам.';
 
-	const renderItem = ({ item, index }: { item: ConversationSummary; index: number }) => {
-		const hasUnread = item.unread_count > 0;
-		const hasPreview = !!item.last_message_body;
-		const isLast = index === filteredConversations.length - 1;
-
-		const isLastMessageByMe = item.last_message_sender_id === sessionUser?.id;
-		const isLastMessageRead =
-			item.other_last_read_message_id &&
-			item.last_message_id &&
-			item.last_message_id <= item.other_last_read_message_id;
-
-		return (
-			<TouchableOpacity
-				activeOpacity={0.62}
-				onPress={() => handleConversationPress(item)}
-				style={{ paddingLeft: 18 }}
-			>
-				<View className="flex-row items-center">
-					<View className="relative">
-						{item.other_user_avatar_url && !item.other_user_deleted ? (
-							<Image
-								source={{ uri: item.other_user_avatar_url }}
-								style={{ width: 58, height: 58, borderRadius: 29 }}
-								contentFit="cover"
-								transition={160}
-							/>
-						) : (
-							<View className="h-[58px] w-[58px] items-center justify-center rounded-full bg-surface-muted">
-								<Ionicons name="person-outline" size={23} color={palette.inkMuted} />
-							</View>
-						)}
-						{hasUnread ? (
-							<View
-								style={{ borderColor: screenBackground }}
-								className="absolute -right-0.5 -top-0.5 h-4 w-4 rounded-full border-[3px] bg-primary"
-							/>
-						) : null}
-					</View>
-
-					<View
-						style={{
-							flex: 1,
-							minHeight: 90,
-							marginLeft: 14,
-							paddingVertical: 14,
-							paddingRight: 18,
-							borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-							borderBottomColor: softBorder,
-						}}
-					>
-						<View className="flex-row items-center">
-							<View className="flex-1">
-								<View className="flex-row items-center">
-									<Text numberOfLines={1} className={`mr-3 flex-1 text-[17px] leading-6 text-ink ${hasUnread ? 'font-extrabold' : 'font-bold'}`}>
-										{item.other_user_deleted
-											? 'Удаленный профиль'
-											: `${item.other_user_name} ${item.other_user_surname}`.trim() || 'Пользователь'}
-									</Text>
-									<Text className={`text-[12px] leading-5 ${hasUnread ? 'font-bold text-primary' : 'font-medium text-ink-muted'}`}>
-										{formatRelativeTime(item.last_activity)}
-									</Text>
-								</View>
-
-								{item.house_id ? (
-									<View className="mt-1 flex-row items-center">
-										<Ionicons name="home-outline" size={14} color={palette.inkMuted} />
-										<Text numberOfLines={1} className="ml-1.5 flex-1 text-[12px] leading-5 text-ink-muted">
-											{item.house_count_room ? `${formatRooms(item.house_count_room)}, ` : ''}
-											{item.house_street ?? ''}{item.house_number ? `, д. ${item.house_number}` : ''}
-										</Text>
-									</View>
-								) : null}
-
-								<View className="mt-1 flex-row items-center">
-									{isLastMessageByMe && hasPreview ? (
-										<Ionicons
-											name={isLastMessageRead ? 'checkmark-done' : 'checkmark'}
-											size={16}
-											color={isLastMessageRead ? palette.primary : palette.inkMuted}
-											style={{ marginRight: 5 }}
-										/>
-									) : null}
-									<Text numberOfLines={1} className={`flex-1 text-[14px] leading-5 ${hasUnread ? 'font-bold text-ink' : hasPreview ? 'text-ink-secondary' : 'italic text-ink-muted'}`}>
-										{hasPreview ? item.last_message_body : 'Начните переписку'}
-									</Text>
-									{hasUnread ? (
-										<View className="ml-2 min-w-[22px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5">
-											<Text className="text-[10px] font-extrabold text-white">{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
-										</View>
-									) : null}
-								</View>
-							</View>
-
-							{item.house_id && item.house_cover_path ? (
-								<Image
-									source={{ uri: item.house_cover_path }}
-									style={{ width: 48, height: 48, borderRadius: 12, marginLeft: 12 }}
-									contentFit="cover"
-									transition={160}
-								/>
-							) : null}
-						</View>
-					</View>
-				</View>
-			</TouchableOpacity>
-		);
-	};
-
 	return (
 		<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
 			<Pressable accessible={false} onPress={Keyboard.dismiss} className="px-5 pb-4 pt-4">
@@ -377,7 +202,16 @@ export default function MessagesScreen() {
 			<FlatList
 				data={filteredConversations}
 				keyExtractor={(item) => String(item.conversation_id)}
-				renderItem={renderItem}
+				renderItem={({ item, index }) => (
+					<ConversationRow
+						conversation={item}
+						currentUserId={sessionUser?.id}
+						isLast={index === filteredConversations.length - 1}
+						screenBackground={screenBackground}
+						dividerColor={softBorder}
+						onPress={() => handleConversationPress(item)}
+					/>
+				)}
 				contentContainerStyle={filteredConversations.length === 0
 					? { flexGrow: 1, paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }
 					: { paddingTop: collapsibleHeader.height + 2, paddingBottom: 110 }}

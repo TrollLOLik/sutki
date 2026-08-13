@@ -1,22 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { formatDistanceToNow, parseISO } from 'date-fns';
-import { ru } from 'date-fns/locale';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EmptyState } from '@/components/EmptyState';
-import { NavigationBackButton } from '@/components/NavigationBackButton';
+import { NotificationListSkeleton } from '@/components/DomainListSkeletons';
+import { NotificationCard, type NotificationPresentation } from '@/components/notifications/NotificationCard';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { Button, IconButton, MaterialSurface } from '@/components/ui';
+import { AppHeader, EmptyState, IconButton, LoadErrorState, MaterialSurface } from '@/components/ui';
 import {
   type UserNotification,
   useMarkAllNotificationsRead,
@@ -25,16 +16,6 @@ import {
 } from '@/lib/api/activity';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
-
-type NotificationTone = 'primary' | 'info' | 'success' | 'danger' | 'neutral';
-
-type Presentation = {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  body: string;
-  path?: string;
-  tone: NotificationTone;
-};
 
 type NotificationSort = 'newest' | 'oldest' | 'unread';
 
@@ -56,7 +37,7 @@ function reviewNotificationTab(item: UserNotification): 'written' | 'received' {
   return targetType === 'reply' ? 'received' : 'written';
 }
 
-function notificationPresentation(item: UserNotification): Presentation {
+function notificationPresentation(item: UserNotification): NotificationPresentation {
   const id = item.entity_id;
   if (item.scope === 'messages') {
     const sender = stringPayload(item, 'sender_name') || 'Пользователь';
@@ -191,14 +172,6 @@ function notificationPresentation(item: UserNotification): Presentation {
   };
 }
 
-function relativeDate(value: string): string {
-  try {
-    return formatDistanceToNow(parseISO(value), { addSuffix: true, locale: ru });
-  } catch {
-    return 'недавно';
-  }
-}
-
 function unreadLabel(count: number): string {
   const lastTwo = count % 100;
   const last = count % 10;
@@ -215,96 +188,6 @@ function eventsLabel(count: number): string {
   if (last === 1) return `${count} событие`;
   if (last >= 2 && last <= 4) return `${count} события`;
   return `${count} событий`;
-}
-
-function NotificationRow({ item, onPress }: { item: UserNotification; onPress: () => void }) {
-  const { palette, isDark } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-  const view = notificationPresentation(item);
-  const isUnread = !item.read_at;
-  const toneColor =
-    view.tone === 'success'
-      ? palette.success
-      : view.tone === 'danger'
-        ? palette.danger
-        : view.tone === 'info'
-          ? palette.info
-          : view.tone === 'neutral'
-            ? palette.inkSecondary
-            : palette.primary;
-  const toneBackground =
-    view.tone === 'success'
-      ? palette.successLight
-      : view.tone === 'danger'
-        ? palette.dangerLight
-        : view.tone === 'info'
-          ? palette.infoLight
-          : view.tone === 'neutral'
-            ? palette.surfaceMuted
-            : palette.primaryLight;
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <MaterialSurface
-        level="raised"
-        radius={22}
-        style={[
-          styles.notificationCard,
-          isUnread
-            ? {
-                borderColor: isDark ? 'rgba(255,107,53,0.32)' : 'rgba(255,90,31,0.24)',
-              }
-            : null,
-        ]}>
-        <Pressable
-          accessibilityLabel={`${view.title}. ${view.body}`}
-          accessibilityRole="button"
-          onPress={onPress}
-          onPressIn={() => {
-            scale.value = reduceMotion ? 1 : withTiming(0.978, { duration: 75 });
-          }}
-          onPressOut={() => {
-            scale.value = reduceMotion
-              ? 1
-              : withSpring(1, { damping: 18, stiffness: 270, mass: 0.55 });
-          }}
-          style={styles.notificationPressable}>
-          <View style={[styles.notificationIcon, { backgroundColor: toneBackground }]}>
-            <Ionicons name={view.icon} size={22} color={toneColor} />
-          </View>
-
-          <View style={styles.notificationCopy}>
-            <View style={styles.notificationTitleRow}>
-              <Text
-                numberOfLines={2}
-                style={[
-                  styles.notificationTitle,
-                  { color: palette.ink, fontWeight: isUnread ? '800' : '700' },
-                ]}>
-                {view.title}
-              </Text>
-              {isUnread ? <View style={[styles.unreadDot, { backgroundColor: palette.primary }]} /> : null}
-            </View>
-            <Text
-              numberOfLines={3}
-              style={[styles.notificationBody, { color: palette.inkSecondary }]}>
-              {view.body}
-            </Text>
-            <View style={styles.notificationMeta}>
-              <Text style={[styles.notificationDate, { color: palette.inkMuted }]}>
-                {relativeDate(item.created_at)}
-              </Text>
-              {view.path ? <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} /> : null}
-            </View>
-          </View>
-        </Pressable>
-      </MaterialSurface>
-    </Animated.View>
-  );
 }
 
 function NotificationSummary({
@@ -369,7 +252,7 @@ export default function NotificationsScreen() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<NotificationSort>('newest');
   const [sortVisible, setSortVisible] = useState(false);
-  const allItems = query.data?.items ?? [];
+  const allItems = useMemo(() => query.data?.items ?? [], [query.data?.items]);
   const unread = allItems.filter((item) => !item.read_at).length;
   const items = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase('ru');
@@ -408,13 +291,7 @@ export default function NotificationsScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: palette.surface }]}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: palette.surface }}>
-        <View style={[styles.header, { borderBottomColor: palette.line }]}>
-          <NavigationBackButton fallback="/(tabs)/profile" size={48} variant="material" />
-          <View style={styles.headerTitleWrap}>
-            <Text style={[styles.headerTitle, { color: palette.ink }]}>Уведомления</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </View>
+        <AppHeader fallback="/(tabs)/profile" title="Уведомления" />
       </SafeAreaView>
 
       <View style={{ flex: 1, overflow: 'hidden' }}>
@@ -444,18 +321,9 @@ export default function NotificationsScreen() {
       </CollapsibleHeader>
 
       {query.isLoading ? (
-        <View style={styles.centeredState}>
-          <ActivityIndicator color={palette.primary} />
-        </View>
+        <NotificationListSkeleton />
       ) : query.isError ? (
-        <View style={styles.errorState}>
-          <EmptyState
-            icon="cloud-offline-outline"
-            title="Не удалось загрузить уведомления"
-            subtitle="Проверьте соединение и попробуйте снова."
-          />
-          <Button label="Повторить" variant="secondary" onPress={() => query.refetch()} />
-        </View>
+        <LoadErrorState title="Не удалось загрузить уведомления" onRetry={() => query.refetch()} />
       ) : !hasNotifications ? (
         <EmptyState
           icon="notifications-outline"
@@ -486,7 +354,12 @@ export default function NotificationsScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <NotificationRow item={item} onPress={() => openNotification(item)} />
+            <NotificationCard
+              presentation={notificationPresentation(item)}
+              createdAt={item.created_at}
+              unread={!item.read_at}
+              onPress={() => openNotification(item)}
+            />
           )}
         />
       )}
@@ -588,62 +461,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
-  },
-  notificationCard: {
-    overflow: 'hidden',
-  },
-  notificationPressable: {
-    minHeight: 112,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 15,
-    gap: 13,
-  },
-  notificationIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  notificationCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  notificationTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  notificationTitle: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    marginTop: 6,
-    borderRadius: 4,
-    flexShrink: 0,
-  },
-  notificationBody: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  notificationMeta: {
-    marginTop: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  notificationDate: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600',
   },
 });

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -8,9 +9,13 @@ import {
   useWindowDimensions,
   View,
   type DimensionValue,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DialogHeader, type DialogTone } from '@/components/ui/DialogHeader';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface BottomSheetProps {
@@ -18,12 +23,34 @@ interface BottomSheetProps {
   onClose: () => void;
   children: React.ReactNode;
   height?: DimensionValue;
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  icon?: keyof typeof Ionicons.glyphMap;
+  tone?: DialogTone;
+  footer?: ReactNode;
+  closeOnBackdrop?: boolean;
+  showClose?: boolean;
+  bodyStyle?: StyleProp<ViewStyle>;
 }
 
 type TransitionState = 'closed' | 'opening' | 'open' | 'closing';
 
-export function BottomSheet({ visible, onClose, children, height }: BottomSheetProps) {
+export function BottomSheet({
+  visible,
+  onClose,
+  children,
+  height,
+  title,
+  subtitle,
+  icon,
+  tone = 'primary',
+  footer,
+  closeOnBackdrop = true,
+  showClose = true,
+  bodyStyle,
+}: BottomSheetProps) {
   const { palette } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -144,10 +171,7 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
       hardwareAccelerated
       onShow={animateOpen}
       onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior="height"
-        automaticOffset
-        className="flex-1 justify-end">
+      <KeyboardAvoidingView behavior="height" automaticOffset className="flex-1 items-center justify-end">
         <Animated.View
           style={{
             position: 'absolute',
@@ -158,13 +182,21 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
             backgroundColor: 'black',
             opacity: backdropOpacity,
           }}>
-          <Pressable style={{ flex: 1 }} onPress={onClose} />
+          <Pressable
+            disabled={!closeOnBackdrop}
+            style={{ flex: 1 }}
+            onPress={onClose}
+          />
         </Animated.View>
 
         <Animated.View
           style={[
             {
               transform: [{ translateY }],
+              width: '100%',
+              maxWidth: 680,
+              maxHeight: '92%',
+              overflow: 'hidden',
               backgroundColor: palette.surface,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
@@ -179,7 +211,7 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
             },
             height ? { height } : null,
           ]}
-          className="px-4 pb-8 pt-3">
+        >
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
@@ -189,10 +221,47 @@ export function BottomSheet({ visible, onClose, children, height }: BottomSheetP
               borderRadius: 2,
               backgroundColor: palette.line,
               alignSelf: 'center',
-              marginBottom: 14,
+              marginTop: 12,
+              marginBottom: title ? 8 : 14,
             }}
           />
-          {children}
+          {title ? (
+            <DialogHeader
+              title={title}
+              description={subtitle}
+              icon={icon}
+              tone={tone}
+              onClose={onClose}
+              showClose={showClose}
+            />
+          ) : null}
+          <View
+            style={[
+              {
+                minHeight: 0,
+                paddingHorizontal: 16,
+                paddingTop: title ? 16 : 0,
+                paddingBottom: footer ? 16 : Math.max(32, insets.bottom + 12),
+              },
+              height ? { flex: 1 } : null,
+              bodyStyle,
+            ]}>
+            {children}
+          </View>
+          {footer ? (
+            <View
+              style={{
+                width: '100%',
+                borderTopWidth: 1,
+                borderTopColor: palette.line,
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: Math.max(16, insets.bottom + 8),
+                backgroundColor: palette.surface,
+              }}>
+              {footer}
+            </View>
+          ) : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>

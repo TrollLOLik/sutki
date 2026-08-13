@@ -1,12 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLayoutEffect, useRef } from 'react';
-import { Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Text, View } from 'react-native';
 
-import { Button } from '@/components/ui';
-import { radii } from '@/theme/tokens';
+import { BottomSheet, Button, DialogActions } from '@/components/ui';
+import type { AuthGateContext } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { AuthGateContext } from '@/lib/requireAuth';
 
 interface AuthGateSheetProps {
   visible: boolean;
@@ -14,147 +12,74 @@ interface AuthGateSheetProps {
   context: AuthGateContext;
 }
 
+const COPY: Record<
+  AuthGateContext,
+  { title: string; description: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  generic: {
+    title: 'Требуется вход в аккаунт',
+    description: 'Войдите, чтобы пользоваться всеми возможностями ВИГАЖ.',
+    icon: 'lock-closed-outline',
+  },
+  listing: {
+    title: 'Войдите, чтобы разместить жильё',
+    description: 'Управлять объявлениями и заявками могут только пользователи с подтверждённым аккаунтом.',
+    icon: 'home-outline',
+  },
+  review: {
+    title: 'Войдите, чтобы оставить отзыв',
+    description: 'Отзывы доступны гостям после завершённого проживания.',
+    icon: 'star-outline',
+  },
+  favorites_cloud: {
+    title: 'Сохраняйте избранное в аккаунте',
+    description: 'После входа объявления будут доступны на всех ваших устройствах.',
+    icon: 'heart-outline',
+  },
+  host: {
+    title: 'Войдите для управления жильём',
+    description: 'Авторизация нужна для работы с объявлениями и входящими заявками.',
+    icon: 'key-outline',
+  },
+};
+
 export function AuthGateSheet({ visible, onClose, context }: AuthGateSheetProps) {
   const { palette } = useAppTheme();
   const router = useRouter();
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(400)).current;
-
-  useLayoutEffect(() => {
-    if (visible) {
-      fade.stopAnimation();
-      slide.stopAnimation();
-      fade.setValue(0);
-      slide.setValue(400);
-    }
-  }, [visible]);
-
-  const handleShow = () => {
-    requestAnimationFrame(() => {
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-        Animated.spring(slide, {
-          toValue: 0,
-          damping: 26,
-          stiffness: 260,
-          mass: 1,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-  };
-
-  const handleClose = () => {
-    fade.stopAnimation();
-    slide.stopAnimation();
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(slide, {
-        toValue: 400,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => onClose());
-  };
+  const copy = COPY[context];
 
   const handleSignIn = () => {
-    handleClose();
-    setTimeout(() => {
-      router.push('/welcome');
-    }, 200);
+    onClose();
+    setTimeout(() => router.push('/welcome'), 180);
   };
 
-  if (!visible) return null;
-
-  let title = 'Требуется вход в аккаунт';
-  let description = 'Войдите, чтобы пользоваться всеми функциями приложения «ВИГАЖ».';
-  let iconName: keyof typeof Ionicons.glyphMap = 'lock-closed-outline';
-
-  switch (context) {
-    case 'listing':
-      title = 'Войдите, чтобы разместить жильё';
-      description = 'Только зарегистрированные пользователи могут размещать свои объявления и сдавать жильё.';
-      iconName = 'home-outline';
-      break;
-    case 'review':
-      title = 'Отзывы могут оставлять гости с подтверждённым аккаунтом';
-      description = 'Войдите в профиль, чтобы делиться своими впечатлениями о проживании.';
-      iconName = 'star-outline';
-      break;
-    case 'favorites_cloud':
-      title = 'Войдите, чтобы сохранять избранное в облаке';
-      description = 'Это позволит вам просматривать избранные объявления на любых ваших устройствах.';
-      iconName = 'heart-outline';
-      break;
-    case 'host':
-      title = 'Войдите, чтобы управлять объявлениями и заявками';
-      description = 'Для просмотра входящих заявок и управления вашим жильем необходима авторизация.';
-      iconName = 'key-outline';
-      break;
-  }
-
   return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-      hardwareAccelerated
-      onShow={handleShow}
-      onRequestClose={handleClose}>
-      <View className="flex-1 justify-end">
-        {/* Backdrop */}
-        <Animated.View
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'black', opacity: fade }}
-        >
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
-        </Animated.View>
-
-        {/* Content Sheet */}
-        <Animated.View
-          style={{
-            transform: [{ translateY: slide }],
-            backgroundColor: palette.surface,
-            borderTopLeftRadius: radii.card,
-            borderTopRightRadius: radii.card,
-          }}
-          className="px-4 pb-10 pt-4"
-        >
-          {/* Top handle and title */}
-          <View className="items-center pb-4">
-            <View className="h-1 w-12 rounded-full bg-line mb-4" />
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-primary-light mb-4">
-              <Ionicons name={iconName} size={30} color={palette.primary} />
-            </View>
-            <Text className="text-xl font-extrabold text-ink text-center px-4 leading-6">
-              {title}
-            </Text>
-          </View>
-
-          <Text className="text-base text-ink-secondary text-center px-6 leading-6 mb-8">
-            {description}
-          </Text>
-
-          {/* Action buttons */}
-          <View className="gap-3">
-            <Button
-              label="Войти или зарегистрироваться"
-              size="md"
-              className="w-full"
-              onPress={handleSignIn}
-            />
-            <Button
-              label="Отмена"
-              variant="secondary"
-              size="md"
-              className="w-full"
-              onPress={handleClose}
-            />
-          </View>
-        </Animated.View>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title={copy.title}
+      subtitle={copy.description}
+      icon={copy.icon}
+      footer={
+        <DialogActions
+          secondary={<Button label="Отмена" variant="secondary" size="md" onPress={onClose} />}
+          primary={<Button label="Войти" size="md" onPress={handleSignIn} />}
+        />
+      }>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: 12,
+          borderRadius: 18,
+          backgroundColor: palette.primaryLight,
+          padding: 14,
+        }}>
+        <Ionicons name="shield-checkmark-outline" size={21} color={palette.primary} />
+        <Text style={{ minWidth: 0, flex: 1, color: palette.inkSecondary, fontSize: 13, lineHeight: 19 }}>
+          Вход защищает ваши данные и позволяет синхронизировать действия между приложением и сайтом.
+        </Text>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }

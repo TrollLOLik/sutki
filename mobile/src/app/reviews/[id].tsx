@@ -1,20 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { parseISO } from 'date-fns';
 import { BlurView } from 'expo-blur';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useMemo, useRef, useState } from 'react';
-import { EmptyState } from '@/components/EmptyState';
+import { ReviewListSkeleton } from '@/components/DomainListSkeletons';
+import { ReviewCard } from '@/components/reviews/ReviewCard';
 import { Stars } from '@/components/Stars';
-import { BottomSheet, Button, IconButton, MaterialSurface } from '@/components/ui';
+import { BottomSheet, Button, DialogActions, EmptyState, IconButton, LoadErrorState, MaterialSurface, TextArea } from '@/components/ui';
 import { useKeyboardAwareListFocus } from '@/hooks/useKeyboardAwareListFocus';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useReviews, useHostReviews, useCreateReviewReply } from '@/lib/api/reviews';
-import { formatDateRu, formatRating, formatReviewsCount } from '@/lib/format';
+import { formatRating, formatReviewsCount } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Review, ReviewSummary } from '@/types/review';
@@ -28,16 +27,19 @@ const REVIEW_EMOJI_OPTIONS = [
 ];
 
 export default function ReviewsScreen() {
-  const { palette, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
   const headerBackground = isDark ? '#14161B' : '#FFFFFF';
   const { id, isHost } = useLocalSearchParams<{ id: string; isHost?: string }>();
   const numericId = Number(id);
   const reviewsListRef = useRef<FlatList<Review>>(null);
   const { handleFocus: handleReplyFocus } = useKeyboardAwareListFocus(reviewsListRef);
-  const { data, isLoading, isError, refetch, isRefetching } = isHost === 'true'
-    ? useHostReviews(numericId, { limit: 50 })
-    : useReviews(numericId, { limit: 50 });
+  const hostMode = isHost === 'true';
+  const listingReviews = useReviews(numericId, { limit: 50 }, !hostMode);
+  const hostReviews = useHostReviews(numericId, { limit: 50 }, hostMode);
+  const { data, isLoading, isError, refetch, isRefetching } = hostMode
+    ? hostReviews
+    : listingReviews;
 
   const { status: authStatus } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
@@ -70,20 +72,9 @@ export default function ReviewsScreen() {
         </View>
 
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={palette.primary} />
-          </View>
+          <ReviewListSkeleton />
         ) : isError ? (
-          <View className="flex-1 gap-4 px-4 justify-center">
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Не удалось загрузить"
-              subtitle="Проверьте подключение и попробуйте снова."
-            />
-            <View className="px-8">
-              <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
-            </View>
-          </View>
+          <LoadErrorState title="Не удалось загрузить отзывы" onRetry={() => refetch()} />
         ) : (
           <>
             <FlatList
@@ -223,42 +214,16 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
   const [replyBody,setReplyBody]=useState('');
   const [submitted,setSubmitted]=useState(false);
   const createReply=useCreateReviewReply(review.id);
-  const date = review.created_at ? parseISO(review.created_at) : null;
   return (
-    <MaterialSurface level="raised" radius={20} className="mb-3 p-4">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-3">
-          <View className="h-10 w-10 overflow-hidden rounded-full bg-surface-skeleton">
-            {review.author_avatar_url ? (
-              <Image source={{ uri: review.author_avatar_url }} style={{ flex: 1 }} contentFit="cover" />
-            ) : (
-              <View className="flex-1 items-center justify-center">
-                <Ionicons name="person" size={18} color={palette.inkMuted} />
-              </View>
-            )}
-          </View>
-          <View>
-            <Text className="text-sm font-semibold text-ink">{review.author_name}</Text>
-            {date ? <Text className="text-xs text-ink-muted mt-0.5">{formatDateRu(date)}</Text> : null}
-          </View>
-        </View>
-        <View className="flex-row items-center gap-1 rounded-full bg-primary-light px-2.5 py-1.5">
-          <Ionicons name="star" size={14} color={palette.primary} />
-          <Text className="text-sm font-bold text-ink">{formatRating(review.rating)}</Text>
-        </View>
-      </View>
-      {review.body ? (
-        <Text className="mt-3 text-[15px] leading-6 text-ink">{review.body}</Text>
-      ) : null}
-      {review.reply?.status === 'active' ? (
-        <View className="mt-3 rounded-2xl bg-primary-light p-3.5">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="chatbubble-ellipses-outline" size={16} color={palette.primary} />
-            <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
-          </View>
-          <Text className="mt-2 text-sm leading-5 text-ink-secondary">{review.reply.body}</Text>
-        </View>
-      ) : submitted || (canReply && review.reply?.status === 'pending_moderation') ? (
+    <ReviewCard
+      body={review.body}
+      className="mb-3"
+      createdAt={review.created_at}
+      header={{ kind: 'author', name: review.author_name, avatarUrl: review.author_avatar_url }}
+      rating={review.rating}
+      ratingMode="score"
+      reply={review.reply}>
+      {review.reply?.status === 'active' ? null : submitted || (canReply && review.reply?.status === 'pending_moderation') ? (
         <Text className="mt-3 text-xs font-semibold text-primary">Ответ отправлен на проверку</Text>
       ) : canReply && review.reply?.status === 'moderation_review' ? (
         <Text className="mt-3 text-xs font-semibold text-primary">Ответ проходит дополнительную проверку</Text>
@@ -281,7 +246,7 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
           disabled={!replyBody.trim()}
         />
       ) : null}
-    </MaterialSurface>
+    </ReviewCard>
   );
 }
 
@@ -302,35 +267,37 @@ function ListingReviewReplyEditor({
   isSubmitting: boolean;
   disabled: boolean;
 }) {
-  const { palette } = useAppTheme();
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
 
   return (
     <View className="mt-3 gap-2">
-      <View className="flex-row items-end gap-2 rounded-field border border-line bg-surface-muted px-3 py-2">
-        <TextInput
+      <View className="flex-row items-end gap-2">
+        <TextArea
           autoFocus
           value={value}
           onChangeText={onChange}
           onFocus={onFocus}
-          multiline
           maxLength={1500}
+          minHeight={72}
           placeholder="Ответ гостю"
-          placeholderTextColor={palette.inkMuted}
-          className="min-h-16 flex-1 text-sm text-ink"
-          textAlignVertical="top"
+          containerStyle={{ flex: 1 }}
+          style={{ fontSize: 14, lineHeight: 19 }}
         />
         <IconButton icon="happy-outline" size={38} iconSize={21} onPress={() => setEmojiPickerVisible(true)} accessibilityLabel="Выбрать смайлик" />
       </View>
-      <View className="flex-row gap-2">
-        <View className="flex-1"><Button label="Отмена" variant="secondary" size="md" onPress={onCancel} /></View>
-        <View className="flex-1"><Button label="Отправить" size="md" loading={isSubmitting} disabled={disabled} onPress={onSubmit} /></View>
-      </View>
+      <DialogActions
+        reset={<Button label="Отмена" mode="soft" tone="neutral" size="md" onPress={onCancel} />}
+        primary={<Button label="Отправить" size="md" loading={isSubmitting} disabled={disabled} onPress={onSubmit} />}
+      />
       <Text className="text-xs text-ink-muted">Ответ появится после проверки.</Text>
 
-      <BottomSheet visible={emojiPickerVisible} onClose={() => setEmojiPickerVisible(false)}>
+      <BottomSheet
+        visible={emojiPickerVisible}
+        onClose={() => setEmojiPickerVisible(false)}
+        title="Добавить эмодзи"
+        subtitle="Выберите символ для ответа"
+        icon="happy-outline">
         <View className="py-2">
-          <Text className="mb-5 text-center text-lg font-bold text-ink">Смайлик</Text>
           <View className="flex-row flex-wrap justify-center gap-3 px-2 pb-2">
             {REVIEW_EMOJI_OPTIONS.map((emoji) => (
               <Pressable key={emoji} onPress={() => { onChange(`${value}${emoji}`); setEmojiPickerVisible(false); }} className="h-12 w-12 items-center justify-center rounded-2xl bg-surface-muted" accessibilityLabel={`Добавить ${emoji}`}>

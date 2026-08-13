@@ -23,14 +23,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 
 import { DatePickerSheet } from '@/components/DatePickerSheet';
-import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
-import { Button, Chip, BottomSheet } from '@/components/ui';
+import { BottomSheet, Button, EmptyState } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
 import { ApiError } from '@/lib/api/client';
@@ -45,7 +44,6 @@ import { useSessionStore } from '@/store/session';
 import { useTabBarStore } from '@/store/tabbar';
 import { useListingLayoutStore } from '@/store/listing-layout';
 import { useNavigationHistoryStore } from '@/store/navigation-history';
-import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { appAlert as Alert } from '@/components/AppAlert';
 
@@ -751,18 +749,15 @@ export default function SearchScreen() {
       />
 
       {/* Guest Picker Bottom Sheet Modal */}
-      <BottomSheet visible={guestModalVisible} onClose={closeGuestModal}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between pb-4 border-b border-line mb-6">
-          <View className="w-10" />
-          <Text className="text-lg font-bold text-ink">Количество гостей</Text>
-          <TouchableOpacity onPress={closeGuestModal} className="w-10 items-end">
-            <Ionicons name="close" size={24} color={palette.ink} />
-          </TouchableOpacity>
-        </View>
-
+      <BottomSheet
+        visible={guestModalVisible}
+        onClose={closeGuestModal}
+        title="Количество гостей"
+        subtitle="Укажите, сколько человек будет проживать"
+        icon="people-outline"
+        footer={<Button label="Применить" onPress={handleApplyGuests} />}>
         {/* Counter Row */}
-        <View className="flex-row items-center justify-center gap-6 py-6 mb-4">
+        <View className="flex-row items-center justify-center gap-6 py-7">
           <TouchableOpacity
             disabled={tempGuests <= 1}
             onPress={() => setTempGuests((g) => Math.max(1, g - 1))}
@@ -784,8 +779,6 @@ export default function SearchScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Apply Button */}
-        <Button label="Применить" onPress={handleApplyGuests} />
       </BottomSheet>
 
       {/* City / free-text Search Overlay Modal */}

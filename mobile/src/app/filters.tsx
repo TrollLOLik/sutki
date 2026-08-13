@@ -2,21 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
-import { Button, Chip, IconButton, MaterialSurface, RangeSlider } from '@/components/ui';
+import { Button, Chip, Counter, IconButton, Input, MaterialSurface, RangeSlider, Switch } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useCategories, useServices } from '@/lib/api/create-listing';
 import { useFavoriteIds } from '@/lib/api/favorites';
@@ -42,13 +40,6 @@ const ROOM_OPTIONS: { label: string; value: RoomFilter }[] = [
   { label: '3', value: '3' },
   { label: '4', value: '4' },
   { label: '5+', value: '5plus' },
-];
-
-const PRICE_PRESETS: { label: string; min: number | null; max: number | null }[] = [
-  { label: 'до 2 000', min: null, max: 2000 },
-  { label: '2 000 – 4 000', min: 2000, max: 4000 },
-  { label: '4 000 – 7 000', min: 4000, max: 7000 },
-  { label: 'от 7 000', min: 7000, max: null },
 ];
 
 const SORT_OPTIONS: { label: string; value: ListingSort }[] = [
@@ -380,98 +371,66 @@ export default function FiltersScreen() {
           </View>
         </MaterialSurface>
 
-        <Pressable
-          accessibilityRole="switch"
-          accessibilityState={{ checked: favoritesOnly }}
+        <Switch
           accessibilityLabel="Показывать только избранные объявления"
-          onPress={() => setFavoritesOnly((value) => !value)}
+          value={favoritesOnly}
+          onValueChange={setFavoritesOnly}
+          label="Только избранные"
+          description="Показывать объявления, отмеченные сердечком"
+          leading={
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 20,
+                backgroundColor: favoritesOnly ? palette.primary : palette.surfaceMuted,
+              }}>
+              <Ionicons name={favoritesOnly ? 'heart' : 'heart-outline'} size={20} color={favoritesOnly ? 'white' : palette.inkSecondary} />
+            </View>
+          }
           style={{
             minHeight: 64,
-            flexDirection: 'row',
-            alignItems: 'center',
             paddingHorizontal: 14,
             paddingVertical: 10,
             borderRadius: 14,
             borderWidth: 1,
             borderColor: favoritesOnly ? palette.primary : palette.line,
             backgroundColor: favoritesOnly ? palette.primaryLight : palette.surface,
-          }}>
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              marginRight: 12,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 20,
-              backgroundColor: favoritesOnly ? palette.primary : palette.surfaceMuted,
-            }}>
-            <Ionicons name={favoritesOnly ? 'heart' : 'heart-outline'} size={20} color={favoritesOnly ? 'white' : palette.inkSecondary} />
-          </View>
-          <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>Только избранные</Text>
-            <Text style={{ marginTop: 2, fontSize: 12, color: palette.inkSecondary }}>
-              Показывать объявления, отмеченные сердечком
-            </Text>
-          </View>
-          <View pointerEvents="none">
-            <Switch
-              value={favoritesOnly}
-              trackColor={{ false: palette.line, true: palette.primary }}
-              thumbColor="white"
-            />
-          </View>
-        </Pressable>
+          }}
+        />
 
         {!isMine && numericOwnerId == null && currentUserId != null ? (
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{ checked: showOwnListings }}
+          <Switch
             accessibilityLabel="Показывать мои объявления"
-            onPress={() => setShowOwnListings((value) => !value)}
+            value={showOwnListings}
+            onValueChange={setShowOwnListings}
+            label="Показывать мои объявления"
+            description="Добавить ваши объявления в общую выдачу"
+            leading={
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 20,
+                  backgroundColor: showOwnListings ? palette.primary : palette.surfaceMuted,
+                }}>
+                <Ionicons name="home-outline" size={20} color={showOwnListings ? 'white' : palette.inkSecondary} />
+              </View>
+            }
             style={{
               minHeight: 64,
-              flexDirection: 'row',
-              alignItems: 'center',
               paddingHorizontal: 14,
               paddingVertical: 10,
               borderRadius: 14,
               borderWidth: 1,
               borderColor: showOwnListings ? palette.primary : palette.line,
               backgroundColor: showOwnListings ? palette.primaryLight : palette.surface,
-            }}>
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                marginRight: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 20,
-                backgroundColor: showOwnListings ? palette.primary : palette.surfaceMuted,
-              }}>
-              <Ionicons
-                name="home-outline"
-                size={20}
-                color={showOwnListings ? 'white' : palette.inkSecondary}
-              />
-            </View>
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: palette.ink }}>
-                Показывать мои объявления
-              </Text>
-              <Text style={{ marginTop: 2, fontSize: 12, color: palette.inkSecondary }}>
-                Добавить ваши объявления в общую выдачу
-              </Text>
-            </View>
-            <View pointerEvents="none">
-              <Switch
-                value={showOwnListings}
-                trackColor={{ false: palette.line, true: palette.primary }}
-                thumbColor="white"
-              />
-            </View>
-          </Pressable>
+            }}
+          />
         ) : null}
 
         {isMine ? (
@@ -560,9 +519,10 @@ export default function FiltersScreen() {
           <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Цена за сутки, ₽</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {/* Min Price Input */}
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
-              <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>от</Text>
-              <TextInput
+            <Input
+              size="md"
+              containerStyle={{ flex: 1 }}
+              before={<Text style={{ fontSize: 15, color: palette.inkMuted }}>от</Text>}
                 value={priceMinInput}
                 onChangeText={(t) => {
                   const cleaned = t.replace(/\D/g, '');
@@ -587,15 +547,14 @@ export default function FiltersScreen() {
                 }}
                 keyboardType="number-pad"
                 placeholder="0"
-                placeholderTextColor={palette.inkMuted}
-                style={{ flex: 1, fontSize: 15, fontWeight: '700', color: palette.ink }}
+                style={{ fontSize: 15, fontWeight: '700' }}
               />
-            </View>
 
             {/* Max Price Input */}
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
-              <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>до</Text>
-              <TextInput
+            <Input
+              size="md"
+              containerStyle={{ flex: 1 }}
+              before={<Text style={{ fontSize: 15, color: palette.inkMuted }}>до</Text>}
                 value={priceMaxInput}
                 onChangeText={(t) => {
                   const cleaned = t.replace(/\D/g, '');
@@ -620,10 +579,8 @@ export default function FiltersScreen() {
                 }}
                 keyboardType="number-pad"
                 placeholder="15 000"
-                placeholderTextColor={palette.inkMuted}
-                style={{ flex: 1, fontSize: 15, fontWeight: '700', color: palette.ink }}
+                style={{ fontSize: 15, fontWeight: '700' }}
               />
-            </View>
           </View>
 
           {/* Custom Range Slider */}
@@ -653,19 +610,17 @@ export default function FiltersScreen() {
               { value: areaMin, setter: setAreaMin, prefix: 'от', placeholder: '5' },
               { value: areaMax, setter: setAreaMax, prefix: 'до', placeholder: '10 000' },
             ].map((field) => (
-              <View
+              <Input
                 key={field.prefix}
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: palette.surface, borderRadius: 12, borderWidth: 1, borderColor: palette.line, paddingHorizontal: 16, height: 48 }}>
-                <Text style={{ fontSize: 15, color: palette.inkMuted, marginRight: 6 }}>{field.prefix}</Text>
-                <TextInput
-                  value={field.value}
-                  onChangeText={(text) => field.setter(text.replace(/\D/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder={field.placeholder}
-                  placeholderTextColor={palette.inkMuted}
-                  style={{ flex: 1, fontSize: 15, fontWeight: '700', color: palette.ink }}
-                />
-              </View>
+                size="md"
+                containerStyle={{ flex: 1 }}
+                before={<Text style={{ fontSize: 15, color: palette.inkMuted }}>{field.prefix}</Text>}
+                value={field.value}
+                onChangeText={(text) => field.setter(text.replace(/\D/g, ''))}
+                keyboardType="number-pad"
+                placeholder={field.placeholder}
+                style={{ fontSize: 15, fontWeight: '700' }}
+              />
             ))}
           </View>
         </View>
@@ -722,51 +677,7 @@ export default function FiltersScreen() {
             }}
           >
             <Text style={{ fontSize: 15, color: palette.ink }}>{formatGuests(guests)}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Меньше гостей"
-                disabled={guests <= 1}
-                onPress={() => setGuests((g) => Math.max(1, g - 1))}
-                style={[
-                  {
-                    width: 36,
-                    height: 36,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 18,
-                    borderWidth: 1,
-                    borderColor: palette.line,
-                  },
-                  guests <= 1 ? { opacity: 0.4 } : undefined,
-                ]}
-              >
-                <Ionicons name="remove" size={18} color={palette.ink} />
-              </Pressable>
-              <Text style={{ width: 24, textAlign: 'center', fontSize: 15, fontWeight: '600', color: palette.ink }}>
-                {guests}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Больше гостей"
-                disabled={guests >= 100}
-                onPress={() => setGuests((g) => Math.min(100, g + 1))}
-                style={[
-                  {
-                    width: 36,
-                    height: 36,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 18,
-                    borderWidth: 1,
-                    borderColor: palette.line,
-                  },
-                  guests >= 100 ? { opacity: 0.4 } : undefined,
-                ]}
-              >
-                <Ionicons name="add" size={18} color={palette.ink} />
-              </Pressable>
-            </View>
+            <Counter value={guests} min={1} max={100} onChange={setGuests} label="Количество гостей" />
           </View>
         </View>
         </MaterialSurface>

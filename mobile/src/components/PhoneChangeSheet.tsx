@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
@@ -143,7 +143,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
     }
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) return;
     setPhone(user?.phone ? formatPhoneMask(normalizePhoneDigits(user.phone)) : '');
     setStep('confirm');
@@ -336,28 +336,16 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
             : 'Телефон привязан к вашему аккаунту';
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} height={630}>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      height={630}
+      title={title}
+      subtitle={subtitle}
+      icon={step === 'success' ? 'checkmark' : step === 'reauth' ? 'shield-checkmark-outline' : 'call-outline'}
+      tone={step === 'success' ? 'success' : 'primary'}
+      bodyStyle={{ paddingTop: 12 }}>
       <View style={{ flex: 1 }}>
-          <View className="flex-row items-center gap-3">
-            <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-light">
-              <Ionicons
-                name={
-                  step === 'success'
-                    ? 'checkmark'
-                    : step === 'reauth'
-                      ? 'shield-checkmark-outline'
-                      : 'call-outline'
-                }
-                size={24}
-                color={step === 'success' ? palette.success : palette.primary}
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="text-xl font-extrabold text-ink">{title}</Text>
-              <Text className="mt-1 text-sm leading-5 text-ink-secondary">{subtitle}</Text>
-            </View>
-          </View>
-
           {step !== 'success' && step !== 'confirm' ? (
             <View className="mt-5 flex-row gap-2">
               <View className="h-1 flex-1 rounded-full bg-primary" />

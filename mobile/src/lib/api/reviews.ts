@@ -34,11 +34,11 @@ export function createReview(requestId: number, body: CreateReviewBody): Promise
   return api.post<Review>(`/api/v1/requests/${requestId}/review`, body);
 }
 
-export function useReviews(houseId: number | undefined, params: ListReviewsParams = {}) {
+export function useReviews(houseId: number | undefined, params: ListReviewsParams = {}, enabled = true) {
   return useQuery({
     queryKey: reviewKeys.list(houseId ?? 0, params),
     queryFn: () => fetchReviews(houseId as number, params),
-    enabled: houseId != null && houseId > 0,
+    enabled: enabled && houseId != null && houseId > 0,
     placeholderData: keepPreviousData,
   });
 }
@@ -55,11 +55,11 @@ export function fetchHostReviews(hostId: number, params: ListReviewsParams = {})
   });
 }
 
-export function useHostReviews(hostId: number | undefined, params: ListReviewsParams = {}) {
+export function useHostReviews(hostId: number | undefined, params: ListReviewsParams = {}, enabled = true) {
   return useQuery({
     queryKey: hostReviewKeys.list(hostId ?? 0, params),
     queryFn: () => fetchHostReviews(hostId as number, params),
-    enabled: hostId != null && hostId > 0,
+    enabled: enabled && hostId != null && hostId > 0,
     staleTime: 5 * 60 * 1000,
     placeholderData: keepPreviousData,
   });

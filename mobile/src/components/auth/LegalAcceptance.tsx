@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Text, View } from 'react-native';
 
+import { Checkbox } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface LegalAcceptanceProps {
@@ -28,24 +28,7 @@ function ConsentRow({
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
-        hitSlop={8}
-        onPress={() => onChange(!checked)}
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 7,
-          borderWidth: 1,
-          borderColor: checked ? palette.primary : palette.line,
-          backgroundColor: checked ? palette.primary : palette.surface,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginTop: 1,
-        }}>
-        {checked ? <Ionicons name="checkmark" size={17} color="#FFFFFF" /> : null}
-      </Pressable>
+      <Checkbox checked={checked} onCheckedChange={onChange} style={{ marginTop: 1 }} />
       <Text style={{ color: palette.inkSecondary, fontSize: 14, lineHeight: 20, flex: 1 }}>
         {label}{' '}
         <Text

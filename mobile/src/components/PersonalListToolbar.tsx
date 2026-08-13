@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
-import { BottomSheet, MaterialSurface, SearchField } from '@/components/ui';
+import { BottomSheet, SearchField, SelectionRow } from '@/components/ui';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import type { ListingLayoutMode } from '@/store/listing-layout';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -126,55 +126,26 @@ export function PersonalListToolbar<T extends string>({
       <BottomSheet
         visible={showSort && sortVisible}
         onClose={() => onSortVisibleChange(false)}
-        height={Math.min(560, 154 + sortOptions.length * 66)}>
-        <View className="flex-row items-center gap-3">
-          <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-light">
-            <Ionicons name="swap-vertical-outline" size={23} color={palette.primary} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-xl font-extrabold text-ink">Сортировка</Text>
-            <Text className="mt-1 text-sm text-ink-secondary">Выберите порядок отображения</Text>
-          </View>
-        </View>
-
-        <View className="mt-5 gap-2">
+        height={Math.min(520, 126 + sortOptions.length * 56)}
+        title="Сортировка"
+        subtitle="Выберите порядок отображения"
+        icon="swap-vertical-outline"
+        showClose={false}
+        bodyStyle={{ paddingTop: 8 }}>
+        <View style={{ gap: 6 }}>
           {sortOptions.map((option) => {
             const selected = option.value === sort;
             return (
-              <MaterialSurface key={option.value} level="raised" radius={18}>
-                <Pressable
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected }}
-                  onPress={() => {
-                    onSortChange(option.value);
-                    onSortVisibleChange(false);
-                  }}
-                  className="h-14 flex-row items-center px-3 active:opacity-75">
-                  <View className={`h-10 w-10 items-center justify-center rounded-full ${selected ? 'bg-primary-light' : 'bg-surface-muted'}`}>
-                    <Ionicons
-                      name={option.icon ?? 'reorder-three-outline'}
-                      size={20}
-                      color={selected ? palette.primary : palette.inkSecondary}
-                    />
-                  </View>
-                  <Text className={`ml-3 flex-1 text-base font-bold ${selected ? 'text-primary' : 'text-ink'}`} numberOfLines={1}>
-                    {option.label}
-                  </Text>
-                  <View
-                    style={{
-                      width: 22,
-                      height: 22,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 11,
-                      borderWidth: selected ? 0 : 1.5,
-                      borderColor: palette.line,
-                      backgroundColor: selected ? palette.primary : 'transparent',
-                    }}>
-                    {selected ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
-                  </View>
-                </Pressable>
-              </MaterialSurface>
+              <SelectionRow
+                key={option.value}
+                label={option.label}
+                icon={option.icon ?? 'reorder-three-outline'}
+                selected={selected}
+                onPress={() => {
+                  onSortChange(option.value);
+                  onSortVisibleChange(false);
+                }}
+              />
             );
           })}
         </View>

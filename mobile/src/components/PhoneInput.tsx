@@ -1,20 +1,20 @@
-import { useRef, useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRef } from 'react';
+import { Pressable, Text, TextInput } from 'react-native';
 
-import { useAppTheme } from '@/theme/useAppTheme';
+import { Input } from '@/components/ui/Input';
 import { formatPhoneMask } from '@/lib/phone';
+import { useAppTheme } from '@/theme/useAppTheme';
 
 interface PhoneInputProps {
   value: string;
-  onChange: (v: string) => void;
+  onChange: (value: string) => void;
   onBlur?: () => void;
   error?: string;
   autoFocus?: boolean;
 }
 
 export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }: PhoneInputProps) {
-  const { palette, isDark } = useAppTheme();
-  const [focused, setFocused] = useState(false);
+  const { palette } = useAppTheme();
   const inputRef = useRef<TextInput>(null);
 
   const handleChangeText = (text: string) => {
@@ -22,72 +22,37 @@ export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }
     onChange(formatPhoneMask(digits));
   };
 
-  const borderColor = error ? palette.danger : focused ? palette.primary : palette.line;
-
   return (
-    <View style={{ width: '100%' }}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={() => inputRef.current?.focus()}
-        style={{
-          height: 56,
-          flexDirection: 'row',
-          alignItems: 'center',
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor,
-          backgroundColor: isDark ? '#202329' : '#F0F1F3',
-          paddingHorizontal: 16,
-        }}>
-        <View
+    <Input
+      ref={inputRef}
+      autoFocus={autoFocus}
+      value={value}
+      onChangeText={handleChangeText}
+      onBlur={onBlur}
+      keyboardType="phone-pad"
+      autoComplete="tel"
+      textContentType="telephoneNumber"
+      placeholder="(999) 000-00-00"
+      maxLength={15}
+      error={error}
+      before={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Код страны Россия плюс семь"
+          hitSlop={8}
+          onPress={() => inputRef.current?.focus()}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             gap: 6,
-            paddingRight: 12,
             borderRightWidth: 1,
             borderRightColor: palette.line,
+            paddingRight: 12,
           }}>
           <Text style={{ fontSize: 19, lineHeight: 23 }}>🇷🇺</Text>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: '700',
-              color: focused ? palette.primary : palette.ink,
-            }}>
-            +7
-          </Text>
-        </View>
-
-        <TextInput
-          ref={inputRef}
-          autoFocus={autoFocus}
-          value={value}
-          onChangeText={handleChangeText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => {
-            setFocused(false);
-            onBlur?.();
-          }}
-          keyboardType="phone-pad"
-          placeholder="(999) 000-00-00"
-          placeholderTextColor={palette.inkMuted}
-          style={{
-            flex: 1,
-            height: '100%',
-            marginLeft: 12,
-            fontSize: 16,
-            color: palette.ink,
-          }}
-          maxLength={15}
-        />
-      </TouchableOpacity>
-
-      {error ? (
-        <Text style={{ marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontWeight: '500', color: palette.danger }}>
-          {error}
-        </Text>
-      ) : null}
-    </View>
+          <Text style={{ color: palette.ink, fontSize: 16, fontWeight: '700' }}>+7</Text>
+        </Pressable>
+      }
+    />
   );
 }

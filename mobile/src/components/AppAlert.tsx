@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { create } from 'zustand';
 
+import { DialogHeader, type DialogTone } from '@/components/ui/DialogHeader';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface AppAlertOptions {
@@ -225,6 +226,7 @@ export function AppAlertHost() {
     danger: { color: palette.danger, background: palette.dangerLight, icon: 'alert-circle-outline' },
     choice: { color: palette.primary, background: palette.primaryLight, icon: 'image-outline' },
   }[tone] as { color: string; background: string; icon: keyof typeof Ionicons.glyphMap };
+  const dialogTone: DialogTone = tone === 'info' || tone === 'choice' ? 'primary' : tone;
   const verticalButtons = request.buttons.length > 2;
   const primaryButtons = request.buttons.filter((button) => button.style !== 'cancel' && button.style !== 'destructive');
   const destructiveButtons = request.buttons.filter((button) => button.style === 'destructive');
@@ -338,7 +340,7 @@ export function AppAlertHost() {
             borderWidth: 1,
             borderColor: palette.line,
             backgroundColor: palette.surface,
-            padding: 20,
+            overflow: 'hidden',
             opacity,
             transform: [{ scale }],
             shadowColor: '#000000',
@@ -347,37 +349,15 @@ export function AppAlertHost() {
             shadowRadius: 24,
             elevation: 14,
           }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-            <View
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 22,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: toneStyle.background,
-              }}>
-              <Ionicons name={toneStyle.icon} size={23} color={toneStyle.color} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
-              <Text style={{ color: palette.ink, fontSize: 18, fontWeight: '800', lineHeight: 23 }}>
-                {request.title}
-              </Text>
-              {request.message ? (
-                <Text
-                  style={{
-                    marginTop: 6,
-                    color: palette.inkSecondary,
-                    fontSize: 14,
-                    lineHeight: 20,
-                  }}>
-                  {request.message}
-                </Text>
-              ) : null}
-            </View>
-          </View>
+          <DialogHeader
+            title={request.title}
+            description={request.message}
+            icon={toneStyle.icon}
+            tone={dialogTone}
+            showClose={false}
+          />
 
-          <View style={{ marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: palette.line }}>
+          <View style={{ paddingHorizontal: 18, paddingTop: 15, paddingBottom: 18 }}>
             {compactChoice ? (
               <View style={{ gap: 10 }}>
                 {renderAction(primaryButtons[0], request.buttons.indexOf(primaryButtons[0]))}

@@ -163,6 +163,7 @@ export function CollapsibleHeader({ children, controller, style }: CollapsibleHe
     >
       <View
         collapsable={false}
+        style={styles.content}
         onLayout={(event) => {
           const nextHeight = Math.ceil(event.nativeEvent.layout.height);
           if (nextHeight > 0 && nextHeight !== contentHeight) {
@@ -180,10 +181,16 @@ export function CollapsibleHeader({ children, controller, style }: CollapsibleHe
 const styles = StyleSheet.create({
   shell: {
     width: '100%',
+    alignSelf: 'stretch',
     flexShrink: 0,
     zIndex: 20,
     elevation: 8,
     overflow: 'hidden',
+  },
+  content: {
+    width: '100%',
+    minWidth: 0,
+    alignSelf: 'stretch',
   },
   measuringShell: {
     position: 'relative',

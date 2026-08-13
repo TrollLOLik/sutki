@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   RefreshControl,
@@ -12,12 +11,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BookingCard } from '@/components/BookingCard';
-import { NavigationBackButton } from '@/components/NavigationBackButton';
-import { EmptyState } from '@/components/EmptyState';
-import { CountedTabs } from '@/components/CountedTabs';
-import { HistoryBookingCard } from '@/components/HistoryBookingCard';
+import { BookingListSkeleton } from '@/components/DomainListSkeletons';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { Button } from '@/components/ui';
+import { AppHeader, Button, CountedTabs, EmptyState, LoadErrorState, Spinner } from '@/components/ui';
 import { useMyBookings } from '@/lib/api/bookings';
 import { ApiError } from '@/lib/api/client';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
@@ -92,8 +88,8 @@ export default function MyBookingsScreen() {
     }
   };
 
-  const rawActiveItems = activeQuery.data?.items ?? [];
-  const rawHistoryItems = historyQuery.data?.items ?? [];
+  const rawActiveItems = useMemo(() => activeQuery.data?.items ?? [], [activeQuery.data?.items]);
+  const rawHistoryItems = useMemo(() => historyQuery.data?.items ?? [], [historyQuery.data?.items]);
   const activeItems = useMemo(() => filterAndSortBookings(rawActiveItems, query, sort), [rawActiveItems, query, sort]);
   const historyItems = useMemo(() => filterAndSortBookings(rawHistoryItems, query, sort), [rawHistoryItems, query, sort]);
 
@@ -126,21 +122,11 @@ export default function MyBookingsScreen() {
     return (
       <View className="flex-1 bg-surface">
         <SafeAreaView edges={['top']} className="flex-1">
-          <View
-            className="h-[70px] flex-row items-center px-4"
-            style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
-            <NavigationBackButton
-              fallback="/(tabs)/profile"
-              size={48}
-              variant="material"
-            />
-            <Text className="flex-1 text-center text-xl font-extrabold text-ink">Мои брони</Text>
-            <View className="h-12 w-12" />
-          </View>
+          <AppHeader fallback="/(tabs)/profile" title="Мои брони" />
 
           {authStatus === 'loading' ? (
             <View className="flex-1 items-center justify-center">
-              <ActivityIndicator color={palette.primary} />
+              <Spinner label="Проверяем сессию" />
             </View>
           ) : (
             <View className="flex-1 gap-4 px-4">
@@ -165,17 +151,7 @@ export default function MyBookingsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View
-          className="h-[70px] flex-row items-center px-4"
-          style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
-          <NavigationBackButton
-            fallback="/(tabs)/profile"
-            size={48}
-            variant="material"
-          />
-          <Text className="flex-1 text-center text-xl font-extrabold text-ink">Мои брони</Text>
-          <View className="h-12 w-12" />
-        </View>
+        <AppHeader fallback="/(tabs)/profile" title="Мои брони" />
 
         <View className="flex-1 overflow-hidden">
         <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
@@ -202,20 +178,9 @@ export default function MyBookingsScreen() {
         </CollapsibleHeader>
 
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={palette.primary} />
-          </View>
+          <BookingListSkeleton />
         ) : isError ? (
-          <View className="flex-1 gap-4 px-4">
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Не удалось загрузить"
-              subtitle="Проверьте подключение и попробуйте снова."
-            />
-            <View className="px-8">
-              <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
-            </View>
-          </View>
+          <LoadErrorState title="Не удалось загрузить бронирования" onRetry={() => refetch()} />
         ) : (
           <ScrollView
             ref={horizontalScrollRef}
@@ -314,8 +279,9 @@ export default function MyBookingsScreen() {
                       ? 'Изменить отзыв'
                       : 'Оставить отзыв';
                     return (
-                      <HistoryBookingCard
+                      <BookingCard
                         booking={item}
+                        variant="history"
                         onPress={() => open(item)}
                         onRepeat={() => repeat(item)}
                         onReview={() => review(item)}

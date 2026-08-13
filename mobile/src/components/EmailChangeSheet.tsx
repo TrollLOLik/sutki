@@ -1,10 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, Text, TextInput, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
-import { Button } from '@/components/ui';
+import { BottomSheet, Button, Input } from '@/components/ui';
 import {
   requestReauthCode,
   useRequestNewEmailCode,
@@ -14,7 +13,6 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/cn';
 import { useSessionStore } from '@/store/session';
-import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 const CODE_LENGTH = 6;
@@ -107,10 +105,6 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   const requestNew = useRequestNewEmailCode();
   const confirmChange = useConfirmEmailChange();
 
-  // Animation values
-  const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(600)).current;
-
   // Input refs for automatic focus
   const hiddenInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
@@ -128,7 +122,8 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
     return () => clearInterval(id);
   }, [secondsNew]);
 
-  // Open/Reset animations and values
+  // Start every opening from a clean flow. BottomSheet owns the transition so
+  // stale step content cannot flash while a second modal is being mounted.
   useLayoutEffect(() => {
     if (visible) {
       // Always reset the session state when opening the sheet to start fresh
@@ -145,27 +140,8 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
       setError(null);
       setLocalEmailError(null);
 
-      fade.stopAnimation();
-      slide.stopAnimation();
-      fade.setValue(0);
-      slide.setValue(600);
     }
   }, [visible]);
-
-  const handleShow = () => {
-    requestAnimationFrame(() => {
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 0.4, duration: 250, useNativeDriver: true }),
-        Animated.spring(slide, {
-          toValue: 0,
-          damping: 26,
-          stiffness: 260,
-          mass: 1,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    });
-  };
 
   // Auto-focus inputs on step change
   useEffect(() => {
@@ -185,17 +161,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
   }, [step, codeSentOld, visible]);
 
   const handleClose = () => {
-    fade.stopAnimation();
-    slide.stopAnimation();
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(slide, {
-        toValue: 600,
-        duration: 200,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start(() => onClose());
+    onClose();
   };
 
   const handleRequestOldCode = async () => {
@@ -309,48 +275,35 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
 
   const handleLeftButtonPress = step === 'verify_old' && !codeSentOld ? handleClose : handleReset;
 
-  return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-      hardwareAccelerated
-      onShow={handleShow}
-      onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior="height"
-        automaticOffset
-        className="flex-1 justify-end">
-        {/* Backdrop */}
-        <Animated.View
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'black', opacity: fade }}
-        >
-          <Pressable style={{ flex: 1 }} onPress={handleClose} />
-        </Animated.View>
+  const sheetTitle =
+    step === 'verify_old'
+      ? 'Подтверждение аккаунта'
+      : step === 'input_new'
+        ? 'Новый адрес почты'
+        : step === 'verify_new'
+          ? 'Подтверждение почты'
+          : 'Почта изменена';
 
-        {/* Content Sheet */}
-        <Animated.View
-          style={{
-            transform: [{ translateY: slide }],
-            backgroundColor: palette.surface,
-            borderTopLeftRadius: radii.card,
-            borderTopRightRadius: radii.card,
-            height: '72%', // Keep sheet fixed tall to prevent keyboard squishing
-          }}
-          className="px-4 pb-8 pt-4"
-        >
-          {/* Top drag handle indicator */}
-          <View className="items-center pb-4">
-            <View className="h-1 w-12 rounded-full bg-line mb-3" />
-            <Text className="text-lg font-extrabold text-ink">
-              {step === 'verify_old' && 'Подтверждение текущей почты'}
-              {step === 'input_new' && 'Новый адрес почты'}
-              {step === 'verify_new' && 'Подтверждение новой почты'}
-              {step === 'success' && 'Успешно'}
-            </Text>
-          </View>
+  const sheetSubtitle =
+    step === 'verify_old'
+      ? 'Сначала подтвердите текущий способ входа'
+      : step === 'input_new'
+        ? 'Укажите адрес, который хотите привязать'
+        : step === 'verify_new'
+          ? 'Введите код из письма'
+          : 'Новый адрес привязан к аккаунту';
+
+  return (
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      height="72%"
+      title={sheetTitle}
+      subtitle={sheetSubtitle}
+      icon={step === 'success' ? 'checkmark-circle-outline' : 'mail-outline'}
+      tone={step === 'success' ? 'success' : 'primary'}
+      bodyStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+      <View className="flex-1">
 
           {/* Stepper bar */}
           {step !== 'success' ? (
@@ -459,28 +412,22 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
                 </Text>
 
                 <View className="gap-2">
-                  <View
-                    className={cn(
-                      'h-12 flex-row items-center rounded-field border px-3 bg-surface-muted',
-                      localEmailError ? 'border-danger' : 'border-line',
-                    )}
-                  >
-                    <Ionicons name="mail-outline" size={18} color={palette.primary} />
-                    <TextInput
-                      ref={emailInputRef}
-                      value={newEmail}
-                      onChangeText={(t) => {
-                        setNewEmail(t);
-                        setLocalEmailError(null);
-                      }}
-                      placeholder="new-email@example.com"
-                      placeholderTextColor={palette.inkMuted}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      className="ml-2 flex-1 text-base text-ink"
-                    />
-                  </View>
+                  <Input
+                    ref={emailInputRef}
+                    value={newEmail}
+                    onChangeText={(t) => {
+                      setNewEmail(t);
+                      setLocalEmailError(null);
+                    }}
+                    before={<Ionicons name="mail-outline" size={18} color={palette.primary} />}
+                    invalid={Boolean(localEmailError)}
+                    placeholder="new-email@example.com"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
                   {localEmailError ? (
                     <Text className="px-1 text-xs font-semibold text-danger mt-1.5">
                       {localEmailError}
@@ -646,8 +593,7 @@ export function EmailChangeSheet({ visible, onClose }: EmailChangeSheetProps) {
               <Button label="Отлично" size="md" className="w-full" onPress={handleClose} />
             )}
           </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Modal>
+      </View>
+    </BottomSheet>
   );
 }

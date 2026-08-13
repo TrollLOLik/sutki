@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View, ActivityIndicator } from 'react-native';
 
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
@@ -58,7 +58,6 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
   const [code, setCode] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
-  const [codeSent, setCodeSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Mutations
@@ -77,7 +76,7 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
     return () => clearInterval(id);
   }, [seconds]);
 
-  const handleStartCheck = async () => {
+  const handleStartCheck = useCallback(async () => {
     setError(null);
     setStep('checking');
     try {
@@ -91,22 +90,21 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
       setStep('confirm_warning'); // Fallback to let them request code, backend will still enforce bookings check
       setError(err instanceof ApiError ? err.message : 'Не удалось выполнить проверку бронирований.');
     }
-  };
+  }, [checkDelete]);
 
   // Start a clean deletion flow once per opening. Keeping this outside the
   // native modal's onShow prevents stale step content from flashing behind it.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (visible && !wasVisibleRef.current) {
       setStep('checking');
       setCode('');
       setDevCode(null);
       setSeconds(0);
-      setCodeSent(false);
       setError(null);
       void handleStartCheck();
     }
     wasVisibleRef.current = visible;
-  }, [visible]);
+  }, [handleStartCheck, visible]);
 
   // Auto-focus input on verify step
   useEffect(() => {
@@ -129,7 +127,6 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
       if (res.dev_code) {
         setDevCode(res.dev_code);
       }
-      setCodeSent(true);
       setStep('verify_code');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось отправить код подтверждения.');
@@ -153,7 +150,6 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
     setCode('');
     setDevCode(null);
     setSeconds(0);
-    setCodeSent(false);
     setError(null);
     handleStartCheck();
   };
@@ -163,52 +159,44 @@ export function AccountDeleteSheet({ visible, onClose }: AccountDeleteSheetProps
       title: 'Проверка аккаунта',
       subtitle: 'Проверяем, можно ли удалить профиль',
       icon: 'shield-checkmark-outline' as const,
-      color: palette.primary,
-      backgroundColor: palette.primaryLight,
     },
     active_bookings_blocked: {
       title: 'Удаление невозможно',
       subtitle: 'Сначала завершите активные действия',
       icon: 'alert-circle-outline' as const,
-      color: palette.danger,
-      backgroundColor: palette.dangerLight,
     },
     confirm_warning: {
       title: 'Удаление аккаунта',
       subtitle: 'Проверьте последствия перед продолжением',
       icon: 'trash-outline' as const,
-      color: palette.danger,
-      backgroundColor: palette.dangerLight,
     },
     verify_code: {
       title: 'Подтверждение удаления',
       subtitle: 'Введите код подтверждения',
       icon: 'key-outline' as const,
-      color: palette.primary,
-      backgroundColor: palette.primaryLight,
     },
     success: {
       title: 'Аккаунт удалён',
       subtitle: 'Удаление профиля завершено',
       icon: 'checkmark-circle-outline' as const,
-      color: palette.success,
-      backgroundColor: palette.successLight,
     },
   }[step];
 
   return (
-    <BottomSheet visible={visible} onClose={handleClose} height="78%">
-      <View className="flex-row items-center gap-3 pb-4">
-        <View
-          className="h-12 w-12 items-center justify-center rounded-full"
-          style={{ backgroundColor: header.backgroundColor }}>
-          <Ionicons name={header.icon} size={23} color={header.color} />
-        </View>
-        <View className="min-w-0 flex-1">
-          <Text className="text-xl font-extrabold text-ink">{header.title}</Text>
-          <Text className="mt-0.5 text-sm leading-5 text-ink-secondary">{header.subtitle}</Text>
-        </View>
-      </View>
+    <BottomSheet
+      visible={visible}
+      onClose={handleClose}
+      height="78%"
+      title={header.title}
+      subtitle={header.subtitle}
+      icon={header.icon}
+      tone={
+        step === 'success'
+          ? 'success'
+          : step === 'active_bookings_blocked' || step === 'confirm_warning'
+            ? 'danger'
+            : 'primary'
+      }>
 
       {/* Errors display */}
       {error ? (

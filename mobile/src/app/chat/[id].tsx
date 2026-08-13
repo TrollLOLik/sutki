@@ -1592,21 +1592,13 @@ export default function ChatDialogScreen() {
 			</View>
 
 			{/* Attachments bottom sheet */}
-			<BottomSheet visible={isAttachMenuVisible} onClose={() => setIsAttachMenuVisible(false)}>
+			<BottomSheet
+				visible={isAttachMenuVisible}
+				onClose={() => setIsAttachMenuVisible(false)}
+				title="Добавить в сообщение"
+				subtitle="Выберите тип вложения"
+				icon="attach-outline">
 				<View className="pt-1 pb-2">
-					<View className="mb-4 flex-row items-center justify-between">
-						<View className="min-w-0 flex-1">
-							<Text className="text-xl font-extrabold text-ink">Добавить в сообщение</Text>
-							<Text className="mt-1 text-sm text-ink-secondary">Выберите тип вложения</Text>
-						</View>
-						<IconButton
-							icon="close"
-							size={40}
-							iconSize={20}
-							onPress={() => setIsAttachMenuVisible(false)}
-							accessibilityLabel="Закрыть вложения"
-						/>
-					</View>
 					<View className="overflow-hidden rounded-[22px] border border-line bg-surface-muted">
 						{[
 							{ icon: 'camera-outline' as const, title: 'Камера', subtitle: 'Сделать снимок сейчас', action: takePhoto },

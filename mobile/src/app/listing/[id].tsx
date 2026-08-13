@@ -23,14 +23,13 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import YaMap, { Marker, Circle } from 'react-native-yamap-plus';
 
-import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import {
   getListingOwnerActionAvailability,
   ListingOwnerActions,
 } from '@/components/ListingOwnerActions';
 import { ResilientImage } from '@/components/ResilientImage';
-import { Button, IconButton, MaterialSurface, Skeleton, materialSurfaceColor } from '@/components/ui';
+import { Button, EmptyState, IconButton, MaterialSurface, Skeleton, materialSurfaceColor } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { useListingPublicationFlow } from '@/hooks/useListingPublicationFlow';

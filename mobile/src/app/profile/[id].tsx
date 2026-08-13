@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import {
@@ -10,24 +9,20 @@ import {
   ScrollView,
   Share,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
   useWindowDimensions,
   BackHandler,
+  type TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EmptyState } from '@/components/EmptyState';
 import { ListingCard } from '@/components/ListingCard';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
-import { ResilientImage } from '@/components/ResilientImage';
-import { Button, IconButton } from '@/components/ui';
+import { Button, EmptyState, IconButton, SearchField } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { ProfileHero, ProfileMetricGrid } from '@/components/profile/ProfileOverview';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
 import { filtersToListParams, useListings } from '@/lib/api/listings';
-import { formatRub } from '@/lib/format';
 import { useFiltersStore, countActiveFilters } from '@/store/filters';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
@@ -35,7 +30,6 @@ import { useHostResponseStats } from '@/lib/api/hostStats';
 import { usePublicProfile } from '@/lib/api/profiles';
 import { formatHostResponseTime } from '@/lib/formatHostStats';
 import { formatMemberSince } from '@/lib/formatMemberSince';
-import { shadows } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { requireAuth } from '@/lib/requireAuth';
@@ -55,7 +49,6 @@ export default function PublicProfileScreen() {
     avatarUrl,
     rating,
     city,
-    listingId,
   } = useLocalSearchParams<{
     id: string;
     name?: string;
@@ -65,7 +58,6 @@ export default function PublicProfileScreen() {
     avatarUrl?: string;
     rating?: string;
     city?: string;
-    listingId?: string;
   }>();
 
   const numericId = Number(id);
@@ -359,47 +351,15 @@ export default function PublicProfileScreen() {
 
           {/* Search & Filter Bar */}
           <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View
-              style={{
-                flex: 1,
-                height: 48,
-                marginRight: 10,
-                paddingHorizontal: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                borderRadius: 24,
-                borderWidth: 1,
-                borderColor: palette.line,
-                backgroundColor: palette.surface,
-                shadowColor: '#1A1A1A',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 6,
-                elevation: 3,
-              }}>
-              <Ionicons name="search" size={20} color={palette.inkMuted} />
-              <TextInput
-                ref={searchInputRef}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Поиск в профиле"
-                placeholderTextColor={palette.inkMuted}
-                style={{ flex: 1, paddingVertical: 0, marginLeft: 8, marginRight: 8, fontSize: 14, fontWeight: '500', color: palette.ink }}
-                returnKeyType="search"
-                onFocus={() => {
-                  setIsSearchFocused(true);
-                }}
-              />
-              {searchQuery.length > 0 && (
-                <Pressable
-                  onPress={() => setSearchQuery('')}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  className="h-8 w-8 items-center justify-center"
-                >
-                  <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-                </Pressable>
-              )}
-            </View>
+            <SearchField
+              ref={searchInputRef}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Поиск в профиле"
+              returnKeyType="search"
+              onFocus={() => setIsSearchFocused(true)}
+              containerStyle={{ flex: 1, marginRight: 10 }}
+            />
             <Animated.View
               style={{
                 width: filtersWidth,
@@ -562,187 +522,6 @@ export default function PublicProfileScreen() {
   );
 }
 
-/**
- * Custom listing card matching LK tokens: white card, large photo, shadows.card, pastel orange "Открыть" button.
- */
-function HostListingCard({
-  listing,
-  onPress,
-  isFavorite,
-  onToggleFavorite,
-}: {
-  listing: any;
-  onPress: () => void;
-  isFavorite: boolean;
-  onToggleFavorite: () => void;
-}) {
-  const { palette } = useAppTheme();
-  const { width: screenWidth } = useWindowDimensions();
-  const cardInnerWidth = screenWidth - 32;
-  const imgWidth = cardInnerWidth * 0.45;
-  const imgHeight = imgWidth * (3 / 4);
-
-  const getCardTitle = () => {
-    const roomsNum = parseInt(listing.rooms, 10);
-    if (isNaN(roomsNum) || roomsNum <= 0) {
-      return 'Современная студия';
-    }
-    return `Уютная ${roomsNum}-комн. квартира`;
-  };
-
-  const formatRoomsPlural = (rooms: string) => {
-    const n = parseInt(rooms, 10);
-    if (isNaN(n) || n <= 0) return 'Студия';
-    if (n === 1) return '1 комната';
-    if (n >= 2 && n <= 4) return `${n} комнаты`;
-    return `${n} комнат`;
-  };
-
-  const metroTime = (listing.id % 12) + 4;
-  const showSuccessBadge = listing.id % 2 === 0;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      className="mb-4 rounded-[24px] border border-line bg-surface p-3 active:opacity-95"
-      style={shadows.card}
-    >
-      <View className="flex-row gap-3">
-        {/* Left: Image with rounded corners */}
-        <View
-          style={{
-            width: imgWidth,
-            height: imgHeight,
-            borderRadius: 16,
-            overflow: 'hidden',
-            backgroundColor: palette.surfaceSkeleton,
-            position: 'relative',
-          }}
-        >
-          {showSuccessBadge ? (
-            <View
-              style={{
-                position: 'absolute',
-                left: 8,
-                top: 8,
-                borderRadius: 999,
-                backgroundColor: '#2EAD6B',
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                zIndex: 10,
-              }}
-            >
-              <Text style={{ fontSize: 8, fontWeight: '700', color: '#fff', lineHeight: 10 }}>
-                Свободно сегодня
-              </Text>
-            </View>
-          ) : (
-            <View
-              style={{
-                position: 'absolute',
-                left: 8,
-                top: 8,
-                borderRadius: 999,
-                backgroundColor: '#2F80ED',
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                zIndex: 10,
-              }}
-            >
-              <Text style={{ fontSize: 8, fontWeight: '700', color: '#fff', lineHeight: 10 }}>
-                Проверено
-              </Text>
-            </View>
-          )}
-
-          <ResilientImage
-            uri={listing.cover_url}
-            style={{ width: imgWidth, height: imgHeight }}
-            fallbackSize={32}
-            transition={150}
-          />
-        </View>
-
-        {/* Right: Details */}
-        <View className="flex-1 justify-between py-0.5">
-          <View className="gap-1">
-            {/* Rating & Favorite */}
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-1">
-                <Ionicons name="star" size={14} color="#FFB400" />
-                <Text className="text-xs font-bold text-ink">{listing.rating.toFixed(1).replace('.', ',')}</Text>
-                <Text className="text-xs text-ink-muted">({listing.reviews_count})</Text>
-              </View>
-              {onToggleFavorite ? (
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite();
-                  }}
-                  hitSlop={8}
-                >
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isFavorite ? palette.primary : palette.inkSecondary}
-                  />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            {/* Title */}
-            <Text numberOfLines={2} className="text-sm font-bold text-ink leading-tight">
-              {getCardTitle()}
-            </Text>
-
-            {/* Address */}
-            <Text numberOfLines={1} className="text-xs text-ink-secondary">
-              {listing.address}
-            </Text>
-
-            {/* Metro */}
-            <View className="flex-row items-center gap-1 mt-0.5">
-              <Text className="text-danger font-black text-xs leading-none">М</Text>
-              <Text numberOfLines={1} className="text-[11px] text-ink-secondary">
-                {listing.city}, {metroTime} мин
-              </Text>
-            </View>
-
-            {/* Specs */}
-            <View className="flex-row items-center gap-2.5 mt-1.5 flex-wrap">
-              <View className="flex-row items-center gap-0.5">
-                <Ionicons name="expand-outline" size={12} color={palette.inkMuted} />
-                <Text className="text-[10px] text-ink-secondary">{listing.area} м²</Text>
-              </View>
-              <View className="flex-row items-center gap-0.5">
-                <Ionicons name="bed-outline" size={12} color={palette.inkMuted} />
-                <Text numberOfLines={1} className="text-[10px] text-ink-secondary">
-                  {formatRoomsPlural(listing.rooms)}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Bottom Part: Price and Pastel Button */}
-      <View className="flex-row justify-between items-center mt-3 pt-1">
-        <View className="flex-row items-baseline gap-1">
-          <Text className="text-lg font-black text-ink">{formatRub(listing.price)} ₽</Text>
-          <Text className="text-xs text-ink-muted">/ ночь</Text>
-        </View>
-
-        <Pressable
-          onPress={onPress}
-          className="rounded-full bg-primary-light px-6 py-2.5 active:opacity-85"
-        >
-          <Text className="text-sm font-bold text-primary">Открыть</Text>
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-}
 
 const formatListingsPlural = (count: number) => {
   const mod10 = count % 10;

@@ -6,15 +6,13 @@ import { Controller, useForm } from 'react-hook-form';
 import {
 	Image,
 	Text,
-	TextInput,
 	TouchableOpacity,
 	View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import * as ImagePicker from 'expo-image-picker';
 
-import { Button, ScreenContainer } from '@/components/ui';
+import { Button, Input, PickerField, ScreenContainer } from '@/components/ui';
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
@@ -23,14 +21,10 @@ import { ApiError } from '@/lib/api/client';
 import { presignMediaUpload, uploadToS3 } from '@/lib/api/media';
 import { env } from '@/lib/env';
 import { useSessionStore } from '@/store/session';
-import { radii } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { User } from '@/types/user';
 import { getGlobalFromBooking, setGlobalFromBooking } from '@/lib/requireAuth';
 import { appAlert as Alert } from '@/components/AppAlert';
-
-// Mock Premium Avatar URL
-const MOCK_AVATAR_URL = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop';
 
 const detectCityByIP = async (): Promise<string | null> => {
   try {
@@ -313,38 +307,21 @@ export default function ProfileSetupScreen() {
               control={control}
               name="name"
               render={({ field: { onChange, onBlur, value } }) => (
-                <View
-                  className={`h-14 flex-row items-center rounded-field border bg-surface px-4 ${
-                    errors.name ? 'border-danger' : 'border-line'
-                  }`}
-                >
-                  <Ionicons
-                    name="person-outline"
-                    size={20}
-                    color={errors.name ? palette.primary : palette.inkMuted}
-                    style={{ marginRight: 10 }}
-                  />
-                  <TextInput
-                    placeholder="Имя"
-                    placeholderTextColor={palette.inkMuted}
-                    className="flex-1 text-base text-ink"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                  />
-                  {value.length > 0 ? (
-                    <TouchableOpacity onPress={() => setValue('name', '')}>
+                <Input
+                  icon="person-outline"
+                  placeholder="Имя"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.name?.message}
+                  after={value.length > 0 ? (
+                    <TouchableOpacity onPress={() => setValue('name', '')} hitSlop={8}>
                       <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
                     </TouchableOpacity>
                   ) : null}
-                </View>
+                />
               )}
             />
-            {errors.name ? (
-              <Text className="mt-1.5 px-1 text-xs font-medium text-danger">
-                {errors.name.message}
-              </Text>
-            ) : null}
           </View>
 
           {/* Surname input */}
@@ -353,98 +330,39 @@ export default function ProfileSetupScreen() {
               control={control}
               name="surname"
               render={({ field: { onChange, onBlur, value } }) => (
-                <View
-                  className={`h-14 flex-row items-center rounded-field border bg-surface px-4 ${
-                    errors.surname ? 'border-danger' : 'border-line'
-                  }`}
-                >
-                  <Ionicons
-                    name="person-outline"
-                    size={20}
-                    color={errors.surname ? palette.primary : palette.inkMuted}
-                    style={{ marginRight: 10 }}
-                  />
-                  <TextInput
-                    placeholder="Фамилия (необязательно)"
-                    placeholderTextColor={palette.inkMuted}
-                    className="flex-1 text-base text-ink"
-                    value={value || ''}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                  />
-                  {value && value.length > 0 ? (
-                    <TouchableOpacity onPress={() => setValue('surname', '')}>
+                <Input
+                  icon="person-outline"
+                  placeholder="Фамилия (необязательно)"
+                  value={value || ''}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.surname?.message}
+                  after={value && value.length > 0 ? (
+                    <TouchableOpacity onPress={() => setValue('surname', '')} hitSlop={8}>
                       <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
                     </TouchableOpacity>
                   ) : null}
-                </View>
+                />
               )}
             />
-            {errors.surname ? (
-              <Text className="mt-1.5 px-1 text-xs font-medium text-danger">
-                {errors.surname.message}
-              </Text>
-            ) : null}
           </View>
 
           {/* Birthday Input (Pressable) */}
-          <View className="w-full">
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={openDatePicker}
-              className="h-14 flex-row items-center rounded-field border border-line bg-surface px-4"
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={20}
-                color={palette.inkMuted}
-                style={{ marginRight: 10 }}
-              />
-              <Text
-                className={`flex-1 text-base ${
-                  birthdayVal ? 'text-ink' : 'text-ink-muted'
-                }`}
-              >
-                {birthdayVal ? formatBirthday(birthdayVal) : 'Дата рождения (необязательно)'}
-              </Text>
-              {birthdayVal ? (
-                <TouchableOpacity onPress={() => setValue('birthday', '')}>
-                  <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-                </TouchableOpacity>
-              ) : null}
-            </TouchableOpacity>
-          </View>
+          <PickerField
+            value={birthdayVal ? formatBirthday(birthdayVal) : null}
+            placeholder="Дата рождения (необязательно)"
+            icon="calendar-outline"
+            onPress={openDatePicker}
+          />
 
           {/* City Input (Pressable) */}
-          <View className="w-full">
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={openCityPicker}
-              className={`h-14 flex-row items-center rounded-field border bg-surface px-4 ${
-                errors.city ? 'border-danger' : 'border-line'
-              }`}
-            >
-              <Ionicons
-                name="location-outline"
-                size={20}
-                color={errors.city ? palette.primary : palette.inkMuted}
-                style={{ marginRight: 10 }}
-              />
-              <Text className={`flex-1 text-base ${cityVal ? 'text-ink' : 'text-ink-muted'}`}>
-                {cityVal || 'Город'}
-              </Text>
-              {cityVal ? (
-                <TouchableOpacity onPress={() => setValue('city', '')}>
-                  <Ionicons name="close-circle" size={18} color={palette.inkMuted} />
-                </TouchableOpacity>
-              ) : null}
-            </TouchableOpacity>
-            {errors.city ? (
-              <Text className="mt-1.5 px-1 text-xs font-medium text-danger">
-                {errors.city.message}
-              </Text>
-            ) : null}
-          </View>
+          <PickerField
+            value={cityVal}
+            placeholder="Город"
+            icon="location-outline"
+            error={errors.city?.message}
+            onPress={openCityPicker}
+          />
         </View>
       </KeyboardAwareForm>
 

@@ -12,8 +12,7 @@ import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
 import { goBackOrReplace } from '@/lib/navigation';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
-import { Button, MaterialSurface } from '@/components/ui';
-import { EmptyState } from '@/components/EmptyState';
+import { Button, EmptyState, MaterialSurface } from '@/components/ui';
 
 function OrangePin() {
   return (

@@ -1,26 +1,21 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
-import { NavigationBackButton } from '@/components/NavigationBackButton';
 
-import { EmptyState } from '@/components/EmptyState';
-import { CountedTabs } from '@/components/CountedTabs';
-import { IncomingRequestCard } from '@/components/IncomingRequestCard';
+import { BookingCard } from '@/components/BookingCard';
+import { BookingListSkeleton } from '@/components/DomainListSkeletons';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { BottomSheet, Button } from '@/components/ui';
+import { AppHeader, BottomSheet, Button, CountedTabs, DialogActions, EmptyState, LoadErrorState, TextArea } from '@/components/ui';
 import {
   bookingKeys,
   useConfirmBooking,
@@ -162,17 +157,7 @@ export default function IncomingBookingsScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} className="flex-1">
-        <View
-          className="h-[70px] flex-row items-center px-4"
-          style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
-          <NavigationBackButton
-            fallback="/(tabs)/profile"
-            size={48}
-            variant="material"
-          />
-          <Text className="flex-1 text-center text-xl font-extrabold text-ink">Входящие заявки</Text>
-          <View className="h-12 w-12" />
-        </View>
+        <AppHeader fallback="/(tabs)/profile" title="Входящие заявки" />
 
         <View className="flex-1 overflow-hidden">
         <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: palette.surface }}>
@@ -199,20 +184,9 @@ export default function IncomingBookingsScreen() {
         </CollapsibleHeader>
 
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={palette.primary} />
-          </View>
+          <BookingListSkeleton />
         ) : isError ? (
-          <View className="flex-1 gap-4 px-4">
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Не удалось загрузить"
-              subtitle="Проверьте подключение и попробуйте снова."
-            />
-            <View className="px-8">
-              <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
-            </View>
-          </View>
+          <LoadErrorState title="Не удалось загрузить заявки" onRetry={() => refetch()} />
         ) : (
           <ScrollView
             ref={horizontalScrollRef}
@@ -260,8 +234,9 @@ export default function IncomingBookingsScreen() {
                     />
                   }
                   renderItem={({ item }) => (
-                    <IncomingRequestCard
+                    <BookingCard
                       booking={item}
+                      variant="incoming"
                       onPress={() =>
                         router.push({ pathname: '/incoming/[id]', params: { id: String(item.id) } })
                       }
@@ -313,8 +288,9 @@ export default function IncomingBookingsScreen() {
                     />
                   }
                   renderItem={({ item }) => (
-                    <IncomingRequestCard
+                    <BookingCard
                       booking={item}
+                      variant="incoming"
                       onPress={() =>
                         router.push({ pathname: '/incoming/[id]', params: { id: String(item.id) } })
                       }
@@ -346,52 +322,14 @@ export default function IncomingBookingsScreen() {
         onClose={() => {
           setRejectionTarget(null);
           setReason('');
-        }}>
-        <View style={{ gap: 18 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: palette.dangerLight,
-              }}>
-              <Ionicons name="close-circle-outline" size={23} color={palette.danger} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: palette.ink }}>Отклонить заявку</Text>
-              <Text style={{ fontSize: 13, lineHeight: 18, color: palette.inkSecondary }}>
-                Причина поможет гостю понять ваше решение
-              </Text>
-            </View>
-          </View>
-
-          <TextInput
-            placeholder="Причина отклонения (необязательно)"
-            value={reason}
-            onChangeText={setReason}
-            multiline
-            autoFocus
-            placeholderTextColor={palette.inkMuted}
-            style={{
-              minHeight: 112,
-              borderWidth: 1,
-              borderColor: palette.line,
-              borderRadius: 18,
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              backgroundColor: palette.surfaceMuted,
-              fontSize: 15,
-              lineHeight: 21,
-              color: palette.ink,
-              textAlignVertical: 'top',
-            }}
-          />
-
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}>
+        }}
+        title="Отклонить заявку"
+        subtitle="Причина поможет гостю понять ваше решение"
+        icon="close-circle-outline"
+        tone="danger"
+        footer={
+          <DialogActions
+            secondary={
               <Button
                 label="Назад"
                 variant="secondary"
@@ -401,18 +339,26 @@ export default function IncomingBookingsScreen() {
                   setReason('');
                 }}
               />
-            </View>
-            <View style={{ flex: 1 }}>
+            }
+            primary={
               <Button
                 label="Отклонить"
-                variant="danger"
+                mode="outline"
+                tone="danger"
                 size="md"
                 loading={rejectMutation.isPending}
                 onPress={handleRejectSubmit}
               />
-            </View>
-          </View>
-        </View>
+            }
+          />
+        }>
+        <TextArea
+          placeholder="Причина отклонения (необязательно)"
+          value={reason}
+          onChangeText={setReason}
+          autoFocus
+          minHeight={112}
+        />
       </BottomSheet>
     </View>
   );

@@ -1,23 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
-import { Button, MaterialSurface } from '@/components/ui';
+import { AppHeader, Button, InlineAlert, MaterialSurface, StickyActionBar, TextArea } from '@/components/ui';
 import { useCreateReview, useReviewEligibility } from '@/lib/api/reviews';
 import { ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
-import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { reportInvariant } from '@/lib/observability';
 
 const MAX_BODY = 1500;
@@ -34,7 +31,6 @@ export default function LeaveReviewScreen() {
   const { palette, isDark } = useAppTheme();
   const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
   const headerBackground = isDark ? '#14161B' : '#FFFFFF';
-  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const numericId = Number(id);
   const createReview = useCreateReview(numericId);
@@ -44,7 +40,6 @@ export default function LeaveReviewScreen() {
   const [rating, setRating] = useState(0);
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [isFocused, setIsFocused] = useState(false);
   const reportedRequestMismatch = useRef<string | null>(null);
 
   useEffect(() => {
@@ -103,23 +98,19 @@ export default function LeaveReviewScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: headerBackground }}>
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: headerBackground }}>
-        <View style={styles.header}>
-          <BlurView intensity={88} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)' }]} />
-          <NavigationBackButton fallback="/bookings" size={48} variant="material" />
-          <Text className="text-xl font-extrabold text-ink" style={styles.headerTitle}>
-            {elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
-              ? 'Изменить отзыв'
-              : 'Оставить отзыв'}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <AppHeader
+          blurred
+          fallback="/bookings"
+          title={elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review'
+            ? 'Изменить отзыв'
+            : 'Оставить отзыв'}
+        />
 
         <KeyboardAwareForm
           rootStyle={{ backgroundColor: screenBackground }}
           contentContainerStyle={styles.scrollContent}
           footer={(
-            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12), backgroundColor: isDark ? 'rgba(20,22,27,0.97)' : 'rgba(255,255,255,0.97)', borderColor: palette.line }]}>
+            <StickyActionBar>
               <Text
                 className={error ? 'text-danger' : 'text-ink-muted'}
                 style={styles.footerHint}
@@ -141,14 +132,13 @@ export default function LeaveReviewScreen() {
                 }
                 onPress={onSubmit}
               />
-            </View>
+            </StickyActionBar>
           )}>
 
             {elig?.review_status === 'rejected' && elig.rejection_reason ? (
-              <MaterialSurface level="raised" radius={18} style={[styles.notice, { backgroundColor: isDark ? 'rgba(255,77,79,0.10)' : 'rgba(255,77,79,0.07)' }]}>
-                <Text className="text-sm font-extrabold text-danger">Причина отклонения предыдущего отзыва:</Text>
-                <Text className="text-xs text-danger/90 leading-relaxed">{elig.rejection_reason}</Text>
-              </MaterialSurface>
+              <InlineAlert tone="danger" title="Причина отклонения предыдущего отзыва">
+                {elig.rejection_reason}
+              </InlineAlert>
             ) : null}
 
             {elig?.review_status === 'rejected' || elig?.review_status === 'moderation_review' ? (
@@ -220,26 +210,17 @@ export default function LeaveReviewScreen() {
                 ))}
               </View>
 
-              <View className="gap-2">
-                <TextInput
-                  value={body}
-                  onChangeText={(value) => {
-                    setBody(value);
-                    setError(null);
-                  }}
-                  multiline
-                  maxLength={MAX_BODY}
-                  onFocus={() => setIsFocused(true)}
-                  onBlur={() => setIsFocused(false)}
-                  placeholder="Напишите ваш отзыв..."
-                  placeholderTextColor={palette.inkMuted}
-                  className="text-base text-ink"
-                  style={[styles.input, { backgroundColor: palette.surface, borderColor: isFocused ? palette.primary : palette.line, borderWidth: isFocused ? 2 : 1 }]}
-                />
-                <Text className="text-right text-xs text-ink-muted">
-                  {body.length} / {MAX_BODY}
-                </Text>
-              </View>
+              <TextArea
+                value={body}
+                onChangeText={(value) => {
+                  setBody(value);
+                  setError(null);
+                }}
+                maxLength={MAX_BODY}
+                minHeight={190}
+                showCount
+                placeholder="Напишите ваш отзыв..."
+              />
             </MaterialSurface>
 
         </KeyboardAwareForm>
@@ -340,13 +321,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
-  },
-  input: {
-    minHeight: 150,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    textAlignVertical: 'top',
   },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,

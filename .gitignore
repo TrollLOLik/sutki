@@ -16,3 +16,18 @@ yarn-error.log*
 .gocache/
 .pnpm-store/
 /deploy/.env.production
+
+# Imported legacy website: keep its former repository and runtime data local.
+/public_html/.git.disabled/
+/public_html/.env
+/public_html/.idea/
+/public_html/.vscode/
+/public_html/.npm-cache/
+/public_html/build/
+/public_html/upload_files/
+/public_html/public/upload_files/
+/public_html/public/build.7z
+/public_html/src/EventSubscriber.7z
+
+# Local Codex design/review scratch files.
+/.codex-temp/

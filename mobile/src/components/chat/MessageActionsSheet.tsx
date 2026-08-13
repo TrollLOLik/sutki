@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { BottomSheet, IconButton } from '@/components/ui';
+import { BottomSheet } from '@/components/ui';
 
 /**
  * Окна правки и удаления. Обязаны совпадать с MessageEditWindow и
@@ -139,28 +139,13 @@ export function MessageActionsSheet({
 	}, [actions, message, onCopy, onDelete, onEdit, onReply]);
 
 	return (
-		<BottomSheet visible={!!message} onClose={onClose}>
+		<BottomSheet
+			visible={!!message}
+			onClose={onClose}
+			title="Действия с сообщением"
+			subtitle={message?.body || 'Вложение'}
+			icon="ellipsis-horizontal-outline">
 			<View className="pt-1 pb-2">
-				<View className="mb-4 flex-row items-center justify-between">
-					<View className="min-w-0 flex-1">
-						<Text className="text-xl font-extrabold text-ink">Действия с сообщением</Text>
-						{message?.body ? (
-							<Text numberOfLines={1} className="mt-1 text-sm text-ink-secondary">
-								{message.body}
-							</Text>
-						) : (
-							<Text className="mt-1 text-sm text-ink-secondary">Вложение</Text>
-						)}
-					</View>
-					<IconButton
-						icon="close"
-						size={40}
-						iconSize={20}
-						onPress={onClose}
-						accessibilityLabel="Закрыть действия"
-					/>
-				</View>
-
 				<View className="overflow-hidden rounded-[22px] border border-line bg-surface-muted">
 					{rows.map((row, index) => (
 						<TouchableOpacity

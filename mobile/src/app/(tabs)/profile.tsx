@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Animated, Dimensions, Easing, Image, Linking, Modal, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { Animated, Dimensions, Easing, Image, Linking, Modal, Pressable, ScrollView, Text, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
@@ -11,7 +11,15 @@ import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { PhoneChangeSheet } from '@/components/PhoneChangeSheet';
 import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
-import { Button, IconButton, Input, MaterialSurface } from '@/components/ui';
+import {
+  Button,
+  DialogActions,
+  Field,
+  IconButton,
+  Input,
+  MaterialSurface,
+  PickerField as UiPickerField,
+} from '@/components/ui';
 import {
   ProfileActionGroup,
   ProfileHero,
@@ -98,8 +106,7 @@ function EditableField({
   keyboardType?: 'default' | 'phone-pad';
 }) {
   return (
-    <View className="gap-2">
-      <Text className="px-1 text-sm font-bold text-ink-secondary">{label}</Text>
+    <Field label={label}>
       <Input
         value={value}
         onChangeText={onChangeText}
@@ -107,7 +114,7 @@ function EditableField({
         placeholder={placeholder}
         keyboardType={keyboardType}
       />
-    </View>
+    </Field>
   );
 }
 
@@ -117,52 +124,40 @@ function PickerField({
   placeholder,
   icon,
   onPress,
-  count = 0,
 }: {
   label: string;
   value: string;
   placeholder: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
-  count?: number;
 }) {
-  const { palette } = useAppTheme();
   return (
-    <View className="gap-2">
-      <Text className="px-1 text-sm font-bold text-ink-secondary">{label}</Text>
-      <Pressable
-        onPress={onPress}
-        className="h-14 flex-row items-center rounded-[18px] border border-line bg-surface-muted px-4 active:opacity-80">
-        <Ionicons name={icon} size={20} color={palette.primary} />
-        <Text className={`ml-3 flex-1 text-base ${value ? 'text-ink' : 'text-ink-muted'}`} numberOfLines={1}>
-          {value || placeholder}
-        </Text>
-        <Ionicons name="chevron-forward" size={19} color={palette.inkMuted} />
-      </Pressable>
-    </View>
+    <UiPickerField
+      label={label}
+      value={value}
+      placeholder={placeholder}
+      icon={icon}
+      onPress={onPress}
+    />
   );
 }
 
 function PhonePickerField({ value, onPress }: { value?: string | null; onPress: () => void }) {
-  const { palette } = useAppTheme();
   const masked = value ? formatPhoneMask(normalizePhoneDigits(value)) : '';
 
   return (
-    <View className="gap-2">
-      <Text className="px-1 text-sm font-bold text-ink-secondary">Телефон</Text>
-      <Pressable
-        onPress={onPress}
-        className="h-14 flex-row items-center rounded-[18px] border border-line bg-surface-muted px-4 active:opacity-80">
+    <UiPickerField
+      label="Телефон"
+      value={masked}
+      placeholder="(999) 000-00-00"
+      onPress={onPress}
+      before={
         <View className="flex-row items-center border-r border-line pr-3">
           <Text style={{ fontSize: 19, lineHeight: 23 }}>🇷🇺</Text>
           <Text className="ml-1.5 text-base font-bold text-ink">+7</Text>
         </View>
-        <Text className={`ml-3 flex-1 text-base ${masked ? 'text-ink' : 'text-ink-muted'}`} numberOfLines={1}>
-          {masked || '(999) 000-00-00'}
-        </Text>
-        <Ionicons name="chevron-forward" size={19} color={palette.inkMuted} />
-      </Pressable>
-    </View>
+      }
+    />
   );
 }
 
@@ -1187,16 +1182,20 @@ export default function ProfileScreen() {
                 </ScrollView>
               </ScrollView>
 
-              <View className="mt-4 flex-row gap-3">
-                <Button label="Позже" variant="secondary" size="md" className="flex-1" onPress={closeSettings} />
-                <Button
-                  label="Сохранить"
-                  size="md"
-                  className="flex-1"
-                  loading={updateMe.isPending}
-                  onPress={handleSaveProfile}
-                />
-              </View>
+              <DialogActions
+                style={{ marginTop: 16 }}
+                reset={<Button label="Позже" mode="soft" tone="neutral" size="md" onPress={closeSettings} />}
+                primary={
+                  <Button
+                    label="Сохранить"
+                    mode="solid"
+                    tone="primary"
+                    size="md"
+                    loading={updateMe.isPending}
+                    onPress={handleSaveProfile}
+                  />
+                }
+              />
         </SafeAreaView>
 
         <CityPickerSheet

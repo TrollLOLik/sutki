@@ -1,18 +1,15 @@
 import { addDays, format, parseISO } from 'date-fns';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EmptyState } from '@/components/EmptyState';
-import { CountedTabs } from '@/components/CountedTabs';
 import { ListingCard } from '@/components/ListingCard';
 import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { Button } from '@/components/ui';
+import { AppHeader, Button, CountedTabs, EmptyState } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useIncomingBookings } from '@/lib/api/bookings';
 import { useListingPublicationFlow } from '@/hooks/useListingPublicationFlow';
@@ -20,7 +17,6 @@ import { useFavoriteIds } from '@/lib/api/favorites';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 import type { ListingCard as ListingCardType } from '@/types/listing';
-import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
 import {
   countActiveFilters,
@@ -37,11 +33,11 @@ const SORT_OPTIONS: SortOption<ListingSort>[] = [
   { value: 'popular', label: 'Сначала популярные', icon: 'eye-outline' },
 ];
 
-const QUICK_STATUSES: Array<{
+const QUICK_STATUSES: {
   key: string;
   label: string;
   statuses: MyListingStatus[];
-}> = [
+}[] = [
   { key: 'all', label: 'Все', statuses: [] },
   { key: 'active', label: 'В поиске', statuses: ['active'] },
   { key: 'pending', label: 'На проверке', statuses: ['pending_moderation', 'moderation_review'] },
@@ -151,46 +147,19 @@ export default function MyListingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: screenBackground }}>
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: headerBackground }}>
-        <View
-          style={{
-            minHeight: 68,
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            overflow: 'hidden',
-          }}
-        >
-          <BlurView
-            intensity={88}
-            tint={isDark ? 'dark' : 'light'}
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-          />
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
-              backgroundColor: isDark ? 'rgba(20,22,27,0.72)' : 'rgba(255,255,255,0.72)',
-            }}
-          />
-          <NavigationBackButton
-            fallback="/(tabs)/profile"
-            size={48}
-            variant="material"
-          />
-          <Text className="flex-1 text-center text-xl font-extrabold text-ink">Мои объявления</Text>
-          <Pressable
-            accessibilityLabel="Разместить объявление"
-            onPress={() => router.push('/create')}
-            className="h-12 w-12 items-center justify-center rounded-full border border-line bg-surface active:opacity-70"
-          >
-            <Ionicons name="add" size={24} color={palette.primary} />
-          </Pressable>
-        </View>
+        <AppHeader
+          blurred
+          fallback="/(tabs)/profile"
+          title="Мои объявления"
+          actions={(
+            <Pressable
+              accessibilityLabel="Разместить объявление"
+              onPress={() => router.push('/create')}
+              className="h-12 w-12 items-center justify-center rounded-full border border-line bg-surface active:opacity-70">
+              <Ionicons name="add" size={24} color={palette.primary} />
+            </Pressable>
+          )}
+        />
 
         <View style={{ flex: 1, overflow: 'hidden', paddingTop: 8, backgroundColor: screenBackground }}>
           <CollapsibleHeader controller={collapsibleHeader} style={{ backgroundColor: screenBackground }}>

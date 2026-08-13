@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { BottomSheet, Button, MaterialSurface } from '@/components/ui';
+import { BottomSheet, Button, DialogActions, MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 const MONTH_NAMES = [
@@ -74,7 +73,7 @@ function indexFromOffset(offset: number, length: number) {
 
 export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }: BirthdayPickerSheetProps) {
   const { palette } = useAppTheme();
-  const cutoff = useMemo(() => adultBirthdayCutoff(), [visible]);
+  const cutoff = useMemo(() => adultBirthdayCutoff(), []);
   const maxYear = cutoff.getFullYear();
   const initial = parseInitial(initialValue, cutoff);
   const [day, setDay] = useState(initial.d);
@@ -104,7 +103,7 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
     dayRef.current?.scrollTo({ y: (daysCount - 1) * ROW_HEIGHT, animated: true });
   }, [day, daysCount]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!visible) return;
     const next = parseInitial(initialValue, cutoff);
     setDay(next.d);
@@ -151,23 +150,23 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} height={430}>
-      <View className="flex-row items-center gap-3">
-        <View className="h-12 w-12 items-center justify-center rounded-full bg-primary-light">
-          <Ionicons name="calendar-outline" size={23} color={palette.primary} />
-        </View>
-        <View className="flex-1">
-          <Text className="text-xl font-extrabold text-ink">Дата рождения</Text>
-          <Text className="mt-1 text-sm text-ink-secondary" numberOfLines={1}>
-            {day} {MONTH_NAMES[month]} {year}
-          </Text>
-        </View>
-      </View>
-
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      height={468}
+      title="Дата рождения"
+      subtitle={`${day} ${MONTH_NAMES[month]} ${year}`}
+      icon="calendar-outline"
+      footer={
+        <DialogActions
+          secondary={<Button label="Отмена" variant="secondary" size="md" onPress={onClose} />}
+          primary={<Button label="Применить" size="md" onPress={apply} />}
+        />
+      }>
       <MaterialSurface
         level="raised"
         radius={24}
-        style={{ height: 214, marginTop: 20, overflow: 'hidden', paddingHorizontal: 12 }}>
+        style={{ height: 214, overflow: 'hidden', paddingHorizontal: 12 }}>
         <View
           pointerEvents="none"
           style={{
@@ -256,10 +255,6 @@ export function BirthdayPickerSheet({ visible, onClose, onApply, initialValue }:
         </View>
       </MaterialSurface>
 
-      <View className="mt-auto flex-row gap-3 pt-5">
-        <Button label="Отмена" variant="secondary" size="md" className="flex-1" onPress={onClose} />
-        <Button label="Применить" size="md" className="flex-1" onPress={apply} />
-      </View>
     </BottomSheet>
   );
 }

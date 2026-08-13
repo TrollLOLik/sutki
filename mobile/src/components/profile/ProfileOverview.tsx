@@ -8,10 +8,9 @@ import {
   Text,
   TouchableOpacity,
   View,
-  type ViewStyle,
 } from 'react-native';
 
-import { MaterialSurface } from '@/components/ui/MaterialSurface';
+import { Card, ListCell, MaterialSurface } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ProfileMetric {
@@ -195,7 +194,7 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
   }, []);
 
   return (
-    <MaterialSurface level="raised" radius={24} style={styles.metricGrid}>
+    <Card level="raised" radius={24} padding="none" style={styles.metricGrid}>
       {rows.map((row, rowIndex) => (
         <View
           key={`metric-row-${rowIndex}`}
@@ -258,7 +257,7 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
           {row.length === 1 ? <View style={styles.metricCellSpacer} /> : null}
         </View>
       ))}
-    </MaterialSurface>
+    </Card>
   );
 }
 
@@ -274,47 +273,42 @@ export function ProfileActionGroup({
   return (
     <View style={styles.section}>
       {title ? <Text style={[styles.sectionTitle, { color: palette.ink }]}>{title}</Text> : null}
-      <MaterialSurface level="raised" radius={24} style={styles.actionGroup}>
+      <Card level="raised" radius={24} padding="none" style={styles.actionGroup}>
         {items.map((item, index) => {
           const iconColor = item.tone === 'danger' ? palette.danger : palette.primary;
           const iconBackground = item.tone === 'danger' ? palette.dangerLight : palette.primaryLight;
           return (
             <View key={item.title}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                activeOpacity={0.66}
+              <ListCell
                 disabled={item.disabled}
                 onPress={item.onPress}
-                style={[styles.actionRow, item.disabled ? { opacity: 0.48 } : null]}>
-                <View style={[styles.actionIcon, { backgroundColor: iconBackground }]}>
-                  <Ionicons name={item.icon} size={21} color={iconColor} />
-                </View>
-                <View style={styles.actionCopy}>
-                  <Text numberOfLines={1} style={[styles.actionTitle, { color: palette.ink }]}>
-                    {item.title}
-                  </Text>
-                  <Text numberOfLines={2} style={[styles.actionSubtitle, { color: palette.inkSecondary }]}>
-                    {item.subtitle}
-                  </Text>
-                </View>
-                {item.count && item.count > 0 ? (
-                  <View style={[styles.counter, { backgroundColor: palette.primary }]}>
-                    <Text style={styles.counterText}>{item.count > 99 ? '99+' : item.count}</Text>
+                multiline
+                style={styles.actionRow}
+                before={
+                  <View style={[styles.actionIcon, { backgroundColor: iconBackground }]}>
+                    <Ionicons name={item.icon} size={21} color={iconColor} />
                   </View>
-                ) : null}
-                <Ionicons
-                  name={item.disabled ? 'lock-closed-outline' : 'chevron-forward'}
-                  size={19}
-                  color={palette.inkMuted}
-                />
-              </TouchableOpacity>
+                }
+                title={item.title}
+                subtitle={item.subtitle}
+                chevron={!item.disabled}
+                after={
+                  item.disabled ? (
+                    <Ionicons name="lock-closed-outline" size={19} color={palette.inkMuted} />
+                  ) : item.count && item.count > 0 ? (
+                    <View style={[styles.counter, { backgroundColor: palette.primary }]}>
+                      <Text style={styles.counterText}>{item.count > 99 ? '99+' : item.count}</Text>
+                    </View>
+                  ) : null
+                }
+              />
               {index < items.length - 1 ? (
                 <View style={[styles.separator, { backgroundColor: palette.line }]} />
               ) : null}
             </View>
           );
         })}
-      </MaterialSurface>
+      </Card>
     </View>
   );
 }
@@ -324,9 +318,9 @@ export function ProfileInfoPanel({ children, title }: { children: ReactNode; tit
   return (
     <View style={styles.section}>
       {title ? <Text style={[styles.sectionTitle, { color: palette.ink }]}>{title}</Text> : null}
-      <MaterialSurface level="raised" radius={24} style={styles.infoPanel}>
+      <Card level="raised" radius={24} padding="md">
         {children}
-      </MaterialSurface>
+      </Card>
     </View>
   );
 }
@@ -510,11 +504,6 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 12,
   },
   actionIcon: {
     width: 44,
@@ -522,21 +511,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  actionTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '800',
-  },
-  actionSubtitle: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
   },
   separator: {
     height: StyleSheet.hairlineWidth,
@@ -554,8 +528,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
-  },
-  infoPanel: {
-    padding: 16,
   },
 });

@@ -10,16 +10,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { appAlert as Alert } from '@/components/AppAlert';
-import { EmptyState } from '@/components/EmptyState';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
-import { BottomSheet, Button, MaterialSurface } from '@/components/ui';
+import { BottomSheet, Button, DialogActions, EmptyState, MaterialSurface, TextArea } from '@/components/ui';
 import { useBooking, useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
@@ -27,7 +25,7 @@ import { bookingStatusMeta, isPending } from '@/lib/booking-status';
 import { formatGuests, formatNights, formatReviewsCount, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 
-function fullName(parts: Array<string | undefined>): string {
+function fullName(parts: (string | undefined)[]): string {
   return parts.map((part) => part?.trim()).filter(Boolean).join(' ') || 'Гость';
 }
 
@@ -347,35 +345,26 @@ export default function IncomingBookingDetailScreen() {
             ) : null}
           </SafeAreaView>
 
-          <BottomSheet visible={rejecting} onClose={() => { setRejecting(false); setReason(''); }}>
-            <View style={styles.sheetContent}>
-              <View style={styles.sheetHeader}>
-                <View style={[styles.sheetIcon, { backgroundColor: palette.dangerLight }]}>
-                  <Ionicons name="close-circle-outline" size={23} color={palette.danger} />
-                </View>
-                <View style={styles.sheetCopy}>
-                  <Text style={[styles.sheetTitle, { color: palette.ink }]}>Отклонить заявку</Text>
-                  <Text style={[styles.sheetSubtitle, { color: palette.inkSecondary }]}>Причина поможет гостю понять ваше решение</Text>
-                </View>
-              </View>
-              <TextInput
-                placeholder="Причина отклонения (необязательно)"
-                placeholderTextColor={palette.inkMuted}
-                value={reason}
-                onChangeText={setReason}
-                multiline
-                autoFocus
-                style={[styles.reasonInput, { color: palette.ink, backgroundColor: palette.surfaceMuted, borderColor: palette.line }]}
+          <BottomSheet
+            visible={rejecting}
+            onClose={() => { setRejecting(false); setReason(''); }}
+            title="Отклонить заявку"
+            subtitle="Причина поможет гостю понять ваше решение"
+            icon="close-circle-outline"
+            tone="danger"
+            footer={
+              <DialogActions
+                secondary={<Button label="Назад" variant="secondary" size="md" onPress={() => { setRejecting(false); setReason(''); }} />}
+                primary={<Button label="Отклонить" mode="outline" tone="danger" size="md" loading={reject.isPending} onPress={handleReject} />}
               />
-              <View style={styles.sheetActions}>
-                <View style={styles.footerAction}>
-                  <Button label="Назад" variant="secondary" size="md" onPress={() => { setRejecting(false); setReason(''); }} />
-                </View>
-                <View style={styles.footerAction}>
-                  <Button label="Отклонить" variant="danger" size="md" loading={reject.isPending} onPress={handleReject} />
-                </View>
-              </View>
-            </View>
+            }>
+            <TextArea
+              placeholder="Причина отклонения (необязательно)"
+              value={reason}
+              onChangeText={setReason}
+              autoFocus
+              minHeight={112}
+            />
           </BottomSheet>
         </>
       )}
