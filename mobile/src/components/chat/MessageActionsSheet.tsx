@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 
+import { DomainCard } from '@/components/domain/DomainCard';
 import type { ChatMessage } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { BottomSheet } from '@/components/ui';
+import { AppIcon, AppText, BottomSheet, ListCell, type AppIconName } from '@/components/ui';
 
 /**
  * Окна правки и удаления. Обязаны совпадать с MessageEditWindow и
@@ -69,7 +69,7 @@ interface MessageActionsSheetProps {
 
 interface ActionRow {
 	key: string;
-	icon: keyof typeof Ionicons.glyphMap;
+	icon: AppIconName;
 	title: string;
 	subtitle?: string;
 	destructive?: boolean;
@@ -146,47 +146,35 @@ export function MessageActionsSheet({
 			subtitle={message?.body || 'Вложение'}
 			icon="ellipsis-horizontal-outline">
 			<View className="pt-1 pb-2">
-				<View className="overflow-hidden rounded-[22px] border border-line bg-surface-muted">
+				<DomainCard radius={22} style={styles.actionsCard}>
 					{rows.map((row, index) => (
-						<TouchableOpacity
+						<ListCell
 							key={row.key}
+							title={row.title}
+							subtitle={row.subtitle}
+							chevron={false}
+							multiline={Boolean(row.subtitle)}
 							onPress={row.onPress}
-							activeOpacity={0.72}
-							className={`flex-row items-center px-4 py-4 ${index > 0 ? 'border-t border-line' : ''}`}
-						>
-							<View
-								className="h-11 w-11 items-center justify-center rounded-2xl"
-								style={{
-									backgroundColor: row.destructive ? palette.dangerLight : palette.primaryLight,
-								}}
-							>
-								<Ionicons
+							style={index > 0 ? styles.dividedAction : undefined}
+							before={
+								<View style={[styles.actionIcon, { backgroundColor: row.destructive ? palette.dangerLight : palette.primaryLight }]}>
+									<AppIcon
 									name={row.icon}
 									size={21}
 									color={row.destructive ? palette.danger : palette.primary}
 								/>
-							</View>
-							<View className="ml-3 flex-1">
-								<Text
-									className="text-[15px] font-extrabold"
-									style={{ color: row.destructive ? palette.danger : palette.ink }}
-								>
-									{row.title}
-								</Text>
-								{row.subtitle ? (
-									<Text className="mt-0.5 text-sm text-ink-secondary">{row.subtitle}</Text>
-								) : null}
-							</View>
-						</TouchableOpacity>
+								</View>
+							}
+						/>
 					))}
-				</View>
+				</DomainCard>
 
 				{/* Объясняем, почему правки нет: «просто не показали кнопку» читается
 				    как баг, особенно сразу после отправки сообщения. */}
 				{message && !actions.canEdit && !actions.canDelete ? (
-					<Text style={styles.hint} className="mt-3 text-[12px] text-ink-muted">
+					<AppText variant="caption" tone="muted" style={styles.hint}>
 						{editHint(message)}
-					</Text>
+					</AppText>
 				) : null}
 			</View>
 		</BottomSheet>
@@ -206,7 +194,22 @@ function editHint(message: ChatMessage): string {
 }
 
 const styles = StyleSheet.create({
+	actionsCard: {
+		overflow: 'hidden',
+	},
+	actionIcon: {
+		width: 44,
+		height: 44,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderRadius: 16,
+	},
+	dividedAction: {
+		borderTopWidth: StyleSheet.hairlineWidth,
+		borderTopColor: 'rgba(128, 128, 128, 0.2)',
+	},
 	hint: {
+		marginTop: 12,
 		paddingHorizontal: 4,
 		lineHeight: 17,
 	},

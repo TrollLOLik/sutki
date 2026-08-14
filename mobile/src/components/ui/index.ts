@@ -5,7 +5,6 @@ export { AppText } from './AppText';
 export type { AppTextProps, AppTextTone } from './AppText';
 export { Button } from './Button';
 export type { ButtonMode, ButtonProps, ButtonSize, ButtonTone, ButtonVariant } from './Button';
-export { Card } from './Card';
 export { Checkbox } from './Checkbox';
 export { Chip } from './Chip';
 export { Counter } from './Counter';

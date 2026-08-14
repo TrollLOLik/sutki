@@ -5,19 +5,18 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Linking,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { appAlert as Alert } from '@/components/AppAlert';
+import { DomainCard, DomainCardPressable } from '@/components/domain/DomainCard';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
-import { BottomSheet, Button, DialogActions, EmptyState, MaterialSurface, TextArea } from '@/components/ui';
+import { BottomSheet, Button, DialogActions, LoadErrorState, Spinner, TextArea } from '@/components/ui';
 import { useBooking, useConfirmBooking, useRejectBooking } from '@/lib/api/bookings';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
@@ -159,21 +158,20 @@ export default function IncomingBookingDetailScreen() {
 
       {isLoading ? (
         <View style={styles.centeredState}>
-          <ActivityIndicator color={palette.primary} />
+          <Spinner label="Загружаем заявку" />
         </View>
       ) : isError || !data || !status || !visual || !start ? (
         <View style={styles.errorState}>
-          <EmptyState
-            icon="cloud-offline-outline"
+          <LoadErrorState
             title="Не удалось загрузить заявку"
             subtitle="Проверьте подключение и попробуйте снова."
+            onRetry={() => refetch()}
           />
-          <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
         </View>
       ) : (
         <>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-            <MaterialSurface level="raised" radius={24} style={styles.statusCard}>
+            <DomainCard radius={24} style={styles.statusCard}>
               <View style={[styles.statusIcon, { backgroundColor: visual.background }]}>
                 <Ionicons name={visual.icon} size={25} color={visual.color} />
               </View>
@@ -186,13 +184,12 @@ export default function IncomingBookingDetailScreen() {
                   Создана {format(parseISO(data.created_at), 'd MMMM, HH:mm', { locale: ru })}
                 </Text>
               </View>
-            </MaterialSurface>
+            </DomainCard>
 
             {data.house ? (
-              <MaterialSurface level="raised" radius={24} style={styles.listingCard}>
-                <TouchableOpacity
+              <DomainCard radius={24} style={styles.listingCard}>
+                <DomainCardPressable
                   accessibilityRole="button"
-                  activeOpacity={0.72}
                   onPress={() => router.push({ pathname: '/listing/[id]', params: { id: String(data.house!.id) } })}
                   style={styles.listingPressable}>
                   <View style={[styles.listingImageWrap, { backgroundColor: palette.surfaceSkeleton }]}>
@@ -210,23 +207,23 @@ export default function IncomingBookingDetailScreen() {
                     <Text style={[styles.listingPrice, { color: palette.primary }]}>{formatRub(data.house.price)} ₽ / ночь</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
-                </TouchableOpacity>
-              </MaterialSurface>
+                </DomainCardPressable>
+              </DomainCard>
             ) : null}
 
             {data.status === 'cancelled' && data.rejection_reason ? (
-              <MaterialSurface level="raised" radius={20} style={[styles.reasonCard, { backgroundColor: palette.dangerLight }]}>
+              <DomainCard radius={20} style={[styles.reasonCard, { backgroundColor: palette.dangerLight }]}>
                 <View style={styles.reasonTitleRow}>
                   <Ionicons name="close-circle-outline" size={20} color={palette.danger} />
                   <Text style={[styles.reasonTitle, { color: palette.danger }]}>Причина отклонения</Text>
                 </View>
                 <Text style={[styles.reasonText, { color: palette.ink }]}>{data.rejection_reason}</Text>
-              </MaterialSurface>
+              </DomainCard>
             ) : null}
 
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: palette.ink }]}>Проживание</Text>
-              <MaterialSurface level="raised" radius={24} style={styles.infoCard}>
+              <DomainCard radius={24} style={styles.infoCard}>
                 <DetailRow
                   icon="calendar-outline"
                   label="Заезд и выезд"
@@ -236,11 +233,11 @@ export default function IncomingBookingDetailScreen() {
                 <DetailRow icon="moon-outline" label="Продолжительность" value={formatNights(nights)} />
                 <Separator />
                 <DetailRow icon="people-outline" label="Гости" value={formatGuests(data.count)} />
-              </MaterialSurface>
+              </DomainCard>
             </View>
 
             {data.house ? (
-              <MaterialSurface level="raised" radius={24} style={styles.totalCard}>
+              <DomainCard radius={24} style={styles.totalCard}>
                 <View style={styles.totalCopy}>
                   <Text style={[styles.totalLabel, { color: palette.inkSecondary }]}>Итого</Text>
                   <Text style={[styles.totalFormula, { color: palette.inkMuted }]}>
@@ -250,13 +247,13 @@ export default function IncomingBookingDetailScreen() {
                 <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={[styles.totalValue, { color: palette.ink }]}>
                   {formatRub(total)} ₽
                 </Text>
-              </MaterialSurface>
+              </DomainCard>
             ) : null}
 
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: palette.ink }]}>Гость</Text>
-              <MaterialSurface level="raised" radius={24} style={styles.guestCard}>
-                <TouchableOpacity accessibilityRole="button" activeOpacity={0.72} onPress={handleGuestProfile} style={styles.guestProfile}>
+              <DomainCard radius={24} style={styles.guestCard}>
+                <DomainCardPressable accessibilityRole="button" onPress={handleGuestProfile} style={styles.guestProfile}>
                   <View style={[styles.guestAvatar, { backgroundColor: palette.primaryLight }]}>
                     {data.guest?.avatar_url ? (
                       <Image source={{ uri: data.guest.avatar_url }} style={styles.guestAvatarImage} contentFit="cover" transition={150} />
@@ -284,12 +281,12 @@ export default function IncomingBookingDetailScreen() {
                     )}
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={palette.inkMuted} />
-                </TouchableOpacity>
+                </DomainCardPressable>
 
                 {guestPhone ? (
                   <>
                     <Separator indent={64} />
-                    <TouchableOpacity accessibilityRole="button" activeOpacity={0.72} onPress={handleCall} style={styles.phoneRow}>
+                    <DomainCardPressable accessibilityRole="button" onPress={handleCall} style={styles.phoneRow}>
                       <View style={[styles.phoneIcon, { backgroundColor: palette.primaryLight }]}>
                         <Ionicons name="call-outline" size={18} color={palette.primary} />
                       </View>
@@ -298,7 +295,7 @@ export default function IncomingBookingDetailScreen() {
                         <Text style={[styles.phoneValue, { color: palette.ink }]}>{guestPhone}</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
-                    </TouchableOpacity>
+                    </DomainCardPressable>
                   </>
                 ) : null}
 
@@ -311,7 +308,7 @@ export default function IncomingBookingDetailScreen() {
                     </View>
                   </>
                 ) : null}
-              </MaterialSurface>
+              </DomainCard>
             </View>
           </ScrollView>
 

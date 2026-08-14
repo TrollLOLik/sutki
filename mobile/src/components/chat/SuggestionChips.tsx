@@ -1,9 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, ScrollView, StyleSheet } from 'react-native';
 
+import { AppIcon, AppText, Chip } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { useChatColors } from './useChatColors';
 
 interface SuggestionChipsProps {
 	suggestions: string[];
@@ -36,7 +35,6 @@ export const SuggestionChips = React.memo(function SuggestionChips({
 	onSendNow,
 }: SuggestionChipsProps) {
 	const { palette } = useAppTheme();
-	const chatColors = useChatColors();
 
 	if (!suggestions.length) return null;
 
@@ -44,10 +42,10 @@ export const SuggestionChips = React.memo(function SuggestionChips({
 		<View>
 			{generated ? (
 				<View style={styles.header}>
-					<Ionicons name="sparkles-outline" size={12} color={palette.primary} />
-					<Text className="ml-1 text-[11px] font-semibold text-ink-muted">
+					<AppIcon name="sparkles-outline" size={12} color={palette.primary} />
+					<AppText variant="caption" tone="muted" style={styles.hint}>
 						Варианты ответа · удерживайте, чтобы отправить сразу
-					</Text>
+					</AppText>
 				</View>
 			) : null}
 
@@ -58,20 +56,16 @@ export const SuggestionChips = React.memo(function SuggestionChips({
 				keyboardShouldPersistTaps="handled"
 			>
 				{suggestions.map((text) => (
-					<TouchableOpacity
+					<Chip
 						key={text}
+						label={text}
 						onPress={() => onPick(text)}
 						onLongPress={() => onSendNow(text)}
 						delayLongPress={320}
-						activeOpacity={0.7}
-						style={{ backgroundColor: chatColors.panelRaised, borderColor: chatColors.border }}
-						className="px-3.5 py-2 rounded-full border"
 						accessibilityRole="button"
 						accessibilityLabel={`Вариант ответа: ${text}`}
 						accessibilityHint="Нажмите, чтобы вставить в поле ввода. Удерживайте, чтобы отправить сразу."
-					>
-						<Text className="text-[12px] text-ink-secondary font-medium">{text}</Text>
-					</TouchableOpacity>
+					/>
 				))}
 			</ScrollView>
 		</View>
@@ -85,6 +79,11 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 		paddingTop: 10,
 		paddingBottom: 2,
+	},
+	hint: {
+		marginLeft: 4,
+		fontSize: 11,
+		fontWeight: '600',
 	},
 	scrollContent: {
 		paddingHorizontal: 16,

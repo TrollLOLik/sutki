@@ -4,19 +4,18 @@ import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  ActivityIndicator,
   Linking,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { appAlert as Alert } from '@/components/AppAlert';
+import { DomainCard, DomainCardPressable } from '@/components/domain/DomainCard';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
-import { Button, EmptyState, MaterialSurface } from '@/components/ui';
+import { Button, LoadErrorState, Spinner } from '@/components/ui';
 import { useBooking, useCancelBooking } from '@/lib/api/bookings';
 import { useFindOrCreateConversation } from '@/lib/api/chat';
 import { ApiError } from '@/lib/api/client';
@@ -164,23 +163,22 @@ export default function BookingDetailScreen() {
 
       {isLoading ? (
         <View style={styles.centeredState}>
-          <ActivityIndicator color={palette.primary} />
+          <Spinner label="Загружаем бронь" />
         </View>
       ) : isError || !data || !status || !visual ? (
         <View style={styles.errorState}>
-          <EmptyState
-            icon="cloud-offline-outline"
+          <LoadErrorState
             title="Не удалось загрузить бронь"
             subtitle="Проверьте подключение и попробуйте снова."
+            onRetry={() => refetch()}
           />
-          <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
         </View>
       ) : (
         <>
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.content}>
-            <MaterialSurface level="raised" radius={24} style={styles.statusCard}>
+            <DomainCard radius={24} style={styles.statusCard}>
               <View style={[styles.statusIcon, { backgroundColor: visual.background }]}>
                 <Ionicons name={visual.icon} size={25} color={visual.color} />
               </View>
@@ -193,13 +191,12 @@ export default function BookingDetailScreen() {
                   Создана {format(parseISO(data.created_at), 'd MMMM, HH:mm', { locale: ru })}
                 </Text>
               </View>
-            </MaterialSurface>
+            </DomainCard>
 
             {data.house ? (
-              <MaterialSurface level="raised" radius={24} style={styles.listingCard}>
-                <TouchableOpacity
+              <DomainCard radius={24} style={styles.listingCard}>
+                <DomainCardPressable
                   accessibilityRole="button"
-                  activeOpacity={0.72}
                   onPress={() =>
                     router.push({ pathname: '/listing/[id]', params: { id: String(data.house!.id) } })
                   }
@@ -230,13 +227,12 @@ export default function BookingDetailScreen() {
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={19} color={palette.inkMuted} />
-                </TouchableOpacity>
-              </MaterialSurface>
+                </DomainCardPressable>
+              </DomainCard>
             ) : null}
 
             {data.status === 'cancelled' && data.rejection_reason ? (
-              <MaterialSurface
-                level="raised"
+              <DomainCard
                 radius={20}
                 style={[styles.reasonCard, { backgroundColor: palette.dangerLight }]}>
                 <View style={styles.reasonTitleRow}>
@@ -244,12 +240,12 @@ export default function BookingDetailScreen() {
                   <Text style={[styles.reasonTitle, { color: palette.danger }]}>Причина отклонения</Text>
                 </View>
                 <Text style={[styles.reasonBody, { color: palette.ink }]}>{data.rejection_reason}</Text>
-              </MaterialSurface>
+              </DomainCard>
             ) : null}
 
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: palette.ink }]}>Проживание</Text>
-              <MaterialSurface level="raised" radius={24} style={styles.infoGroup}>
+              <DomainCard radius={24} style={styles.infoGroup}>
                 <InfoRow
                   icon="calendar-outline"
                   label="Заезд и выезд"
@@ -265,11 +261,11 @@ export default function BookingDetailScreen() {
                 <InfoRow icon="moon-outline" label="Продолжительность" value={formatNights(Math.max(1, nights))} />
                 <Divider />
                 <InfoRow icon="people-outline" label="Гости" value={formatGuests(data.count)} />
-              </MaterialSurface>
+              </DomainCard>
             </View>
 
             {data.house ? (
-              <MaterialSurface level="raised" radius={24} style={styles.totalCard}>
+              <DomainCard radius={24} style={styles.totalCard}>
                 <View style={styles.totalCopy}>
                   <Text style={[styles.totalLabel, { color: palette.inkSecondary }]}>Итого</Text>
                   <Text style={[styles.totalBreakdown, { color: palette.inkMuted }]}>
@@ -277,26 +273,25 @@ export default function BookingDetailScreen() {
                   </Text>
                 </View>
                 <Text style={[styles.totalValue, { color: palette.ink }]}>{formatRub(total)} ₽</Text>
-              </MaterialSurface>
+              </DomainCard>
             ) : null}
 
             {data.message?.trim() ? (
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: palette.ink }]}>Комментарий</Text>
-                <MaterialSurface level="raised" radius={22} style={styles.commentCard}>
+                <DomainCard radius={22} style={styles.commentCard}>
                   <Ionicons name="chatbubble-ellipses-outline" size={20} color={palette.primary} />
                   <Text style={[styles.commentText, { color: palette.inkSecondary }]}>{data.message.trim()}</Text>
-                </MaterialSurface>
+                </DomainCard>
               </View>
             ) : null}
 
             {data.house ? (
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: palette.ink }]}>Владелец</Text>
-                <MaterialSurface level="raised" radius={24} style={styles.ownerCard}>
-                  <TouchableOpacity
+                <DomainCard radius={24} style={styles.ownerCard}>
+                  <DomainCardPressable
                     accessibilityRole="button"
-                    activeOpacity={0.72}
                     onPress={handleOwnerProfile}
                     style={styles.ownerProfileRow}>
                     <View style={[styles.ownerAvatar, { backgroundColor: palette.surfaceMuted }]}>
@@ -342,14 +337,13 @@ export default function BookingDetailScreen() {
                       )}
                     </View>
                     <Ionicons name="chevron-forward" size={19} color={palette.inkMuted} />
-                  </TouchableOpacity>
+                  </DomainCardPressable>
 
                   {data.house.owner_phone ? (
                     <>
                       <Divider indent={0} />
-                      <TouchableOpacity
+                      <DomainCardPressable
                         accessibilityRole="button"
-                        activeOpacity={0.72}
                         onPress={handleCall}
                         style={styles.phoneRow}>
                         <View style={[styles.phoneIcon, { backgroundColor: palette.primaryLight }]}>
@@ -360,10 +354,10 @@ export default function BookingDetailScreen() {
                           <Text style={[styles.phoneValue, { color: palette.ink }]}>{data.house.owner_phone}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={17} color={palette.inkMuted} />
-                      </TouchableOpacity>
+                      </DomainCardPressable>
                     </>
                   ) : null}
-                </MaterialSurface>
+                </DomainCard>
               </View>
             ) : null}
           </ScrollView>
@@ -394,16 +388,15 @@ export default function BookingDetailScreen() {
               variant={canReview ? 'secondary' : 'primary'}
             />
             {isPending(data.status) ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                activeOpacity={0.68}
-                disabled={cancel.isPending}
+              <Button
+                label={cancel.isPending ? 'Отменяем…' : 'Отменить заявку'}
+                icon="close-outline"
+                mode="soft"
+                tone="danger"
+                loading={cancel.isPending}
                 onPress={handleCancel}
-                style={[styles.cancelButton, { backgroundColor: palette.dangerLight }]}>
-                <Text style={[styles.cancelText, { color: palette.danger }]}>
-                  {cancel.isPending ? 'Отменяем…' : 'Отменить заявку'}
-                </Text>
-              </TouchableOpacity>
+                style={styles.cancelButton}
+              />
             ) : null}
           </SafeAreaView>
         </>
@@ -777,10 +770,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 17,
-  },
-  cancelText: {
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '800',
   },
 });

@@ -12,7 +12,7 @@ export interface DomainCardProps extends ViewProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** Shared visual shell for listing-adjacent entities such as bookings and reviews. */
+/** Shared visual shell for domain entities such as listings, bookings, reviews, and profiles. */
 export function DomainCard({
   children,
   radius = 22,

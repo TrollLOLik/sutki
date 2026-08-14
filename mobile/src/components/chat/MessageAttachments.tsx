@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
+import { PressableScale } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { AlbumGrid } from './AlbumGrid';
 import { VideoAttachment } from './VideoAttachment';
@@ -42,8 +43,9 @@ export function ImageAttachment({ attachment, onPress, onRetry, retrying }: Imag
 	const failed = isFailedAttachment(attachment);
 
 	return (
-		<TouchableOpacity
-			activeOpacity={0.9}
+		<PressableScale
+			pressedScale={0.99}
+			disabledOpacity={1}
 			onPress={() => (failed ? onRetry(attachment) : onPress(attachment))}
 			disabled={pending || retrying}
 			style={styles.imageAttachment}
@@ -65,7 +67,7 @@ export function ImageAttachment({ attachment, onPress, onRetry, retrying }: Imag
 					onRetry={() => onRetry(attachment)}
 				/>
 			) : null}
-		</TouchableOpacity>
+		</PressableScale>
 	);
 }
 
@@ -106,7 +108,7 @@ export function FailedOverlay({
 					<Text numberOfLines={2} style={styles.failedReason}>
 						{reason || 'Сервис проверки временно недоступен.'}
 					</Text>
-					<Pressable
+					<PressableScale
 						onPress={onRetry}
 						style={styles.retryButton}
 						accessibilityRole="button"
@@ -114,7 +116,7 @@ export function FailedOverlay({
 					>
 						<Ionicons name="refresh" size={15} color="#FFFFFF" />
 						<Text style={styles.retryText}>Повторить</Text>
-					</Pressable>
+					</PressableScale>
 				</>
 			) : null}
 		</View>
@@ -143,7 +145,9 @@ export function DocumentAttachment({
 	const { palette } = useAppTheme();
 
 	return (
-		<Pressable
+		<PressableScale
+			pressedScale={0.985}
+			disabledOpacity={1}
 			disabled={isBusy}
 			onPress={() => onPress(attachment)}
 			accessibilityRole="button"
@@ -171,7 +175,7 @@ export function DocumentAttachment({
 			) : (
 				<Ionicons name="download-outline" size={20} color={isMine ? '#fff' : palette.primary} />
 			)}
-		</Pressable>
+		</PressableScale>
 	);
 }
 

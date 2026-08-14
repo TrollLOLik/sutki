@@ -1,20 +1,23 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
-import { Card, ListCell, MaterialSurface } from '@/components/ui';
+import { DomainCard } from '@/components/domain/DomainCard';
+import {
+  AppIcon,
+  AppText,
+  ListCell,
+  PressableScale,
+  type AppIconName,
+} from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ProfileMetric {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: AppIconName;
   label: string;
   value: string | number;
   loading?: boolean;
@@ -23,7 +26,7 @@ export interface ProfileMetric {
 }
 
 export interface ProfileActionItem {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: AppIconName;
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -33,7 +36,7 @@ export interface ProfileActionItem {
 }
 
 interface ProfileHeroProps {
-  avatarActionIcon?: keyof typeof Ionicons.glyphMap | null;
+  avatarActionIcon?: AppIconName | null;
   avatarPressLabel?: string;
   avatarUri?: string | null;
   badge?: string;
@@ -66,119 +69,125 @@ export function ProfileHero({
   verifiedLabel,
 }: ProfileHeroProps) {
   const { palette, isDark } = useAppTheme();
-  const AvatarWrapper = onAvatarPress ? TouchableOpacity : View;
+  const avatarContent = (
+    <>
+      <View
+        style={[
+          styles.avatarRing,
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.primary,
+          },
+        ]}>
+        {avatarUri ? (
+          <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" transition={160} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: palette.primaryLight }]}>
+            <AppText style={[styles.initials, { color: palette.primary }]}>{initials}</AppText>
+          </View>
+        )}
+      </View>
+
+      {onAvatarPress && avatarActionIcon ? (
+        <View
+          style={[
+            styles.avatarAction,
+            {
+              backgroundColor: palette.primary,
+              borderColor: palette.surface,
+            },
+          ]}>
+          {uploadingAvatar ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <AppIcon name={avatarActionIcon} size={15} tone="inverse" />
+          )}
+        </View>
+      ) : null}
+    </>
+  );
 
   return (
-    <MaterialSurface
-      level="raised"
+    <DomainCard
       radius={26}
       style={[styles.hero, { shadowColor: isDark ? '#000000' : '#16181D' }]}>
       <View style={styles.heroContent}>
-        <AvatarWrapper
-          {...(onAvatarPress
-            ? {
-                accessibilityLabel: avatarPressLabel,
-                accessibilityRole: 'button' as const,
-                activeOpacity: 0.78,
-                disabled: uploadingAvatar,
-                onPress: onAvatarPress,
-              }
-            : {})}
-          style={styles.avatarOuter}>
-          <View
-            style={[
-              styles.avatarRing,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.primary,
-              },
-            ]}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" transition={160} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: palette.primaryLight }]}>
-                <Text style={[styles.initials, { color: palette.primary }]}>{initials}</Text>
-              </View>
-            )}
-          </View>
-
-          {onAvatarPress && avatarActionIcon ? (
-            <View
-              style={[
-                styles.avatarAction,
-                {
-                  backgroundColor: palette.primary,
-                  borderColor: palette.surface,
-                },
-              ]}>
-              {uploadingAvatar ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name={avatarActionIcon} size={15} color="#FFFFFF" />
-              )}
-            </View>
-          ) : null}
-        </AvatarWrapper>
+        {onAvatarPress ? (
+          <PressableScale
+            accessibilityLabel={avatarPressLabel}
+            accessibilityRole="button"
+            disabled={uploadingAvatar}
+            disabledOpacity={1}
+            onPress={onAvatarPress}
+            pressedScale={0.97}
+            style={styles.avatarOuter}>
+            {avatarContent}
+          </PressableScale>
+        ) : (
+          <View style={styles.avatarOuter}>{avatarContent}</View>
+        )}
 
         <View style={styles.heroText}>
           <View style={styles.badges}>
             <View style={[styles.badge, { backgroundColor: palette.primaryLight }]}>
-              <Text
+              <AppText
                 numberOfLines={1}
                 ellipsizeMode="tail"
                 style={[styles.badgeText, { color: palette.primary }]}>
                 {badge}
-              </Text>
+              </AppText>
             </View>
             {verifiedLabel ? (
               <View style={[styles.badge, { backgroundColor: palette.successLight }]}>
-                <Ionicons name="checkmark-circle" size={13} color={palette.success} />
-                <Text
+                <AppIcon name="checkmark-circle" size={13} color={palette.success} />
+                <AppText
                   numberOfLines={1}
                   ellipsizeMode="tail"
                   style={[styles.badgeText, { color: palette.success }]}>
                   {verifiedLabel}
-                </Text>
+                </AppText>
               </View>
             ) : null}
           </View>
 
-          <Text numberOfLines={2} style={[styles.name, { color: palette.ink }]}>
+          <AppText numberOfLines={2} style={[styles.name, { color: palette.ink }]}>
             {name}
-          </Text>
+          </AppText>
 
           <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={15} color={palette.inkMuted} />
-            <Text numberOfLines={1} style={[styles.metaText, { color: palette.inkSecondary }]}>
+            <AppIcon name="location-outline" size={15} color={palette.inkMuted} />
+            <AppText numberOfLines={1} style={[styles.metaText, { color: palette.inkSecondary }]}>
               {city || 'Город не указан'}
-            </Text>
+            </AppText>
           </View>
           {subtitle ? (
-            <Text numberOfLines={1} style={[styles.subtitle, { color: palette.inkSecondary }]}>
+            <AppText numberOfLines={1} style={[styles.subtitle, { color: palette.inkSecondary }]}>
               {subtitle}
-            </Text>
+            </AppText>
           ) : null}
 
           {rating > 0 || reviewsCount > 0 || onRatingPress ? (
-            <Pressable
+            <PressableScale
               accessibilityRole={onRatingPress ? 'button' : undefined}
               disabled={!onRatingPress}
+              disabledOpacity={1}
               hitSlop={6}
               onPress={onRatingPress}
-              style={({ pressed }) => [styles.ratingRow, pressed && onRatingPress ? { opacity: 0.68 } : null]}>
-              <Ionicons name="star" size={15} color={palette.star} />
-              <Text style={[styles.ratingValue, { color: palette.ink }]}>
+              pressedScale={0.97}
+              style={styles.ratingRow}>
+              <AppIcon name="star" size={15} color={palette.star} />
+              <AppText style={[styles.ratingValue, { color: palette.ink }]}>
                 {rating > 0 ? rating.toFixed(1) : 'Нет отзывов'}
-              </Text>
+              </AppText>
               {reviewsCount > 0 ? (
-                <Text style={[styles.ratingCount, { color: palette.inkSecondary }]}>({reviewsCount})</Text>
+                <AppText style={[styles.ratingCount, { color: palette.inkSecondary }]}>({reviewsCount})</AppText>
               ) : null}
-              {onRatingPress ? <Ionicons name="chevron-forward" size={14} color={palette.inkMuted} /> : null}
-            </Pressable>
+              {onRatingPress ? <AppIcon name="chevron-forward" size={14} color={palette.inkMuted} /> : null}
+            </PressableScale>
           ) : null}
         </View>
       </View>
-    </MaterialSurface>
+    </DomainCard>
   );
 }
 
@@ -194,7 +203,7 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
   }, []);
 
   return (
-    <Card level="raised" radius={24} padding="none" style={styles.metricGrid}>
+    <DomainCard radius={24} style={styles.metricGrid}>
       {rows.map((row, rowIndex) => (
         <View
           key={`metric-row-${rowIndex}`}
@@ -219,12 +228,13 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
                   : palette.primaryLight;
 
             return (
-              <TouchableOpacity
+              <PressableScale
                 key={`${metric.label}-${columnIndex}`}
                 accessibilityRole={metric.onPress ? 'button' : undefined}
-                activeOpacity={metric.onPress ? 0.68 : 1}
                 disabled={!metric.onPress}
+                disabledOpacity={1}
                 onPress={metric.onPress}
+                pressedScale={metric.onPress ? 0.985 : 1}
                 style={[
                   styles.metricCell,
                   columnIndex === 0
@@ -232,32 +242,32 @@ export function ProfileMetricGrid({ metrics }: { metrics: ProfileMetric[] }) {
                     : null,
                 ]}>
                 <View style={[styles.metricIcon, { backgroundColor: toneBackground }]}>
-                  <Ionicons name={metric.icon} size={18} color={toneColor} />
+                  <AppIcon name={metric.icon} size={18} color={toneColor} />
                 </View>
                 <View style={styles.metricContent}>
                   {metric.loading ? (
                     <ActivityIndicator size="small" color={toneColor} style={styles.metricLoader} />
                   ) : (
-                    <Text
+                    <AppText
                       numberOfLines={1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.62}
                       maxFontSizeMultiplier={1.15}
                       style={[styles.metricValue, { color: palette.ink }]}>
                       {metric.value}
-                    </Text>
+                    </AppText>
                   )}
-                  <Text numberOfLines={2} style={[styles.metricLabel, { color: palette.inkSecondary }]}>
+                  <AppText numberOfLines={2} style={[styles.metricLabel, { color: palette.inkSecondary }]}>
                     {metric.label}
-                  </Text>
+                  </AppText>
                 </View>
-              </TouchableOpacity>
+              </PressableScale>
             );
           })}
           {row.length === 1 ? <View style={styles.metricCellSpacer} /> : null}
         </View>
       ))}
-    </Card>
+    </DomainCard>
   );
 }
 
@@ -272,8 +282,8 @@ export function ProfileActionGroup({
 
   return (
     <View style={styles.section}>
-      {title ? <Text style={[styles.sectionTitle, { color: palette.ink }]}>{title}</Text> : null}
-      <Card level="raised" radius={24} padding="none" style={styles.actionGroup}>
+      {title ? <AppText style={[styles.sectionTitle, { color: palette.ink }]}>{title}</AppText> : null}
+      <DomainCard radius={24} style={styles.actionGroup}>
         {items.map((item, index) => {
           const iconColor = item.tone === 'danger' ? palette.danger : palette.primary;
           const iconBackground = item.tone === 'danger' ? palette.dangerLight : palette.primaryLight;
@@ -286,7 +296,7 @@ export function ProfileActionGroup({
                 style={styles.actionRow}
                 before={
                   <View style={[styles.actionIcon, { backgroundColor: iconBackground }]}>
-                    <Ionicons name={item.icon} size={21} color={iconColor} />
+                    <AppIcon name={item.icon} size={21} color={iconColor} />
                   </View>
                 }
                 title={item.title}
@@ -294,10 +304,10 @@ export function ProfileActionGroup({
                 chevron={!item.disabled}
                 after={
                   item.disabled ? (
-                    <Ionicons name="lock-closed-outline" size={19} color={palette.inkMuted} />
+                    <AppIcon name="lock-closed-outline" size={19} color={palette.inkMuted} />
                   ) : item.count && item.count > 0 ? (
                     <View style={[styles.counter, { backgroundColor: palette.primary }]}>
-                      <Text style={styles.counterText}>{item.count > 99 ? '99+' : item.count}</Text>
+                      <AppText style={styles.counterText}>{item.count > 99 ? '99+' : item.count}</AppText>
                     </View>
                   ) : null
                 }
@@ -308,7 +318,7 @@ export function ProfileActionGroup({
             </View>
           );
         })}
-      </Card>
+      </DomainCard>
     </View>
   );
 }
@@ -317,10 +327,10 @@ export function ProfileInfoPanel({ children, title }: { children: ReactNode; tit
   const { palette } = useAppTheme();
   return (
     <View style={styles.section}>
-      {title ? <Text style={[styles.sectionTitle, { color: palette.ink }]}>{title}</Text> : null}
-      <Card level="raised" radius={24} padding="md">
+      {title ? <AppText style={[styles.sectionTitle, { color: palette.ink }]}>{title}</AppText> : null}
+      <DomainCard radius={24} style={styles.infoPanelCard}>
         {children}
-      </Card>
+      </DomainCard>
     </View>
   );
 }
@@ -501,6 +511,9 @@ const styles = StyleSheet.create({
   },
   actionGroup: {
     overflow: 'hidden',
+  },
+  infoPanelCard: {
+    padding: 16,
   },
   actionRow: {
     minHeight: 76,

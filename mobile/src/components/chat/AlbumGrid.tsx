@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
+import { PressableScale } from '@/components/ui';
 import { type ChatAttachment, isFailedAttachment, isPendingAttachment } from './types';
 
 /**
@@ -49,7 +50,9 @@ interface TileProps {
 function Tile({ attachment, width, height, overflowCount, onPress, onRetry, retrying }: TileProps) {
 	const failed = isFailedAttachment(attachment);
 	return (
-		<Pressable
+		<PressableScale
+			pressedScale={0.99}
+			disabledOpacity={1}
 			onPress={() => (failed ? onRetry(attachment) : onPress(attachment))}
 			disabled={isPendingAttachment(attachment) || retrying}
 			style={[styles.tile, { width, height }]}
@@ -80,7 +83,7 @@ function Tile({ attachment, width, height, overflowCount, onPress, onRetry, retr
 					<Text style={styles.overflowText}>+{overflowCount}</Text>
 				</View>
 			) : null}
-		</Pressable>
+		</PressableScale>
 	);
 }
 

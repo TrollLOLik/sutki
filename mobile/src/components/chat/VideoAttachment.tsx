@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
+import { PressableScale } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { formatDuration } from '@/lib/video';
 import type { ChatAttachment } from './types';
@@ -48,7 +49,9 @@ export const VideoAttachment = React.memo(function VideoAttachment({
 	const thumbnail = attachment.thumbnail_url || localThumbnailUri;
 
 	return (
-		<Pressable
+		<PressableScale
+			pressedScale={0.99}
+			disabledOpacity={1}
 			onPress={() => (isFailed ? onRetry(attachment) : onPress(attachment))}
 			disabled={isPending || retrying}
 			style={styles.container}
@@ -94,7 +97,7 @@ export const VideoAttachment = React.memo(function VideoAttachment({
 					<Text style={styles.durationText}>{formatDuration(attachment.duration_seconds)}</Text>
 				</View>
 			) : null}
-		</Pressable>
+		</PressableScale>
 	);
 });
 
