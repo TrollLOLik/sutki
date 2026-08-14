@@ -60,20 +60,23 @@ function HistoryRow({ entry, index, selected }: { entry: NavigationHistoryEntry;
 
   return (
     <Animated.View
-      entering={FadeInRight.delay(index * 28).duration(170)}
       layout={LinearTransition.duration(140)}
-      style={[styles.row, { height: NAVIGATION_MENU_ROW_HEIGHT }, rowStyle]}>
-      <View style={styles.iconFrame}>
-        <Animated.View style={[styles.iconLayer, inactiveIconStyle]}>
-          <Ionicons name="ellipse-outline" size={22} color={palette.inkMuted} />
-        </Animated.View>
-        <Animated.View style={[styles.iconLayer, activeIconStyle]}>
-          <Ionicons name="arrow-back-circle" size={22} color={palette.primary} />
-        </Animated.View>
-      </View>
-      <Animated.Text numberOfLines={1} style={[styles.title, titleStyle]}>
-        {entry.title}
-      </Animated.Text>
+      style={{ height: NAVIGATION_MENU_ROW_HEIGHT }}>
+      <Animated.View
+        entering={FadeInRight.delay(index * 28).duration(170)}
+        style={[styles.row, StyleSheet.absoluteFill, rowStyle]}>
+        <View style={styles.iconFrame}>
+          <Animated.View style={[styles.iconLayer, inactiveIconStyle]}>
+            <Ionicons name="ellipse-outline" size={22} color={palette.inkMuted} />
+          </Animated.View>
+          <Animated.View style={[styles.iconLayer, activeIconStyle]}>
+            <Ionicons name="arrow-back-circle" size={22} color={palette.primary} />
+          </Animated.View>
+        </View>
+        <Animated.Text numberOfLines={1} style={[styles.title, titleStyle]}>
+          {entry.title}
+        </Animated.Text>
+      </Animated.View>
     </Animated.View>
   );
 }

@@ -20,11 +20,13 @@ export function AnimatedListItem({
 
   return (
     <Animated.View
-      entering={reduceMotion ? undefined : FadeInDown.duration(180).springify().damping(22)}
-      exiting={reduceMotion ? undefined : FadeOutUp.duration(135)}
       layout={reduceMotion ? undefined : LinearTransition.springify().damping(22).stiffness(260)}
       style={style}>
-      {children}
+      <Animated.View
+        entering={reduceMotion ? undefined : FadeInDown.duration(180).springify().damping(22)}
+        exiting={reduceMotion ? undefined : FadeOutUp.duration(135)}>
+        {children}
+      </Animated.View>
     </Animated.View>
   );
 }
