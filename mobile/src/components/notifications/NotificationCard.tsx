@@ -4,7 +4,7 @@ import { ru } from 'date-fns/locale';
 import { StyleSheet, View } from 'react-native';
 
 import { DomainCard, DomainCardPressable } from '@/components/domain/DomainCard';
-import { AppIcon, AppText } from '@/components/ui';
+import { AnimatedListItem, AppIcon, AppText } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export type NotificationTone = 'primary' | 'info' | 'success' | 'danger' | 'neutral';
@@ -53,7 +53,8 @@ export function NotificationCard({ presentation, createdAt, unread = false, onPr
           ? palette.surfaceMuted
           : palette.primaryLight;
   return (
-    <DomainCard
+    <AnimatedListItem>
+      <DomainCard
       radius={22}
       style={[
         styles.card,
@@ -63,7 +64,7 @@ export function NotificationCard({ presentation, createdAt, unread = false, onPr
           accessibilityLabel={`${presentation.title}. ${presentation.body}`}
           accessibilityRole="button"
           onPress={onPress}
-          pressedScale={0.978}
+          pressedScale={0.988}
           style={styles.pressable}>
           <View style={[styles.icon, { backgroundColor: toneBackground }]}>
             <AppIcon name={presentation.icon} size={22} color={toneColor} />
@@ -80,7 +81,8 @@ export function NotificationCard({ presentation, createdAt, unread = false, onPr
             </View>
           </View>
         </DomainCardPressable>
-    </DomainCard>
+      </DomainCard>
+    </AnimatedListItem>
   );
 }
 

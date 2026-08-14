@@ -1,5 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { StyleSheet, View, PanResponder } from 'react-native';
+import { View, PanResponder } from 'react-native';
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
@@ -29,6 +37,9 @@ export function RangeSlider({
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
+  const reduceMotion = useReducedMotion();
+  const minActive = useSharedValue(0);
+  const maxActive = useSharedValue(0);
 
   // Synchronous tracking of latest values for the PanResponder thread
   const latestValueMinRef = useRef(valueMin);
@@ -74,13 +85,25 @@ export function RangeSlider({
 
   const minStartPx = useRef(0);
   const maxStartPx = useRef(0);
+  const activateThumb = (value: typeof minActive) => {
+    value.value = reduceMotion ? 0 : withTiming(1, { duration: 80 });
+  };
+  const releaseThumb = (value: typeof minActive) => {
+    value.value = reduceMotion
+      ? 0
+      : withSpring(0, { damping: 17, stiffness: 260, mass: 0.58 });
+  };
 
-  const minThumbPan = useRef(
+  // PanResponder callbacks run after render and intentionally read the latest
+  // controlled values from refs so a drag cannot use a stale range.
+  // eslint-disable-next-line react-hooks/refs
+  const [minThumbPan] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         minStartPx.current = valueToPx(latestValueMinRef.current);
+        activateThumb(minActive);
       },
       onPanResponderMove: (_, gestureState) => {
         const newPx = Math.max(0, minStartPx.current + gestureState.dx);
@@ -95,24 +118,28 @@ export function RangeSlider({
         }
       },
       onPanResponderRelease: () => {
+        releaseThumb(minActive);
         if (onSlidingCompleteRef.current) {
           onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
         }
       },
       onPanResponderTerminate: () => {
+        releaseThumb(minActive);
         if (onSlidingCompleteRef.current) {
           onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
         }
       },
-    })
-  ).current;
+    }),
+  );
 
-  const maxThumbPan = useRef(
+  // eslint-disable-next-line react-hooks/refs
+  const [maxThumbPan] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         maxStartPx.current = valueToPx(latestValueMaxRef.current);
+        activateThumb(maxActive);
       },
       onPanResponderMove: (_, gestureState) => {
         const newPx = Math.max(0, maxStartPx.current + gestureState.dx);
@@ -127,20 +154,42 @@ export function RangeSlider({
         }
       },
       onPanResponderRelease: () => {
+        releaseThumb(maxActive);
         if (onSlidingCompleteRef.current) {
           onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
         }
       },
       onPanResponderTerminate: () => {
+        releaseThumb(maxActive);
         if (onSlidingCompleteRef.current) {
           onSlidingCompleteRef.current({ min: latestValueMinRef.current, max: latestValueMaxRef.current });
         }
       },
-    })
-  ).current;
+    }),
+  );
 
-  const minPx = valueToPx(valueMin);
-  const maxPx = valueToPx(valueMax);
+  const renderValueToPx = (value: number) => {
+    if (max === min || trackWidth === 0) return 0;
+    return ((value - min) / (max - min)) * trackWidth;
+  };
+  const minPx = renderValueToPx(valueMin);
+  const maxPx = renderValueToPx(valueMax);
+  const minThumbStyle = useAnimatedStyle(() => ({
+    zIndex: minActive.value > 0.01 ? 3 : 2,
+    transform: [{ scale: interpolate(minActive.value, [0, 1], [1, 1.14]) }],
+    shadowOpacity: interpolate(minActive.value, [0, 1], [0.15, 0.26]),
+    shadowRadius: interpolate(minActive.value, [0, 1], [2.5, 7]),
+    shadowOffset: { width: 0, height: interpolate(minActive.value, [0, 1], [2, 4]) },
+    elevation: interpolate(minActive.value, [0, 1], [3, 6]),
+  }));
+  const maxThumbStyle = useAnimatedStyle(() => ({
+    zIndex: maxActive.value > 0.01 ? 3 : 2,
+    transform: [{ scale: interpolate(maxActive.value, [0, 1], [1, 1.14]) }],
+    shadowOpacity: interpolate(maxActive.value, [0, 1], [0.15, 0.26]),
+    shadowRadius: interpolate(maxActive.value, [0, 1], [2.5, 7]),
+    shadowOffset: { width: 0, height: interpolate(maxActive.value, [0, 1], [2, 4]) },
+    elevation: interpolate(maxActive.value, [0, 1], [3, 6]),
+  }));
 
   return (
     <View
@@ -166,24 +215,26 @@ export function RangeSlider({
       />
 
       {/* Min Thumb */}
-      <View
+      <Animated.View
         {...minThumbPan.panHandlers}
         style={[
           styles.thumb,
           {
             left: minPx - 14,
           },
+          minThumbStyle,
         ]}
       />
 
       {/* Max Thumb */}
-      <View
+      <Animated.View
         {...maxThumbPan.panHandlers}
         style={[
           styles.thumb,
           {
             left: maxPx - 14,
           },
+          maxThumbStyle,
         ]}
       />
     </View>

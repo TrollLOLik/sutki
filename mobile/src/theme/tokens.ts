@@ -133,10 +133,39 @@ export type IconSizeToken = keyof typeof iconSizes;
 export const pressMotion = {
   scale: 0.97,
   inDuration: 70,
+  variants: {
+    compact: {
+      scale: 0.94,
+      opacity: 0.88,
+      inDuration: 65,
+    },
+    control: {
+      scale: 0.97,
+      opacity: 0.93,
+      inDuration: 75,
+    },
+    surface: {
+      scale: 0.988,
+      opacity: 0.96,
+      inDuration: 90,
+    },
+  },
   spring: {
     damping: 17,
     stiffness: 280,
     mass: 0.55,
+  },
+} as const;
+
+export type PressMotionVariant = keyof typeof pressMotion.variants;
+
+export const selectionMotion = {
+  duration: 190,
+  spring: {
+    damping: 18,
+    stiffness: 280,
+    mass: 0.65,
+    overshootClamping: true,
   },
 } as const;
 

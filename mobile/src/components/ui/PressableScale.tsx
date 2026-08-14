@@ -6,19 +6,26 @@ import {
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { pressMotion } from '@/theme/tokens';
+import {
+  pressMotion,
+  type PressMotionVariant,
+} from '@/theme/tokens';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export interface PressableScaleProps
   extends Omit<PressableProps, 'style'> {
   style?: PressableProps['style'];
+  motionVariant?: PressMotionVariant;
   pressedScale?: number;
+  pressedOpacity?: number;
   disabledOpacity?: number;
 }
 
 export function PressableScale({
-  pressedScale = pressMotion.scale,
+  motionVariant,
+  pressedScale,
+  pressedOpacity,
   disabledOpacity = 0.42,
   disabled = false,
   style,
@@ -27,16 +34,20 @@ export function PressableScale({
   ...props
 }: PressableScaleProps) {
   const reduceMotion = useReducedMotion();
-  const [scale] = useState(() => new Animated.Value(1));
+  const [pressProgress] = useState(() => new Animated.Value(0));
+  const variant = motionVariant ? pressMotion.variants[motionVariant] : null;
+  const resolvedScale = pressedScale ?? variant?.scale ?? pressMotion.scale;
+  const resolvedPressedOpacity = pressedOpacity ?? variant?.opacity ?? 1;
+  const inDuration = variant?.inDuration ?? pressMotion.inDuration;
 
   const animateIn: NonNullable<PressableProps['onPressIn']> = (event) => {
-    scale.stopAnimation();
+    pressProgress.stopAnimation();
     if (reduceMotion) {
-      scale.setValue(1);
+      pressProgress.setValue(0);
     } else {
-      Animated.timing(scale, {
-        toValue: pressedScale,
-        duration: pressMotion.inDuration,
+      Animated.timing(pressProgress, {
+        toValue: 1,
+        duration: inDuration,
         useNativeDriver: true,
       }).start();
     }
@@ -44,12 +55,12 @@ export function PressableScale({
   };
 
   const animateOut: NonNullable<PressableProps['onPressOut']> = (event) => {
-    scale.stopAnimation();
+    pressProgress.stopAnimation();
     if (reduceMotion) {
-      scale.setValue(1);
+      pressProgress.setValue(0);
     } else {
-      Animated.spring(scale, {
-        toValue: 1,
+      Animated.spring(pressProgress, {
+        toValue: 0,
         ...pressMotion.spring,
         useNativeDriver: true,
       }).start();
@@ -57,8 +68,16 @@ export function PressableScale({
     onPressOut?.(event);
   };
 
+  const scale = pressProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, resolvedScale],
+  });
+  const pressedAnimatedOpacity = pressProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, resolvedPressedOpacity],
+  });
   const animationStyle = {
-    opacity: disabled ? disabledOpacity : 1,
+    opacity: disabled ? disabledOpacity : pressedAnimatedOpacity,
     transform: [{ scale }],
   };
 

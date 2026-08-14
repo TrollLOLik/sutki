@@ -1,9 +1,17 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { View, type PressableProps } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { AppText } from '@/components/ui/AppText';
 import { PressableScale } from '@/components/ui/PressableScale';
+import { pressMotion } from '@/theme/tokens';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ListCellProps extends Omit<PressableProps, 'children'> {
@@ -42,9 +50,34 @@ export function ListCell({
   multiline = false,
   disabled,
   style,
+  onPressIn,
+  onPressOut,
   ...rest
 }: ListCellProps) {
   const { palette } = useAppTheme();
+  const reduceMotion = useReducedMotion();
+  const [pressed, setPressed] = useState(false);
+  const pressProgress = useSharedValue(0);
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pressProgress.value * 3 }],
+  }));
+
+  useEffect(() => {
+    pressProgress.value = reduceMotion
+      ? 0
+      : pressed
+        ? withTiming(1, { duration: 75 })
+        : withSpring(0, pressMotion.spring);
+  }, [pressProgress, pressed, reduceMotion]);
+
+  const handlePressIn: NonNullable<PressableProps['onPressIn']> = (event) => {
+    setPressed(true);
+    onPressIn?.(event);
+  };
+  const handlePressOut: NonNullable<PressableProps['onPressOut']> = (event) => {
+    setPressed(false);
+    onPressOut?.(event);
+  };
 
   return (
     <PressableScale
@@ -52,7 +85,10 @@ export function ListCell({
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={Boolean(disabled)}
       disabledOpacity={0.46}
-      pressedScale={0.985}
+      pressedScale={1}
+      pressedOpacity={0.96}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       style={(state) => [
         {
           minHeight: multiline || subtitle ? 68 : 56,
@@ -78,9 +114,9 @@ export function ListCell({
         </View>
         {after ? <View style={{ flexShrink: 0, marginLeft: 10 }}>{after}</View> : null}
         {chevron ? (
-          <View style={{ flexShrink: 0, marginLeft: after ? 6 : 10 }}>
+          <Animated.View style={[{ flexShrink: 0, marginLeft: after ? 6 : 10 }, chevronStyle]}>
             <AppIcon name="chevron-forward" size={18} color={palette.inkMuted} />
-          </View>
+          </Animated.View>
         ) : null}
       </View>
     </PressableScale>

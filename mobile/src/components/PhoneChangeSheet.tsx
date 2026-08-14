@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 
 import { KeyboardAwareFormScrollView } from '@/components/KeyboardAwareForm';
 import { PhoneInput } from '@/components/PhoneInput';
@@ -344,6 +345,7 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
       subtitle={subtitle}
       icon={step === 'success' ? 'checkmark' : step === 'reauth' ? 'shield-checkmark-outline' : 'call-outline'}
       tone={step === 'success' ? 'success' : 'primary'}
+      contentKey={`${step}-${step === 'reauth' ? String(reauthSent) : 'ready'}`}
       bodyStyle={{ paddingTop: 12 }}>
       <View style={{ flex: 1 }}>
           {step !== 'success' && step !== 'confirm' ? (
@@ -360,14 +362,16 @@ export function PhoneChangeSheet({ visible, onClose }: PhoneChangeSheetProps) {
           ) : null}
 
           {error ? (
-            <MaterialSurface level="raised" radius={18} style={{ marginTop: 16, padding: 14 }}>
-              <View className="flex-row items-start gap-3">
-                <Ionicons name="alert-circle-outline" size={20} color={palette.danger} />
-                <Text className="flex-1 text-sm font-semibold leading-5 text-danger">
-                  {translateError(error)}
-                </Text>
-              </View>
-            </MaterialSurface>
+            <Animated.View key={error} entering={FadeInDown.duration(150)} exiting={FadeOutUp.duration(110)}>
+              <MaterialSurface level="raised" radius={18} style={{ marginTop: 16, padding: 14 }}>
+                <View className="flex-row items-start gap-3">
+                  <Ionicons name="alert-circle-outline" size={20} color={palette.danger} />
+                  <Text className="flex-1 text-sm font-semibold leading-5 text-danger">
+                    {translateError(error)}
+                  </Text>
+                </View>
+              </MaterialSurface>
+            </Animated.View>
           ) : null}
 
           <KeyboardAwareFormScrollView

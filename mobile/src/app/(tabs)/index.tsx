@@ -27,7 +27,7 @@ import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
-import { BottomSheet, Button, Counter, EmptyState, FullScreenModal, LoadErrorState } from '@/components/ui';
+import { BottomSheet, Button, Chip, Counter, EmptyState, FullScreenModal, LoadErrorState } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
 import { ApiError } from '@/lib/api/client';
@@ -497,8 +497,11 @@ export default function SearchScreen() {
                 ? filters.rooms.length === 0
                 : filters.rooms.includes(roomValue);
               return (
-                <Pressable
+                <Chip
                   key={item.value}
+                  label={item.label}
+                  selected={selected}
+                  selectedVariant="solid"
                   onLayout={(event) => {
                     quickFilterOffsets.current[item.value] = event.nativeEvent.layout.x;
                     if (selected) scrollToActiveQuickFilter();
@@ -512,15 +515,8 @@ export default function SearchScreen() {
                       filters.toggleRoom(roomValue);
                     }
                   }}
-                  style={{ borderRadius: 18 }}
-                  className={`h-9 items-center justify-center border px-4 active:opacity-80 ${
-                    selected ? 'border-primary bg-primary' : 'border-line bg-surface-muted'
-                  }`}
-                >
-                  <Text className={`text-sm font-semibold ${selected ? 'text-white' : 'text-ink-secondary'}`}>
-                    {item.label}
-                  </Text>
-                </Pressable>
+                  style={{ minHeight: 36 }}
+                />
               );
             })}
           </ScrollView>

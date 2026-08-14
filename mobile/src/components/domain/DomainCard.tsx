@@ -31,5 +31,11 @@ export function DomainCardPressable({
   pressedScale = 0.985,
   ...props
 }: PressableScaleProps) {
-  return <PressableScale pressedScale={pressedScale} {...props} />;
+  return (
+    <PressableScale
+      motionVariant="surface"
+      pressedScale={pressedScale}
+      {...props}
+    />
+  );
 }

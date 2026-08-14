@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { ResilientImage } from '@/components/ResilientImage';
 import { ListingOwnerActions } from '@/components/ListingOwnerActions';
@@ -7,7 +8,7 @@ import {
   PromotionBadge,
   PromotionHighlightSurface,
 } from '@/components/promotion/PromotionHighlightSurface';
-import { AppIcon, AppText, PressableScale, materialSurfaceColor } from '@/components/ui';
+import { AnimatedListItem, AppIcon, AppText, IconButton, PressableScale, materialSurfaceColor } from '@/components/ui';
 import { formatRating, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
@@ -153,10 +154,11 @@ export function ListingCard({
 
   if (layout === 'grid') {
     return (
-      <View style={{ flex: 1, marginBottom: 12 }}>
+      <AnimatedListItem style={{ flex: 1, marginBottom: 12 }}>
         <PromotionHighlightSurface active={isHighlighted} radius={19}>
           <PressableScale
-            pressedScale={0.975}
+            motionVariant="surface"
+            pressedScale={0.988}
             accessibilityRole="button"
             onPress={onPress}
             style={{
@@ -196,10 +198,16 @@ export function ListingCard({
               ) : null}
 
               {onToggleFavorite ? (
-                <Pressable
+                <IconButton
                   accessibilityRole="button"
                   accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
                   hitSlop={6}
+                  icon={isFavorite ? 'heart' : 'heart-outline'}
+                  iconSize={19}
+                  size={34}
+                  tone="primary"
+                  selected={isFavorite}
+                  surface="floating"
                   onPress={(event) => {
                     event.stopPropagation();
                     onToggleFavorite();
@@ -208,26 +216,15 @@ export function ListingCard({
                     position: 'absolute',
                     top: 7,
                     right: 7,
-                    width: 34,
-                    height: 34,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 17,
-                    borderWidth: 1,
-                    borderColor: palette.line,
-                    backgroundColor: palette.overlaySurface,
                   }}
-                >
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={19}
-                    color={isFavorite ? palette.primary : palette.inkSecondary}
-                  />
-                </Pressable>
+                />
               ) : null}
 
               {isOwn || isViewed ? (
-                <View
+                <Animated.View
+                  key={listing.status}
+                  entering={FadeIn.duration(150)}
+                  exiting={FadeOut.duration(100)}
                   style={{
                     position: 'absolute',
                     bottom: 7,
@@ -260,7 +257,7 @@ export function ListingCard({
                   >
                     {isOwn ? 'Ваше' : 'Просмотрено'}
                   </Text>
-                </View>
+                </Animated.View>
               ) : null}
             </View>
 
@@ -353,15 +350,16 @@ export function ListingCard({
             {onBook ? <ListingBookingAction compact onPress={onBook} /> : null}
           </PressableScale>
         </PromotionHighlightSurface>
-      </View>
+      </AnimatedListItem>
     );
   }
 
   return (
-    <View style={{ marginBottom: 12 }}>
+    <AnimatedListItem style={{ marginBottom: 12 }}>
       <PromotionHighlightSurface active={isHighlighted} radius={20}>
         <PressableScale
-          pressedScale={0.985}
+          motionVariant="surface"
+          pressedScale={0.988}
           onPress={onPress}
           accessibilityRole="button"
           className="border p-3 active:opacity-95"
@@ -440,7 +438,13 @@ export function ListingCard({
                 <Text className="text-xs text-ink-muted">({listing.reviews_count})</Text>
               </View>
               {onToggleFavorite ? (
-                <TouchableOpacity
+                <IconButton
+                  icon={isFavorite ? 'heart' : 'heart-outline'}
+                  iconSize={20}
+                  size={32}
+                  tone="primary"
+                  selected={isFavorite}
+                  surface="bare"
                   onPress={(e) => {
                     e.stopPropagation();
                     onToggleFavorite();
@@ -448,13 +452,7 @@ export function ListingCard({
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-                >
-                  <Ionicons
-                    name={isFavorite ? 'heart' : 'heart-outline'}
-                    size={20}
-                    color={isFavorite ? palette.primary : palette.inkSecondary}
-                  />
-                </TouchableOpacity>
+                />
               ) : null}
             </View>
 
@@ -499,7 +497,10 @@ export function ListingCard({
       {/* Owner-only moderation status (my listings screen) */}
       {moderationBadge ? (
         <View className="mt-3 gap-1">
-          <View
+          <Animated.View
+            key={listing.status}
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(100)}
             className="self-start flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
             style={{ backgroundColor: moderationBadge.bg }}
           >
@@ -514,7 +515,7 @@ export function ListingCard({
               style={{ flexShrink: 1, fontSize: 11, fontWeight: '700', color: moderationBadge.fg }}>
               {moderationBadge.label}
             </Text>
-          </View>
+          </Animated.View>
           {(listing.status === 'rejected' || listing.status === 'moderation_review') && listing.rejection_reason ? (
             <Text numberOfLines={3} className="text-[11px] text-ink-secondary leading-4">
               {listing.status === 'rejected' ? 'Причина' : 'Комментарий'}: {listing.rejection_reason}
@@ -559,6 +560,6 @@ export function ListingCard({
       {onBook ? <ListingBookingAction compact={false} onPress={onBook} /> : null}
         </PressableScale>
       </PromotionHighlightSurface>
-    </View>
+    </AnimatedListItem>
   );
 }

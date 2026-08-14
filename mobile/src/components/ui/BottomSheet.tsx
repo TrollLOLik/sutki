@@ -12,6 +12,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import Reanimated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AppIconName } from '@/components/ui/AppIcon';
@@ -31,6 +32,8 @@ export interface BottomSheetProps {
   closeOnBackdrop?: boolean;
   showClose?: boolean;
   bodyStyle?: StyleProp<ViewStyle>;
+  /** Changes animate inside the already-open sheet without remounting the modal. */
+  contentKey?: string | number;
 }
 
 type TransitionState = 'closed' | 'opening' | 'open' | 'closing';
@@ -48,6 +51,7 @@ export function BottomSheet({
   closeOnBackdrop = true,
   showClose = true,
   bodyStyle,
+  contentKey,
 }: BottomSheetProps) {
   const { palette } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -251,7 +255,13 @@ export function BottomSheet({
               height ? { flex: 1 } : null,
               bodyStyle,
             ]}>
-            {children}
+            <Reanimated.View
+              key={contentKey ?? 'sheet-content'}
+              entering={reduceMotion ? undefined : FadeInRight.duration(190)}
+              exiting={reduceMotion ? undefined : FadeOutLeft.duration(130)}
+              style={height ? { minHeight: 0, flex: 1 } : undefined}>
+              {children}
+            </Reanimated.View>
           </View>
           {footer ? (
             <View

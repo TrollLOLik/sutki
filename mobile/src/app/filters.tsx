@@ -14,7 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { DatePickerSheet } from '@/components/DatePickerSheet';
 import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
-import { Button, Chip, Counter, IconButton, Input, MaterialSurface, RangeSlider, Switch } from '@/components/ui';
+import { Button, Chip, Counter, IconButton, Input, MaterialSurface, RangeSlider, SegmentedControl, Switch } from '@/components/ui';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
 import { useCategories, useServices } from '@/lib/api/create-listing';
 import { useFavoriteIds } from '@/lib/api/favorites';
@@ -343,32 +343,14 @@ export default function FiltersScreen() {
         )}>
         <MaterialSurface level="base" radius={20} style={{ gap: 12, padding: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: palette.ink }}>Сортировка</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {SORT_OPTIONS.map((option) => {
-              const selected = sort === option.value;
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => setSort(option.value)}
-                  style={{
-                    flex: 1,
-                    minHeight: 44,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: selected ? palette.primary : palette.line,
-                    backgroundColor: selected ? palette.primaryLight : palette.surface,
-                    paddingHorizontal: 8,
-                  }}
-                >
-                  <Text numberOfLines={2} style={{ textAlign: 'center', fontSize: 12, fontWeight: '700', color: selected ? palette.primary : palette.inkSecondary }}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <SegmentedControl
+            value={sort}
+            options={SORT_OPTIONS}
+            onChange={setSort}
+            accessibilityLabel="Сортировка объявлений"
+            variant="separate"
+            style={{ marginHorizontal: -2, width: 'auto' }}
+          />
         </MaterialSurface>
 
         <Switch

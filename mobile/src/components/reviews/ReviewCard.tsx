@@ -1,9 +1,10 @@
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DomainCard } from '@/components/domain/DomainCard';
-import { AppIcon, AppText } from '@/components/ui';
+import { AnimatedListItem, AppIcon, AppText } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ReviewReply } from '@/types/review';
 
@@ -71,7 +72,8 @@ export function ReviewCard({
   const statusView = statusPresentation(status);
 
   return (
-    <DomainCard radius={20} className={`gap-3 p-4 ${className ?? ''}`}>
+    <AnimatedListItem>
+      <DomainCard radius={20} className={`gap-3 p-4 ${className ?? ''}`}>
       {header.kind === 'listing' ? (
         <View className="flex-row items-center gap-3">
           {header.coverUrl ? (
@@ -147,7 +149,10 @@ export function ReviewCard({
       ) : null}
 
       {statusView ? (
-        <View
+        <Animated.View
+          key={status}
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(100)}
           className="self-start flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
           style={{ backgroundColor: statusView.danger ? palette.dangerLight : palette.primaryLight }}>
           <AppIcon
@@ -158,12 +163,13 @@ export function ReviewCard({
           <AppText style={{ color: statusView.danger ? palette.danger : palette.primary }} className="text-xs font-bold">
             {statusView.label}
           </AppText>
-        </View>
+        </Animated.View>
       ) : null}
       {status === 'rejected' && rejectionReason ? (
         <AppText className="text-xs leading-4 text-danger">{rejectionReason}</AppText>
       ) : null}
       {children}
-    </DomainCard>
+      </DomainCard>
+    </AnimatedListItem>
   );
 }

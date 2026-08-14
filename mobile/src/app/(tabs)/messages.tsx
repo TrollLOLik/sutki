@@ -1,13 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-	Animated,
-	Easing,
 	FlatList,
 	Keyboard,
+	type NativeScrollEvent,
+	type NativeSyntheticEvent,
 	Pressable,
 	RefreshControl,
 	View,
 } from 'react-native';
+import Animated, {
+	cancelAnimation,
+	Easing,
+	type SharedValue,
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -19,7 +27,6 @@ import { AppIcon, AppText, Button, CountedTabs, EmptyState, LoadErrorState, Spin
 import { ConversationListSkeleton } from '@/components/DomainListSkeletons';
 import { ConversationRow } from '@/components/chat/ConversationRow';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { useCollapsibleHeader } from '@/components/CollapsibleHeader';
 import { useScrollHideTabBar } from '@/hooks/useScrollHideTabBar';
 
 type ConversationSort = 'recent' | 'oldest' | 'unread';
@@ -40,51 +47,46 @@ const CONVERSATION_SORT_OPTIONS: SortOption<ConversationSort>[] = [
 type CollapsibleSectionProps = {
 	expanded: boolean;
 	height: number;
+	progress: SharedValue<number>;
 	children: React.ReactNode;
 };
 
-function CollapsibleSection({ expanded, height, children }: CollapsibleSectionProps) {
-	const [progress] = useState(() => new Animated.Value(expanded ? 1 : 0));
+function CollapsibleSection({ expanded, height, progress, children }: CollapsibleSectionProps) {
+	const animatedStyle = useAnimatedStyle(() => {
+		const value = progress.value;
 
-	useEffect(() => {
-		const transition = Animated.timing(progress, {
-			toValue: expanded ? 1 : 0,
-			duration: expanded ? 280 : 240,
-			easing: Easing.out(Easing.cubic),
-			useNativeDriver: false,
-		});
-
-		transition.start();
-		return () => transition.stop();
-	}, [expanded, progress]);
+		return {
+			height: height * value,
+			opacity: value,
+			transform: [{ translateY: -12 * (1 - value) }],
+		};
+	}, [height]);
 
 	return (
 		<Animated.View
 			pointerEvents={expanded ? 'auto' : 'none'}
-			style={{
-				height: progress.interpolate({
-					inputRange: [0, 1],
-					outputRange: [0, height],
-				}),
-				opacity: progress,
-				transform: [
-					{
-						translateY: progress.interpolate({
-							inputRange: [0, 1],
-							outputRange: [-8, 0],
-						}),
-					},
-				],
+			style={[
+				{
 				overflow: 'hidden',
 				flexShrink: 0,
-			}}>
+				},
+				animatedStyle,
+			]}>
 			{children}
 		</Animated.View>
 	);
 }
 
+const TITLE_SECTION_HEIGHT = 68;
+const TOOLBAR_SECTION_HEIGHT = 64;
+const TABS_SECTION_HEIGHT = 54;
+const HEADER_TOP_OFFSET = 10;
+const HEADER_HIDE_DISTANCE = 8;
+const HEADER_SHOW_DISTANCE = 16;
+
+type ScrollEvent = NativeSyntheticEvent<NativeScrollEvent>;
+
 export default function MessagesScreen() {
-	const collapsibleHeader = useCollapsibleHeader();
 	const handleTabBarScroll = useScrollHideTabBar();
 	const { palette, isDark } = useAppTheme();
 	const screenBackground = isDark ? '#0D0F12' : '#F4F5F7';
@@ -103,10 +105,62 @@ export default function MessagesScreen() {
 	const [sort, setSort] = useState<ConversationSort>('recent');
 	const [sortVisible, setSortVisible] = useState(false);
 	const [tab, setTab] = useState<ConversationTab>('all');
+	const headerProgress = useSharedValue(1);
+	const [headerExpanded, setHeaderExpanded] = useState(true);
+	const headerExpandedRef = useRef(true);
+	const lastOffsetRef = useRef(0);
+	const directionRef = useRef<-1 | 0 | 1>(0);
+	const directionDistanceRef = useRef(0);
+
+	const setHeaderVisibility = useCallback((expanded: boolean) => {
+		if (headerExpandedRef.current === expanded) return;
+
+		headerExpandedRef.current = expanded;
+		setHeaderExpanded(expanded);
+		cancelAnimation(headerProgress);
+		headerProgress.set(withTiming(expanded ? 1 : 0, {
+			duration: expanded ? 320 : 280,
+			easing: Easing.bezier(0.22, 1, 0.36, 1),
+		}));
+	}, [headerProgress]);
+
+	const showHeader = useCallback(() => {
+		directionRef.current = 0;
+		directionDistanceRef.current = 0;
+		setHeaderVisibility(true);
+	}, [setHeaderVisibility]);
+
+	const handleScroll = useCallback((event: ScrollEvent) => {
+		handleTabBarScroll(event);
+
+		const offset = Math.max(0, event.nativeEvent.contentOffset.y);
+		const delta = offset - lastOffsetRef.current;
+		lastOffsetRef.current = offset;
+
+		if (offset <= HEADER_TOP_OFFSET) {
+			showHeader();
+			return;
+		}
+
+		if (Math.abs(delta) < 0.25 || Math.abs(delta) > 120) return;
+
+		const direction: -1 | 1 = delta > 0 ? 1 : -1;
+		if (directionRef.current !== direction) {
+			directionRef.current = direction;
+			directionDistanceRef.current = 0;
+		}
+		directionDistanceRef.current += Math.abs(delta);
+
+		const threshold = direction === 1 ? HEADER_HIDE_DISTANCE : HEADER_SHOW_DISTANCE;
+		if (directionDistanceRef.current < threshold) return;
+
+		setHeaderVisibility(direction === -1);
+		directionDistanceRef.current = 0;
+	}, [handleTabBarScroll, setHeaderVisibility, showHeader]);
 
 	const handleTabChange = (nextTab: ConversationTab) => {
 		if (tab === nextTab) return;
-		collapsibleHeader.show();
+		showHeader();
 		setTab(nextTab);
 	};
 
@@ -220,26 +274,36 @@ export default function MessagesScreen() {
 			: tab === 'renting'
 				? 'Здесь появятся переписки по объявлениям, которые вы рассматриваете.'
 				: 'Здесь появятся ваши переписки по объявлениям и заявкам.';
+	const hasToolbar = allConversations.length > 0;
+	const expandedHeaderHeight = TITLE_SECTION_HEIGHT
+		+ (hasToolbar ? TOOLBAR_SECTION_HEIGHT : 0)
+		+ TABS_SECTION_HEIGHT;
 
 	return (
 		<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
 			<View style={{ flex: 1, overflow: 'hidden' }}>
 				<View
 					style={{
+						position: 'absolute',
+						top: 0,
+						left: 0,
+						right: 0,
 						width: '100%',
-						flexShrink: 0,
 						zIndex: 20,
 						elevation: 8,
 						backgroundColor: screenBackground,
 					}}>
-					<CollapsibleSection expanded={collapsibleHeader.expanded} height={68}>
+					<CollapsibleSection
+						expanded={headerExpanded}
+						height={TITLE_SECTION_HEIGHT}
+						progress={headerProgress}>
 						<Pressable accessible={false} onPress={Keyboard.dismiss} className="px-5 pb-4 pt-4">
 							<AppText variant="screenTitle" style={{ fontSize: 30, lineHeight: 36 }}>
 								Сообщения
 							</AppText>
 						</Pressable>
 					</CollapsibleSection>
-					{conversations && conversations.length > 0 ? (
+					{hasToolbar ? (
 						<PersonalListToolbar
 							query={searchQuery}
 							onQueryChange={setSearchQuery}
@@ -252,7 +316,10 @@ export default function MessagesScreen() {
 						/>
 					) : null}
 
-					<CollapsibleSection expanded={collapsibleHeader.expanded} height={54}>
+					<CollapsibleSection
+						expanded={headerExpanded}
+						height={TABS_SECTION_HEIGHT}
+						progress={headerProgress}>
 						<CountedTabs
 							items={CONVERSATION_TABS.map((item) => ({ ...item, count: conversationCounts[item.value] }))}
 							value={tab}
@@ -276,18 +343,13 @@ export default function MessagesScreen() {
 					)}
 					contentContainerStyle={
 						filteredConversations.length === 0
-							? { flexGrow: 1, paddingTop: 2, paddingBottom: 110 }
-							: { paddingTop: 2, paddingBottom: 110 }
+							? { flexGrow: 1, paddingTop: expandedHeaderHeight + 2, paddingBottom: 110 }
+							: { paddingTop: expandedHeaderHeight + 2, paddingBottom: 110 }
 					}
 					showsVerticalScrollIndicator={false}
 					keyboardDismissMode="on-drag"
 					keyboardShouldPersistTaps="handled"
-					onScroll={(event) => {
-						collapsibleHeader.onScroll(event);
-						handleTabBarScroll(event);
-					}}
-					onScrollBeginDrag={collapsibleHeader.onScrollBeginDrag}
-					onScrollEndDrag={collapsibleHeader.onScrollEndDrag}
+					onScroll={handleScroll}
 					scrollEventThrottle={16}
 					ListEmptyComponent={
 						<View className="flex-1 justify-center px-6">
@@ -300,7 +362,7 @@ export default function MessagesScreen() {
 							onRefresh={refetch}
 							tintColor={palette.primary}
 							colors={[palette.primary]}
-							progressViewOffset={0}
+							progressViewOffset={expandedHeaderHeight}
 						/>
 					}
 				/>

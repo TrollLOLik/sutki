@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { View, type ViewProps } from 'react-native';
+import Animated, { FadeInDown, FadeOutUp, useReducedMotion } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/AppText';
 import { cn } from '@/lib/cn';
@@ -24,6 +25,7 @@ export function Field({
   className,
   ...rest
 }: FieldProps) {
+  const reduceMotion = useReducedMotion();
   return (
     <View className={cn('w-full gap-2', className)} {...rest}>
       {label || action ? (
@@ -50,13 +52,18 @@ export function Field({
       {children}
 
       {error ? (
-        <AppText
-          variant="caption"
-          tone="danger"
-          accessibilityLiveRegion="polite"
-          className="px-1">
-          {error}
-        </AppText>
+        <Animated.View
+          key={error}
+          entering={reduceMotion ? undefined : FadeInDown.duration(150).springify().damping(20)}
+          exiting={reduceMotion ? undefined : FadeOutUp.duration(110)}>
+          <AppText
+            variant="caption"
+            tone="danger"
+            accessibilityLiveRegion="polite"
+            className="px-1">
+            {error}
+          </AppText>
+        </Animated.View>
       ) : description ? (
         <AppText variant="caption" tone="muted" className="px-1">
           {description}

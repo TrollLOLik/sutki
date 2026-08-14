@@ -16,6 +16,16 @@ import {
 import { ru } from 'date-fns/locale';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  SlideInLeft,
+  SlideInRight,
+  SlideOutLeft,
+  SlideOutRight,
+  ZoomIn,
+  useReducedMotion,
+} from 'react-native-reanimated';
 
 import { useAppTheme } from '@/theme/useAppTheme';
 import { IconButton, MaterialSurface } from '@/components/ui';
@@ -46,7 +56,9 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
   const { palette } = useAppTheme();
   const min = startOfDay(minDate ?? new Date());
   const [month, setMonth] = useState(() => startOfMonth(value.start ?? min));
+  const [monthDirection, setMonthDirection] = useState(1);
   const [gridWidth, setGridWidth] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   const gridStart = startOfWeek(startOfMonth(month), WEEK_OPTS);
   const days = eachDayOfInterval({
@@ -86,6 +98,7 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
   };
 
   const changeMonth = (delta: number) => {
+    setMonthDirection(delta >= 0 ? 1 : -1);
     setMonth((current) => addMonths(current, delta));
   };
 
@@ -100,9 +113,17 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
           disabled={!canGoPrev}
           onPress={() => changeMonth(-1)}
         />
-        <Text className="text-[17px] font-extrabold capitalize text-ink">
-          {format(month, 'LLLL yyyy', { locale: ru })}
-        </Text>
+        <View style={styles.monthTitleFrame}>
+          <Animated.View
+            key={month.toISOString()}
+            entering={reduceMotion ? undefined : monthDirection > 0 ? SlideInRight.duration(210) : SlideInLeft.duration(210)}
+            exiting={reduceMotion ? undefined : monthDirection > 0 ? SlideOutLeft.duration(170) : SlideOutRight.duration(170)}
+            style={styles.monthTitleLayer}>
+            <Text className="text-[17px] font-extrabold capitalize text-ink">
+              {format(month, 'LLLL yyyy', { locale: ru })}
+            </Text>
+          </Animated.View>
+        </View>
         <IconButton
           icon="chevron-forward"
           iconSize={18}
@@ -121,7 +142,11 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
           ))}
         </View>
 
-        <View key={month.toISOString()} style={styles.calendarGrid}>
+        <Animated.View
+          key={month.toISOString()}
+          entering={reduceMotion ? undefined : monthDirection > 0 ? SlideInRight.duration(230) : SlideInLeft.duration(230)}
+          exiting={reduceMotion ? undefined : monthDirection > 0 ? SlideOutLeft.duration(190) : SlideOutRight.duration(190)}
+          style={styles.calendarGrid}>
         {Array.from({ length: 6 }, (_, weekIndex) => (
           <View key={weekIndex} style={styles.calendarWeek}>
           {days.slice(weekIndex * 7, weekIndex * 7 + 7).map((day) => {
@@ -150,7 +175,18 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
             <View
               key={day.toISOString()}
               style={{ width: gridWidth > 0 ? gridWidth / 7 : 0, height: 46, alignItems: 'center', justifyContent: 'center' }}>
-              <View
+              <Animated.View
+                key={`${day.toISOString()}-${selected ? 'selected' : 'idle'}-${endpoint ? 'endpoint' : 'range'}`}
+                entering={
+                  reduceMotion
+                    ? undefined
+                    : endpoint
+                      ? ZoomIn.duration(170).springify().damping(18)
+                      : selected
+                        ? FadeIn.duration(150)
+                        : FadeIn.duration(100)
+                }
+                exiting={reduceMotion ? undefined : FadeOut.duration(90)}
                 pointerEvents="none"
                 style={[
                   styles.dayVisual,
@@ -174,7 +210,7 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
                   }}>
                   {format(day, 'd')}
                 </Text>
-              </View>
+              </Animated.View>
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ disabled: disabled || outside, selected: endpoint }}
@@ -187,7 +223,7 @@ export function CalendarRange({ value, onChange, minDate, isDateDisabled }: Cale
           })}
           </View>
         ))}
-        </View>
+        </Animated.View>
       </View>
 
       <View style={[styles.selectionPanel, { backgroundColor: palette.surfaceMuted }]}>
@@ -246,6 +282,21 @@ const styles = StyleSheet.create({
   },
   calendarGrid: {
     width: '100%',
+    height: 276,
+  },
+  monthTitleFrame: {
+    width: 170,
+    height: 28,
+    overflow: 'hidden',
+  },
+  monthTitleLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   calendarWeek: {
     width: '100%',

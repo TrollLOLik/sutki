@@ -119,7 +119,8 @@ export function ProfileHero({
             disabled={uploadingAvatar}
             disabledOpacity={1}
             onPress={onAvatarPress}
-            pressedScale={0.97}
+            motionVariant="surface"
+            pressedScale={0.988}
             style={styles.avatarOuter}>
             {avatarContent}
           </PressableScale>
@@ -173,7 +174,8 @@ export function ProfileHero({
               disabledOpacity={1}
               hitSlop={6}
               onPress={onRatingPress}
-              pressedScale={0.97}
+              motionVariant="surface"
+              pressedScale={0.988}
               style={styles.ratingRow}>
               <AppIcon name="star" size={15} color={palette.star} />
               <AppText style={[styles.ratingValue, { color: palette.ink }]}>

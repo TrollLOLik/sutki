@@ -1,10 +1,11 @@
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DomainCard, DomainCardPressable } from '@/components/domain/DomainCard';
 import { ResilientImage } from '@/components/ResilientImage';
-import { AppIcon, AppText, Button, InlineAlert } from '@/components/ui';
+import { AnimatedListItem, AppIcon, AppText, Button, InlineAlert } from '@/components/ui';
 import { historyKind, historyMeta } from '@/lib/booking-history';
 import { bookingStatusMeta } from '@/lib/booking-status';
 import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
@@ -119,13 +120,19 @@ export function BookingCard({
   const createdAt = format(parseISO(booking.created_at), 'd MMM, HH:mm', { locale: ru });
 
   return (
-    <DomainCard radius={24} style={styles.card}>
+    <AnimatedListItem>
+      <DomainCard radius={24} style={styles.card}>
       <DomainCardPressable accessibilityRole="button" onPress={onPress} style={styles.main}>
         <View style={styles.topRow}>
-          <View style={[styles.statusBadge, { backgroundColor: visual.background }]}>
+          <Animated.View
+            key={`${booking.status}-${visual.label}`}
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(100)}
+            style={[styles.statusBadge, { backgroundColor: visual.background }]}
+          >
             <AppIcon name={visual.icon} size={14} color={visual.color} />
             <AppText style={[styles.statusText, { color: visual.color }]}>{visual.label}</AppText>
-          </View>
+          </Animated.View>
           <AppText numberOfLines={1} style={[styles.requestMeta, { color: palette.inkMuted }]}>№{booking.id}</AppText>
         </View>
 
@@ -238,7 +245,8 @@ export function BookingCard({
           </View>
         )}
       </View>
-    </DomainCard>
+      </DomainCard>
+    </AnimatedListItem>
   );
 }
 

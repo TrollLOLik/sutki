@@ -1,4 +1,5 @@
 export { Badge } from './Badge';
+export { AnimatedListItem } from './AnimatedListItem';
 export { AppIcon } from './AppIcon';
 export type { AppIconName, AppIconProps, AppIconTone } from './AppIcon';
 export { AppText } from './AppText';
