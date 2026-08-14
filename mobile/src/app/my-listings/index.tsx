@@ -8,7 +8,7 @@ import { ListingCard } from '@/components/ListingCard';
 import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { AppHeader, Button, CountedTabs, EmptyState, IconButton } from '@/components/ui';
+import { AppHeader, Button, CountedTabs, EmptyState, IconButton, LoadErrorState } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useIncomingBookings } from '@/lib/api/bookings';
 import { useListingPublicationFlow } from '@/hooks/useListingPublicationFlow';
@@ -213,14 +213,9 @@ export default function MyListingsScreen() {
         ) : isError ? (
           <View 
             style={{ paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }}
-            className="flex-1 justify-center gap-4 px-4"
+            className="flex-1 justify-center px-4"
           >
-            <EmptyState
-              icon="cloud-offline-outline"
-              title="Не удалось загрузить"
-              subtitle="Проверьте подключение и попробуйте снова."
-            />
-            <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
+            <LoadErrorState loading={isRefetching} onRetry={() => refetch()} />
           </View>
         ) : (data?.items.length ?? 0) === 0 ? (
           <View 

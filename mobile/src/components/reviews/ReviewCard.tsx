@@ -1,9 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { MaterialSurface } from '@/components/ui';
+import { DomainCard } from '@/components/domain/DomainCard';
+import { AppIcon, AppText } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ReviewReply } from '@/types/review';
 
@@ -71,7 +71,7 @@ export function ReviewCard({
   const statusView = statusPresentation(status);
 
   return (
-    <MaterialSurface level="raised" radius={20} className={`gap-3 p-4 ${className ?? ''}`}>
+    <DomainCard radius={20} className={`gap-3 p-4 ${className ?? ''}`}>
       {header.kind === 'listing' ? (
         <View className="flex-row items-center gap-3">
           {header.coverUrl ? (
@@ -82,12 +82,12 @@ export function ReviewCard({
             />
           ) : (
             <View className="items-center justify-center rounded-xl bg-surface-muted" style={{ width: 68, height: 52 }}>
-              <Ionicons name="image-outline" size={20} color={palette.inkMuted} />
+              <AppIcon name="image-outline" size={20} color={palette.inkMuted} />
             </View>
           )}
           <View className="min-w-0 flex-1 gap-0.5">
-            <Text className="text-sm font-bold text-ink" numberOfLines={1}>{header.title}</Text>
-            {header.subtitle ? <Text className="text-xs text-ink-secondary" numberOfLines={1}>{header.subtitle}</Text> : null}
+            <AppText className="text-sm font-bold text-ink" numberOfLines={1}>{header.title}</AppText>
+            {header.subtitle ? <AppText className="text-xs text-ink-secondary" numberOfLines={1}>{header.subtitle}</AppText> : null}
           </View>
         </View>
       ) : (
@@ -97,17 +97,17 @@ export function ReviewCard({
               <Image source={{ uri: header.avatarUrl }} style={{ flex: 1 }} contentFit="cover" />
             ) : (
               <View className="flex-1 items-center justify-center">
-                <Text className="text-sm font-bold text-primary">{header.name?.[0]?.toUpperCase() || 'Г'}</Text>
+                <AppText className="text-sm font-bold text-primary">{header.name?.[0]?.toUpperCase() || 'Г'}</AppText>
               </View>
             )}
           </View>
           <View className="min-w-0 flex-1 gap-0.5">
-            <Text className="text-sm font-bold text-ink" numberOfLines={1}>{header.name || 'Гость'}</Text>
-            <Text className="text-xs text-ink-secondary">{reviewDate(createdAt)}</Text>
+            <AppText className="text-sm font-bold text-ink" numberOfLines={1}>{header.name || 'Гость'}</AppText>
+            <AppText className="text-xs text-ink-secondary">{reviewDate(createdAt)}</AppText>
           </View>
           {header.listingLabel ? (
             <View className="max-w-[42%] rounded-full bg-surface-muted px-2.5 py-1">
-              <Text className="text-xs font-medium text-ink-secondary" numberOfLines={1}>{header.listingLabel}</Text>
+              <AppText className="text-xs font-medium text-ink-secondary" numberOfLines={1}>{header.listingLabel}</AppText>
             </View>
           ) : null}
         </View>
@@ -116,13 +116,13 @@ export function ReviewCard({
       <View className="flex-row items-center justify-between gap-3">
         {ratingMode === 'score' ? (
           <View className="flex-row items-center gap-1 rounded-full bg-primary-light px-2.5 py-1.5">
-            <Ionicons name="star" size={14} color={palette.star} />
-            <Text className="text-sm font-bold text-ink">{rating.toFixed(1).replace('.', ',')}</Text>
+            <AppIcon name="star" size={14} color={palette.star} />
+            <AppText className="text-sm font-bold text-ink">{rating.toFixed(1).replace('.', ',')}</AppText>
           </View>
         ) : (
           <View className="flex-row items-center gap-0.5 rounded-full bg-primary-light px-2.5 py-1.5">
             {Array.from({ length: 5 }).map((_, index) => (
-              <Ionicons
+              <AppIcon
                 key={index}
                 name={index < rating ? 'star' : 'star-outline'}
                 size={16}
@@ -131,18 +131,18 @@ export function ReviewCard({
             ))}
           </View>
         )}
-        {header.kind === 'listing' ? <Text className="text-xs text-ink-secondary">{reviewDate(createdAt)}</Text> : null}
+        {header.kind === 'listing' ? <AppText className="text-xs text-ink-secondary">{reviewDate(createdAt)}</AppText> : null}
       </View>
 
-      {body ? <Text className="text-[15px] font-normal leading-6 text-ink">{body}</Text> : null}
+      {body ? <AppText className="text-[15px] font-normal leading-6 text-ink">{body}</AppText> : null}
 
       {reply?.status === 'active' ? (
         <View className="rounded-2xl bg-primary-light p-3.5">
           <View className="flex-row items-center gap-2">
-            <Ionicons name="chatbubble-ellipses-outline" size={16} color={palette.primary} />
-            <Text className="text-xs font-bold text-primary">Ответ владельца</Text>
+            <AppIcon name="chatbubble-ellipses-outline" size={16} color={palette.primary} />
+            <AppText className="text-xs font-bold text-primary">Ответ владельца</AppText>
           </View>
-          <Text className="mt-2 text-sm leading-5 text-ink-secondary">{reply.body}</Text>
+          <AppText className="mt-2 text-sm leading-5 text-ink-secondary">{reply.body}</AppText>
         </View>
       ) : null}
 
@@ -150,20 +150,20 @@ export function ReviewCard({
         <View
           className="self-start flex-row items-center gap-1.5 rounded-full px-3 py-1.5"
           style={{ backgroundColor: statusView.danger ? palette.dangerLight : palette.primaryLight }}>
-          <Ionicons
+          <AppIcon
             name={statusView.icon}
             size={14}
             color={statusView.danger ? palette.danger : palette.primary}
           />
-          <Text style={{ color: statusView.danger ? palette.danger : palette.primary }} className="text-xs font-bold">
+          <AppText style={{ color: statusView.danger ? palette.danger : palette.primary }} className="text-xs font-bold">
             {statusView.label}
-          </Text>
+          </AppText>
         </View>
       ) : null}
       {status === 'rejected' && rejectionReason ? (
-        <Text className="text-xs leading-4 text-danger">{rejectionReason}</Text>
+        <AppText className="text-xs leading-4 text-danger">{rejectionReason}</AppText>
       ) : null}
       {children}
-    </MaterialSurface>
+    </DomainCard>
   );
 }

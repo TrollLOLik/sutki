@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { MaterialSurface } from '@/components/ui';
+import { DomainCard, DomainCardPressable } from '@/components/domain/DomainCard';
+import { AppIcon, AppText } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export type NotificationTone = 'primary' | 'info' | 'success' | 'danger' | 'neutral';
@@ -34,7 +34,6 @@ function relativeDate(value: string) {
 
 export function NotificationCard({ presentation, createdAt, unread = false, onPress }: NotificationCardProps) {
   const { palette, isDark } = useAppTheme();
-  const [scale] = useState(() => new Animated.Value(1));
   const toneColor = presentation.tone === 'success'
     ? palette.success
     : presentation.tone === 'danger'
@@ -54,48 +53,34 @@ export function NotificationCard({ presentation, createdAt, unread = false, onPr
           ? palette.surfaceMuted
           : palette.primaryLight;
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <MaterialSurface
-        level="raised"
-        radius={22}
-        style={[
-          styles.card,
-          unread ? { borderColor: isDark ? 'rgba(255,107,53,0.32)' : 'rgba(255,90,31,0.24)' } : null,
-        ]}>
-        <Pressable
+    <DomainCard
+      radius={22}
+      style={[
+        styles.card,
+        unread ? { borderColor: isDark ? 'rgba(255,107,53,0.32)' : 'rgba(255,90,31,0.24)' } : null,
+      ]}>
+        <DomainCardPressable
           accessibilityLabel={`${presentation.title}. ${presentation.body}`}
           accessibilityRole="button"
           onPress={onPress}
-          onPressIn={() => {
-            Animated.timing(scale, { toValue: 0.978, duration: 75, useNativeDriver: true }).start();
-          }}
-          onPressOut={() => {
-            Animated.spring(scale, {
-              toValue: 1,
-              damping: 18,
-              stiffness: 270,
-              mass: 0.55,
-              useNativeDriver: true,
-            }).start();
-          }}
+          pressedScale={0.978}
           style={styles.pressable}>
           <View style={[styles.icon, { backgroundColor: toneBackground }]}>
-            <Ionicons name={presentation.icon} size={22} color={toneColor} />
+            <AppIcon name={presentation.icon} size={22} color={toneColor} />
           </View>
           <View style={styles.copy}>
             <View style={styles.titleRow}>
-              <Text numberOfLines={2} style={[styles.title, { color: palette.ink, fontWeight: unread ? '800' : '700' }]}>{presentation.title}</Text>
+              <AppText numberOfLines={2} style={[styles.title, { color: palette.ink, fontWeight: unread ? '800' : '700' }]}>{presentation.title}</AppText>
               {unread ? <View style={[styles.unreadDot, { backgroundColor: palette.primary }]} /> : null}
             </View>
-            <Text numberOfLines={3} style={[styles.body, { color: palette.inkSecondary }]}>{presentation.body}</Text>
+            <AppText numberOfLines={3} style={[styles.body, { color: palette.inkSecondary }]}>{presentation.body}</AppText>
             <View style={styles.meta}>
-              <Text style={[styles.date, { color: palette.inkMuted }]}>{relativeDate(createdAt)}</Text>
-              {presentation.path ? <Ionicons name="chevron-forward" size={16} color={palette.inkMuted} /> : null}
+              <AppText style={[styles.date, { color: palette.inkMuted }]}>{relativeDate(createdAt)}</AppText>
+              {presentation.path ? <AppIcon name="chevron-forward" size={16} color={palette.inkMuted} /> : null}
             </View>
           </View>
-        </Pressable>
-      </MaterialSurface>
-    </Animated.View>
+        </DomainCardPressable>
+    </DomainCard>
   );
 }
 

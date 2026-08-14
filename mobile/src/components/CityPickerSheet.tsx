@@ -69,13 +69,14 @@ export function CityPickerSheet({
       subtitle="Начните вводить название"
       icon="location-outline"
       bodyStyle={{ paddingHorizontal: 0, paddingTop: 16, paddingBottom: 0 }}>
-      <SearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Поиск города"
-        autoFocus
-        containerStyle={{ marginHorizontal: 16, marginBottom: 12 }}
-      />
+      <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Поиск города"
+          autoFocus
+        />
+      </View>
 
       {allowAnyCity ? (
         <View style={{ marginHorizontal: 16, marginBottom: 8 }}>

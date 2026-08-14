@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
+import { DomainCard } from '@/components/domain/DomainCard';
+import { AppIcon, AppText, Button, InlineAlert } from '@/components/ui';
 import type { BookingStatusPayload } from '@/store/chatStore';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -71,7 +73,7 @@ export const BookingStatusCard = React.memo(function BookingStatusCard({
 	reviewStatus,
 	onReview,
 }: Props) {
-	const { palette, isDark } = useAppTheme();
+	const { palette } = useAppTheme();
 	const meta = EVENT_META[payload.event] ?? EVENT_META.new;
 
 	const iconColor =
@@ -100,106 +102,72 @@ export const BookingStatusCard = React.memo(function BookingStatusCard({
 
 	return (
 		<View className="items-center my-2.5 px-5">
-			<View
-				style={[
-					styles.card,
-					{
-						backgroundColor: isDark ? '#181B20' : '#FFFFFF',
-						borderColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(18,24,32,0.09)',
-						shadowColor: isDark ? '#000' : '#53606F',
-					},
-				]}
-			>
+			<DomainCard radius={20} style={styles.card}>
 				<View className="flex-row items-start">
 					<View
 						style={[
 							styles.iconRing,
 							{
 								borderColor: iconColor,
-								backgroundColor: isDark ? '#202329' : palette.surfaceMuted,
+								backgroundColor: palette.surfaceMuted,
 							},
 						]}
 					>
-						<Ionicons name={meta.icon} size={23} color={iconColor} />
+						<AppIcon name={meta.icon} size={23} color={iconColor} />
 					</View>
 					<View className="flex-1">
-						<Text className="text-[15px] leading-5 font-extrabold text-ink">{meta.title}</Text>
+						<AppText className="text-[15px] leading-5 font-extrabold text-ink">{meta.title}</AppText>
 						{dates ? (
-							<Text className="text-[12px] leading-5 text-ink-secondary mt-1">
+							<AppText className="text-[12px] leading-5 text-ink-secondary mt-1">
 								{dates}
 								{payload.guests ? ` · ${guestsLabel(payload.guests)}` : ''}
-							</Text>
+							</AppText>
 						) : null}
 					</View>
 				</View>
 
 				{payload.event === 'rejected' && payload.reason ? (
-					<Text className="text-[13px] text-ink-secondary mt-2 leading-5">
+					<AppText className="text-[13px] text-ink-secondary mt-2 leading-5">
 						Причина: {payload.reason}
-					</Text>
+					</AppText>
 				) : null}
 
 				{payload.event === 'confirmed' && payload.address ? (
 					<View className="flex-row items-start mt-2">
-						<Ionicons name="location-outline" size={15} color={palette.inkSecondary} style={{ marginTop: 2 }} />
-						<Text className="text-[13px] text-ink-secondary ml-1.5 flex-1 leading-5">
+						<AppIcon name="location-outline" size={15} color={palette.inkSecondary} style={{ marginTop: 2 }} />
+						<AppText className="text-[13px] text-ink-secondary ml-1.5 flex-1 leading-5">
 							{payload.address}
-						</Text>
+						</AppText>
 					</View>
 				) : null}
 
 				{!isOwner && payload.event === 'confirmed' && (reviewStatus === 'rejected' || reviewStatus === 'moderation_review') ? (
-					<View className="mt-3 bg-danger/5 border border-danger/10 p-3 rounded-xl gap-0.5">
-						<Text className="text-[12px] font-bold text-danger">Отзыв отклонён модерацией</Text>
-						<Text className="text-[11px] text-danger leading-relaxed">
-							Пожалуйста, измените текст отзыва, чтобы он соответствовал правилам.
-						</Text>
-					</View>
+					<InlineAlert compact tone="danger" title="Отзыв отклонён модерацией" style={styles.reviewAlert}>
+						Пожалуйста, измените текст отзыва, чтобы он соответствовал правилам.
+					</InlineAlert>
 				) : null}
 
 				{showActions ? (
 					<View className="flex-row gap-2 mt-4">
-						<TouchableOpacity
-							onPress={() => onConfirm?.(payload.request_id)}
-							disabled={busy}
-							activeOpacity={0.8}
-							style={{ backgroundColor: palette.primary, opacity: busy ? 0.6 : 1 }}
-							className="flex-1 flex-row items-center justify-center rounded-[14px] py-3"
-						>
-							{confirming ? (
-								<ActivityIndicator size="small" color="#fff" />
-							) : (
-								<Text className="text-white font-bold text-[13px]">Подтвердить</Text>
-							)}
-						</TouchableOpacity>
-						<TouchableOpacity
-							onPress={() => onReject?.(payload.request_id)}
-							disabled={busy}
-							activeOpacity={0.8}
-							style={{ opacity: busy ? 0.6 : 1 }}
-							className="flex-1 flex-row items-center justify-center rounded-[14px] py-3 bg-surface border border-line/60"
-						>
-							{rejecting ? (
-								<ActivityIndicator size="small" color={palette.danger} />
-							) : (
-								<Text className="font-bold text-[13px]" style={{ color: palette.danger }}>
-									Отклонить
-								</Text>
-							)}
-						</TouchableOpacity>
+						<View className="flex-1">
+							<Button label="Подтвердить" icon="checkmark-outline" size="md" loading={confirming} disabled={busy} onPress={() => onConfirm?.(payload.request_id)} />
+						</View>
+						<View className="flex-1">
+							<Button label="Отклонить" icon="close-outline" variant="danger" size="md" loading={rejecting} disabled={busy} onPress={() => onReject?.(payload.request_id)} />
+						</View>
 					</View>
 				) : null}
 
 				{!isOwner && payload.event === 'confirmed' && reviewAvailable ? (
-					<TouchableOpacity onPress={() => onReview?.(payload.request_id)} activeOpacity={0.8} style={{ backgroundColor: palette.primary }} className="mt-3 items-center rounded-xl py-2.5 w-full">
-						<Text className="text-[13px] font-bold text-white">{reviewLabel || 'Оставить отзыв'}</Text>
-					</TouchableOpacity>
+					<View className="mt-3 w-full">
+						<Button label={reviewLabel || 'Оставить отзыв'} icon="star-outline" size="md" onPress={() => onReview?.(payload.request_id)} />
+					</View>
 				) : null}
 
 				{time ? (
-					<Text className="text-[10px] text-ink-muted mt-2 self-end">{time}</Text>
+					<AppText className="text-[10px] text-ink-muted mt-2 self-end">{time}</AppText>
 				) : null}
-			</View>
+			</DomainCard>
 		</View>
 	);
 });
@@ -208,14 +176,16 @@ const styles = StyleSheet.create({
 	card: {
 		width: '100%',
 		maxWidth: 360,
-		borderRadius: 20,
-		borderWidth: StyleSheet.hairlineWidth,
 		paddingHorizontal: 16,
 		paddingVertical: 15,
+		shadowColor: '#000',
 		shadowOpacity: 0.08,
 		shadowRadius: 16,
 		shadowOffset: { width: 0, height: 8 },
 		elevation: 2,
+	},
+	reviewAlert: {
+		marginTop: 12,
 	},
 	iconRing: {
 		width: 44,

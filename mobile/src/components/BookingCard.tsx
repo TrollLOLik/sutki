@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { DomainCard, DomainCardPressable } from '@/components/domain/DomainCard';
 import { ResilientImage } from '@/components/ResilientImage';
-import { Button, InlineAlert, MaterialSurface } from '@/components/ui';
+import { AppIcon, AppText, Button, InlineAlert } from '@/components/ui';
 import { historyKind, historyMeta } from '@/lib/booking-history';
 import { bookingStatusMeta } from '@/lib/booking-status';
 import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
@@ -119,14 +119,14 @@ export function BookingCard({
   const createdAt = format(parseISO(booking.created_at), 'd MMM, HH:mm', { locale: ru });
 
   return (
-    <MaterialSurface level="raised" radius={24} style={styles.card}>
-      <TouchableOpacity accessibilityRole="button" activeOpacity={0.72} onPress={onPress} style={styles.main}>
+    <DomainCard radius={24} style={styles.card}>
+      <DomainCardPressable accessibilityRole="button" onPress={onPress} style={styles.main}>
         <View style={styles.topRow}>
           <View style={[styles.statusBadge, { backgroundColor: visual.background }]}>
-            <Ionicons name={visual.icon} size={14} color={visual.color} />
-            <Text style={[styles.statusText, { color: visual.color }]}>{visual.label}</Text>
+            <AppIcon name={visual.icon} size={14} color={visual.color} />
+            <AppText style={[styles.statusText, { color: visual.color }]}>{visual.label}</AppText>
           </View>
-          <Text numberOfLines={1} style={[styles.requestMeta, { color: palette.inkMuted }]}>№{booking.id}</Text>
+          <AppText numberOfLines={1} style={[styles.requestMeta, { color: palette.inkMuted }]}>№{booking.id}</AppText>
         </View>
 
         <View style={styles.contentRow}>
@@ -145,33 +145,33 @@ export function BookingCard({
 
           <View style={styles.copy}>
             <View style={styles.titleRow}>
-              <Text numberOfLines={incoming ? 1 : 2} style={[styles.title, { color: palette.ink }]}>
+              <AppText numberOfLines={incoming ? 1 : 2} style={[styles.title, { color: palette.ink }]}>
                 {incoming ? guestName : booking.house?.address ?? 'Объявление'}
-              </Text>
+              </AppText>
               {incoming && booking.guest?.rating && booking.guest.rating > 0 ? (
                 <View style={styles.rating}>
-                  <Ionicons name="star" size={13} color={palette.star} />
-                  <Text style={[styles.ratingText, { color: palette.ink }]}>{booking.guest.rating.toFixed(1)}</Text>
+                  <AppIcon name="star" size={13} color={palette.star} />
+                  <AppText style={[styles.ratingText, { color: palette.ink }]}>{booking.guest.rating.toFixed(1)}</AppText>
                 </View>
               ) : incoming ? (
-                <Text style={[styles.newGuest, { color: palette.inkMuted }]}>Новый гость</Text>
+                <AppText style={[styles.newGuest, { color: palette.inkMuted }]}>Новый гость</AppText>
               ) : null}
             </View>
-            <Text numberOfLines={1} style={[styles.subtitle, { color: palette.inkSecondary }]}>
+            <AppText numberOfLines={1} style={[styles.subtitle, { color: palette.inkSecondary }]}>
               {incoming ? booking.house?.address : booking.house?.city}
-            </Text>
+            </AppText>
             <View style={styles.detailRow}>
-              <Ionicons name="calendar-outline" size={14} color={palette.inkMuted} />
-              <Text numberOfLines={1} style={[styles.detailText, { color: palette.inkSecondary }]}>
+              <AppIcon name="calendar-outline" size={14} color={palette.inkMuted} />
+              <AppText numberOfLines={1} style={[styles.detailText, { color: palette.inkSecondary }]}>
                 {formatDateRangeRu(start, end)}
-              </Text>
+              </AppText>
             </View>
             <View style={styles.detailRow}>
-              <Ionicons name="people-outline" size={14} color={palette.inkMuted} />
-              <Text style={[styles.detailText, { color: palette.inkSecondary }]}>{formatGuests(booking.count)}</Text>
+              <AppIcon name="people-outline" size={14} color={palette.inkMuted} />
+              <AppText style={[styles.detailText, { color: palette.inkSecondary }]}>{formatGuests(booking.count)}</AppText>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+          <AppIcon name="chevron-forward" size={18} color={palette.inkMuted} />
         </View>
 
         {booking.rejection_reason?.trim() ? (
@@ -183,19 +183,19 @@ export function BookingCard({
         {total != null ? (
           <View style={styles.totalRow}>
             <View style={styles.totalCopy}>
-              <Text numberOfLines={1} style={[styles.totalLabel, { color: palette.inkSecondary }]}>
+              <AppText numberOfLines={1} style={[styles.totalLabel, { color: palette.inkSecondary }]}>
                 {history ? 'Итого за проживание' : 'Стоимость проживания'}
-              </Text>
+              </AppText>
               {!history ? (
-                <Text numberOfLines={1} style={[styles.createdText, { color: palette.inkMuted }]}>Создана {createdAt}</Text>
+                <AppText numberOfLines={1} style={[styles.createdText, { color: palette.inkMuted }]}>Создана {createdAt}</AppText>
               ) : null}
             </View>
-            <Text adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={[styles.totalValue, { color: palette.ink }]}>
+            <AppText adjustsFontSizeToFit minimumFontScale={0.72} numberOfLines={1} style={[styles.totalValue, { color: palette.ink }]}>
               {formatRub(total)} ₽
-            </Text>
+            </AppText>
           </View>
         ) : null}
-      </TouchableOpacity>
+      </DomainCardPressable>
 
       <View style={[styles.actions, { borderTopColor: palette.line }]}>
         {incoming ? (
@@ -238,7 +238,7 @@ export function BookingCard({
           </View>
         )}
       </View>
-    </MaterialSurface>
+    </DomainCard>
   );
 }
 

@@ -1,5 +1,6 @@
 import { View, useWindowDimensions } from 'react-native';
 
+import { DomainCard } from '@/components/domain/DomainCard';
 import { Skeleton } from '@/components/ui';
 
 /** Placeholder for a listing card while the feed loads (TZ §2 skeletons). */
@@ -13,7 +14,7 @@ export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'gr
 
   if (layout === 'grid') {
     return (
-      <View style={{ width: '100%' }} className="mb-3 rounded-card border border-line bg-surface p-2">
+      <DomainCard radius={19} style={{ width: '100%' }} className="mb-3 p-2">
         <Skeleton width="100%" height={116} radius={13} />
         <View className="gap-2 px-0.5 pb-1 pt-3">
           <View className="flex-row items-center justify-between">
@@ -28,12 +29,12 @@ export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'gr
             <Skeleton width="36%" height={12} radius={4} />
           </View>
         </View>
-      </View>
+      </DomainCard>
     );
   }
 
   return (
-    <View className="mb-3 rounded-card border border-line bg-surface p-3">
+    <DomainCard radius={20} className="mb-3 p-3">
       {/* Top Part: Image & Details */}
       <View className="flex-row gap-3">
         {/* Left: Image Skeleton with exact size */}
@@ -70,6 +71,6 @@ export function ListingCardSkeleton({ layout = 'list' }: { layout?: 'list' | 'gr
         <Skeleton width="35%" height={22} radius={4} />
         <Skeleton width={88} height={36} radius={999} />
       </View>
-    </View>
+    </DomainCard>
   );
 }

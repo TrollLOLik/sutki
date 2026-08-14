@@ -1,11 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { AnimatePresence, MotiView } from 'moti';
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DomainCardPressable } from '@/components/domain/DomainCard';
 import { ResilientImage } from '@/components/ResilientImage';
+import { AppIcon, AppText } from '@/components/ui';
 import { formatRating, formatRooms, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
@@ -47,7 +48,8 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
           exitTransition={{ type: 'timing', duration: 220 }}
           style={[styles.container, { marginBottom: insets.bottom + 96 }]}
         >
-          <Pressable
+          <DomainCardPressable
+            pressedScale={0.985}
             onPress={() => router.push(`/listing/${listing.id}`)}
             style={[styles.card, highlighted && styles.cardHighlighted]}
           >
@@ -58,53 +60,53 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
                 <View style={styles.badgesRow}>
                   {promoted ? (
                     <View style={styles.promotionBadge}>
-                      <Ionicons
+                      <AppIcon
                         name={highlighted ? 'sparkles' : 'trending-up'}
                         size={12}
                         color={palette.primary}
                       />
-                      <Text style={styles.promotionText}>
+                      <AppText style={styles.promotionText}>
                         {highlighted ? 'ЛУЧШЕЕ' : 'ТОП'}
-                      </Text>
+                      </AppText>
                     </View>
                   ) : null}
                   {isOwn || isViewed ? (
                     <View style={[styles.stateBadge, isOwn && styles.stateBadgeOwn]}>
-                      <Ionicons
+                      <AppIcon
                         name={isOwn ? 'home-outline' : 'eye-outline'}
                         size={11}
                         color={isOwn ? '#FFFFFF' : palette.inkSecondary}
                       />
-                      <Text style={[styles.stateBadgeText, isOwn && styles.stateBadgeTextOwn]}>
+                      <AppText style={[styles.stateBadgeText, isOwn && styles.stateBadgeTextOwn]}>
                         {isOwn ? 'Ваше' : 'Просмотрено'}
-                      </Text>
+                      </AppText>
                     </View>
                   ) : null}
-                  {isFavorite ? <Ionicons name="heart" size={16} color={palette.primary} /> : null}
+                  {isFavorite ? <AppIcon name="heart" size={16} color={palette.primary} /> : null}
                 </View>
               ) : null}
               <View style={styles.header}>
-                <Text style={styles.price}>{formatRub(listing.price)} ₽</Text>
+                <AppText style={styles.price}>{formatRub(listing.price)} ₽</AppText>
                 {listing.rating > 0 ? (
                   <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={13} color={palette.star} style={{ marginRight: 2 }} />
-                    <Text style={styles.ratingText}>
+                    <AppIcon name="star" size={13} color={palette.star} style={{ marginRight: 2 }} />
+                    <AppText style={styles.ratingText}>
                       {formatRating(listing.rating).replace('.', ',')}
-                    </Text>
+                    </AppText>
                   </View>
                 ) : null}
               </View>
 
-              <Text numberOfLines={1} style={styles.title}>
+              <AppText numberOfLines={1} style={styles.title}>
                 {formatRooms(listing.rooms)} · {listing.area} м²
-              </Text>
+              </AppText>
 
-              <Text numberOfLines={1} style={styles.address}>
+              <AppText numberOfLines={1} style={styles.address}>
                 {listing.address}
-              </Text>
+              </AppText>
               <View style={styles.viewsRow}>
-                <Ionicons name="eye-outline" size={13} color={palette.inkMuted} />
-                <Text style={styles.viewsText}>{listing.views}</Text>
+                <AppIcon name="eye-outline" size={13} color={palette.inkMuted} />
+                <AppText style={styles.viewsText}>{listing.views}</AppText>
               </View>
             </View>
 
@@ -113,9 +115,9 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
               onPress={onClose}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={17} color={palette.inkSecondary} />
+              <AppIcon name="close" size={17} color={palette.inkSecondary} />
             </Pressable>
-          </Pressable>
+          </DomainCardPressable>
         </MotiView>
       ) : null}
     </AnimatePresence>

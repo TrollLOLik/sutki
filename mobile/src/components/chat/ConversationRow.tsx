@@ -1,9 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { differenceInDays, format, isToday, isYesterday } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { AppIcon, AppText, PressableScale } from '@/components/ui';
 import type { ConversationSummary } from '@/lib/api/chat';
 import { formatRooms } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -38,14 +38,14 @@ export function ConversationRow({ conversation, currentUserId, isLast = false, s
   const name = conversation.other_user_deleted ? 'Удалённый профиль' : `${conversation.other_user_name} ${conversation.other_user_surname}`.trim() || 'Пользователь';
 
   return (
-    <TouchableOpacity activeOpacity={0.62} onPress={onPress} style={styles.touchable}>
+    <PressableScale pressedScale={0.988} onPress={onPress} style={styles.touchable}>
       <View style={styles.row}>
         <View style={styles.avatarWrap}>
           {conversation.other_user_avatar_url && !conversation.other_user_deleted ? (
             <Image source={{ uri: conversation.other_user_avatar_url }} style={styles.avatar} contentFit="cover" transition={160} />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: palette.surfaceMuted }]}>
-              <Ionicons name="person-outline" size={23} color={palette.inkMuted} />
+              <AppIcon name="person-outline" size={23} color={palette.inkMuted} />
             </View>
           )}
           {hasUnread ? <View style={[styles.unreadDot, { borderColor: screenBackground, backgroundColor: palette.primary }]} /> : null}
@@ -54,31 +54,31 @@ export function ConversationRow({ conversation, currentUserId, isLast = false, s
           <View style={styles.contentRow}>
             <View style={styles.contentCopy}>
               <View style={styles.titleRow}>
-                <Text numberOfLines={1} style={[styles.title, { color: palette.ink }, hasUnread && styles.titleUnread]}>{name}</Text>
-                <Text style={[styles.time, { color: hasUnread ? palette.primary : palette.inkMuted }, hasUnread && styles.timeUnread]}>{formatRelativeTime(conversation.last_activity)}</Text>
+                <AppText numberOfLines={1} style={[styles.title, { color: palette.ink }, hasUnread && styles.titleUnread]}>{name}</AppText>
+                <AppText style={[styles.time, { color: hasUnread ? palette.primary : palette.inkMuted }, hasUnread && styles.timeUnread]}>{formatRelativeTime(conversation.last_activity)}</AppText>
               </View>
               {conversation.house_id ? (
                 <View style={styles.listingRow}>
-                  <Ionicons name="home-outline" size={14} color={palette.inkMuted} />
-                  <Text numberOfLines={1} style={[styles.listingText, { color: palette.inkMuted }]}>
+                  <AppIcon name="home-outline" size={14} color={palette.inkMuted} />
+                  <AppText numberOfLines={1} style={[styles.listingText, { color: palette.inkMuted }]}>
                     {conversation.house_count_room ? `${formatRooms(conversation.house_count_room)}, ` : ''}
                     {conversation.house_street ?? ''}{conversation.house_number ? `, д. ${conversation.house_number}` : ''}
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
               <View style={styles.previewRow}>
-                {isMine && hasPreview ? <Ionicons name={isRead ? 'checkmark-done' : 'checkmark'} size={16} color={isRead ? palette.primary : palette.inkMuted} style={styles.readIcon} /> : null}
-                <Text numberOfLines={1} style={[styles.preview, { color: hasUnread ? palette.ink : hasPreview ? palette.inkSecondary : palette.inkMuted }, hasUnread ? styles.previewUnread : !hasPreview ? styles.previewEmpty : null]}>
+                {isMine && hasPreview ? <AppIcon name={isRead ? 'checkmark-done' : 'checkmark'} size={16} color={isRead ? palette.primary : palette.inkMuted} style={styles.readIcon} /> : null}
+                <AppText numberOfLines={1} style={[styles.preview, { color: hasUnread ? palette.ink : hasPreview ? palette.inkSecondary : palette.inkMuted }, hasUnread ? styles.previewUnread : !hasPreview ? styles.previewEmpty : null]}>
                   {hasPreview ? conversation.last_message_body : 'Начните переписку'}
-                </Text>
-                {hasUnread ? <View style={[styles.counter, { backgroundColor: palette.primary }]}><Text style={styles.counterText}>{conversation.unread_count > 99 ? '99+' : conversation.unread_count}</Text></View> : null}
+                </AppText>
+                {hasUnread ? <View style={[styles.counter, { backgroundColor: palette.primary }]}><AppText style={styles.counterText}>{conversation.unread_count > 99 ? '99+' : conversation.unread_count}</AppText></View> : null}
               </View>
             </View>
             {conversation.house_id && conversation.house_cover_path ? <Image source={{ uri: conversation.house_cover_path }} style={styles.cover} contentFit="cover" transition={160} /> : null}
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 

@@ -1,13 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppIcon, AppText, PressableScale } from '@/components/ui';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ListingOwnerActionAvailability {
@@ -55,11 +49,6 @@ function OwnerActionButton({
   compact: boolean;
 }) {
   const { palette } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
   const solid = action.tone === 'solid';
   const tinted = action.tone === 'tinted';
   const foreground = solid
@@ -69,24 +58,17 @@ function OwnerActionButton({
       : palette.inkSecondary;
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityLabel={action.label}
       accessibilityRole="button"
       hitSlop={compact ? 3 : 0}
+      pressedScale={0.96}
       onPress={(event) => {
         event.stopPropagation();
         action.onPress();
       }}
-      onPressIn={() => {
-        scale.value = reduceMotion ? 1 : withTiming(0.96, { duration: 70 });
-      }}
-      onPressOut={() => {
-        scale.value = reduceMotion
-          ? 1
-          : withSpring(1, { damping: 18, stiffness: 300, mass: 0.55 });
-      }}
       style={styles.actionCell}>
-      <Animated.View
+      <View
         style={[
           styles.actionButton,
           compact ? styles.compactButton : styles.regularButton,
@@ -107,16 +89,15 @@ function OwnerActionButton({
             shadowOffset: { width: 0, height: 4 },
             elevation: solid ? 3 : 0,
           },
-          animatedStyle,
         ]}>
-        <Ionicons name={action.icon} size={compact ? 17 : 16} color={foreground} />
+        <AppIcon name={action.icon} size={compact ? 17 : 16} color={foreground} />
         {!compact ? (
-          <Text numberOfLines={1} style={[styles.actionLabel, { color: foreground }]}>
+          <AppText numberOfLines={1} style={[styles.actionLabel, { color: foreground }]}>
             {action.label}
-          </Text>
+          </AppText>
         ) : null}
-      </Animated.View>
-    </Pressable>
+      </View>
+    </PressableScale>
   );
 }
 

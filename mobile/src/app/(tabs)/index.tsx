@@ -9,7 +9,6 @@ import {
   Pressable,
   RefreshControl,
   Text,
-  TouchableOpacity,
   View,
   ActivityIndicator,
   ScrollView,
@@ -28,7 +27,7 @@ import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
-import { BottomSheet, Button, Counter, EmptyState, FullScreenModal } from '@/components/ui';
+import { BottomSheet, Button, Counter, EmptyState, FullScreenModal, LoadErrorState } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
 import { ApiError } from '@/lib/api/client';
@@ -588,14 +587,7 @@ export default function SearchScreen() {
         />
       ) : isError ? (
         <View style={{ paddingTop: listPaddingTop }} className="flex-1 px-4">
-          <EmptyState
-            icon="cloud-offline-outline"
-            title="Не удалось загрузить"
-            subtitle="Проверьте подключение и попробуйте снова."
-            action={
-              <Button label="Повторить" variant="secondary" onPress={() => refetch()} />
-            }
-          />
+          <LoadErrorState loading={isRefetching} onRetry={() => refetch()} />
         </View>
       ) : similarPending ? (
         <FlatList

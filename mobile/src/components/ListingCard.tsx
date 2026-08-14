@@ -1,12 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { ResilientImage } from '@/components/ResilientImage';
 import { ListingOwnerActions } from '@/components/ListingOwnerActions';
@@ -14,7 +7,7 @@ import {
   PromotionBadge,
   PromotionHighlightSurface,
 } from '@/components/promotion/PromotionHighlightSurface';
-import { materialSurfaceColor } from '@/components/ui';
+import { AppIcon, AppText, PressableScale, materialSurfaceColor } from '@/components/ui';
 import { formatRating, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
@@ -55,11 +48,6 @@ function ListingBookingAction({
   onPress: () => void;
 }) {
   const { palette } = useAppTheme();
-  const reduceMotion = useReducedMotion();
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
 
   return (
     <View
@@ -69,24 +57,16 @@ function ListingBookingAction({
         borderTopColor: compact ? 'rgba(128,128,128,0.18)' : 'transparent',
         paddingTop: compact ? 8 : 0,
       }}>
-      <Pressable
+      <PressableScale
+        pressedScale={0.97}
         accessibilityRole="button"
         accessibilityLabel="Оставить заявку"
         onPress={(event) => {
           event.stopPropagation();
           onPress();
-        }}
-        onPressIn={() => {
-          scale.value = reduceMotion ? 1 : withTiming(0.97, { duration: 70 });
-        }}
-        onPressOut={() => {
-          scale.value = reduceMotion
-            ? 1
-            : withSpring(1, { damping: 18, stiffness: 300, mass: 0.55 });
         }}>
-        <Animated.View
-          style={[
-            {
+        <View
+          style={{
               minHeight: compact ? 36 : 42,
               flexDirection: 'row',
               alignItems: 'center',
@@ -102,11 +82,9 @@ function ListingBookingAction({
               shadowOpacity: 0.2,
               shadowRadius: 8,
               elevation: 3,
-            },
-            animatedStyle,
-          ]}>
-          <Ionicons name="calendar-outline" size={compact ? 15 : 17} color="#FFFFFF" />
-          <Text
+          }}>
+          <AppIcon name="calendar-outline" size={compact ? 15 : 17} color="#FFFFFF" />
+          <AppText
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.8}
@@ -118,9 +96,9 @@ function ListingBookingAction({
               fontWeight: '800',
             }}>
             Оставить заявку
-          </Text>
-        </Animated.View>
-      </Pressable>
+          </AppText>
+        </View>
+      </PressableScale>
     </View>
   );
 }
@@ -142,11 +120,6 @@ export function ListingCard({
 }: ListingCardProps) {
   const { palette, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
-  const reduceMotion = useReducedMotion();
-  const pressScale = useSharedValue(1);
-  const animatedCardStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressScale.value }],
-  }));
 
   // card: screen - 16px margin each side - 12px padding each side = screenWidth - 56
   // image column: 45% of that, aspect ratio 4:3
@@ -180,21 +153,12 @@ export function ListingCard({
 
   if (layout === 'grid') {
     return (
-      <Animated.View style={[{ flex: 1, marginBottom: 12 }, animatedCardStyle]}>
+      <View style={{ flex: 1, marginBottom: 12 }}>
         <PromotionHighlightSurface active={isHighlighted} radius={19}>
-          <Pressable
+          <PressableScale
+            pressedScale={0.975}
             accessibilityRole="button"
             onPress={onPress}
-            onPressIn={() => {
-              pressScale.value = reduceMotion
-                ? 1
-                : withSpring(0.975, { damping: 22, stiffness: 340, mass: 0.6 });
-            }}
-            onPressOut={() => {
-              pressScale.value = reduceMotion
-                ? 1
-                : withSpring(1, { damping: 18, stiffness: 260, mass: 0.7 });
-            }}
             style={{
               minHeight: showOwnerStats ? 350 : 286,
               borderRadius: isHighlighted ? 17.5 : 19,
@@ -387,27 +351,18 @@ export function ListingCard({
               style={{ marginTop: 9 }}
             />
             {onBook ? <ListingBookingAction compact onPress={onBook} /> : null}
-          </Pressable>
+          </PressableScale>
         </PromotionHighlightSurface>
-      </Animated.View>
+      </View>
     );
   }
 
   return (
-    <Animated.View style={[{ marginBottom: 12 }, animatedCardStyle]}>
+    <View style={{ marginBottom: 12 }}>
       <PromotionHighlightSurface active={isHighlighted} radius={20}>
-        <Pressable
+        <PressableScale
+          pressedScale={0.985}
           onPress={onPress}
-          onPressIn={() => {
-            pressScale.value = reduceMotion
-              ? 1
-              : withSpring(0.985, { damping: 22, stiffness: 340, mass: 0.6 });
-          }}
-          onPressOut={() => {
-            pressScale.value = reduceMotion
-              ? 1
-              : withSpring(1, { damping: 18, stiffness: 260, mass: 0.7 });
-          }}
           accessibilityRole="button"
           className="border p-3 active:opacity-95"
           style={{
@@ -602,8 +557,8 @@ export function ListingCard({
         style={{ marginTop: 10 }}
       />
       {onBook ? <ListingBookingAction compact={false} onPress={onBook} /> : null}
-        </Pressable>
+        </PressableScale>
       </PromotionHighlightSurface>
-    </Animated.View>
+    </View>
   );
 }

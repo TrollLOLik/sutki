@@ -57,18 +57,24 @@ export function PressableScale({
     onPressOut?.(event);
   };
 
+  const animationStyle = {
+    opacity: disabled ? disabledOpacity : 1,
+    transform: [{ scale }],
+  };
+
+  // AnimatedPressable does not reliably resolve a style callback on Android.
+  // Keep the overwhelmingly common static path as a plain style array so
+  // explicit width/height constraints cannot be lost during measurement.
+  const resolvedStyle: PressableProps['style'] = typeof style === 'function'
+    ? (state) => [style(state), animationStyle]
+    : [style, animationStyle];
+
   return (
     <AnimatedPressable
       disabled={disabled}
       onPressIn={animateIn}
       onPressOut={animateOut}
-      style={(state) => [
-        typeof style === 'function' ? style(state) : style,
-        {
-          opacity: disabled ? disabledOpacity : 1,
-          transform: [{ scale }],
-        },
-      ]}
+      style={resolvedStyle}
       {...props}
     />
   );

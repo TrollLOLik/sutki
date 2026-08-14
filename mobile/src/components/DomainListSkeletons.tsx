@@ -1,12 +1,13 @@
 import { StyleSheet, View } from 'react-native';
 
-import { MaterialSurface, Skeleton } from '@/components/ui';
+import { DomainCard } from '@/components/domain/DomainCard';
+import { Skeleton } from '@/components/ui';
 
 export function BookingListSkeleton({ count = 3 }: { count?: number }) {
   return (
     <View style={styles.list}>
       {Array.from({ length: count }, (_, index) => (
-        <MaterialSurface key={index} level="raised" radius={24} style={styles.bookingCard}>
+        <DomainCard key={index} radius={24} style={styles.bookingCard}>
           <View style={styles.bookingTop}>
             <Skeleton width={116} height={28} radius={14} />
             <Skeleton width={36} height={12} radius={4} />
@@ -27,7 +28,7 @@ export function BookingListSkeleton({ count = 3 }: { count?: number }) {
           <View style={styles.bookingAction}>
             <Skeleton width="100%" height={44} radius={16} />
           </View>
-        </MaterialSurface>
+        </DomainCard>
       ))}
     </View>
   );
@@ -37,7 +38,7 @@ export function ReviewListSkeleton({ count = 3 }: { count?: number }) {
   return (
     <View style={styles.list}>
       {Array.from({ length: count }, (_, index) => (
-        <MaterialSurface key={index} level="raised" radius={20} style={styles.reviewCard}>
+        <DomainCard key={index} radius={20} style={styles.reviewCard}>
           <View style={styles.reviewHead}>
             <Skeleton width={44} height={44} radius={22} />
             <View style={styles.flexCopy}>
@@ -48,7 +49,7 @@ export function ReviewListSkeleton({ count = 3 }: { count?: number }) {
           <Skeleton width={124} height={28} radius={14} />
           <Skeleton width="96%" height={15} radius={4} />
           <Skeleton width="72%" height={15} radius={4} />
-        </MaterialSurface>
+        </DomainCard>
       ))}
     </View>
   );
@@ -58,7 +59,7 @@ export function NotificationListSkeleton({ count = 5 }: { count?: number }) {
   return (
     <View style={styles.list}>
       {Array.from({ length: count }, (_, index) => (
-        <MaterialSurface key={index} level="raised" radius={20} style={styles.notificationCard}>
+        <DomainCard key={index} radius={22} style={styles.notificationCard}>
           <Skeleton width={44} height={44} radius={15} />
           <View style={styles.flexCopy}>
             <Skeleton width="46%" height={17} radius={5} />
@@ -66,7 +67,7 @@ export function NotificationListSkeleton({ count = 5 }: { count?: number }) {
             <Skeleton width="66%" height={13} radius={4} style={styles.skeletonGap} />
             <Skeleton width={72} height={11} radius={4} style={styles.skeletonGap} />
           </View>
-        </MaterialSurface>
+        </DomainCard>
       ))}
     </View>
   );

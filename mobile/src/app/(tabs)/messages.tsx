@@ -1,24 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import {
-	ActivityIndicator,
 	Animated,
 	Easing,
 	FlatList,
 	Keyboard,
 	Pressable,
 	RefreshControl,
-	Text,
 	View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/store/session';
 import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { AppText, Button, CountedTabs, EmptyState, LoadErrorState } from '@/components/ui';
+import { AppIcon, AppText, Button, CountedTabs, EmptyState, LoadErrorState, Spinner } from '@/components/ui';
 import { ConversationListSkeleton } from '@/components/DomainListSkeletons';
 import { ConversationRow } from '@/components/chat/ConversationRow';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
@@ -127,7 +124,7 @@ export default function MessagesScreen() {
 	if (status === 'loading') {
 		return (
 			<SafeAreaView edges={['top']} className="flex-1 bg-surface justify-center items-center">
-				<ActivityIndicator size="large" color={palette.primary} />
+				<Spinner label="Проверяем сессию" />
 			</SafeAreaView>
 		);
 	}
@@ -137,14 +134,14 @@ export default function MessagesScreen() {
 			<SafeAreaView edges={['top']} className="flex-1 bg-surface justify-center items-center px-8">
 				<View className="items-center mb-6">
 					<View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-						<Ionicons name="chatbubbles-outline" size={40} color={palette.primary} />
+						<AppIcon name="chatbubbles-outline" size={40} color={palette.primary} />
 					</View>
 					<AppText variant="title" align="center" style={{ marginBottom: 8 }}>
 						Сообщения
 					</AppText>
-					<Text className="text-center text-base text-ink-secondary px-4 leading-6">
+					<AppText className="text-center text-base text-ink-secondary px-4 leading-6">
 						Войдите в аккаунт, чтобы общаться с владельцами жилья и обсуждать детали бронирования.
-					</Text>
+					</AppText>
 				</View>
 				<Button
 					label="Войти в профиль"
