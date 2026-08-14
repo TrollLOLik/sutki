@@ -19,6 +19,8 @@ export type { DividerProps } from './Divider';
 export { EmptyState } from './EmptyState';
 export { LoadErrorState } from './LoadErrorState';
 export { Field } from './Field';
+export { FieldFrame } from './FieldFrame';
+export type { FieldFrameProps, FieldFrameSize } from './FieldFrame';
 export { FormSection } from './FormSection';
 export { Input } from './Input';
 export { InlineAlert } from './InlineAlert';

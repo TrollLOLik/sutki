@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
-import { Text, View, type ViewProps } from 'react-native';
+import { View, type TextStyle, type ViewProps } from 'react-native';
 
+import { AppText, type AppTextTone } from '@/components/ui/AppText';
 import { cn } from '@/lib/cn';
+import type { TypographyVariant } from '@/theme/tokens';
 
 export interface FormSectionProps extends ViewProps {
   title: ReactNode;
@@ -11,9 +13,16 @@ export interface FormSectionProps extends ViewProps {
   className?: string;
 }
 
-function renderCopy(value: ReactNode, className: string) {
+function renderCopy(
+  value: ReactNode,
+  variant: TypographyVariant,
+  tone: AppTextTone = 'ink',
+  style?: TextStyle,
+) {
   return typeof value === 'string' || typeof value === 'number' ? (
-    <Text className={className}>{value}</Text>
+    <AppText variant={variant} tone={tone} style={style}>
+      {value}
+    </AppText>
   ) : (
     value
   );
@@ -31,9 +40,12 @@ export function FormSection({
     <View className={cn('w-full gap-3', className)} {...rest}>
       <View className="flex-row items-start justify-between gap-3 px-1">
         <View className="min-w-0 flex-1 gap-1">
-          {renderCopy(title, 'text-lg font-extrabold text-ink')}
+          {renderCopy(title, 'sectionTitle')}
           {description
-            ? renderCopy(description, 'text-sm leading-5 text-ink-secondary')
+            ? renderCopy(description, 'label', 'secondary', {
+                fontWeight: '400',
+                lineHeight: 20,
+              })
             : null}
         </View>
         {action}

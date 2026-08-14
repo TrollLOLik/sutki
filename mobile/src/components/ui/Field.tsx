@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { Text, View, type ViewProps } from 'react-native';
+import { View, type ViewProps } from 'react-native';
 
+import { AppText } from '@/components/ui/AppText';
 import { cn } from '@/lib/cn';
 
 export interface FieldProps extends ViewProps {
@@ -28,10 +29,17 @@ export function Field({
       {label || action ? (
         <View className="min-h-5 flex-row items-center justify-between gap-3 px-1">
           {label ? (
-            <Text className="min-w-0 flex-1 text-sm font-bold text-ink-secondary">
+            <AppText
+              variant="label"
+              tone="secondary"
+              className="min-w-0 flex-1">
               {label}
-              {required ? <Text className="text-primary"> *</Text> : null}
-            </Text>
+              {required ? (
+                <AppText variant="label" tone="primary">
+                  {' *'}
+                </AppText>
+              ) : null}
+            </AppText>
           ) : (
             <View />
           )}
@@ -42,13 +50,17 @@ export function Field({
       {children}
 
       {error ? (
-        <Text
+        <AppText
+          variant="caption"
+          tone="danger"
           accessibilityLiveRegion="polite"
-          className="px-1 text-xs font-medium leading-4 text-danger">
+          className="px-1">
           {error}
-        </Text>
+        </AppText>
       ) : description ? (
-        <Text className="px-1 text-xs leading-4 text-ink-muted">{description}</Text>
+        <AppText variant="caption" tone="muted" className="px-1">
+          {description}
+        </AppText>
       ) : null}
     </View>
   );

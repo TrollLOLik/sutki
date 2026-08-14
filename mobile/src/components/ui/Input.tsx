@@ -1,7 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import { forwardRef, useState, type ReactNode } from 'react';
 import {
-  Text,
   TextInput,
   View,
   type StyleProp,
@@ -9,15 +7,18 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
+import { FieldFrame, type FieldFrameSize } from '@/components/ui/FieldFrame';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface InputProps extends TextInputProps {
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
   before?: ReactNode;
   after?: ReactNode;
   error?: string;
   invalid?: boolean;
-  size?: 'md' | 'lg';
+  size?: FieldFrameSize;
   containerStyle?: StyleProp<ViewStyle>;
   frameStyle?: StyleProp<ViewStyle>;
 }
@@ -44,31 +45,18 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   const { palette } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(error || invalid);
-  const height = size === 'md' ? 48 : 56;
-  const radius = size === 'md' ? 16 : 18;
 
   return (
     <View style={[{ width: '100%', opacity: editable ? 1 : 0.48 }, containerStyle]}>
-      <View
-        style={[
-          {
-            height,
-            width: '100%',
-            flexDirection: 'row',
-            alignItems: 'center',
-            overflow: 'hidden',
-            borderRadius: radius,
-            borderWidth: hasError || isFocused ? 1.5 : 1,
-            borderColor: hasError ? palette.danger : isFocused ? palette.primary : palette.line,
-            backgroundColor: palette.surfaceMuted,
-            paddingHorizontal: 16,
-          },
-          frameStyle,
-        ]}>
+      <FieldFrame
+        size={size}
+        focused={isFocused}
+        invalid={hasError}
+        style={frameStyle}>
         {before ? (
           <View style={{ flexShrink: 0, marginRight: 12 }}>{before}</View>
         ) : icon ? (
-          <Ionicons
+          <AppIcon
             name={icon}
             size={20}
             color={hasError ? palette.danger : isFocused ? palette.primary : palette.inkMuted}
@@ -103,8 +91,16 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           {...rest}
         />
         {after ? <View style={{ flexShrink: 0, marginLeft: 10 }}>{after}</View> : null}
-      </View>
-      {error ? <Text className="mt-1.5 px-1 text-xs font-medium text-danger">{error}</Text> : null}
+      </FieldFrame>
+      {error ? (
+        <AppText
+          variant="caption"
+          tone="danger"
+          accessibilityLiveRegion="polite"
+          style={{ marginTop: 6, paddingHorizontal: 4 }}>
+          {error}
+        </AppText>
+      ) : null}
     </View>
   );
 });

@@ -1,11 +1,15 @@
 import { useRef } from 'react';
-import { Pressable, Text, TextInput } from 'react-native';
+import { TextInput } from 'react-native';
 
+import { AppText } from '@/components/ui/AppText';
 import { Input } from '@/components/ui/Input';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { formatPhoneMask } from '@/lib/phone';
 import { useAppTheme } from '@/theme/useAppTheme';
 
-interface PhoneInputProps {
+const RUSSIAN_FLAG = String.fromCodePoint(0x1f1f7, 0x1f1fa);
+
+export interface PhoneInputProps {
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
@@ -13,7 +17,13 @@ interface PhoneInputProps {
   autoFocus?: boolean;
 }
 
-export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }: PhoneInputProps) {
+export function PhoneInput({
+  value,
+  onChange,
+  onBlur,
+  error,
+  autoFocus = false,
+}: PhoneInputProps) {
   const { palette } = useAppTheme();
   const inputRef = useRef<TextInput>(null);
 
@@ -36,10 +46,11 @@ export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }
       maxLength={15}
       error={error}
       before={
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Код страны Россия плюс семь"
           hitSlop={8}
+          pressedScale={0.985}
           onPress={() => inputRef.current?.focus()}
           style={{
             flexDirection: 'row',
@@ -49,9 +60,9 @@ export function PhoneInput({ value, onChange, onBlur, error, autoFocus = false }
             borderRightColor: palette.line,
             paddingRight: 12,
           }}>
-          <Text style={{ fontSize: 19, lineHeight: 23 }}>🇷🇺</Text>
-          <Text style={{ color: palette.ink, fontSize: 16, fontWeight: '700' }}>+7</Text>
-        </Pressable>
+          <AppText style={{ fontSize: 19, lineHeight: 23 }}>{RUSSIAN_FLAG}</AppText>
+          <AppText variant="bodyStrong">+7</AppText>
+        </PressableScale>
       }
     />
   );

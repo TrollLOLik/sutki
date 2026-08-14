@@ -1,13 +1,13 @@
 import { forwardRef, useState } from 'react';
 import {
-  Text,
   TextInput,
-  View,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
 
+import { AppText } from '@/components/ui/AppText';
+import { FieldFrame } from '@/components/ui/FieldFrame';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface TextAreaProps extends Omit<TextInputProps, 'multiline'> {
@@ -38,18 +38,13 @@ export const TextArea = forwardRef<TextInput, TextAreaProps>(function TextArea(
   const length = String(value ?? defaultValue ?? '').length;
 
   return (
-    <View
-      style={[
-        {
-          minHeight,
-          overflow: 'hidden',
-          borderRadius: 18,
-          borderWidth: focused || invalid ? 1.5 : 1,
-          borderColor: invalid ? palette.danger : focused ? palette.primary : palette.line,
-          backgroundColor: palette.surfaceMuted,
-        },
-        containerStyle,
-      ]}>
+    <FieldFrame
+      focused={focused}
+      invalid={invalid}
+      multiline
+      minHeight={minHeight}
+      contentPaddingHorizontal={0}
+      style={containerStyle}>
       <TextInput
         ref={ref}
         {...rest}
@@ -83,18 +78,20 @@ export const TextArea = forwardRef<TextInput, TextAreaProps>(function TextArea(
         ]}
       />
       {showCount && maxLength ? (
-        <Text
+        <AppText
+          variant="caption"
+          tone={invalid ? 'danger' : 'muted'}
           style={{
             paddingRight: 12,
             paddingBottom: 9,
             textAlign: 'right',
-            color: invalid ? palette.danger : palette.inkMuted,
             fontSize: 11,
             lineHeight: 14,
+            fontWeight: '400',
           }}>
           {length} / {maxLength}
-        </Text>
+        </AppText>
       ) : null}
-    </View>
+    </FieldFrame>
   );
 });

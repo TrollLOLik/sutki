@@ -1,22 +1,22 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import {
-  Pressable,
-  Text,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
   View,
 } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
 import { Field } from '@/components/ui/Field';
-import { useAppTheme } from '@/theme/useAppTheme';
+import { FieldFrame } from '@/components/ui/FieldFrame';
+import { PressableScale } from '@/components/ui/PressableScale';
 
 export interface PickerFieldProps extends Omit<PressableProps, 'children' | 'style'> {
   label?: string;
   value?: string | null;
   placeholder?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
   before?: ReactNode;
   after?: ReactNode;
   description?: string;
@@ -39,64 +39,50 @@ export function PickerField({
   style,
   ...rest
 }: PickerFieldProps) {
-  const { palette } = useAppTheme();
-
   return (
     <Field
       label={label}
       description={description}
       error={error}
       required={required}>
-      <Pressable
+      <PressableScale
         accessibilityRole="button"
         accessibilityState={{ disabled: Boolean(disabled) }}
         disabled={Boolean(disabled)}
-        className="active:opacity-75"
+        pressedScale={0.985}
+        disabledOpacity={0.48}
         style={[
           {
             width: '100%',
-            opacity: disabled ? 0.48 : 1,
           },
           style,
         ]}
         {...rest}>
-        <View
-          style={{
-            minHeight: 56,
-            width: '100%',
-            flexDirection: 'row',
-            alignItems: 'center',
-            overflow: 'hidden',
-            borderRadius: 18,
-            borderWidth: error ? 1.5 : 1,
-            borderColor: error ? palette.danger : palette.line,
-            backgroundColor: palette.surfaceMuted,
-            paddingHorizontal: 16,
-          }}>
+        <FieldFrame invalid={Boolean(error)}>
           {before ? (
             <View style={{ flexShrink: 0 }}>{before}</View>
           ) : icon ? (
             <View style={{ flexShrink: 0 }}>
-              <Ionicons name={icon} size={20} color={palette.primary} />
+              <AppIcon name={icon} size={20} tone="primary" />
             </View>
           ) : null}
-          <Text
+          <AppText
+            variant="body"
+            tone={value ? 'ink' : 'muted'}
             numberOfLines={1}
             style={{
               minWidth: 0,
               flex: 1,
               marginLeft: before || icon ? 12 : 0,
-              color: value ? palette.ink : palette.inkMuted,
-              fontSize: 16,
               lineHeight: 21,
             }}>
             {value || placeholder}
-          </Text>
+          </AppText>
           <View style={{ flexShrink: 0, marginLeft: 10 }}>
-            {after ?? <Ionicons name="chevron-forward" size={19} color={palette.inkMuted} />}
+            {after ?? <AppIcon name="chevron-forward" size={19} tone="muted" />}
           </View>
-        </View>
-      </Pressable>
+        </FieldFrame>
+      </PressableScale>
     </Field>
   );
 }
