@@ -6,7 +6,6 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   Animated,
   FlatList,
-  Modal,
   Pressable,
   RefreshControl,
   Text,
@@ -29,7 +28,7 @@ import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
-import { BottomSheet, Button, EmptyState } from '@/components/ui';
+import { BottomSheet, Button, Counter, EmptyState, FullScreenModal } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useListingPublication, useMyListings } from '@/lib/api/create-listing';
 import { ApiError } from '@/lib/api/client';
@@ -756,27 +755,14 @@ export default function SearchScreen() {
         subtitle="Укажите, сколько человек будет проживать"
         icon="people-outline"
         footer={<Button label="Применить" onPress={handleApplyGuests} />}>
-        {/* Counter Row */}
-        <View className="flex-row items-center justify-center gap-6 py-7">
-          <TouchableOpacity
-            disabled={tempGuests <= 1}
-            onPress={() => setTempGuests((g) => Math.max(1, g - 1))}
-            className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted disabled:opacity-40"
-          >
-            <Ionicons name="remove" size={24} color={palette.ink} />
-          </TouchableOpacity>
-          
-          <Text className="min-w-16 text-center text-3xl font-extrabold text-ink">
-            {tempGuests}
-          </Text>
-
-          <TouchableOpacity
-            disabled={tempGuests >= 100}
-            onPress={() => setTempGuests((g) => Math.min(100, g + 1))}
-            className="h-12 w-12 items-center justify-center rounded-full border border-line active:bg-surface-muted disabled:opacity-40"
-          >
-            <Ionicons name="add" size={24} color={palette.ink} />
-          </TouchableOpacity>
+        <View className="items-center justify-center py-7">
+          <Counter
+            label="Количество гостей"
+            value={tempGuests}
+            min={1}
+            max={100}
+            onChange={setTempGuests}
+          />
         </View>
 
       </BottomSheet>
@@ -887,19 +873,12 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
     void clearRecentSearches().catch(() => undefined);
   };
 
-  if (!visible) return null;
-
   return (
-    <Modal
+    <FullScreenModal
       visible={visible}
-      animationType="fade"
-      transparent={true}
-      statusBarTranslucent
-      navigationBarTranslucent
-      hardwareAccelerated
       onShow={focusSearchInput}
-      onRequestClose={onClose}
-    >
+      onClose={onClose}
+      transition="fade">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 bg-surface"
@@ -986,7 +965,7 @@ function SearchModal({ visible, onClose, onSelectCity, onSubmitQuery, initialVal
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </FullScreenModal>
   );
 }
 

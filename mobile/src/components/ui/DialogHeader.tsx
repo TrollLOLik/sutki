@@ -1,7 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
 import { IconButton } from '@/components/ui/IconButton';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -10,7 +11,7 @@ export type DialogTone = 'primary' | 'neutral' | 'success' | 'warning' | 'danger
 export interface DialogHeaderProps {
   title: ReactNode;
   description?: ReactNode;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
   tone?: DialogTone;
   onClose?: () => void;
   showClose?: boolean;
@@ -73,29 +74,30 @@ export function DialogHeader({
             borderRadius: 13,
             backgroundColor,
           }}>
-          <Ionicons name={icon} size={21} color={color} />
+          <AppIcon name={icon} size={21} color={color} />
         </View>
       ) : null}
 
       <View style={{ minWidth: 0, flex: 1 }}>
         {typeof title === 'string' ? (
-          <Text style={{ color: palette.ink, fontSize: 18, lineHeight: 23, fontWeight: '800' }}>
+          <AppText variant="title" style={{ fontSize: 18, lineHeight: 23 }}>
             {title}
-          </Text>
+          </AppText>
         ) : (
           title
         )}
         {description ? (
           typeof description === 'string' ? (
-            <Text
+            <AppText
+              variant="caption"
+              tone="secondary"
               style={{
                 marginTop: 3,
-                color: palette.inkSecondary,
                 fontSize: 12,
                 lineHeight: 17,
               }}>
               {description}
-            </Text>
+            </AppText>
           ) : (
             description
           )

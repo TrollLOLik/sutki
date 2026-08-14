@@ -1,16 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   Animated,
   Modal,
   Pressable,
-  Text,
   View,
   type AlertButton,
   type AlertStatic,
 } from 'react-native';
 import { create } from 'zustand';
 
+import { Button } from '@/components/ui/Button';
+import type { AppIconName } from '@/components/ui/AppIcon';
 import { DialogHeader, type DialogTone } from '@/components/ui/DialogHeader';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -55,68 +55,6 @@ export const appAlert: Pick<AlertStatic, 'alert'> = {
 };
 
 type AlertTone = 'info' | 'success' | 'warning' | 'danger' | 'choice';
-
-interface AlertActionProps {
-  children: ReactNode;
-  onPress: () => void;
-  backgroundColor: string;
-  borderColor: string;
-  bordered?: boolean;
-  flex?: number;
-  minHeight?: number;
-}
-
-function AlertAction({
-  children,
-  onPress,
-  backgroundColor,
-  borderColor,
-  bordered = false,
-  flex,
-  minHeight = 48,
-}: AlertActionProps) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const pressIn = () => {
-    Animated.timing(scale, {
-      toValue: 0.97,
-      duration: 70,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const pressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      damping: 16,
-      stiffness: 320,
-      mass: 0.55,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <Animated.View style={{ flex, transform: [{ scale }] }}>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        onPressIn={pressIn}
-        onPressOut={pressOut}
-        style={{
-          minHeight,
-          borderRadius: 16,
-          borderWidth: bordered ? 1 : 0,
-          borderColor,
-          backgroundColor,
-          paddingHorizontal: 14,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-        {children}
-      </Pressable>
-    </Animated.View>
-  );
-}
 
 function getTone(request: AlertRequest): AlertTone {
   const title = request.title.toLocaleLowerCase('ru');
@@ -219,13 +157,13 @@ export function AppAlertHost() {
   if (!request) return null;
 
   const tone = getTone(request);
-  const toneStyle = {
-    info: { color: palette.info, background: palette.infoLight, icon: 'information-circle-outline' },
-    success: { color: palette.success, background: palette.successLight, icon: 'checkmark-circle-outline' },
-    warning: { color: palette.primary, background: palette.primaryLight, icon: 'warning-outline' },
-    danger: { color: palette.danger, background: palette.dangerLight, icon: 'alert-circle-outline' },
-    choice: { color: palette.primary, background: palette.primaryLight, icon: 'image-outline' },
-  }[tone] as { color: string; background: string; icon: keyof typeof Ionicons.glyphMap };
+  const toneIcon: Record<AlertTone, AppIconName> = {
+    info: 'information-circle-outline',
+    success: 'checkmark-circle-outline',
+    warning: 'warning-outline',
+    danger: 'alert-circle-outline',
+    choice: 'image-outline',
+  };
   const dialogTone: DialogTone = tone === 'info' || tone === 'choice' ? 'primary' : tone;
   const verticalButtons = request.buttons.length > 2;
   const primaryButtons = request.buttons.filter((button) => button.style !== 'cancel' && button.style !== 'destructive');
@@ -239,46 +177,28 @@ export function AppAlertHost() {
     const isCancel = button.style === 'cancel';
     const isDestructive = button.style === 'destructive';
     const isPrimary = !isCancel && !isDestructive;
-    const actionIcon: keyof typeof Ionicons.glyphMap = isDestructive
+    const actionIcon: AppIconName = isDestructive
       ? 'trash-outline'
       : isCancel
         ? 'close-outline'
         : tone === 'choice'
           ? 'images-outline'
           : 'checkmark-outline';
-    const backgroundColor = isPrimary
-      ? palette.primary
-      : isDestructive
-        ? palette.dangerLight
-        : palette.surfaceMuted;
-    const foregroundColor = isPrimary ? '#FFFFFF' : isDestructive ? palette.danger : palette.ink;
 
     return (
-      <AlertAction
+      <Button
         key={`${button.text ?? 'button'}-${index}`}
+        label={button.text ?? 'Понятно'}
+        startIcon={actionIcon}
         onPress={() => close(button)}
-        flex={flex}
-        minHeight={isPrimary && compactChoice ? 52 : 48}
-        backgroundColor={backgroundColor}
-        borderColor={isDestructive ? palette.danger : palette.line}
-        bordered={!isPrimary}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 }}>
-          <Ionicons name={actionIcon} size={18} color={foregroundColor} />
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.82}
-            style={{
-              flexShrink: 1,
-              textAlign: 'center',
-              color: foregroundColor,
-              fontSize: 14,
-              fontWeight: '800',
-            }}>
-            {button.text ?? 'Понятно'}
-          </Text>
-        </View>
-      </AlertAction>
+        mode={isPrimary ? 'solid' : 'soft'}
+        tone={isDestructive ? 'danger' : isCancel ? 'neutral' : 'primary'}
+        size="md"
+        style={[
+          flex ? { flex } : null,
+          isPrimary && compactChoice ? { height: 52 } : null,
+        ]}
+      />
     );
   };
 
@@ -286,6 +206,7 @@ export function AppAlertHost() {
     <Modal
       visible
       transparent
+      presentationStyle="overFullScreen"
       statusBarTranslucent
       navigationBarTranslucent
       hardwareAccelerated
@@ -352,7 +273,7 @@ export function AppAlertHost() {
           <DialogHeader
             title={request.title}
             description={request.message}
-            icon={toneStyle.icon}
+            icon={toneIcon[tone]}
             tone={dialogTone}
             showClose={false}
           />

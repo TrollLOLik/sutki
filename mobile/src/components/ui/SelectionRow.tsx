@@ -10,15 +10,17 @@ export interface SelectionRowProps {
   selected: boolean;
   onPress: () => void;
   icon?: AppIconName;
+  disabled?: boolean;
 }
 
-export function SelectionRow({ label, selected, onPress, icon }: SelectionRowProps) {
+export function SelectionRow({ label, selected, onPress, icon, disabled = false }: SelectionRowProps) {
   const { palette } = useAppTheme();
 
   return (
     <PressableScale
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
+      disabled={disabled}
       onPress={onPress}
       pressedScale={0.985}
       style={{

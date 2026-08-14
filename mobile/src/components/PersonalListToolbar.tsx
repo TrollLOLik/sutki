@@ -3,10 +3,9 @@ import { View } from 'react-native';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
 import {
   AppText,
-  BottomSheet,
   IconButton,
   SearchField,
-  SelectionRow,
+  SelectionSheet,
   type AppIconName,
 } from '@/components/ui';
 import type { ListingLayoutMode } from '@/store/listing-layout';
@@ -112,33 +111,19 @@ export function PersonalListToolbar<T extends string>({
         ) : null}
       </View>
 
-      <BottomSheet
+      <SelectionSheet
         visible={showSort && sortVisible}
         onClose={() => onSortVisibleChange(false)}
-        height={Math.min(520, 126 + sortOptions.length * 56)}
         title="Сортировка"
         subtitle="Выберите порядок отображения"
         icon="swap-vertical-outline"
-        showClose={false}
-        bodyStyle={{ paddingTop: 8 }}>
-        <View style={{ gap: 6 }}>
-          {sortOptions.map((option) => {
-            const selected = option.value === sort;
-            return (
-              <SelectionRow
-                key={option.value}
-                label={option.label}
-                icon={option.icon ?? 'reorder-three-outline'}
-                selected={selected}
-                onPress={() => {
-                  onSortChange(option.value);
-                  onSortVisibleChange(false);
-                }}
-              />
-            );
-          })}
-        </View>
-      </BottomSheet>
+        value={sort}
+        options={sortOptions.map((option) => ({
+          ...option,
+          icon: option.icon ?? 'reorder-three-outline',
+        }))}
+        onChange={onSortChange}
+      />
     </>
   );
 }

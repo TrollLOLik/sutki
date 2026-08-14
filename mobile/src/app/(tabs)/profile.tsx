@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Animated, Dimensions, Easing, Image, Linking, Modal, Pressable, ScrollView, Text, View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { Animated, Dimensions, Easing, Image, Linking, Pressable, ScrollView, Text, View, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
@@ -16,6 +16,7 @@ import {
   Button,
   DialogActions,
   Field,
+  FullScreenModal,
   IconButton,
   Input,
   MaterialSurface,
@@ -777,15 +778,10 @@ export default function ProfileScreen() {
         </ScrollView>
       )}
 
-      <Modal
+      <FullScreenModal
         visible={settingsVisible}
-        animationType="slide"
-        transparent={false}
-        statusBarTranslucent
-        navigationBarTranslucent
-        hardwareAccelerated
-        onRequestClose={closeSettings}
-      >
+        onClose={closeSettings}
+        transition="slide">
         <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface px-4 pt-2 pb-6">
               <View className="h-16 flex-row items-center">
                 <IconButton
@@ -1221,7 +1217,7 @@ export default function ProfileScreen() {
               visible={phoneChangeVisible}
               onClose={() => setPhoneChangeVisible(false)}
             />
-      </Modal>
+      </FullScreenModal>
       <AccountDeleteSheet
         visible={deleteSheetVisible}
         onClose={handleCloseDeleteAccount}

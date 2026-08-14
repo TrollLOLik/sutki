@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SearchOverlayHeader } from '@/components/SearchOverlayHeader';
 import { SearchResultItem } from '@/components/SearchResultItem';
+import { FullScreenModal } from '@/components/ui';
 import { suggestCities, suggestAddress, type DaDataSuggestion } from '@/lib/api/cities';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -176,18 +176,12 @@ export function MapSearchOverlay({
   // When city context is set, show a chip to clear it
   const cityContextName = cityContext;
 
-  if (!visible) return null;
-
   return (
-    <Modal
+    <FullScreenModal
       visible={visible}
-      animationType="fade"
-      transparent={false}
-      statusBarTranslucent
-      navigationBarTranslucent
-      hardwareAccelerated
       onShow={focusSearchInput}
-      onRequestClose={onClose}>
+      onClose={onClose}
+      transition="fade">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 bg-surface"
@@ -278,6 +272,6 @@ export function MapSearchOverlay({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </FullScreenModal>
   );
 }

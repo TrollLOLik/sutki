@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 
-import { BottomSheet, SearchField } from '@/components/ui';
+import { AppText, BottomSheet, SearchField, SelectionRow } from '@/components/ui';
 import { suggestCities } from '@/lib/api/cities';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -79,47 +78,29 @@ export function CityPickerSheet({
       />
 
       {allowAnyCity ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => select(null)}
-          style={{
-            minHeight: 56,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: palette.line,
-            paddingHorizontal: 18,
-          }}>
-          <Ionicons name="globe-outline" size={20} color={palette.primary} />
-          <Text style={{ flex: 1, color: palette.ink, fontSize: 15, fontWeight: '700' }}>Любой город</Text>
-          {!selectedCity ? <Ionicons name="checkmark" size={20} color={palette.primary} /> : null}
-        </Pressable>
+        <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+          <SelectionRow
+            label="Любой город"
+            icon="globe-outline"
+            selected={!selectedCity}
+            onPress={() => select(null)}
+          />
+        </View>
       ) : null}
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        contentContainerStyle={{ flexGrow: 1, gap: 8, paddingHorizontal: 16, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
         {suggestions.map((city) => (
-          <Pressable
+          <SelectionRow
             key={city}
-            accessibilityRole="button"
+            label={city}
+            icon="location-outline"
+            selected={selectedCity === city}
             onPress={() => select(city)}
-            style={{
-              minHeight: 56,
-              flexDirection: 'row',
-              alignItems: 'center',
-              borderBottomWidth: 1,
-              borderBottomColor: palette.line,
-              paddingHorizontal: 18,
-            }}>
-            <Text numberOfLines={1} style={{ minWidth: 0, flex: 1, color: palette.ink, fontSize: 15 }}>
-              {city}
-            </Text>
-            {selectedCity === city ? <Ionicons name="checkmark" size={20} color={palette.primary} /> : null}
-          </Pressable>
+          />
         ))}
 
         {loading ? (
@@ -127,13 +108,13 @@ export function CityPickerSheet({
             <ActivityIndicator color={palette.primary} />
           </View>
         ) : query.trim().length > 0 && suggestions.length === 0 ? (
-          <Text style={{ paddingVertical: 32, textAlign: 'center', color: palette.inkMuted, fontSize: 14 }}>
+          <AppText variant="label" tone="muted" align="center" style={{ paddingVertical: 32 }}>
             Города не найдены
-          </Text>
+          </AppText>
         ) : query.trim().length === 0 ? (
-          <Text style={{ paddingVertical: 32, textAlign: 'center', color: palette.inkMuted, fontSize: 13 }}>
+          <AppText variant="caption" tone="muted" align="center" style={{ paddingVertical: 32 }}>
             Введите название города
-          </Text>
+          </AppText>
         ) : null}
       </ScrollView>
     </BottomSheet>

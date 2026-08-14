@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
@@ -15,17 +14,18 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { AppIconName } from '@/components/ui/AppIcon';
 import { DialogHeader, type DialogTone } from '@/components/ui/DialogHeader';
 import { useAppTheme } from '@/theme/useAppTheme';
 
-interface BottomSheetProps {
+export interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
   children: React.ReactNode;
   height?: DimensionValue;
   title?: ReactNode;
   subtitle?: ReactNode;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
   tone?: DialogTone;
   footer?: ReactNode;
   closeOnBackdrop?: boolean;
@@ -119,7 +119,11 @@ export function BottomSheet({
       return;
     }
 
-    if (!mounted || transition.current === 'closing' || transition.current === 'closed') return;
+    if (!mounted || transition.current === 'closing') return;
+    if (transition.current === 'closed') {
+      setMounted(false);
+      return;
+    }
     cancelPendingAnimation();
     transition.current = 'closing';
 
@@ -166,6 +170,7 @@ export function BottomSheet({
       visible={mounted}
       transparent
       animationType="none"
+      presentationStyle="overFullScreen"
       statusBarTranslucent
       navigationBarTranslucent
       hardwareAccelerated

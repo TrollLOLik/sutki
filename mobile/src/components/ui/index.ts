@@ -47,8 +47,15 @@ export type { MaterialLevel } from './MaterialSurface';
 export { ScreenContainer } from './ScreenContainer';
 export { Skeleton } from './Skeleton';
 export { BottomSheet } from './BottomSheet';
+export type { BottomSheetProps } from './BottomSheet';
+export { FullScreenModal } from './FullScreenModal';
+export type { FullScreenModalProps, FullScreenModalTransition } from './FullScreenModal';
 export { RangeSlider } from './RangeSlider';
 export { MetricTile } from './MetricTile';
 export { PastelIcon } from './PastelIcon';
+export { SelectionSheet } from './SelectionSheet';
+export type { SelectionSheetOption, SelectionSheetProps } from './SelectionSheet';
+export { WheelPicker } from './WheelPicker';
+export type { WheelPickerHandle, WheelPickerItem, WheelPickerProps, WheelPickerValue } from './WheelPicker';
 
 
