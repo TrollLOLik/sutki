@@ -1,13 +1,15 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface SegmentedOption<T extends string> {
   value: T;
   label: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
   badge?: ReactNode;
   disabled?: boolean;
 }
@@ -20,7 +22,13 @@ export interface SegmentedControlProps<T extends string> {
   style?: StyleProp<ViewStyle>;
 }
 
-export function SegmentedControl<T extends string>({ value, options, onChange, accessibilityLabel = 'Переключатель', style }: SegmentedControlProps<T>) {
+export function SegmentedControl<T extends string>({
+  value,
+  options,
+  onChange,
+  accessibilityLabel = 'Переключатель',
+  style,
+}: SegmentedControlProps<T>) {
   const { palette } = useAppTheme();
 
   return (
@@ -43,19 +51,24 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
       {options.map((option) => {
         const selected = option.value === value;
         return (
-          <Pressable
+          <PressableScale
             key={option.value}
             accessibilityRole="tab"
             accessibilityState={{ selected, disabled: Boolean(option.disabled) }}
             disabled={Boolean(option.disabled)}
-            onPress={(event) => onChange(option.value, { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY })}
-            className="active:opacity-75"
+            pressedScale={0.985}
+            disabledOpacity={0.4}
+            onPress={(event) =>
+              onChange(option.value, {
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY,
+              })
+            }
             style={{
               minWidth: 0,
               flexBasis: 0,
               flexGrow: 1,
               flexShrink: 1,
-              opacity: option.disabled ? 0.4 : 1,
             }}>
             <View
               pointerEvents="none"
@@ -72,13 +85,30 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
                 borderColor: selected ? palette.line : 'transparent',
                 backgroundColor: selected ? palette.surface : 'transparent',
               }}>
-              {option.icon ? <Ionicons name={option.icon} size={16} color={selected ? palette.primary : palette.inkSecondary} /> : null}
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ minWidth: 0, flexShrink: 1, color: selected ? palette.ink : palette.inkSecondary, fontSize: 13, fontWeight: selected ? '800' : '600' }}>
+              {option.icon ? (
+                <AppIcon
+                  name={option.icon}
+                  size={16}
+                  color={selected ? palette.primary : palette.inkSecondary}
+                />
+              ) : null}
+              <AppText
+                variant="captionStrong"
+                tone={selected ? 'ink' : 'secondary'}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                style={{
+                  minWidth: 0,
+                  flexShrink: 1,
+                  fontSize: 13,
+                  fontWeight: selected ? '800' : '600',
+                }}>
                 {option.label}
-              </Text>
+              </AppText>
               {option.badge}
             </View>
-          </Pressable>
+          </PressableScale>
         );
       })}
     </View>

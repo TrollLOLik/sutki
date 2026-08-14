@@ -12,6 +12,7 @@ import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { PhoneChangeSheet } from '@/components/PhoneChangeSheet';
 import { AccountDeleteSheet } from '@/components/AccountDeleteSheet';
 import {
+  AppHeader,
   Button,
   DialogActions,
   Field,
@@ -587,32 +588,28 @@ export default function ProfileScreen() {
   return (
     <View className="flex-1 bg-surface">
       <SafeAreaView edges={['top']} style={{ backgroundColor: palette.surface }}>
-        <View
-          className="h-[70px] flex-row items-center px-4"
-          style={{ borderBottomWidth: 1, borderBottomColor: palette.line }}>
-          <NavigationBackButton
-            accessibilityLabel="В поиск"
-            onPress={openSearchTab}
-            size={48}
-            variant="material"
-          />
-          <View className="flex-1 items-center px-3">
-            <Text numberOfLines={1} className="text-xl font-extrabold text-ink">
-              Профиль
-            </Text>
-          </View>
-          {status !== 'guest' ? (
-            <IconButton
-              accessibilityLabel="Настройки профиля"
-              icon="settings-outline"
-              iconSize={22}
-              onPress={() => openSettings('basic')}
+        <AppHeader
+          title="Профиль"
+          leading={
+            <NavigationBackButton
+              accessibilityLabel="В поиск"
+              onPress={openSearchTab}
               size={48}
+              variant="material"
             />
-          ) : (
-            <View className="h-12 w-12" />
-          )}
-        </View>
+          }
+          actions={
+            status !== 'guest' ? (
+              <IconButton
+                accessibilityLabel="Настройки профиля"
+                icon="settings-outline"
+                iconSize={22}
+                onPress={() => openSettings('basic')}
+                size={48}
+              />
+            ) : undefined
+          }
+        />
       </SafeAreaView>
 
       {status === 'guest' ? (

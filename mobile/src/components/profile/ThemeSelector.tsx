@@ -1,11 +1,19 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { MaterialSurface, SegmentedControl } from '@/components/ui';
+import {
+  AppText,
+  MaterialSurface,
+  PastelIcon,
+  SegmentedControl,
+  type AppIconName,
+} from '@/components/ui';
 import { useThemeStore, type ThemePreference } from '@/store/theme';
-import { useAppTheme } from '@/theme/useAppTheme';
 
-const OPTIONS: { value: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const OPTIONS: {
+  value: ThemePreference;
+  label: string;
+  icon: AppIconName;
+}[] = [
   { value: 'light', label: 'Светлая', icon: 'sunny-outline' },
   { value: 'dark', label: 'Тёмная', icon: 'moon-outline' },
   { value: 'system', label: 'Системная', icon: 'phone-portrait-outline' },
@@ -15,9 +23,11 @@ export function ThemeSelector() {
   const preference = useThemeStore((state) => state.preference);
   const transition = useThemeStore((state) => state.transition);
   const startThemeTransition = useThemeStore((state) => state.startThemeTransition);
-  const { palette } = useAppTheme();
 
-  const handleOptionPress = (value: ThemePreference, origin?: { x: number; y: number }) => {
+  const handleOptionPress = (
+    value: ThemePreference,
+    origin?: { x: number; y: number },
+  ) => {
     if (value === preference || transition.active) return;
     startThemeTransition(origin ?? { x: 0, y: 0 }, value);
   };
@@ -25,12 +35,12 @@ export function ThemeSelector() {
   return (
     <MaterialSurface level="raised" radius={24} style={{ padding: 16 }}>
       <View className="mb-4 flex-row items-center gap-3">
-        <View className="h-10 w-10 items-center justify-center rounded-full bg-primary-light">
-          <Ionicons name="color-palette-outline" size={20} color={palette.primary} />
-        </View>
+        <PastelIcon name="color-palette-outline" size={20} containerSize={40} />
         <View className="flex-1">
-          <Text className="text-base font-extrabold text-ink">Оформление</Text>
-          <Text className="mt-0.5 text-xs font-medium text-ink-secondary">Выберите тему приложения</Text>
+          <AppText variant="bodyStrong">Оформление</AppText>
+          <AppText variant="caption" tone="secondary" style={{ marginTop: 2 }}>
+            Выберите тему приложения
+          </AppText>
         </View>
       </View>
       <SegmentedControl

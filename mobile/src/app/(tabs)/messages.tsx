@@ -18,7 +18,7 @@ import { useSessionStore } from '@/store/session';
 import { useConversations, ConversationSummary } from '@/lib/api/chat';
 import { requireAuth } from '@/lib/requireAuth';
 import { useAppTheme } from '@/theme/useAppTheme';
-import { Button, CountedTabs, EmptyState, LoadErrorState } from '@/components/ui';
+import { AppText, Button, CountedTabs, EmptyState, LoadErrorState } from '@/components/ui';
 import { ConversationListSkeleton } from '@/components/DomainListSkeletons';
 import { ConversationRow } from '@/components/chat/ConversationRow';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
@@ -139,7 +139,9 @@ export default function MessagesScreen() {
 					<View className="mb-4 h-20 w-20 items-center justify-center rounded-full bg-primary/10">
 						<Ionicons name="chatbubbles-outline" size={40} color={palette.primary} />
 					</View>
-					<Text className="text-center text-xl font-bold text-ink mb-2">Сообщения</Text>
+					<AppText variant="title" align="center" style={{ marginBottom: 8 }}>
+						Сообщения
+					</AppText>
 					<Text className="text-center text-base text-ink-secondary px-4 leading-6">
 						Войдите в аккаунт, чтобы общаться с владельцами жилья и обсуждать детали бронирования.
 					</Text>
@@ -157,7 +159,9 @@ export default function MessagesScreen() {
 		return (
 			<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
 				<View className="px-5 pb-4 pt-4">
-					<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
+					<AppText variant="screenTitle" style={{ fontSize: 30, lineHeight: 36 }}>
+						Сообщения
+					</AppText>
 				</View>
 				<ConversationListSkeleton />
 			</SafeAreaView>
@@ -168,7 +172,9 @@ export default function MessagesScreen() {
 		return (
 			<SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: screenBackground }}>
 				<View className="px-5 pb-4 pt-4">
-					<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
+					<AppText variant="screenTitle" style={{ fontSize: 30, lineHeight: 36 }}>
+						Сообщения
+					</AppText>
 				</View>
 				<LoadErrorState title="Не удалось загрузить сообщения" loading={isFetching} onRetry={() => refetch()} />
 			</SafeAreaView>
@@ -231,7 +237,9 @@ export default function MessagesScreen() {
 					}}>
 					<CollapsibleSection expanded={collapsibleHeader.expanded} height={68}>
 						<Pressable accessible={false} onPress={Keyboard.dismiss} className="px-5 pb-4 pt-4">
-							<Text className="text-[30px] leading-9 font-extrabold text-ink">Сообщения</Text>
+							<AppText variant="screenTitle" style={{ fontSize: 30, lineHeight: 36 }}>
+								Сообщения
+							</AppText>
 						</Pressable>
 					</CollapsibleSection>
 					{conversations && conversations.length > 0 ? (

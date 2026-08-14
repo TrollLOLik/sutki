@@ -1,15 +1,20 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { BottomSheet, SearchField, SelectionRow } from '@/components/ui';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
+import {
+  AppText,
+  BottomSheet,
+  IconButton,
+  SearchField,
+  SelectionRow,
+  type AppIconName,
+} from '@/components/ui';
 import type { ListingLayoutMode } from '@/store/listing-layout';
-import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface SortOption<T extends string> {
   value: T;
   label: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
 }
 
 interface PersonalListToolbarProps<T extends string> {
@@ -43,8 +48,6 @@ export function PersonalListToolbar<T extends string>({
   layoutMode,
   onLayoutToggle,
 }: PersonalListToolbarProps<T>) {
-  const { palette } = useAppTheme();
-
   return (
     <>
       <View
@@ -64,27 +67,16 @@ export function PersonalListToolbar<T extends string>({
           containerStyle={{ flex: 1, marginRight: 10 }}
         />
         {showSort ? (
-          <Pressable
+          <IconButton
+            accessibilityLabel="Сортировка"
+            icon="swap-vertical-outline"
+            iconSize={22}
             onPress={() => onSortVisibleChange(true)}
-            style={{
-              width: 48,
-              height: 48,
-              marginRight: onFilterPress || onLayoutToggle ? 10 : 0,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 24,
-              borderWidth: 1,
-              borderColor: palette.line,
-              backgroundColor: palette.surface,
-              shadowColor: '#1A1A1A',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 6,
-              elevation: 3,
-            }}
-            accessibilityLabel="Сортировка">
-            <Ionicons name="swap-vertical-outline" size={22} color={palette.primary} />
-          </Pressable>
+            size={48}
+            surface="floating"
+            tone="primary"
+            style={{ marginRight: onFilterPress || onLayoutToggle ? 10 : 0 }}
+          />
         ) : null}
         {layoutMode && onLayoutToggle ? (
           <ListingLayoutToggle
@@ -94,32 +86,29 @@ export function PersonalListToolbar<T extends string>({
           />
         ) : null}
         {onFilterPress ? (
-          <Pressable
-            onPress={onFilterPress}
-            style={{
-              position: 'relative',
-              width: 48,
-              height: 48,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 24,
-              borderWidth: 1,
-              borderColor: palette.line,
-              backgroundColor: palette.surface,
-              shadowColor: '#1A1A1A',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 6,
-              elevation: 3,
-            }}
-            accessibilityLabel="Фильтры">
-            <Ionicons name="options-outline" size={22} color={palette.primary} />
+          <View style={{ position: 'relative', width: 48, height: 48 }}>
+            <IconButton
+              accessibilityLabel="Фильтры"
+              icon="options-outline"
+              iconSize={22}
+              onPress={onFilterPress}
+              size={48}
+              surface="floating"
+              tone="primary"
+            />
             {filterCount > 0 ? (
-              <View style={{ position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.primary }}>
-                <Text style={{ color: 'white', fontSize: 11, fontWeight: 'bold' }}>{filterCount > 9 ? '9+' : filterCount}</Text>
+              <View
+                pointerEvents="none"
+                className="absolute -right-1 -top-1 h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1">
+                <AppText
+                  variant="captionStrong"
+                  tone="inverse"
+                  style={{ fontSize: 11, lineHeight: 14 }}>
+                  {filterCount > 9 ? '9+' : filterCount}
+                </AppText>
               </View>
             ) : null}
-          </Pressable>
+          </View>
         ) : null}
       </View>
 

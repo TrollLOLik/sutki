@@ -9,7 +9,8 @@ import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
-type IconButtonTone = 'neutral' | 'primary' | 'danger';
+export type IconButtonTone = 'neutral' | 'primary' | 'danger';
+export type IconButtonSurface = 'material' | 'floating';
 
 export interface IconButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   icon: AppIconName;
@@ -18,6 +19,7 @@ export interface IconButtonProps extends Omit<PressableProps, 'children' | 'styl
   tone?: IconButtonTone;
   selected?: boolean;
   filled?: boolean;
+  surface?: IconButtonSurface;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -28,6 +30,7 @@ export function IconButton({
   tone = 'neutral',
   selected = false,
   filled = false,
+  surface = 'material',
   disabled,
   style,
   ...rest
@@ -40,9 +43,17 @@ export function IconButton({
     ? toneColor
     : selected
       ? palette.primaryLight
+      : surface === 'floating'
+        ? palette.surface
+        : isDark
+          ? '#202329'
+          : '#F0F1F3';
+  const borderColor =
+    surface === 'floating'
+      ? palette.line
       : isDark
-        ? '#202329'
-        : '#F0F1F3';
+        ? 'rgba(255,255,255,0.08)'
+        : 'rgba(18,24,32,0.07)';
 
   return (
     <PressableScale
@@ -58,6 +69,15 @@ export function IconButton({
           borderRadius: size / 2,
           opacity: disabled ? 0.42 : 1,
           flexShrink: 0,
+          ...(surface === 'floating'
+            ? {
+                shadowColor: '#1A1A1A',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 6,
+                elevation: 3,
+              }
+            : null),
         },
         style,
       ]}
@@ -70,7 +90,7 @@ export function IconButton({
           justifyContent: 'center',
           borderRadius: size / 2,
           borderWidth: 1,
-          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(18,24,32,0.07)',
+          borderColor,
           backgroundColor,
         }}>
         <AppIcon name={icon} size={iconSize} color={foreground} />

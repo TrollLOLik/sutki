@@ -1,5 +1,7 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface CountedTabItem<T extends string> {
@@ -32,13 +34,14 @@ function CountedTabButton<T extends string>({
   const { palette } = useAppTheme();
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="tab"
       accessibilityLabel={`${item.label}: ${item.count}`}
       accessibilityState={{ selected, disabled: Boolean(item.disabled) }}
       disabled={Boolean(item.disabled)}
+      pressedScale={0.98}
+      disabledOpacity={0.42}
       onPress={() => onChange(item.value)}
-      className="active:opacity-80"
       style={{
         minHeight: 38,
         minWidth: 0,
@@ -54,21 +57,21 @@ function CountedTabButton<T extends string>({
         borderColor: selected ? palette.primary : palette.line,
         backgroundColor: selected ? palette.primaryLight : palette.surface,
         paddingHorizontal: 13,
-        opacity: item.disabled ? 0.42 : 1,
       }}>
-      <Text
+      <AppText
+        variant="captionStrong"
+        tone={selected ? 'primary' : 'secondary'}
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.82}
         style={{
           minWidth: 0,
           flexShrink: 1,
-          color: selected ? palette.primary : palette.inkSecondary,
           fontSize: 13,
           fontWeight: '700',
         }}>
         {item.label}
-      </Text>
+      </AppText>
       <View
         style={{
           minWidth: 22,
@@ -80,11 +83,14 @@ function CountedTabButton<T extends string>({
           backgroundColor: selected ? palette.primary : palette.surfaceMuted,
           paddingHorizontal: 5,
         }}>
-        <Text style={{ color: selected ? '#FFFFFF' : palette.inkMuted, fontSize: 11, fontWeight: '800' }}>
+        <AppText
+          variant="captionStrong"
+          tone={selected ? 'inverse' : 'muted'}
+          style={{ fontSize: 11, lineHeight: 14, fontWeight: '800' }}>
           {item.count > 99 ? '99+' : item.count}
-        </Text>
+        </AppText>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

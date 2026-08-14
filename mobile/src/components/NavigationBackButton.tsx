@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { useCallback, useMemo, type ReactNode } from 'react';
 import { type StyleProp, Vibration, View, type ViewStyle } from 'react-native';
@@ -7,6 +6,7 @@ import { runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { navigationMenuTop } from '@/components/NavigationHistoryOverlay';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { goBackOrReplace } from '@/lib/navigation';
 import { NAVIGATION_MENU_ROW_HEIGHT, useNavigationHistoryStore } from '@/store/navigation-history';
 import { useAppTheme } from '@/theme/useAppTheme';
@@ -37,7 +37,7 @@ export function NavigationBackButton({
   style,
   variant = 'plain',
 }: NavigationBackButtonProps) {
-  const { palette, isDark } = useAppTheme();
+  const { isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
 
   const handlePress = useCallback(() => {
@@ -139,7 +139,7 @@ export function NavigationBackButton({
             : null,
           style,
         ]}>
-        {children ?? <Ionicons name="chevron-back" size={24} color={palette.ink} />}
+        {children ?? <AppIcon name="chevron-back" size={24} tone="ink" />}
       </View>
     </GestureDetector>
   );

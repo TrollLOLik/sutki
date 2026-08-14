@@ -1,15 +1,14 @@
 import { addDays, format, parseISO } from 'date-fns';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListingCard } from '@/components/ListingCard';
 import { getListingOwnerActionAvailability } from '@/components/ListingOwnerActions';
 import { ListingCardSkeleton } from '@/components/ListingCardSkeleton';
 import { PersonalListToolbar, type SortOption } from '@/components/PersonalListToolbar';
-import { AppHeader, Button, CountedTabs, EmptyState } from '@/components/ui';
+import { AppHeader, Button, CountedTabs, EmptyState, IconButton } from '@/components/ui';
 import { useMyListings } from '@/lib/api/create-listing';
 import { useIncomingBookings } from '@/lib/api/bookings';
 import { useListingPublicationFlow } from '@/hooks/useListingPublicationFlow';
@@ -151,14 +150,17 @@ export default function MyListingsScreen() {
           blurred
           fallback="/(tabs)/profile"
           title="Мои объявления"
-          actions={(
-            <Pressable
+          actions={
+            <IconButton
               accessibilityLabel="Разместить объявление"
+              icon="add"
+              iconSize={24}
               onPress={() => router.push('/create')}
-              className="h-12 w-12 items-center justify-center rounded-full border border-line bg-surface active:opacity-70">
-              <Ionicons name="add" size={24} color={palette.primary} />
-            </Pressable>
-          )}
+              size={48}
+              surface="floating"
+              tone="primary"
+            />
+          }
         />
 
         <View style={{ flex: 1, overflow: 'hidden', paddingTop: 8, backgroundColor: screenBackground }}>
