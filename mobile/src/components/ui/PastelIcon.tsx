@@ -1,9 +1,10 @@
 import { View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface PastelIconProps {
-  name: keyof typeof Ionicons.glyphMap;
+  name: AppIconName;
   size?: number;
   color?: string;
   containerSize?: number;
@@ -31,7 +32,7 @@ export function PastelIcon({
         justifyContent: 'center',
       }}
     >
-      <Ionicons name={name} size={size} color={iconColor} />
+      <AppIcon name={name} size={size} color={iconColor} />
     </View>
   );
 }

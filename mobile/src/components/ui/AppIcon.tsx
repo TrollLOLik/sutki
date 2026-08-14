@@ -9,6 +9,8 @@ import { useAppTheme } from '@/theme/useAppTheme';
 
 type IoniconProps = ComponentProps<typeof Ionicons>;
 
+export type AppIconName = keyof typeof Ionicons.glyphMap;
+
 export type AppIconTone =
   | 'ink'
   | 'secondary'
@@ -21,7 +23,7 @@ export type AppIconTone =
 
 export interface AppIconProps
   extends Omit<IoniconProps, 'name' | 'size' | 'color'> {
-  name: keyof typeof Ionicons.glyphMap;
+  name: AppIconName;
   size?: IconSizeToken | number;
   tone?: AppIconTone;
   color?: string;

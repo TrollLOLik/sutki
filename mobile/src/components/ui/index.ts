@@ -1,6 +1,6 @@
 export { Badge } from './Badge';
 export { AppIcon } from './AppIcon';
-export type { AppIconProps, AppIconTone } from './AppIcon';
+export type { AppIconName, AppIconProps, AppIconTone } from './AppIcon';
 export { AppText } from './AppText';
 export type { AppTextProps, AppTextTone } from './AppText';
 export { Button } from './Button';

@@ -1,7 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Pressable, Text, View, type PressableProps } from 'react-native';
+import { View, type PressableProps } from 'react-native';
 
+import { AppIcon } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ListCellProps extends Omit<PressableProps, 'children'> {
@@ -15,7 +17,8 @@ export interface ListCellProps extends Omit<PressableProps, 'children'> {
 
 function renderCopy(value: ReactNode, type: 'title' | 'subtitle', color: string) {
   return typeof value === 'string' || typeof value === 'number' ? (
-    <Text
+    <AppText
+      variant={type === 'title' ? 'label' : 'caption'}
       numberOfLines={type === 'title' ? 1 : 2}
       style={{
         color,
@@ -24,7 +27,7 @@ function renderCopy(value: ReactNode, type: 'title' | 'subtitle', color: string)
         fontWeight: type === 'title' ? '800' : '500',
       }}>
       {value}
-    </Text>
+    </AppText>
   ) : (
     value
   );
@@ -44,15 +47,16 @@ export function ListCell({
   const { palette } = useAppTheme();
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={Boolean(disabled)}
+      disabledOpacity={0.46}
+      pressedScale={0.985}
       style={(state) => [
         {
           minHeight: multiline || subtitle ? 68 : 56,
           width: '100%',
-          opacity: disabled ? 0.46 : state.pressed ? 0.68 : 1,
         },
         typeof style === 'function' ? style(state) : style,
       ]}
@@ -75,10 +79,10 @@ export function ListCell({
         {after ? <View style={{ flexShrink: 0, marginLeft: 10 }}>{after}</View> : null}
         {chevron ? (
           <View style={{ flexShrink: 0, marginLeft: after ? 6 : 10 }}>
-            <Ionicons name="chevron-forward" size={18} color={palette.inkMuted} />
+            <AppIcon name="chevron-forward" size={18} color={palette.inkMuted} />
           </View>
         ) : null}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }

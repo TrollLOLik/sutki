@@ -3,8 +3,6 @@ import {
   Animated,
   Pressable,
   type PressableProps,
-  type StyleProp,
-  type ViewStyle,
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
@@ -14,7 +12,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export interface PressableScaleProps
   extends Omit<PressableProps, 'style'> {
-  style?: StyleProp<ViewStyle>;
+  style?: PressableProps['style'];
   pressedScale?: number;
   disabledOpacity?: number;
 }
@@ -64,8 +62,8 @@ export function PressableScale({
       disabled={disabled}
       onPressIn={animateIn}
       onPressOut={animateOut}
-      style={[
-        style,
+      style={(state) => [
+        typeof style === 'function' ? style(state) : style,
         {
           opacity: disabled ? disabledOpacity : 1,
           transform: [{ scale }],

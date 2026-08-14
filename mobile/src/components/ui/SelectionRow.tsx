@@ -1,23 +1,26 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface SelectionRowProps {
   label: string;
   selected: boolean;
   onPress: () => void;
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
 }
 
 export function SelectionRow({ label, selected, onPress, icon }: SelectionRowProps) {
   const { palette } = useAppTheme();
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       onPress={onPress}
+      pressedScale={0.985}
       style={{
         minHeight: 50,
         width: '100%',
@@ -31,10 +34,11 @@ export function SelectionRow({ label, selected, onPress, icon }: SelectionRowPro
       }}>
       {icon ? (
         <View style={{ width: 34, height: 34, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name={icon} size={20} color={palette.inkSecondary} />
+          <AppIcon name={icon} size={20} color={palette.inkSecondary} />
         </View>
       ) : null}
-      <Text
+      <AppText
+        variant="label"
         numberOfLines={1}
         style={{
           minWidth: 0,
@@ -45,7 +49,7 @@ export function SelectionRow({ label, selected, onPress, icon }: SelectionRowPro
           fontWeight: selected ? '700' : '500',
         }}>
         {label}
-      </Text>
+      </AppText>
       <View
         style={{
           width: 20,
@@ -57,8 +61,8 @@ export function SelectionRow({ label, selected, onPress, icon }: SelectionRowPro
           borderColor: selected ? palette.primary : palette.line,
           backgroundColor: selected ? palette.primary : 'transparent',
         }}>
-        {selected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
+        {selected ? <AppIcon name="checkmark" size={14} tone="inverse" /> : null}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }

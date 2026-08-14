@@ -1,15 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Pressable,
-  Text,
+  View,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { cn } from '@/lib/cn';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -20,9 +19,9 @@ export type ButtonTone = 'primary' | 'neutral' | 'danger' | 'success' | 'warning
 
 export interface ButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   label: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  startIcon?: keyof typeof Ionicons.glyphMap;
-  endIcon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
+  startIcon?: AppIconName;
+  endIcon?: AppIconName;
   variant?: ButtonVariant;
   mode?: ButtonMode;
   tone?: ButtonTone;
@@ -68,8 +67,6 @@ export function Button({
   disabled,
   className,
   style,
-  onPressIn,
-  onPressOut,
   ...rest
 }: ButtonProps) {
   const { palette, isDark } = useAppTheme();
@@ -79,7 +76,6 @@ export function Button({
   const metrics = sizes[size];
   const leadingIcon = startIcon ?? icon;
   const isDisabled = Boolean(disabled || loading);
-  const [pressedScale] = useState(() => new Animated.Value(1));
 
   const toneColor =
     resolvedTone === 'danger'
@@ -133,33 +129,13 @@ export function Button({
           : 'transparent';
   const elevated = resolvedMode === 'solid' && resolvedTone !== 'neutral' && !isDisabled;
 
-  const handlePressIn: NonNullable<PressableProps['onPressIn']> = (event) => {
-    Animated.timing(pressedScale, {
-      toValue: 0.965,
-      duration: 70,
-      useNativeDriver: true,
-    }).start();
-    onPressIn?.(event);
-  };
-
-  const handlePressOut: NonNullable<PressableProps['onPressOut']> = (event) => {
-    Animated.spring(pressedScale, {
-      toValue: 1,
-      damping: 17,
-      stiffness: 280,
-      mass: 0.55,
-      useNativeDriver: true,
-    }).start();
-    onPressOut?.(event);
-  };
-
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading || undefined }}
       disabled={isDisabled}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+      disabledOpacity={1}
+      pressedScale={0.965}
       className={cn(
         'relative min-w-0 items-center justify-center',
         stretched && 'w-full',
@@ -167,52 +143,47 @@ export function Button({
       )}
       style={[{ height: metrics.height, borderRadius: metrics.radius }, style]}
       {...rest}>
-      <Animated.View
+      <View
         pointerEvents="none"
-        style={[
-          {
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            borderRadius: metrics.radius,
-            borderWidth: resolvedMode === 'ghost' ? 0 : 1,
-            borderColor,
-            backgroundColor,
-            opacity: isDisabled ? 0.48 : 1,
-            shadowColor: elevated ? toneColor : '#000000',
-            shadowOpacity: elevated ? 0.2 : 0,
-            shadowRadius: elevated ? 12 : 0,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: elevated ? 3 : 0,
-          },
-          { transform: [{ scale: pressedScale }] },
-        ]}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          borderRadius: metrics.radius,
+          borderWidth: resolvedMode === 'ghost' ? 0 : 1,
+          borderColor,
+          backgroundColor,
+          opacity: isDisabled ? 0.48 : 1,
+          shadowColor: elevated ? toneColor : '#000000',
+          shadowOpacity: elevated ? 0.2 : 0,
+          shadowRadius: elevated ? 12 : 0,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: elevated ? 3 : 0,
+        }}
       />
-      <Animated.View
+      <View
         pointerEvents="none"
-        style={[
-          {
-            minWidth: 0,
-            maxWidth: '100%',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            paddingHorizontal: 14,
-            opacity: isDisabled ? 0.64 : 1,
-          },
-          { transform: [{ scale: pressedScale }] },
-        ]}>
+        style={{
+          minWidth: 0,
+          maxWidth: '100%',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          paddingHorizontal: 14,
+          opacity: isDisabled ? 0.64 : 1,
+        }}>
         {loading ? (
           <ActivityIndicator color={foreground} />
         ) : (
           <>
             {leadingIcon ? (
-              <Ionicons name={leadingIcon} size={metrics.iconSize} color={foreground} />
+              <AppIcon name={leadingIcon} size={metrics.iconSize} color={foreground} />
             ) : null}
-            <Text
+            <AppText
+              variant="button"
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.82}
@@ -224,13 +195,13 @@ export function Button({
                 fontWeight: '800',
               }}>
               {label}
-            </Text>
+            </AppText>
             {endIcon ? (
-              <Ionicons name={endIcon} size={metrics.iconSize} color={foreground} />
+              <AppIcon name={endIcon} size={metrics.iconSize} color={foreground} />
             ) : null}
           </>
         )}
-      </Animated.View>
-    </Pressable>
+      </View>
+    </PressableScale>
   );
 }

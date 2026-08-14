@@ -1,19 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
 import {
-  Animated,
-  Pressable,
+  View,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 type IconButtonTone = 'neutral' | 'primary' | 'danger';
 
 export interface IconButtonProps extends Omit<PressableProps, 'children' | 'style'> {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: AppIconName;
   iconSize?: number;
   size?: number;
   tone?: IconButtonTone;
@@ -31,12 +30,9 @@ export function IconButton({
   filled = false,
   disabled,
   style,
-  onPressIn,
-  onPressOut,
   ...rest
 }: IconButtonProps) {
   const { palette, isDark } = useAppTheme();
-  const [scale] = useState(() => new Animated.Value(1));
   const toneColor =
     tone === 'primary' ? palette.primary : tone === 'danger' ? palette.danger : palette.inkSecondary;
   const foreground = filled ? '#FFFFFF' : toneColor;
@@ -49,29 +45,12 @@ export function IconButton({
         : '#F0F1F3';
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityState={{ disabled: Boolean(disabled), selected }}
       disabled={Boolean(disabled)}
       hitSlop={6}
-      onPressIn={(event) => {
-        Animated.timing(scale, {
-          toValue: 0.94,
-          duration: 70,
-          useNativeDriver: true,
-        }).start();
-        onPressIn?.(event);
-      }}
-      onPressOut={(event) => {
-        Animated.spring(scale, {
-          toValue: 1,
-          damping: 17,
-          stiffness: 300,
-          mass: 0.5,
-          useNativeDriver: true,
-        }).start();
-        onPressOut?.(event);
-      }}
+      pressedScale={0.94}
       style={[
         {
           width: size,
@@ -83,22 +62,19 @@ export function IconButton({
         style,
       ]}
       {...rest}>
-      <Animated.View
-        style={[
-          {
-            width: '100%',
-            height: '100%',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: size / 2,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(18,24,32,0.07)',
-            backgroundColor,
-          },
-          { transform: [{ scale }] },
-        ]}>
-        <Ionicons name={icon} size={iconSize} color={foreground} />
-      </Animated.View>
-    </Pressable>
+      <View
+        style={{
+          width: '100%',
+          height: '100%',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: size / 2,
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(18,24,32,0.07)',
+          backgroundColor,
+        }}>
+        <AppIcon name={icon} size={iconSize} color={foreground} />
+      </View>
+    </PressableScale>
   );
 }

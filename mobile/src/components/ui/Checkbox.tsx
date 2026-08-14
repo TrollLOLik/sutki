@@ -1,7 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppIcon } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface CheckboxProps extends Omit<PressableProps, 'children' | 'style'> {
@@ -24,13 +26,13 @@ export function Checkbox({
   const { palette } = useAppTheme();
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="checkbox"
       accessibilityState={{ checked, disabled: Boolean(disabled) }}
       disabled={Boolean(disabled)}
       hitSlop={label ? undefined : 8}
       onPress={() => onCheckedChange(!checked)}
-      className="active:opacity-75"
+      pressedScale={0.98}
       style={[
         {
           minWidth: 24,
@@ -56,18 +58,18 @@ export function Checkbox({
           borderColor: checked ? palette.primary : palette.line,
           backgroundColor: checked ? palette.primary : palette.surfaceMuted,
         }}>
-        {checked ? <Ionicons name="checkmark" size={17} color="#FFFFFF" /> : null}
+        {checked ? <AppIcon name="checkmark" size={17} tone="inverse" /> : null}
       </View>
       {label || description ? (
         <View pointerEvents="none" style={{ minWidth: 0, flex: 1, gap: 2 }}>
           {typeof label === 'string' ? (
-            <Text style={{ color: palette.ink, fontSize: 14, fontWeight: '700', lineHeight: 20 }}>{label}</Text>
+            <AppText variant="label" style={{ color: palette.ink, lineHeight: 20 }}>{label}</AppText>
           ) : label}
           {typeof description === 'string' ? (
-            <Text style={{ color: palette.inkSecondary, fontSize: 12, lineHeight: 17 }}>{description}</Text>
+            <AppText variant="caption" style={{ color: palette.inkSecondary, lineHeight: 17, fontWeight: '400' }}>{description}</AppText>
           ) : description}
         </View>
       ) : null}
-    </Pressable>
+    </PressableScale>
   );
 }

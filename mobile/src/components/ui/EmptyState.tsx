@@ -1,12 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
 import { MaterialSurface } from '@/components/ui/MaterialSurface';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface EmptyStateProps {
-  icon?: keyof typeof Ionicons.glyphMap;
+  icon?: AppIconName;
   title: string;
   subtitle?: string;
   action?: ReactNode;
@@ -26,13 +27,13 @@ export function EmptyState({
         level="raised"
         radius={32}
         className="mb-5 h-16 w-16 items-center justify-center">
-        <Ionicons name={icon} size={28} color={palette.inkMuted} />
+        <AppIcon name={icon} size={28} color={palette.inkMuted} />
       </MaterialSurface>
-      <Text className="text-center text-lg font-extrabold text-ink">{title}</Text>
+      <AppText variant="sectionTitle" align="center">{title}</AppText>
       {subtitle ? (
-        <Text className="mt-2 max-w-[320px] text-center text-sm leading-5 text-ink-secondary">
+        <AppText variant="label" tone="secondary" align="center" className="mt-2 max-w-[320px] font-normal leading-5">
           {subtitle}
-        </Text>
+        </AppText>
       ) : null}
       {action ? <View className="mt-5 w-full max-w-[280px]">{action}</View> : null}
     </View>

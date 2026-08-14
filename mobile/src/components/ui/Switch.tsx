@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface SwitchProps extends Omit<PressableProps, 'children' | 'style'> {
@@ -16,12 +18,12 @@ export function Switch({ value, onValueChange, label, description, leading, disa
   const { palette } = useAppTheme();
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled: Boolean(disabled) }}
       disabled={Boolean(disabled)}
       onPress={() => onValueChange(!value)}
-      className="active:opacity-75"
+      pressedScale={0.985}
       style={[
         {
           minHeight: 30,
@@ -36,8 +38,8 @@ export function Switch({ value, onValueChange, label, description, leading, disa
       {leading ? <View pointerEvents="none" style={{ flexShrink: 0 }}>{leading}</View> : null}
       {label || description ? (
         <View pointerEvents="none" style={{ minWidth: 0, flex: 1, gap: 2 }}>
-          {typeof label === 'string' ? <Text style={{ color: palette.ink, fontSize: 15, fontWeight: '700', lineHeight: 20 }}>{label}</Text> : label}
-          {typeof description === 'string' ? <Text style={{ color: palette.inkSecondary, fontSize: 12, lineHeight: 17 }}>{description}</Text> : description}
+          {typeof label === 'string' ? <AppText variant="label" style={{ color: palette.ink, fontSize: 15, lineHeight: 20 }}>{label}</AppText> : label}
+          {typeof description === 'string' ? <AppText variant="caption" style={{ color: palette.inkSecondary, lineHeight: 17, fontWeight: '400' }}>{description}</AppText> : description}
         </View>
       ) : null}
       <View
@@ -66,6 +68,6 @@ export function Switch({ value, onValueChange, label, description, leading, disa
           }}
         />
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }

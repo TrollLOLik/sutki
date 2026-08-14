@@ -1,5 +1,5 @@
-import { Pressable, Text } from 'react-native';
-
+import { AppText } from '@/components/ui/AppText';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface ChipProps {
@@ -11,7 +11,7 @@ interface ChipProps {
 export function Chip({ label, selected = false, onPress }: ChipProps) {
   const { palette } = useAppTheme();
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
@@ -25,7 +25,8 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
         backgroundColor: selected ? palette.primaryLight : palette.surfaceMuted,
         borderColor: selected ? palette.primary : palette.line,
       }}>
-      <Text
+      <AppText
+        variant="label"
         numberOfLines={1}
         ellipsizeMode="tail"
         style={{
@@ -35,8 +36,8 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
           color: selected ? palette.primary : palette.inkSecondary,
         }}>
         {label}
-      </Text>
-    </Pressable>
+      </AppText>
+    </PressableScale>
   );
 }
 

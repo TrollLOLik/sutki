@@ -1,7 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { AppText } from '@/components/ui/AppText';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export type InlineAlertTone = 'info' | 'success' | 'warning' | 'danger';
@@ -14,7 +15,7 @@ export interface InlineAlertProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const icons: Record<InlineAlertTone, keyof typeof Ionicons.glyphMap> = {
+const icons: Record<InlineAlertTone, AppIconName> = {
   info: 'information-circle-outline',
   success: 'checkmark-circle-outline',
   warning: 'warning-outline',
@@ -44,10 +45,10 @@ export function InlineAlert({ tone = 'info', title, children, compact = false, s
         },
         style,
       ]}>
-      <Ionicons name={icons[tone]} size={compact ? 19 : 21} color={color} />
+      <AppIcon name={icons[tone]} size={compact ? 19 : 21} color={color} />
       <View style={{ minWidth: 0, flex: 1, gap: title ? 3 : 0 }}>
-        {typeof title === 'string' ? <Text style={{ color, fontSize: 14, fontWeight: '800', lineHeight: 19 }}>{title}</Text> : title}
-        {typeof children === 'string' ? <Text style={{ color, fontSize: compact ? 12 : 13, lineHeight: compact ? 17 : 19 }}>{children}</Text> : children}
+        {typeof title === 'string' ? <AppText variant="label" style={{ color, fontWeight: '800', lineHeight: 19 }}>{title}</AppText> : title}
+        {typeof children === 'string' ? <AppText variant="caption" style={{ color, fontSize: compact ? 12 : 13, lineHeight: compact ? 17 : 19, fontWeight: '400' }}>{children}</AppText> : children}
       </View>
     </View>
   );

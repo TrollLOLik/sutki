@@ -1,5 +1,6 @@
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { AppText } from '@/components/ui/AppText';
 import { IconButton } from '@/components/ui/IconButton';
 import { useAppTheme } from '@/theme/useAppTheme';
 
@@ -18,9 +19,9 @@ export function Counter({ value, min = 0, max = 99, onChange, label = 'Коли�
   return (
     <View accessibilityLabel={label} style={[{ flexDirection: 'row', alignItems: 'center', gap: 12 }, style]}>
       <IconButton icon="remove" size={36} iconSize={18} disabled={value <= min} onPress={() => onChange(Math.max(min, value - 1))} />
-      <Text accessibilityLiveRegion="polite" style={{ minWidth: 30, textAlign: 'center', color: palette.ink, fontSize: 16, fontWeight: '800' }}>
+      <AppText variant="bodyStrong" accessibilityLiveRegion="polite" style={{ minWidth: 30, textAlign: 'center', color: palette.ink, fontWeight: '800' }}>
         {value}
-      </Text>
+      </AppText>
       <IconButton icon="add" size={36} iconSize={18} disabled={value >= max} onPress={() => onChange(Math.min(max, value + 1))} />
     </View>
   );

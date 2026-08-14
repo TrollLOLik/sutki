@@ -1,4 +1,6 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+
+import { AppText } from '@/components/ui/AppText';
 import { shadows } from '@/theme/tokens';
 import { Skeleton } from './Skeleton';
 
@@ -29,9 +31,9 @@ export function MetricTile({ label, value, loading = false, icon }: MetricTilePr
       {loading ? (
         <Skeleton width="65%" height={22} radius={6} />
       ) : (
-        <Text className="text-xl font-extrabold text-ink leading-tight">{displayValue}</Text>
+        <AppText variant="title" className="leading-tight">{displayValue}</AppText>
       )}
-      <Text className="text-xs font-semibold text-ink-secondary mt-1 leading-none">{label}</Text>
+      <AppText variant="caption" tone="secondary" className="mt-1 font-semibold leading-none">{label}</AppText>
     </View>
   );
 }

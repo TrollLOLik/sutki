@@ -5,7 +5,7 @@ import {
   MaterialSurface,
   type MaterialLevel,
 } from '@/components/ui/MaterialSurface';
-import { useAppTheme } from '@/theme/useAppTheme';
+import { Divider } from '@/components/ui/Divider';
 
 type CardPadding = 'none' | 'sm' | 'md' | 'lg';
 
@@ -35,7 +35,6 @@ export function Card({
   style,
   ...rest
 }: CardProps) {
-  const { palette } = useAppTheme();
   const paddingValue = paddingBySize[padding];
 
   return (
@@ -43,11 +42,11 @@ export function Card({
       {header ? (
         <View style={[styles.region, { padding: paddingValue }]}>{header}</View>
       ) : null}
-      {header && children ? <View style={[styles.divider, { backgroundColor: palette.line }]} /> : null}
+      {header && children ? <Divider /> : null}
       {children ? (
         <View style={[styles.region, { padding: paddingValue }]}>{children}</View>
       ) : null}
-      {footer && (header || children) ? <View style={[styles.divider, { backgroundColor: palette.line }]} /> : null}
+      {footer && (header || children) ? <Divider /> : null}
       {footer ? (
         <View style={[styles.region, { padding: paddingValue }]}>{footer}</View>
       ) : null}
@@ -58,8 +57,5 @@ export function Card({
 const styles = StyleSheet.create({
   region: {
     width: '100%',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
   },
 });
