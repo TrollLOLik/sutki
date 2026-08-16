@@ -140,7 +140,30 @@ export default function CodeScreen() {
       <MaterialSurface
         level="raised"
         radius={24}
-        style={{ paddingHorizontal: 12, paddingVertical: 18 }}>
+        style={{
+          position: 'relative',
+          paddingHorizontal: 12,
+          paddingVertical: 18,
+        }}>
+        <TextInput
+          ref={inputRef}
+          value={code}
+          onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, length))}
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          maxLength={length}
+          autoFocus
+          caretHidden
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            opacity: 0,
+          }}
+        />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Поле ввода кода"
@@ -191,18 +214,6 @@ export default function CodeScreen() {
           </Text>
         </View>
       ) : null}
-
-      <TextInput
-        ref={inputRef}
-        value={code}
-        onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, length))}
-        keyboardType="number-pad"
-        textContentType="oneTimeCode"
-        maxLength={length}
-        autoFocus
-        caretHidden
-        className="absolute h-px w-px opacity-0"
-      />
 
       <View style={{ marginTop: 22, gap: 10 }}>
         <Pressable

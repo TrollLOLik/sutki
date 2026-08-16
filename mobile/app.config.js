@@ -7,7 +7,7 @@ module.exports = {
   expo: {
     name: "ВИГАЖ",
     slug: "wigaj-arenda",
-    version: "1.2.0",
+    version: "1.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "wigaj-arenda",
@@ -117,6 +117,11 @@ module.exports = {
     experiments: {
       typedRoutes: true,
       reactCompiler: false,
+    },
+    extra: {
+      eas: {
+        projectId: "9c08c697-61d0-47a2-8ee1-a6edabb29fc9",
+      },
     },
   },
 };

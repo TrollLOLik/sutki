@@ -2,12 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { MotiView } from 'moti';
 import { type ReactNode } from 'react';
-import { ScrollView, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { Text, View } from 'react-native';
 
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { ScreenContainer } from '@/components/ui';
-import { useKeyboardStickyStyle } from '@/hooks/useKeyboardStickyStyle';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface AuthStepScreenProps {
@@ -29,7 +28,6 @@ export function AuthStepScreen({
   fallback = '/welcome',
 }: AuthStepScreenProps) {
   const { palette } = useAppTheme();
-  const keyboardStickyStyle = useKeyboardStickyStyle();
 
   return (
     <ScreenContainer centered>
@@ -38,14 +36,31 @@ export function AuthStepScreen({
           <NavigationBackButton fallback={fallback} size={48} variant="material" />
         </View>
 
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <KeyboardAwareForm
+          keyboardGap={16}
+          contentFooterGap={12}
           contentContainerStyle={{
             flexGrow: 1,
             paddingTop: 18,
-            paddingBottom: 116,
-          }}>
+          }}
+          footerStyle={{
+            paddingTop: 10,
+            paddingBottom: 8,
+            backgroundColor: palette.surface,
+          }}
+          footer={(
+            <MotiView
+              from={{ opacity: 0, translateY: 10 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{
+                type: 'spring',
+                damping: 20,
+                stiffness: 180,
+                delay: 80,
+              }}>
+              {footer}
+            </MotiView>
+          )}>
           <MotiView
             from={{ opacity: 0, translateY: 14 }}
             animate={{ opacity: 1, translateY: 0 }}
@@ -88,29 +103,7 @@ export function AuthStepScreen({
 
             <View style={{ marginTop: 32 }}>{children}</View>
           </MotiView>
-        </ScrollView>
-
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            {
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              paddingTop: 10,
-              paddingBottom: 8,
-              backgroundColor: palette.surface,
-            },
-            keyboardStickyStyle,
-          ]}>
-          <MotiView
-            from={{ opacity: 0, translateY: 10 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 180, delay: 80 }}>
-            {footer}
-          </MotiView>
-        </Animated.View>
+        </KeyboardAwareForm>
       </View>
     </ScreenContainer>
   );

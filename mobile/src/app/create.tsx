@@ -1020,21 +1020,15 @@ export default function CreateListingScreen() {
                   router.replace('/my-listings' as any);
                 }}
               />
-              <Pressable
+              <Button
+                label="На главную"
+                startIcon="home-outline"
+                variant="secondary"
                 onPress={() => {
                   draft.reset();
                   router.replace('/(tabs)');
                 }}
-                style={({ pressed }) => ({
-                  minHeight: 44,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.62 : 1,
-                })}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: palette.inkSecondary }}>
-                  На главную
-                </Text>
-              </Pressable>
+              />
             </View>
           </MotiView>
         </View>

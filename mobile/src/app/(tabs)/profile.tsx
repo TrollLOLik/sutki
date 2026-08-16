@@ -3,10 +3,11 @@ import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Animated, Dimensions, Easing, Image, Linking, Pressable, ScrollView, Text, View, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BirthdayPickerSheet, formatBirthday } from '@/components/BirthdayPickerSheet';
 import { CityPickerSheet } from '@/components/CityPickerSheet';
+import { KeyboardAwareForm } from '@/components/KeyboardAwareForm';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { EmailChangeSheet } from '@/components/EmailChangeSheet';
 import { PhoneChangeSheet } from '@/components/PhoneChangeSheet';
@@ -165,6 +166,7 @@ function PhonePickerField({ value, onPress }: { value?: string | null; onPress: 
 
 export default function ProfileScreen() {
   const { palette } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const tabNavigation = useNavigation();
   const user = useSessionStore((s) => s.user);
@@ -495,7 +497,6 @@ export default function ProfileScreen() {
 
   const handleScroll = useScrollHideTabBar();
 
-  const horizontalScrollRef = useRef<ScrollView>(null);
   const tabAnim = useRef(new Animated.Value(0)).current;
   const windowWidth = Dimensions.get('window').width;
   const [containerWidth, setContainerWidth] = useState(windowWidth - 32);
@@ -512,10 +513,6 @@ export default function ProfileScreen() {
 
   const handleTabChange = (tab: SettingsTab) => {
     setSettingsTab(tab);
-    horizontalScrollRef.current?.scrollTo({
-      x: tab === 'basic' ? 0 : containerWidth,
-      animated: true,
-    });
   };
 
   const openSettings = useCallback((initialTab: SettingsTab = 'basic') => {
@@ -585,6 +582,30 @@ export default function ProfileScreen() {
     const completedCount = completionItems.filter(item => item.completed).length;
     return Math.round((completedCount / completionItems.length) * 100);
   }, [completionItems]);
+
+  const renderSettingsFooter = () => (
+    <DialogActions
+      reset={(
+        <Button
+          label="Позже"
+          mode="soft"
+          tone="neutral"
+          size="md"
+          onPress={closeSettings}
+        />
+      )}
+      primary={(
+        <Button
+          label="Сохранить"
+          mode="solid"
+          tone="primary"
+          size="md"
+          loading={updateMe.isPending}
+          onPress={handleSaveProfile}
+        />
+      )}
+    />
+  );
 
   return (
     <View className="flex-1 bg-surface">
@@ -782,7 +803,7 @@ export default function ProfileScreen() {
         visible={settingsVisible}
         onClose={closeSettings}
         transition="slide">
-        <SafeAreaView edges={['top', 'bottom']} className="flex-1 bg-surface px-4 pt-2 pb-6">
+        <SafeAreaView edges={['top']} className="flex-1 bg-surface px-4 pt-2">
               <View className="h-16 flex-row items-center">
                 <IconButton
                   accessibilityLabel="Закрыть настройки"
@@ -847,28 +868,19 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
 
-              <ScrollView
-                ref={horizontalScrollRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                scrollEventThrottle={16}
-                onMomentumScrollEnd={(e) => {
-                  const offsetX = e.nativeEvent.contentOffset.x;
-                  const page = Math.round(offsetX / containerWidth);
-                  const nextTab = page === 0 ? 'basic' : 'security';
-                  if (settingsTab !== nextTab) {
-                    setSettingsTab(nextTab);
-                  }
-                }}
-                className="flex-1 mt-2"
-              >
-                {/* Basic Tab */}
-                <ScrollView
+              <View className="mt-2 flex-1">
+                {settingsTab === 'basic' ? (
+                  <KeyboardAwareForm
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerClassName="gap-4 pt-5 pb-28"
-                  style={{ width: containerWidth }}
+                  contentContainerClassName="gap-4 pt-5"
+                  rootStyle={{ flex: 1 }}
+                  footerStyle={{
+                    paddingTop: 16,
+                    paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+                    backgroundColor: palette.surface,
+                  }}
+                  footer={renderSettingsFooter()}
                 >
                   <MaterialSurface level="raised" radius={24}>
                     <TouchableOpacity
@@ -945,13 +957,18 @@ export default function ProfileScreen() {
                   {saveError ? (
                     <Text className="px-1 text-sm font-medium text-danger">{saveError}</Text>
                   ) : null}
-                </ScrollView>
-
-                {/* Security Tab */}
-                <ScrollView
+                  </KeyboardAwareForm>
+                ) : (
+                  <KeyboardAwareForm
                   showsVerticalScrollIndicator={false}
-                  contentContainerClassName="gap-4 pt-5 pb-28"
-                  style={{ width: containerWidth }}
+                  contentContainerClassName="gap-4 pt-5"
+                  rootStyle={{ flex: 1 }}
+                  footerStyle={{
+                    paddingTop: 16,
+                    paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+                    backgroundColor: palette.surface,
+                  }}
+                  footer={renderSettingsFooter()}
                 >
                   <Text className="px-1 text-lg font-extrabold text-ink">Способы входа</Text>
                   <MaterialSurface level="raised" radius={22} style={{ padding: 16, gap: 14 }}>
@@ -1172,23 +1189,9 @@ export default function ProfileScreen() {
                       </View>
                     </MaterialSurface>
                   </View>
-                </ScrollView>
-              </ScrollView>
-
-              <DialogActions
-                style={{ marginTop: 16 }}
-                reset={<Button label="Позже" mode="soft" tone="neutral" size="md" onPress={closeSettings} />}
-                primary={
-                  <Button
-                    label="Сохранить"
-                    mode="solid"
-                    tone="primary"
-                    size="md"
-                    loading={updateMe.isPending}
-                    onPress={handleSaveProfile}
-                  />
-                }
-              />
+                  </KeyboardAwareForm>
+                )}
+              </View>
         </SafeAreaView>
 
         <CityPickerSheet

@@ -701,7 +701,6 @@ export default function MapScreen() {
 
       {/* Bottom mini-card on pin tap */}
       <ListingMapCard
-        key={selectedListing?.id ?? 'no-listing'}
         listing={selectedListing}
         onClose={closeSelectedListing}
         isFavorite={selectedListing ? favoriteIds?.has(selectedListing.id) ?? false : false}

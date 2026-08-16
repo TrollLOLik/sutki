@@ -66,7 +66,7 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
                         size={12}
                         color={palette.primary}
                       />
-                      <AppText style={styles.promotionText}>
+                      <AppText numberOfLines={1} style={styles.promotionText}>
                         {highlighted ? 'ЛУЧШЕЕ' : 'ТОП'}
                       </AppText>
                     </View>
@@ -78,7 +78,9 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
                         size={11}
                         color={isOwn ? '#FFFFFF' : palette.inkSecondary}
                       />
-                      <AppText style={[styles.stateBadgeText, isOwn && styles.stateBadgeTextOwn]}>
+                      <AppText
+                        numberOfLines={1}
+                        style={[styles.stateBadgeText, isOwn && styles.stateBadgeTextOwn]}>
                         {isOwn ? 'Ваше' : 'Просмотрено'}
                       </AppText>
                     </View>
@@ -170,44 +172,55 @@ const makeStyles = (palette: Palette) =>
     justifyContent: 'center',
   },
   promotionBadge: {
+    minHeight: 20,
+    maxWidth: 92,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 999,
     backgroundColor: palette.primaryLight,
+    overflow: 'hidden',
   },
   promotionText: {
+    flexShrink: 1,
     color: palette.primary,
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '800',
   },
   badgesRow: {
-    minHeight: 22,
+    minHeight: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginBottom: 5,
+    marginBottom: 3,
+    overflow: 'hidden',
   },
   stateBadge: {
+    minHeight: 20,
+    maxWidth: 104,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: palette.line,
     backgroundColor: palette.surface,
+    overflow: 'hidden',
   },
   stateBadgeOwn: {
     borderColor: palette.primary,
     backgroundColor: palette.primary,
   },
   stateBadgeText: {
+    flexShrink: 1,
     color: palette.inkSecondary,
     fontSize: 10,
+    lineHeight: 12,
     fontWeight: '700',
   },
   stateBadgeTextOwn: {
@@ -217,10 +230,11 @@ const makeStyles = (palette: Palette) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   price: {
     fontSize: 19,
+    lineHeight: 23,
     fontWeight: '800',
     color: palette.primary,
     fontVariant: ['tabular-nums'],
@@ -235,27 +249,31 @@ const makeStyles = (palette: Palette) =>
   },
   ratingText: {
     fontSize: 11,
+    lineHeight: 14,
     fontWeight: 'bold',
     color: palette.ink,
   },
   title: {
     fontSize: 14,
+    lineHeight: 17,
     fontWeight: '700',
     color: palette.ink,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   address: {
     fontSize: 12,
+    lineHeight: 15,
     color: palette.inkSecondary,
   },
   viewsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginTop: 3,
+    marginTop: 2,
   },
   viewsText: {
     fontSize: 11,
+    lineHeight: 13,
     color: palette.inkMuted,
   },
   closeButton: {
