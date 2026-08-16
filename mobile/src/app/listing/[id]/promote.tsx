@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,6 +20,7 @@ import { ListingCard } from '@/components/ListingCard';
 import { confirmMockPayment, usePaymentProducts, usePaymentStatus } from '@/lib/api/payments';
 import { useListingPromotions, usePromotionCheckout } from '@/lib/api/promotions';
 import { formatRub } from '@/lib/format';
+import { env } from '@/lib/env';
 import { useListing } from '@/lib/api/listings';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
@@ -234,6 +235,20 @@ function DurationOption({ days, disabled, selected, onPress }: DurationOptionPro
 }
 
 export default function PromoteListingScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  if (!env.paymentsEnabled) {
+    return (
+      <Redirect
+        href={{ pathname: '/listing/[id]', params: { id: String(id) } } as any}
+      />
+    );
+  }
+
+  return <EnabledPromoteListingScreen />;
+}
+
+function EnabledPromoteListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const houseId = Number(id);
   const { palette } = useAppTheme();

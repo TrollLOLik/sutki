@@ -30,8 +30,8 @@ import { useBboxAutoReload } from '@/hooks/useBboxAutoReload';
 import { countActiveFilters, useFiltersStore } from '@/store/filters';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
-import type { Palette } from '@/theme/tokens';
 import { env } from '@/lib/env';
+import type { Palette } from '@/theme/tokens';
 import type { ListingCard } from '@/types/listing';
 
 // Fallback center (Magnitogorsk) — only used when GPS, city and IP geolocation
@@ -357,8 +357,8 @@ export default function MapScreen() {
           <PriceBubble
             price={data.price}
             selected={isSelected}
-            promoted={(data.promotion_types ?? []).length > 0}
-            highlighted={(data.promotion_types ?? []).includes('highlight')}
+            promoted={env.paymentsEnabled && (data.promotion_types ?? []).length > 0}
+            highlighted={env.paymentsEnabled && (data.promotion_types ?? []).includes('highlight')}
             favorite={favoriteIds?.has(data.id) ?? false}
             viewed={!isOwn && (viewedListingIds?.has(data.id) ?? false)}
             own={isOwn}

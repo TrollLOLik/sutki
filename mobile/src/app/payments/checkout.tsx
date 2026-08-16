@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +13,7 @@ import {
   usePaymentStatus,
 } from '@/lib/api/payments';
 import { formatRub } from '@/lib/format';
+import { env } from '@/lib/env';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { goBackOrReplace } from '@/lib/navigation';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
@@ -26,6 +27,14 @@ function createIdempotencyKey() {
 }
 
 export default function PaymentCheckoutScreen() {
+  if (!env.paymentsEnabled) {
+    return <Redirect href={'/(tabs)/profile' as any} />;
+  }
+
+  return <EnabledPaymentCheckoutScreen />;
+}
+
+function EnabledPaymentCheckoutScreen() {
   const { productCode } = useLocalSearchParams<{ productCode?: string }>();
   const { palette } = useAppTheme();
   const products = usePaymentProducts();

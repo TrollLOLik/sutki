@@ -30,4 +30,6 @@ export const env = {
   wsUrl: process.env.EXPO_PUBLIC_WS_URL ?? getCentrifugoHost(),
   /** Public website/deep-link origin used in shared listing and profile URLs. */
   appUrl: (process.env.EXPO_PUBLIC_APP_URL ?? 'https://arenda.wigaj.ru').replace(/\/+$/, ''),
+  /** Paid checkout and listing promotion purchases. Disabled unless explicitly enabled at build time. */
+  paymentsEnabled: process.env.EXPO_PUBLIC_PAYMENTS_ENABLED === 'true',
 } as const;

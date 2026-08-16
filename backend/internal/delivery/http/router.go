@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, paymentsEnabled bool, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// Remove the internal webhook secret before middleware.Logger sees the URL.
@@ -71,8 +71,10 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 				r.Get("/mine", listingHandler.listMine)
 				r.Post("/{id}/favorite", favoriteHandler.Add)
 				r.Delete("/{id}/favorite", favoriteHandler.Remove)
-				r.Post("/{id}/promotions/checkout", promotionHandler.Checkout)
-				r.Get("/{id}/promotions", promotionHandler.List)
+				if paymentsEnabled {
+					r.Post("/{id}/promotions/checkout", promotionHandler.Checkout)
+					r.Get("/{id}/promotions", promotionHandler.List)
+				}
 			})
 
 			// Endpoints with optional authentication under /listings
@@ -99,10 +101,12 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 		// Login-free unsubscribe link from email footers (HMAC-signed).
 		r.Get("/email/unsubscribe", emailHandler.Unsubscribe)
 		r.Post("/support/callback-requests", supportHandler.CallbackRequest)
-		r.Get("/payment-products", paymentHandler.Products)
-		r.Post("/webhooks/yookassa", paymentHandler.Webhook)
-		r.Post("/admin/payments/{id}/refunds", paymentHandler.Refund)
-		r.Post("/admin/payments/mock/{provider_id}/status", paymentHandler.MockSetStatus)
+		if paymentsEnabled {
+			r.Get("/payment-products", paymentHandler.Products)
+			r.Post("/webhooks/yookassa", paymentHandler.Webhook)
+			r.Post("/admin/payments/{id}/refunds", paymentHandler.Refund)
+			r.Post("/admin/payments/mock/{provider_id}/status", paymentHandler.MockSetStatus)
+		}
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
@@ -163,9 +167,11 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Post("/media/presign", mediaHandler.PresignUpload)
 			r.Post("/media/listings/moderate", mediaHandler.ModerateListingImages)
 			r.Post("/ai/listing-description", aiHandler.GenerateDescription)
-			r.Post("/payments/checkout", paymentHandler.Checkout)
-			r.Get("/payments/{id}", paymentHandler.Get)
-			r.Post("/payments/{id}/mock-confirm", paymentHandler.MockConfirm)
+			if paymentsEnabled {
+				r.Post("/payments/checkout", paymentHandler.Checkout)
+				r.Get("/payments/{id}", paymentHandler.Get)
+				r.Post("/payments/{id}/mock-confirm", paymentHandler.MockConfirm)
+			}
 		})
 	})
 

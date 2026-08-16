@@ -59,6 +59,12 @@ module.exports = {
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
       ],
+      blockedPermissions: [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+      ],
     },
     web: {
       output: "static",
@@ -66,6 +72,7 @@ module.exports = {
     },
     plugins: [
       "expo-router",
+      "./plugins/with-gradle-wrapper-version",
       "./plugins/with-rich-content-text-input",
       "./plugins/with-yandex-mapkit-init",
       [

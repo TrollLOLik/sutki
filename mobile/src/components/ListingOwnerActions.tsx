@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { AppIcon, AppText, PressableScale } from '@/components/ui';
+import { env } from '@/lib/env';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 export interface ListingOwnerActionAvailability {
@@ -17,7 +18,8 @@ export function getListingOwnerActionAvailability(
   const normalizedStatus = status ?? 'active';
   return {
     canEdit: true,
-    canPromote: normalizedStatus !== 'rejected' && normalizedStatus !== 'unpublished',
+    canPromote:
+      env.paymentsEnabled && normalizedStatus !== 'rejected' && normalizedStatus !== 'unpublished',
     canPublish: normalizedStatus === 'unpublished',
     canUnpublish: normalizedStatus === 'active',
   };
@@ -120,7 +122,7 @@ export function ListingOwnerActions({
       tone: primaryAction === 'edit' ? 'solid' : 'surface',
     });
   }
-  if (onPromote) {
+  if (env.paymentsEnabled && onPromote) {
     actions.push({
       id: 'promote',
       icon: 'rocket-outline',

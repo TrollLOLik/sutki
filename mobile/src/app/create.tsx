@@ -1002,7 +1002,7 @@ export default function CreateListingScreen() {
             </View>
 
             <View style={{ gap: 11, marginTop: 28 }}>
-              {!isEditing && publishedListingId != null ? (
+              {env.paymentsEnabled && !isEditing && publishedListingId != null ? (
                 <Button
                   label="Продвинуть объявление"
                   onPress={() => {
@@ -1014,7 +1014,7 @@ export default function CreateListingScreen() {
               ) : null}
               <Button
                 label="Мои объявления"
-                variant={!isEditing && publishedListingId != null ? 'secondary' : undefined}
+                variant={env.paymentsEnabled && !isEditing && publishedListingId != null ? 'secondary' : undefined}
                 onPress={() => {
                   draft.reset();
                   router.replace('/my-listings' as any);

@@ -176,7 +176,7 @@ func main() {
 
 	userRepo := postgres.NewUserRepo(queries)
 	var paymentProvider domain.PaymentProvider
-	if cfg.PaymentProvider == "yookassa" {
+	if cfg.PaymentsEnabled && cfg.PaymentProvider == "yookassa" {
 		paymentProvider, err = paymentinfra.NewYookassaProvider(paymentinfra.YookassaConfig{
 			APIURL: cfg.PaymentAPIURL, ShopID: cfg.PaymentShopID, Secret: cfg.PaymentSecret,
 			Timeout: cfg.PaymentProviderTimeout,
@@ -186,7 +186,11 @@ func main() {
 		}
 	} else {
 		paymentProvider = paymentinfra.NewMockProvider()
-		log.Println("payment provider: MOCK mode; no real money is charged")
+		if cfg.PaymentsEnabled {
+			log.Println("payment provider: MOCK mode; no real money is charged")
+		} else {
+			log.Println("payments and listing promotion purchases: disabled")
+		}
 	}
 	paymentRepo := postgres.NewPaymentRepo(pool)
 	paymentSvc := paymentuc.New(paymentRepo, userRepo, paymentProvider, nil, paymentuc.Config{
@@ -196,7 +200,9 @@ func main() {
 	promotionSvc := promotion.New(postgres.NewPromotionRepo(pool), paymentSvc)
 	paymentSvc.SetActivationHandler(promotionSvc)
 	promotionSvc.StartExpiryWorker(ctx)
-	paymentSvc.StartWebhookWorker(ctx)
+	if cfg.PaymentsEnabled {
+		paymentSvc.StartWebhookWorker(ctx)
+	}
 	paymentHandler := httpdelivery.NewPaymentHandler(paymentSvc)
 	promotionHandler := httpdelivery.NewPromotionHandler(promotionSvc)
 	codeRepo := postgres.NewAuthCodeRepo(queries)
@@ -331,7 +337,7 @@ func main() {
 	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.MinAppVersion, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.PaymentsEnabled, cfg.MinAppVersion, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

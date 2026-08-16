@@ -687,7 +687,7 @@ export default function ProfileScreen() {
               {
                 icon: 'home-outline',
                 title: 'Мои объявления',
-                subtitle: 'Объекты, цены, доступность и продвижение',
+                subtitle: 'Объекты, цены и доступность',
                 count: activity?.listings,
                 onPress: () => openSection('listings', '/my-listings'),
               },

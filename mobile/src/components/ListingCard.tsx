@@ -10,6 +10,7 @@ import {
 } from '@/components/promotion/PromotionHighlightSurface';
 import { AnimatedListItem, AppIcon, AppText, IconButton, PressableScale, materialSurfaceColor } from '@/components/ui';
 import { formatRating, formatRub } from '@/lib/format';
+import { env } from '@/lib/env';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
 
@@ -128,7 +129,7 @@ export function ListingCard({
   const imgWidth = cardInnerWidth * 0.45;
   const imgHeight = imgWidth * (3 / 4);
 
-  const promotionTypes = listing.promotion_types ?? [];
+  const promotionTypes = env.paymentsEnabled ? (listing.promotion_types ?? []) : [];
   const isPromoted = promotionTypes.length > 0;
   const isHighlighted = promotionTypes.includes('highlight');
   const cardBackground = materialSurfaceColor(isDark, 'raised');

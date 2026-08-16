@@ -8,6 +8,7 @@ import { DomainCardPressable } from '@/components/domain/DomainCard';
 import { ResilientImage } from '@/components/ResilientImage';
 import { AppIcon, AppText } from '@/components/ui';
 import { formatRating, formatRooms, formatRub } from '@/lib/format';
+import { env } from '@/lib/env';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Palette } from '@/theme/tokens';
 import type { ListingCard } from '@/types/listing';
@@ -32,8 +33,8 @@ export function ListingMapCard({ listing, onClose, isFavorite, isViewed, isOwn }
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const promoted = (listing?.promotion_types ?? []).length > 0;
-  const highlighted = (listing?.promotion_types ?? []).includes('highlight');
+  const promoted = env.paymentsEnabled && (listing?.promotion_types ?? []).length > 0;
+  const highlighted = env.paymentsEnabled && (listing?.promotion_types ?? []).includes('highlight');
 
   return (
     <AnimatePresence>

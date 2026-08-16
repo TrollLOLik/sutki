@@ -73,6 +73,7 @@ type Config struct {
 
 	// Payment provider. Mock and YooKassa implement the same server-side
 	// contract; switching sandbox/prod only changes credentials and endpoint.
+	PaymentsEnabled           bool
 	PaymentProvider           string
 	PaymentAPIURL             string
 	PaymentShopID             string
@@ -184,6 +185,7 @@ func Load() (Config, error) {
 		UCallerEnabled:   getBool("UCALLER_ENABLED", false),
 		UCallerTimeout:   getDuration("UCALLER_TIMEOUT", 10*time.Second),
 
+		PaymentsEnabled:           getBool("PAYMENTS_ENABLED", false),
 		PaymentProvider:           getEnv("PAYMENT_PROVIDER", "mock"),
 		PaymentAPIURL:             getEnv("PAYMENT_API_URL", "https://api.yookassa.ru/v3"),
 		PaymentShopID:             getEnv("PAYMENT_SHOP_ID", ""),
@@ -258,7 +260,7 @@ func Load() (Config, error) {
 	if cfg.PaymentProvider != "mock" && cfg.PaymentProvider != "yookassa" {
 		return Config{}, fmt.Errorf("PAYMENT_PROVIDER must be mock or yookassa")
 	}
-	if cfg.PaymentProvider == "yookassa" && (cfg.PaymentShopID == "" || cfg.PaymentSecret == "") {
+	if cfg.PaymentsEnabled && cfg.PaymentProvider == "yookassa" && (cfg.PaymentShopID == "" || cfg.PaymentSecret == "") {
 		return Config{}, fmt.Errorf("PAYMENT_SHOP_ID and PAYMENT_SECRET are required for yookassa")
 	}
 	if cfg.PaymentAdminTokenPrevious != "" && cfg.PaymentAdminToken == "" {
@@ -353,7 +355,7 @@ func Load() (Config, error) {
 				return Config{}, fmt.Errorf("%s must be a lowercase hexadecimal SHA-256", document.name)
 			}
 		}
-		if cfg.PaymentProvider == "mock" {
+		if cfg.PaymentsEnabled && cfg.PaymentProvider == "mock" {
 			return Config{}, fmt.Errorf("PAYMENT_PROVIDER=mock is not allowed when APP_ENV=production")
 		}
 		if cfg.AuthExposeCode {
