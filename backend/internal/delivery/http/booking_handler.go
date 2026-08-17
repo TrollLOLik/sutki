@@ -474,6 +474,8 @@ func (h *BookingHandler) writeBookingError(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusForbidden, "forbidden")
 	case errors.Is(err, domain.ErrBookingOwnListing):
 		writeError(w, http.StatusForbidden, "Вы не можете забронировать собственное объявление")
+	case errors.Is(err, domain.ErrUserInteractionBlocked):
+		writeError(w, http.StatusForbidden, "Отправить заявку этому пользователю сейчас нельзя.")
 	case errors.Is(err, domain.ErrBookingNotPending):
 		writeError(w, http.StatusConflict, "booking not pending")
 	default:

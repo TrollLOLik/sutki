@@ -32,6 +32,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/abuse"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/attachmentmoderation"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
@@ -248,6 +249,7 @@ func main() {
 
 	// Chat is constructed before booking: booking posts system status cards
 	// into owner-guest conversations via the ChatSystemPoster interface.
+	abuseRepo := postgres.NewAbuseRepo(pool)
 	chatRepo := postgres.NewChatRepo(queries)
 	chatSvc := chat.New(chatRepo, privateStorage, chat.Config{
 		CentrifugoURL:  cfg.CentrifugoURL,
@@ -256,6 +258,7 @@ func main() {
 		Notifier:       notifier,
 		UserEvents:     userEvents,
 		ImageModerator: imageModerator,
+		BlockChecker:   abuseRepo,
 	})
 	// Reply suggestions run on their own model so switching them (the most
 	// frequent LLM call in the app) does not affect description generation.
@@ -298,10 +301,11 @@ func main() {
 
 	bookingRepo := postgres.NewBookingRepo(queries)
 	bookingSvc := booking.New(bookingRepo, booking.Config{
-		Notifier:   notifier,
-		Chat:       chatSvc,
-		UserEvents: userEvents,
-		ExposeCode: cfg.AuthExposeCode,
+		Notifier:     notifier,
+		Chat:         chatSvc,
+		UserEvents:   userEvents,
+		BlockChecker: abuseRepo,
+		ExposeCode:   cfg.AuthExposeCode,
 	})
 	bookingSvc.StartCleanupJob(ctx, 1*time.Hour)
 	bookingHandler := httpdelivery.NewBookingHandler(bookingSvc, cfg.MediaBaseURL)
@@ -319,6 +323,7 @@ func main() {
 	reviewSvc.SetUserEvents(userEvents)
 	reviewSvc.StartWorker(ctx)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
+	abuseHandler := httpdelivery.NewAbuseHandler(abuse.New(abuseRepo))
 
 	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, cfg.AppEnvironment != "production")
 
@@ -337,7 +342,7 @@ func main() {
 	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.PaymentsEnabled, cfg.MinAppVersion, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, abuseHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.PaymentsEnabled, cfg.MinAppVersion, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

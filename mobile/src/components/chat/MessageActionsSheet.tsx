@@ -20,6 +20,7 @@ export interface MessageActionsAvailability {
 	canCopy: boolean;
 	canEdit: boolean;
 	canDelete: boolean;
+	canReport: boolean;
 }
 
 /**
@@ -53,6 +54,7 @@ export function getMessageActions(
 		canEdit:
 			isMine && isUserKind && !isDeleted && isSettled && hasText && !isReadByOther && ageMs < EDIT_WINDOW_MS,
 		canDelete: isMine && isUserKind && !isDeleted && isSettled && ageMs < DELETE_WINDOW_MS,
+		canReport: !isMine && isUserKind && !isDeleted && isSettled && message.id > 0,
 	};
 }
 
@@ -65,6 +67,7 @@ interface MessageActionsSheetProps {
 	onCopy: (message: ChatMessage) => void;
 	onEdit: (message: ChatMessage) => void;
 	onDelete: (message: ChatMessage) => void;
+	onReport: (message: ChatMessage) => void;
 }
 
 interface ActionRow {
@@ -92,6 +95,7 @@ export function MessageActionsSheet({
 	onCopy,
 	onEdit,
 	onDelete,
+	onReport,
 }: MessageActionsSheetProps) {
 	const { palette } = useAppTheme();
 
@@ -134,9 +138,19 @@ export function MessageActionsSheet({
 				onPress: () => onDelete(message),
 			});
 		}
+		if (actions.canReport) {
+			list.push({
+				key: 'report',
+				icon: 'flag-outline',
+				title: 'Пожаловаться',
+				subtitle: 'Сообщить о нарушении правил',
+				destructive: true,
+				onPress: () => onReport(message),
+			});
+		}
 
 		return list;
-	}, [actions, message, onCopy, onDelete, onEdit, onReply]);
+	}, [actions, message, onCopy, onDelete, onEdit, onReply, onReport]);
 
 	return (
 		<BottomSheet

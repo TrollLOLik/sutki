@@ -247,6 +247,34 @@ WHERE request.house_id = house.id
 		return nil, err
 	}
 
+	// A blocked account must not bypass the pair restriction by logging out,
+	// submitting a guest request and then verifying the same email. Keep the
+	// row in the user's history as cancelled, but never return it to the hook
+	// that notifies the owner and posts a system chat card.
+	const cancelBlocked = `
+UPDATE request
+SET user_id = $2::int,
+    status = 'cancelled',
+    rejection_reason = 'Взаимодействие с пользователем недоступно',
+    updated_at = now()
+FROM house
+WHERE request.house_id = house.id
+  AND LOWER(TRIM(request.email)) = LOWER(TRIM($1))
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND EXISTS (
+    SELECT 1
+    FROM user_block b
+    WHERE b.revoked_at IS NULL
+      AND (
+        (b.blocker_user_id = $2::int AND b.blocked_user_id = house.owner_id)
+        OR (b.blocker_user_id = house.owner_id AND b.blocked_user_id = $2::int)
+      )
+  )`
+	if _, err := tx.Exec(ctx, cancelBlocked, email, userID); err != nil {
+		return nil, err
+	}
+
 	// 2. Link the remaining guest requests to the verified user and move
 	// them to in_progress so owners finally see them as pending.
 	const linkRequests = `
@@ -411,6 +439,32 @@ WHERE request.house_id = house.id
   AND request.status = 'pending_verification'
   AND house.owner_id = $2::int`
 	if _, err := tx.Exec(ctx, deleteOwn, phoneNormalized, userID); err != nil {
+		return nil, err
+	}
+
+	// Mirror the email flow: an existing account cannot bypass its pair block
+	// by creating a guest request with the phone it later verifies.
+	const cancelBlocked = `
+UPDATE request
+SET user_id = $2::int,
+    status = 'cancelled',
+    rejection_reason = 'Взаимодействие с пользователем недоступно',
+    updated_at = now()
+FROM house
+WHERE request.house_id = house.id
+  AND request.phone_normalized = $1
+  AND request.user_id IS NULL
+  AND request.status = 'pending_verification'
+  AND EXISTS (
+    SELECT 1
+    FROM user_block b
+    WHERE b.revoked_at IS NULL
+      AND (
+        (b.blocker_user_id = $2::int AND b.blocked_user_id = house.owner_id)
+        OR (b.blocker_user_id = house.owner_id AND b.blocked_user_id = $2::int)
+      )
+  )`
+	if _, err := tx.Exec(ctx, cancelBlocked, phoneNormalized, userID); err != nil {
 		return nil, err
 	}
 

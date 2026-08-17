@@ -91,3 +91,15 @@ var (
 	// ErrActiveBookings is returned when a user attempts to delete their account with active bookings.
 	ErrActiveBookings = errors.New("cannot delete account with active bookings")
 )
+
+// Reports and user blocks.
+var (
+	ErrSelfBlock             = errors.New("cannot block self")
+	ErrSelfReport            = errors.New("cannot report self")
+	ErrReportTargetForbidden = errors.New("report target is not accessible")
+	ErrReportRateLimit       = errors.New("report rate limit reached")
+	// ErrUserInteractionBlocked is returned only for NEW user-initiated
+	// contact. Existing booking transitions and backend system cards remain
+	// available so a block cannot strand an active rental workflow.
+	ErrUserInteractionBlocked = errors.New("user interaction is blocked")
+)

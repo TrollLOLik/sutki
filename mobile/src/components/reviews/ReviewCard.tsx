@@ -31,6 +31,7 @@ interface ReviewCardProps {
   reply?: ReviewReply;
   rejectionReason?: string;
   status?: string;
+  headerAction?: ReactNode;
   children?: ReactNode;
   className?: string;
 }
@@ -62,6 +63,7 @@ export function ReviewCard({
   className,
   createdAt,
   header,
+  headerAction,
   rating,
   ratingMode = 'stars',
   rejectionReason,
@@ -112,6 +114,7 @@ export function ReviewCard({
               <AppText className="text-xs font-medium text-ink-secondary" numberOfLines={1}>{header.listingLabel}</AppText>
             </View>
           ) : null}
+          {headerAction ? <View style={{ flexShrink: 0 }}>{headerAction}</View> : null}
         </View>
       )}
 

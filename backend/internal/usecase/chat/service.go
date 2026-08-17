@@ -207,6 +207,9 @@ type Config struct {
 	// invalidations. It is independent from email delivery.
 	UserEvents     domain.UserEventPublisher
 	ImageModerator domain.ImageModerator
+	// BlockChecker prevents new user-authored interaction while preserving
+	// history and server-authored booking status cards.
+	BlockChecker domain.UserBlockChecker
 }
 
 type Service struct {
@@ -218,6 +221,7 @@ type Service struct {
 	notifier       domain.EmailNotifier
 	userEvents     domain.UserEventPublisher
 	imageModerator domain.ImageModerator
+	blockChecker   domain.UserBlockChecker
 	// Reply suggestions are optional: with no generator wired the service
 	// serves the canned fallback sets (see suggestions.go).
 	suggestionGen   SuggestionGenerator
@@ -276,8 +280,44 @@ func New(repo domain.ChatRepository, storage domain.FileStorage, cfg Config) *Se
 		notifier:        cfg.Notifier,
 		userEvents:      cfg.UserEvents,
 		imageModerator:  cfg.ImageModerator,
+		blockChecker:    cfg.BlockChecker,
 		suggestionCache: newSuggestionCache(),
 	}
+}
+
+func (s *Service) ensureInteractionAllowed(ctx context.Context, firstUserID, secondUserID int32) error {
+	if s.blockChecker == nil || firstUserID == secondUserID {
+		return nil
+	}
+	blocked, err := s.blockChecker.IsBlockedBetween(ctx, firstUserID, secondUserID)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return domain.ErrUserInteractionBlocked
+	}
+	return nil
+}
+
+// ConversationBlockState returns the pair restriction from the caller's
+// perspective. Reading history remains allowed; this state only controls new
+// user-authored actions in the client.
+func (s *Service) ConversationBlockState(ctx context.Context, userID int32, convID int64) (domain.UserBlockState, error) {
+	isParticipant, err := s.repo.CheckParticipantExists(ctx, convID, userID)
+	if err != nil {
+		return domain.UserBlockState{}, err
+	}
+	if !isParticipant {
+		return domain.UserBlockState{}, domain.ErrBookingForbidden
+	}
+	if s.blockChecker == nil {
+		return domain.UserBlockState{}, nil
+	}
+	otherUserID, err := s.repo.GetOtherParticipantID(ctx, convID, userID)
+	if err != nil {
+		return domain.UserBlockState{}, err
+	}
+	return s.blockChecker.BlockState(ctx, userID, otherUserID)
 }
 
 // ConnectionToken signs a connection-JWT for Centrifugo socket connection
@@ -327,6 +367,15 @@ func (s *Service) PublishTyping(ctx context.Context, userID int32, convID int64,
 	}
 	if !isParticipant {
 		return domain.ErrBookingForbidden
+	}
+	if s.blockChecker != nil {
+		otherUserID, err := s.repo.GetOtherParticipantID(ctx, convID, userID)
+		if err != nil {
+			return err
+		}
+		if err := s.ensureInteractionAllowed(ctx, userID, otherUserID); err != nil {
+			return err
+		}
 	}
 
 	return s.centrifugoPublish(fmt.Sprintf("chat:conv_%d", convID), map[string]any{
@@ -379,6 +428,9 @@ func (s *Service) HostResponseStats(ctx context.Context, hostID int32) (domain.H
 func (s *Service) FindOrCreateConversation(ctx context.Context, houseID *int32, user1, user2 int32) (int64, error) {
 	if user1 == user2 {
 		return 0, ErrSelfConversation
+	}
+	if err := s.ensureInteractionAllowed(ctx, user1, user2); err != nil {
+		return 0, err
 	}
 	// Anti-spam: a user may only open a conversation when there is a real
 	// relationship with the target — an existing conversation between them, a
@@ -723,6 +775,15 @@ func (s *Service) SendMessage(ctx context.Context, userID int32, convID int64, b
 	}
 	if !isParticipant {
 		return domain.Message{}, domain.ErrBookingForbidden
+	}
+	if s.blockChecker != nil {
+		otherUserID, err := s.repo.GetOtherParticipantID(ctx, convID, userID)
+		if err != nil {
+			return domain.Message{}, err
+		}
+		if err := s.ensureInteractionAllowed(ctx, userID, otherUserID); err != nil {
+			return domain.Message{}, err
+		}
 	}
 
 	// Verify if other user is deleted

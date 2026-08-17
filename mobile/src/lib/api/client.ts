@@ -61,6 +61,8 @@ const API_ERROR_TRANSLATIONS: Record<string, string> = {
   'reply attempts exceeded': 'Превышено количество попыток изменения ответа.',
   'you can only message users you have a listing or booking relationship with':
     'Написать можно только пользователю, с которым вас связывает объявление или бронирование.',
+  'user interaction is blocked':
+    'Новые сообщения и заявки недоступны, пока между пользователями действует блокировка.',
 };
 
 function localizeApiMessage(message: string, status: number): string {

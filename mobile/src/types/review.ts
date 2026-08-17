@@ -5,6 +5,7 @@
 
 export interface Review {
   id: number;
+  author_id: number;
   /** 1..5 stars. */
   rating: number;
   body: string;
@@ -45,6 +46,7 @@ export interface CreateReviewBody {
 
 export interface UserReview {
   id: number;
+  author_id: number;
   rating: number;
   body: string;
   author_name?: string;

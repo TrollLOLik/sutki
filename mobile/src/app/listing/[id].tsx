@@ -42,6 +42,10 @@ import { env } from '@/lib/env';
 import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import { ContentActionsSheet } from '@/components/safety/ContentActionsSheet';
+import { ReportSheet } from '@/components/safety/ReportSheet';
+import { useUserBlockState } from '@/lib/api/abuse';
+import { requireAuth } from '@/lib/requireAuth';
 
 export default function ListingDetailScreen() {
   const { palette, isDark } = useAppTheme();
@@ -60,6 +64,10 @@ export default function ListingDetailScreen() {
   const viewRequestStartedRef = useRef(false);
 
   const { user } = useSessionStore();
+  const blockState = useUserBlockState(
+    data?.owner_id,
+    Boolean(user && data && data.owner_id !== user.id),
+  );
 
   const isMountedRef = useRef(false);
   useEffect(() => {
@@ -199,6 +207,8 @@ export default function ListingDetailScreen() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [actionsVisible, setActionsVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
 
   const animVisible = useRef(new Animated.Value(0)).current;
   const isHeaderVisibleRef = useRef(false);
@@ -293,6 +303,12 @@ export default function ListingDetailScreen() {
     } catch (error) {
       console.log('Error sharing listing:', error);
     }
+  };
+
+  const handleOpenReport = () => {
+    if (!requireAuth('generic')) return;
+    setActionsVisible(false);
+    setTimeout(() => setReportVisible(true), 240);
   };
 
   const getListingTitle = () => {
@@ -454,12 +470,12 @@ export default function ListingDetailScreen() {
                 />
               )}
               <IconButton
-                icon="share-outline"
+                icon="ellipsis-horizontal"
                 iconSize={22}
                 size={48}
                 tone="primary"
-                onPress={handleShare}
-                accessibilityLabel="Поделиться"
+                onPress={() => setActionsVisible(true)}
+                accessibilityLabel="Действия с объявлением"
               />
 
             </View>
@@ -982,7 +998,14 @@ export default function ListingDetailScreen() {
                 </View>
                 <View className="flex-1">
                   <Button
-                    label="Оставить заявку"
+                    label={
+                      blockState.data?.blocked
+                        ? blockState.data.blocked_by_me
+                          ? 'Пользователь заблокирован'
+                          : 'Заявка недоступна'
+                        : 'Оставить заявку'
+                    }
+                    disabled={Boolean(blockState.data?.blocked)}
                     onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
                   />
                 </View>
@@ -991,6 +1014,44 @@ export default function ListingDetailScreen() {
           </SafeAreaView>
         </>
       )}
+      {data ? (
+        <>
+          <ContentActionsSheet
+            visible={actionsVisible}
+            onClose={() => setActionsVisible(false)}
+            title="Объявление"
+            subtitle={getListingSubtitle()}
+            actions={[
+              {
+                key: 'share',
+                title: 'Поделиться',
+                subtitle: 'Отправить ссылку на объявление',
+                icon: 'share-outline',
+                onPress: () => {
+                  setActionsVisible(false);
+                  void handleShare();
+                },
+              },
+              ...(!isOwnListing
+                ? [{
+                    key: 'report',
+                    title: 'Пожаловаться',
+                    subtitle: 'Сообщить о нарушении правил',
+                    icon: 'flag-outline' as const,
+                    onPress: handleOpenReport,
+                  }]
+                : []),
+            ]}
+          />
+          <ReportSheet
+            visible={reportVisible}
+            targetType="listing"
+            targetID={numericId}
+            targetLabel={getListingSubtitle()}
+            onClose={() => setReportVisible(false)}
+          />
+        </>
+      ) : null}
     </View>
   );
 }

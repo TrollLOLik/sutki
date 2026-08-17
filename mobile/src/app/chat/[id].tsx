@@ -45,7 +45,7 @@ import { api, ApiError } from '@/lib/api/client';
 import { useAppTheme } from '@/theme/useAppTheme';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
 import { formatRooms } from '@/lib/format';
-import { BottomSheet, IconButton, MaterialSurface } from '@/components/ui';
+import { BottomSheet, Button, IconButton, InlineAlert, MaterialSurface } from '@/components/ui';
 import { BookingStatusCard } from '@/components/chat/BookingStatusCard';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import {
@@ -76,6 +76,14 @@ import Animated, {
 	FadeIn,
 	FadeInDown,
 } from 'react-native-reanimated';
+import { ReportSheet } from '@/components/safety/ReportSheet';
+import { UserActionsSheet } from '@/components/safety/UserActionsSheet';
+import {
+	useBlockUser,
+	useUnblockUser,
+	useUserBlockState,
+	type ReportTargetType,
+} from '@/lib/api/abuse';
 
 const CHAT_LIST_CONTENT_STYLE = { paddingVertical: 18 } as const;
 const CHAT_LIST_BATCH_SIZE = 8;
@@ -129,6 +137,12 @@ export default function ChatDialogScreen() {
 	// dismissible for the rest of the session. Not a chat message — it never
 	// pollutes history or unread counters.
 	const [safetyNoticeDismissed, setSafetyNoticeDismissed] = useState(false);
+	const [userActionsVisible, setUserActionsVisible] = useState(false);
+	const [reportTarget, setReportTarget] = useState<{
+		type: ReportTargetType;
+		id: number;
+		label: string;
+	} | null>(null);
 
 	const {
 		data,
@@ -144,6 +158,13 @@ export default function ChatDialogScreen() {
 	// Load listing context if available
 	const { data: conversations } = useConversations();
 	const activeConv = conversations?.find((c) => c.conversation_id === convID);
+	const routeOtherUserID = Number(params.otherUserId);
+	const otherUserID = activeConv?.other_user_id || (Number.isFinite(routeOtherUserID) ? routeOtherUserID : 0);
+	const { data: blockState } = useUserBlockState(otherUserID, otherUserID > 0 && sessionUser?.id != null);
+	const blockUser = useBlockUser(otherUserID);
+	const unblockUser = useUnblockUser(otherUserID);
+	const isBlocked = blockState?.blocked === true;
+	const blockedByMe = blockState?.blocked_by_me === true;
 	const houseID = activeConv?.house_id || (params.houseId ? parseInt(params.houseId, 10) : undefined);
 	const { data: listing } = useListing(houseID);
 
@@ -406,13 +427,17 @@ export default function ChatDialogScreen() {
 
 	const closeActions = React.useCallback(() => setActionsTarget(null), []);
 
-	const actionsAvailability = React.useMemo(
-		() =>
-			actionsTarget
-				? getMessageActions(actionsTarget, sessionUser?.id, activeConv?.other_last_read_message_id)
-				: { canReply: false, canCopy: false, canEdit: false, canDelete: false },
-		[actionsTarget, activeConv?.other_last_read_message_id, sessionUser?.id],
-	);
+	const actionsAvailability = React.useMemo(() => {
+		if (!actionsTarget) {
+			return { canReply: false, canCopy: false, canEdit: false, canDelete: false, canReport: false };
+		}
+		const availability = getMessageActions(
+			actionsTarget,
+			sessionUser?.id,
+			activeConv?.other_last_read_message_id,
+		);
+		return { ...availability, canReply: !isBlocked && availability.canReply };
+	}, [actionsTarget, activeConv?.other_last_read_message_id, isBlocked, sessionUser?.id]);
 
 	const handleActionReply = React.useCallback(
 		(message: ChatMessage) => {
@@ -428,6 +453,20 @@ export default function ChatDialogScreen() {
 			if (!message.body) return;
 			await Clipboard.setStringAsync(message.body);
 			hapticSuccess();
+		},
+		[closeActions],
+	);
+
+	const handleActionReport = React.useCallback(
+		(message: ChatMessage) => {
+			closeActions();
+			setTimeout(() => {
+				setReportTarget({
+					type: 'message',
+					id: message.id,
+					label: message.body?.trim().slice(0, 60) || 'Сообщение с вложением',
+				});
+			}, 220);
 		},
 		[closeActions],
 	);
@@ -485,6 +524,7 @@ export default function ChatDialogScreen() {
 	const otherTypingExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const emitTyping = React.useCallback((active: boolean) => {
+		if (isBlocked && active) return;
 		if (!convID || ownTypingActiveRef.current === active) return;
 		ownTypingActiveRef.current = active;
 		ownTypingLastSentAtRef.current = active ? Date.now() : 0;
@@ -492,7 +532,7 @@ export default function ChatDialogScreen() {
 			// Typing is best-effort and must never interfere with composing or
 			// sending the actual message.
 		});
-	}, [convID]);
+	}, [convID, isBlocked]);
 
 	const stopOwnTyping = React.useCallback(() => {
 		if (ownTypingStopTimerRef.current) {
@@ -501,6 +541,16 @@ export default function ChatDialogScreen() {
 		}
 		emitTyping(false);
 	}, [emitTyping]);
+
+	useEffect(() => {
+		if (!isBlocked) return;
+		stopOwnTyping();
+		const frame = requestAnimationFrame(() => {
+			setEditing(null);
+			setReplyTo(null);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [isBlocked, stopOwnTyping]);
 
 	const handleInputChange = React.useCallback((value: string) => {
 		setInputText(value);
@@ -746,6 +796,13 @@ export default function ChatDialogScreen() {
 	 * поле в схеме не понадобилось.
 	 */
 	const handleSend = async () => {
+		if (isBlocked) {
+			Alert.alert(
+				'Обмен сообщениями недоступен',
+				'Новые сообщения нельзя отправить, пока действует блокировка.',
+			);
+			return;
+		}
 		const text = inputText.trim();
 		const hasAttachments = staged.length > 0;
 		if (!text && !hasAttachments) return;
@@ -1183,9 +1240,9 @@ export default function ChatDialogScreen() {
 	// Отправлять можно и одни вложения без подписи, поэтому кнопка смотрит на
 	// оба источника. В режиме правки вложения не при чём — правится только текст,
 	// и пустым его оставлять нельзя (сервер вернёт ErrEmptyMessage).
-	const canSend = editing
+	const canSend = !isBlocked && (editing
 		? !isInputEmpty && !isSavingEdit
-		: (!isInputEmpty || staged.length > 0) && !uploading;
+		: (!isInputEmpty || staged.length > 0) && !uploading);
 	const isDeletedUser = !!activeConv?.other_user_deleted;
 	const conversationTitle = activeConv
 		? [activeConv.other_user_name, activeConv.other_user_surname]
@@ -1195,7 +1252,7 @@ export default function ChatDialogScreen() {
 		: params.title?.trim() || 'Собеседник';
 	const callPhone = activeConv?.other_user_phone?.trim() || '';
 	const normalizedCallPhone = callPhone.replace(/[^\d+]/g, '');
-	const canCall = !!activeConv && !isDeletedUser && normalizedCallPhone.length > 0;
+	const canCall = !!activeConv && !isDeletedUser && !isBlocked && normalizedCallPhone.length > 0;
 	const canOpenProfile = !!activeConv?.other_user_id && !isDeletedUser;
 	const presenceLabel = isOtherTyping
 		? 'печатает…'
@@ -1223,6 +1280,46 @@ export default function ChatDialogScreen() {
 		if (!canCall) return;
 		Linking.openURL(`tel:${normalizedCallPhone}`).catch(() => {
 			Alert.alert('Ошибка', 'Не удалось открыть телефон.');
+		});
+	};
+
+	const openUserReport = () => {
+		if (!otherUserID) return;
+		setUserActionsVisible(false);
+		setTimeout(() => {
+			setReportTarget({ type: 'user', id: otherUserID, label: conversationTitle });
+		}, 220);
+	};
+
+	const confirmBlock = () => {
+		if (!otherUserID) return;
+		setUserActionsVisible(false);
+		Alert.alert(
+			'Заблокировать пользователя?',
+			'Новые сообщения, звонки и заявки между вами станут недоступны. История и текущие бронирования сохранятся.',
+			[
+				{ text: 'Отмена', style: 'cancel' },
+				{
+					text: 'Заблокировать',
+					style: 'destructive',
+					onPress: () => blockUser.mutate(undefined, {
+						onError: (caught) => Alert.alert(
+							'Не удалось заблокировать',
+							caught instanceof ApiError ? caught.message : 'Попробуйте ещё раз.',
+						),
+					}),
+				},
+			],
+		);
+	};
+
+	const handleUnblock = () => {
+		setUserActionsVisible(false);
+		unblockUser.mutate(undefined, {
+			onError: (caught) => Alert.alert(
+				'Не удалось разблокировать',
+				caught instanceof ApiError ? caught.message : 'Попробуйте ещё раз.',
+			),
 		});
 	};
 
@@ -1260,6 +1357,7 @@ export default function ChatDialogScreen() {
 	const suggestionsEnabled =
 		!isLoading &&
 		!isDeletedUser &&
+		!isBlocked &&
 		!editing &&
 		isInputEmpty &&
 		staged.length === 0 &&
@@ -1377,16 +1475,27 @@ export default function ChatDialogScreen() {
 					</TouchableOpacity>
 				</View>
 
-				{canCall ? (
-					<IconButton
-						icon="call-outline"
-						iconSize={23}
-						size={48}
-						tone="primary"
-						onPress={handleCallPress}
-						accessibilityLabel="Позвонить"
-					/>
-				) : null}
+				<View className="flex-row items-center gap-1">
+					{canCall ? (
+						<IconButton
+							icon="call-outline"
+							iconSize={22}
+							size={44}
+							tone="primary"
+							onPress={handleCallPress}
+							accessibilityLabel="Позвонить"
+						/>
+					) : null}
+					{otherUserID > 0 && !isDeletedUser ? (
+						<IconButton
+							icon="ellipsis-horizontal"
+							iconSize={21}
+							size={44}
+							onPress={() => setUserActionsVisible(true)}
+							accessibilityLabel="Действия с пользователем"
+						/>
+					) : null}
+				</View>
 			</Animated.View>
 
 			{/* Sticky Listing Context Header */}
@@ -1506,6 +1615,26 @@ export default function ChatDialogScreen() {
 								</View>
 							</View>
 						</View>
+					</View>
+				) : isBlocked ? (
+					<View
+						style={{ paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 16 }}
+						className="border-t border-line/30 bg-surface px-4 py-4">
+						<InlineAlert compact title="Обмен сообщениями недоступен">
+							История и карточки текущих бронирований остаются доступными.
+						</InlineAlert>
+						{blockedByMe ? (
+							<Button
+								label="Разблокировать"
+								startIcon="person-add-outline"
+								mode="soft"
+								tone="neutral"
+								size="md"
+								loading={unblockUser.isPending}
+								onPress={handleUnblock}
+								style={{ marginTop: 10 }}
+							/>
+						) : null}
 					</View>
 				) : (
 					<Animated.View
@@ -1638,6 +1767,35 @@ export default function ChatDialogScreen() {
 				onCopy={handleActionCopy}
 				onEdit={startEditing}
 				onDelete={handleActionDelete}
+				onReport={handleActionReport}
+			/>
+
+			<UserActionsSheet
+				visible={userActionsVisible}
+				userName={conversationTitle}
+				blocked={isBlocked}
+				blockedByMe={blockedByMe}
+				busy={blockUser.isPending || unblockUser.isPending}
+				onClose={() => setUserActionsVisible(false)}
+				onOpenProfile={() => {
+					setUserActionsVisible(false);
+					setTimeout(handleProfilePress, 220);
+				}}
+				onCall={canCall ? () => {
+					setUserActionsVisible(false);
+					setTimeout(handleCallPress, 220);
+				} : undefined}
+				onReport={openUserReport}
+				onBlock={confirmBlock}
+				onUnblock={handleUnblock}
+			/>
+
+			<ReportSheet
+				visible={reportTarget != null}
+				targetType={reportTarget?.type ?? 'user'}
+				targetID={reportTarget?.id ?? 0}
+				targetLabel={reportTarget?.label}
+				onClose={() => setReportTarget(null)}
 			/>
 
 			<VideoPlayerModal uri={playingVideoUri} onClose={() => setPlayingVideoUri(null)} />

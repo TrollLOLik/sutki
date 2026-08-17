@@ -25,6 +25,7 @@ func NewReviewHandler(svc *review.Service, mediaBaseURL string) *ReviewHandler {
 
 type reviewDTO struct {
 	ID              int32           `json:"id"`
+	AuthorID        int32           `json:"author_id"`
 	Rating          int32           `json:"rating"`
 	Body            string          `json:"body"`
 	AuthorName      string          `json:"author_name"`
@@ -147,6 +148,7 @@ func (h *ReviewHandler) reviewDTO(rv domain.Review) reviewDTO {
 	}
 	out := reviewDTO{
 		ID:              rv.ID,
+		AuthorID:        rv.AuthorID,
 		Rating:          rv.Rating,
 		Body:            rv.Body,
 		AuthorName:      rv.AuthorName,
@@ -250,6 +252,7 @@ func summaryDTO(s domain.RatingSummary) reviewSummaryDTO {
 
 type userReviewDTO struct {
 	ID              int32           `json:"id"`
+	AuthorID        int32           `json:"author_id"`
 	Rating          int32           `json:"rating"`
 	Body            string          `json:"body"`
 	AuthorName      string          `json:"author_name,omitempty"`
@@ -334,6 +337,7 @@ func (h *ReviewHandler) userReviewDTO(rv domain.Review) userReviewDTO {
 	}
 	out := userReviewDTO{
 		ID:              rv.ID,
+		AuthorID:        rv.AuthorID,
 		Rating:          rv.Rating,
 		Body:            rv.Body,
 		AuthorName:      rv.AuthorName,

@@ -24,6 +24,8 @@ import type { UserReview } from '@/types/review';
 import { useActivityScopeSeen } from '@/hooks/useActivityScopeSeen';
 import { useKeyboardAwareListFocus } from '@/hooks/useKeyboardAwareListFocus';
 import { CollapsibleHeader, useCollapsibleHeader } from '@/components/CollapsibleHeader';
+import { ContentActionsSheet } from '@/components/safety/ContentActionsSheet';
+import { ReportSheet } from '@/components/safety/ReportSheet';
 
 type ReviewTab = 'written' | 'received';
 type ReviewSort = 'newest' | 'oldest' | 'rating_desc' | 'rating_asc';
@@ -81,6 +83,8 @@ export default function MyReviewsScreen() {
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reviewHighlight] = useState(() => new Animated.Value(0));
   const [highlightedReviewId, setHighlightedReviewId] = useState<number | null>(null);
+  const [actionReview, setActionReview] = useState<UserReview | null>(null);
+  const [reportReview, setReportReview] = useState<UserReview | null>(null);
 
   const writtenQuery = useMyWrittenReviews({ limit: 100 });
   const receivedQuery = useMyReceivedReviews({ limit: 100 });
@@ -199,6 +203,7 @@ export default function MyReviewsScreen() {
     const card = !isWritten ? (
       <ReceivedReviewCard
         review={item}
+        onActions={() => setActionReview(item)}
         onReplyFocus={() => handleReceivedReplyFocus(index ?? 0)}
       />
     ) : (
@@ -376,6 +381,32 @@ export default function MyReviewsScreen() {
           </ScrollView>
         )}
         </View>
+        <ContentActionsSheet
+          visible={actionReview != null}
+          onClose={() => setActionReview(null)}
+          title="Отзыв"
+          subtitle={actionReview?.author_name || 'Действия с отзывом'}
+          actions={[
+            {
+              key: 'report',
+              title: 'Пожаловаться',
+              subtitle: 'Сообщить о нарушении правил',
+              icon: 'flag-outline',
+              onPress: () => {
+                const review = actionReview;
+                setActionReview(null);
+                if (review) setTimeout(() => setReportReview(review), 240);
+              },
+            },
+          ]}
+        />
+        <ReportSheet
+          visible={reportReview != null}
+          targetType="review"
+          targetID={reportReview?.id ?? 0}
+          targetLabel={reportReview?.author_name}
+          onClose={() => setReportReview(null)}
+        />
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -414,7 +445,15 @@ const screenStyles = StyleSheet.create({
   },
 });
 
-function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onReplyFocus: () => void }) {
+function ReceivedReviewCard({
+  review,
+  onActions,
+  onReplyFocus,
+}: {
+  review: UserReview;
+  onActions: () => void;
+  onReplyFocus: () => void;
+}) {
   const { palette } = useAppTheme();
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
@@ -448,6 +487,15 @@ function ReceivedReviewCard({ review, onReplyFocus }: { review: UserReview; onRe
         avatarUrl: review.author_avatar_url,
         listingLabel: `${review.house_street}, ${review.house_number}`,
       }}
+      headerAction={(
+        <IconButton
+          icon="ellipsis-horizontal"
+          size={36}
+          iconSize={19}
+          onPress={onActions}
+          accessibilityLabel="Действия с отзывом"
+        />
+      )}
       rating={review.rating}
       reply={review.reply}>
       {review.reply?.status === 'active' ? null : submitted || review.reply?.status === 'pending_moderation' ? (

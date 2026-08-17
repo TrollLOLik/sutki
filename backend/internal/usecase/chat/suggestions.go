@@ -147,6 +147,15 @@ func (s *Service) Suggestions(ctx context.Context, userID int32, convID int64) (
 	if !isParticipant {
 		return SuggestionsResult{}, domain.ErrBookingForbidden
 	}
+	if s.blockChecker != nil {
+		otherUserID, err := s.repo.GetOtherParticipantID(ctx, convID, userID)
+		if err != nil {
+			return SuggestionsResult{}, err
+		}
+		if err := s.ensureInteractionAllowed(ctx, userID, otherUserID); err != nil {
+			return SuggestionsResult{}, err
+		}
+	}
 
 	sctx, err := s.repo.GetSuggestionContext(ctx, convID, suggestionContextMessages)
 	if err != nil {

@@ -18,6 +18,9 @@ import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Review, ReviewSummary } from '@/types/review';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
+import { ContentActionsSheet } from '@/components/safety/ContentActionsSheet';
+import { ReportSheet } from '@/components/safety/ReportSheet';
+import { requireAuth } from '@/lib/requireAuth';
 
 const REVIEW_EMOJI_OPTIONS = [
   '\u{1F600}', '\u{1F60A}', '\u{1F642}', '\u{1F60D}',
@@ -41,8 +44,10 @@ export default function ReviewsScreen() {
     ? hostReviews
     : listingReviews;
 
-  const { status: authStatus } = useSessionStore();
+  const { status: authStatus, user } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
+  const [actionReview, setActionReview] = useState<Review | null>(null);
+  const [reportReview, setReportReview] = useState<Review | null>(null);
   const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated && isHost !== 'true' });
 
   const isOwnListing = useMemo(() => {
@@ -113,6 +118,8 @@ export default function ReviewsScreen() {
                 <ReviewRow
                   review={item}
                   canReply={isOwnListing}
+                  canReport={item.author_id !== user?.id}
+                  onActions={() => setActionReview(item)}
                   onReplyFocus={() => handleReplyFocus(index)}
                 />
               )}
@@ -136,6 +143,33 @@ export default function ReviewsScreen() {
 
           </>
         )}
+        <ContentActionsSheet
+          visible={actionReview != null}
+          onClose={() => setActionReview(null)}
+          title="Отзыв"
+          subtitle={actionReview?.author_name || 'Действия с отзывом'}
+          actions={[
+            {
+              key: 'report',
+              title: 'Пожаловаться',
+              subtitle: 'Сообщить о нарушении правил',
+              icon: 'flag-outline',
+              onPress: () => {
+                if (!requireAuth('generic')) return;
+                const review = actionReview;
+                setActionReview(null);
+                if (review) setTimeout(() => setReportReview(review), 240);
+              },
+            },
+          ]}
+        />
+        <ReportSheet
+          visible={reportReview != null}
+          targetType="review"
+          targetID={reportReview?.id ?? 0}
+          targetLabel={reportReview?.author_name}
+          onClose={() => setReportReview(null)}
+        />
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -208,7 +242,19 @@ const styles = StyleSheet.create({
   },
 });
 
-function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canReply: boolean; onReplyFocus: () => void }) {
+function ReviewRow({
+  review,
+  canReply,
+  canReport,
+  onActions,
+  onReplyFocus,
+}: {
+  review: Review;
+  canReply: boolean;
+  canReport: boolean;
+  onActions: () => void;
+  onReplyFocus: () => void;
+}) {
   const { palette } = useAppTheme();
   const [replying,setReplying]=useState(false);
   const [replyBody,setReplyBody]=useState('');
@@ -220,6 +266,15 @@ function ReviewRow({ review, canReply, onReplyFocus }: { review: Review; canRepl
       className="mb-3"
       createdAt={review.created_at}
       header={{ kind: 'author', name: review.author_name, avatarUrl: review.author_avatar_url }}
+      headerAction={canReport ? (
+        <IconButton
+          icon="ellipsis-horizontal"
+          size={36}
+          iconSize={19}
+          onPress={onActions}
+          accessibilityLabel="Действия с отзывом"
+        />
+      ) : null}
       rating={review.rating}
       ratingMode="score"
       reply={review.reply}>

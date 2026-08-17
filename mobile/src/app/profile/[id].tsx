@@ -18,7 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ListingCard } from '@/components/ListingCard';
 import { ListingLayoutToggle } from '@/components/ListingLayoutToggle';
-import { Button, EmptyState, IconButton, SearchField } from '@/components/ui';
+import { Button, EmptyState, IconButton, InlineAlert, SearchField } from '@/components/ui';
 import { ImageViewerModal } from '@/components/ui/ImageViewerModal';
 import { ProfileHero, ProfileMetricGrid } from '@/components/profile/ProfileOverview';
 import { useFavoriteIds, useToggleFavorite } from '@/lib/api/favorites';
@@ -37,6 +37,9 @@ import { useSessionStore } from '@/store/session';
 import { appAlert as Alert } from '@/components/AppAlert';
 import { useListingLayoutStore } from '@/store/listing-layout';
 import { env } from '@/lib/env';
+import { ReportSheet } from '@/components/safety/ReportSheet';
+import { UserActionsSheet } from '@/components/safety/UserActionsSheet';
+import { useBlockUser, useUnblockUser, useUserBlockState } from '@/lib/api/abuse';
 
 export default function PublicProfileScreen() {
   const { palette } = useAppTheme();
@@ -70,6 +73,14 @@ export default function PublicProfileScreen() {
   const layoutMode = useListingLayoutStore((state) => state.discovery);
   const toggleLayoutMode = useListingLayoutStore((state) => state.toggleMode);
   const [avatarViewerVisible, setAvatarViewerVisible] = useState(false);
+  const [userActionsVisible, setUserActionsVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const canQueryBlockState = sessionUserId != null && Number.isFinite(numericId) && numericId > 0 && numericId !== sessionUserId;
+  const { data: blockState } = useUserBlockState(numericId, canQueryBlockState);
+  const blockUser = useBlockUser(numericId);
+  const unblockUser = useUnblockUser(numericId);
+  const isBlocked = blockState?.blocked === true;
+  const blockedByMe = blockState?.blocked_by_me === true;
 
   useEffect(() => {
     if (sessionUserId != null && numericId === sessionUserId) {
@@ -191,6 +202,10 @@ export default function PublicProfileScreen() {
   });
 
   const handleCall = () => {
+    if (isBlocked) {
+      Alert.alert('Действие недоступно', 'Контакты скрыты, пока между пользователями действует блокировка.');
+      return;
+    }
     if (!publicPhone) {
       Alert.alert('Информация', 'Телефон владельца не указан.');
       return;
@@ -204,6 +219,10 @@ export default function PublicProfileScreen() {
 
   const handleMessage = async () => {
     if (!requireAuth('generic')) return;
+    if (isBlocked) {
+      Alert.alert('Обмен сообщениями недоступен', 'Чтобы снова написать пользователю, сначала снимите блокировку.');
+      return;
+    }
     try {
       const res = await findOrCreateConv({
         houseID: null,
@@ -235,6 +254,44 @@ export default function PublicProfileScreen() {
     }
   };
 
+  const openReport = () => {
+    if (!requireAuth('generic')) return;
+    setUserActionsVisible(false);
+    setTimeout(() => setReportVisible(true), 220);
+  };
+
+  const confirmBlock = () => {
+    if (!requireAuth('generic')) return;
+    setUserActionsVisible(false);
+    Alert.alert(
+      'Заблокировать пользователя?',
+      'Новые сообщения, звонки и заявки между вами станут недоступны. Существующие бронирования сохранятся.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Заблокировать',
+          style: 'destructive',
+          onPress: () => {
+            blockUser.mutate(undefined, {
+              onError: (caught) => {
+                Alert.alert('Не удалось заблокировать', caught instanceof ApiError ? caught.message : 'Попробуйте ещё раз.');
+              },
+            });
+          },
+        },
+      ],
+    );
+  };
+
+  const handleUnblock = () => {
+    setUserActionsVisible(false);
+    unblockUser.mutate(undefined, {
+      onError: (caught) => {
+        Alert.alert('Не удалось разблокировать', caught instanceof ApiError ? caught.message : 'Попробуйте ещё раз.');
+      },
+    });
+  };
+
   // Open host reviews page (isHost = true)
   const onReviewsPress = () => {
     router.push({
@@ -244,6 +301,49 @@ export default function PublicProfileScreen() {
   };
 
   const hostListingsCount = publicProfile?.listings_count ?? hostListingCountData?.total ?? 0;
+
+  const renderContactActions = (size: 'md' | 'lg' = 'lg') => {
+    if (isBlocked) {
+      if (blockedByMe) {
+        return (
+          <Button
+            label="Разблокировать"
+            icon="person-add-outline"
+            mode="soft"
+            tone="neutral"
+            size={size}
+            loading={unblockUser.isPending}
+            onPress={handleUnblock}
+          />
+        );
+      }
+      return (
+        <InlineAlert compact title="Обмен сообщениями недоступен">
+          Текущие бронирования сохраняются, но создать новый чат или заявку нельзя.
+        </InlineAlert>
+      );
+    }
+
+    return (
+      <View className="flex-1 flex-row gap-3">
+        {publicPhone ? (
+          <View className="flex-1">
+            <Button label="Позвонить" icon="call-outline" onPress={handleCall} size={size} />
+          </View>
+        ) : null}
+        <View className="flex-1">
+          <Button
+            label="Написать"
+            icon="chatbubble-ellipses-outline"
+            loading={isCreatingChat}
+            onPress={handleMessage}
+            size={size}
+            variant={publicPhone ? 'secondary' : 'primary'}
+          />
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View className="flex-1 bg-surface">
@@ -258,10 +358,10 @@ export default function PublicProfileScreen() {
             </Text>
           </View>
           <IconButton
-            accessibilityLabel="Поделиться профилем"
-            icon="share-outline"
+            accessibilityLabel="Действия с профилем"
+            icon="ellipsis-horizontal"
             iconSize={21}
-            onPress={handleShare}
+            onPress={() => setUserActionsVisible(true)}
             size={48}
           />
         </View>
@@ -303,10 +403,10 @@ export default function PublicProfileScreen() {
               tone: 'neutral',
             },
             {
-              icon: publicPhone ? 'checkmark-circle-outline' : 'call-outline',
-              label: 'Номер телефона',
-              value: publicPhone ? 'Подтверждён' : 'Не указан',
-              tone: publicPhone ? 'success' : 'neutral',
+              icon: isBlocked ? 'ban-outline' : publicPhone ? 'checkmark-circle-outline' : 'call-outline',
+              label: isBlocked ? 'Контакты' : 'Номер телефона',
+              value: isBlocked ? 'Недоступны' : publicPhone ? 'Подтверждён' : 'Не указан',
+              tone: !isBlocked && publicPhone ? 'success' : 'neutral',
             },
             {
               icon: 'chatbubbles-outline',
@@ -325,20 +425,7 @@ export default function PublicProfileScreen() {
             };
           }}
           className="flex-row gap-3">
-          {publicPhone ? (
-            <View className="flex-1">
-              <Button label="Позвонить" icon="call-outline" onPress={handleCall} />
-            </View>
-          ) : null}
-          <View className="flex-1">
-            <Button
-              label="Написать"
-              icon="chatbubble-ellipses-outline"
-              loading={isCreatingChat}
-              onPress={handleMessage}
-              variant={publicPhone ? 'secondary' : 'primary'}
-            />
-          </View>
+          {renderContactActions()}
         </View>
 
         <View className="mt-1 gap-3">
@@ -494,24 +581,32 @@ export default function PublicProfileScreen() {
           zIndex: 30,
         }}
       >
-        <View className="flex-row gap-3">
-          {publicPhone ? (
-            <View className="flex-1">
-              <Button label="Позвонить" icon="call-outline" onPress={handleCall} size="md" />
-            </View>
-          ) : null}
-          <View className="flex-1">
-            <Button
-              label="Написать"
-              icon="chatbubble-ellipses-outline"
-              loading={isCreatingChat}
-              onPress={handleMessage}
-              size="md"
-              variant={publicPhone ? 'secondary' : 'primary'}
-            />
-          </View>
-        </View>
+        <View className="flex-row gap-3">{renderContactActions('md')}</View>
       </Animated.View>
+
+      <UserActionsSheet
+        visible={userActionsVisible}
+        userName={displayName}
+        blocked={isBlocked}
+        blockedByMe={blockedByMe}
+        busy={blockUser.isPending || unblockUser.isPending}
+        onClose={() => setUserActionsVisible(false)}
+        onShare={() => {
+          setUserActionsVisible(false);
+          setTimeout(handleShare, 220);
+        }}
+        onReport={openReport}
+        onBlock={confirmBlock}
+        onUnblock={handleUnblock}
+      />
+
+      <ReportSheet
+        visible={reportVisible}
+        targetType="user"
+        targetID={numericId}
+        targetLabel={displayName}
+        onClose={() => setReportVisible(false)}
+      />
 
       <ImageViewerModal
         visible={avatarViewerVisible}

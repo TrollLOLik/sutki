@@ -7,7 +7,7 @@ module.exports = {
   expo: {
     name: "ВИГАЖ",
     slug: "wigaj-arenda",
-    version: "1.0",
+    version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "wigaj-arenda",

@@ -21,6 +21,7 @@ import {
   IconButton,
   Input,
   MaterialSurface,
+  ListCell,
   PickerField as UiPickerField,
 } from '@/components/ui';
 import {
@@ -533,6 +534,11 @@ export default function ProfileScreen() {
     setSettingsVisible(false);
   }, []);
 
+  const openBlockedUsers = useCallback(() => {
+    closeSettings();
+    setTimeout(() => router.push('/blocked-users' as any), 240);
+  }, [closeSettings]);
+
   const handleDeleteAccount = () => {
     // Keep profile settings mounted underneath the deletion flow so opening
     // the confirmation does not close the editor or lose the current tab.
@@ -1017,6 +1023,23 @@ export default function ProfileScreen() {
                       </View>
                     </Pressable>
                   </MaterialSurface>
+
+                  <View className="gap-3">
+                    <Text className="text-lg font-extrabold text-ink">Безопасность общения</Text>
+                    <MaterialSurface level="raised" radius={22} style={{ overflow: 'hidden' }}>
+                      <ListCell
+                        title="Заблокированные пользователи"
+                        subtitle="Просмотр списка и разблокировка"
+                        multiline
+                        onPress={openBlockedUsers}
+                        before={
+                          <View className="h-11 w-11 items-center justify-center rounded-2xl bg-primary-light">
+                            <Ionicons name="ban-outline" size={21} color={palette.primary} />
+                          </View>
+                        }
+                      />
+                    </MaterialSurface>
+                  </View>
 
                   <View className="gap-3">
                     <Text className="text-lg font-extrabold text-ink">Публичность данных</Text>

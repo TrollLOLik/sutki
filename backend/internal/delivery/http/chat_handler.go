@@ -37,6 +37,7 @@ func (h *ChatHandler) Routes(r chi.Router) {
 	r.Post("/conversations/{id}/read", h.readMessages)
 	r.Get("/conversations/{id}/suggestions", h.suggestions)
 	r.Get("/conversations/{id}/presence", h.conversationPresence)
+	r.Get("/conversations/{id}/block-state", h.conversationBlockState)
 	r.Post("/conversations/{id}/typing", h.typing)
 	r.Post("/presence/heartbeat", h.presenceHeartbeat)
 	r.Post("/attachments/presign", h.presignUpload)
@@ -144,6 +145,30 @@ func (h *ChatHandler) conversationPresence(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, presence)
 }
 
+func (h *ChatHandler) conversationBlockState(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	convID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || convID <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	state, err := h.svc.ConversationBlockState(r.Context(), userID, convID)
+	if err != nil {
+		if errors.Is(err, domain.ErrBookingForbidden) {
+			writeError(w, http.StatusForbidden, "У вас нет доступа к этому диалогу.")
+			return
+		}
+		writeInternalError(w, r, err, "failed to get conversation block state")
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
 type typingRequest struct {
 	Active bool `json:"active"`
 }
@@ -169,11 +194,14 @@ func (h *ChatHandler) typing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.PublishTyping(r.Context(), userID, convID, req.Active); err != nil {
-		if errors.Is(err, domain.ErrBookingForbidden) {
+		switch {
+		case errors.Is(err, domain.ErrBookingForbidden):
 			writeError(w, http.StatusForbidden, "not a participant of this conversation")
-			return
+		case errors.Is(err, domain.ErrUserInteractionBlocked):
+			writeError(w, http.StatusForbidden, "Обмен сообщениями с этим пользователем недоступен.")
+		default:
+			writeInternalError(w, r, err, "failed to publish typing state")
 		}
-		writeInternalError(w, r, err, "failed to publish typing state")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -318,6 +346,8 @@ func (h *ChatHandler) findOrCreateConversation(w http.ResponseWriter, r *http.Re
 		switch {
 		case errors.Is(err, chat.ErrSelfConversation):
 			writeError(w, http.StatusBadRequest, "cannot create conversation with yourself")
+		case errors.Is(err, domain.ErrUserInteractionBlocked):
+			writeError(w, http.StatusForbidden, "Обмен сообщениями с этим пользователем недоступен.")
 		case errors.Is(err, chat.ErrContactNotAllowed):
 			writeError(w, http.StatusForbidden, "you can only message users you have a listing or booking relationship with")
 		default:
@@ -443,6 +473,8 @@ func (h *ChatHandler) sendMessage(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, domain.ErrBookingForbidden):
 			writeError(w, http.StatusForbidden, "У вас нет доступа к этому диалогу.")
+		case errors.Is(err, domain.ErrUserInteractionBlocked):
+			writeError(w, http.StatusForbidden, "Обмен сообщениями с этим пользователем недоступен.")
 		case errors.Is(err, chat.ErrRecipientDeleted):
 			writeError(w, http.StatusBadRequest, "Нельзя написать этому пользователю: его профиль удалён.")
 		case errors.Is(err, chat.ErrEmptyMessage):
@@ -594,6 +626,8 @@ func (h *ChatHandler) suggestions(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, domain.ErrBookingForbidden):
 			writeError(w, http.StatusForbidden, "У вас нет доступа к этому диалогу.")
+		case errors.Is(err, domain.ErrUserInteractionBlocked):
+			writeError(w, http.StatusForbidden, "Обмен сообщениями с этим пользователем недоступен.")
 		default:
 			log.Printf("[Chat] Suggestions error (user=%d, conv=%d): %v", userID, convID, err)
 			writeInternalError(w, r, err, "internal error")

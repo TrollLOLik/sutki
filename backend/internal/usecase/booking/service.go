@@ -28,25 +28,30 @@ type Config struct {
 	// system messages — clients can never post non-user kinds.
 	Chat       domain.ChatSystemPoster
 	UserEvents domain.UserEventPublisher
-	ExposeCode bool
+	// BlockChecker gates only new authenticated booking requests. Existing
+	// requests keep their normal lifecycle actions after either side blocks.
+	BlockChecker domain.UserBlockChecker
+	ExposeCode   bool
 }
 
 // Service implements booking (rental request) use cases.
 type Service struct {
-	repo       domain.BookingRepository
-	notifier   domain.EmailNotifier
-	chat       domain.ChatSystemPoster
-	userEvents domain.UserEventPublisher
-	exposeCode bool
+	repo         domain.BookingRepository
+	notifier     domain.EmailNotifier
+	chat         domain.ChatSystemPoster
+	userEvents   domain.UserEventPublisher
+	blockChecker domain.UserBlockChecker
+	exposeCode   bool
 }
 
 func New(repo domain.BookingRepository, cfg Config) *Service {
 	return &Service{
-		repo:       repo,
-		notifier:   cfg.Notifier,
-		chat:       cfg.Chat,
-		userEvents: cfg.UserEvents,
-		exposeCode: cfg.ExposeCode,
+		repo:         repo,
+		notifier:     cfg.Notifier,
+		chat:         cfg.Chat,
+		userEvents:   cfg.UserEvents,
+		blockChecker: cfg.BlockChecker,
+		exposeCode:   cfg.ExposeCode,
 	}
 }
 
@@ -154,6 +159,15 @@ func (s *Service) Create(ctx context.Context, b domain.NewBooking) (domain.Booki
 	}
 	if b.UserID != 0 && ownerID == b.UserID {
 		return domain.Booking{}, domain.ErrBookingOwnListing
+	}
+	if b.UserID != 0 && s.blockChecker != nil {
+		blocked, err := s.blockChecker.IsBlockedBetween(ctx, b.UserID, ownerID)
+		if err != nil {
+			return domain.Booking{}, err
+		}
+		if blocked {
+			return domain.Booking{}, domain.ErrUserInteractionBlocked
+		}
 	}
 	// Reject requests that overlap an already-confirmed booking so users cannot
 	// request dates that are taken.

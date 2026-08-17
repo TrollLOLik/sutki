@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, paymentsEnabled bool, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, abuseHandler *AbuseHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, paymentsEnabled bool, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// Remove the internal webhook secret before middleware.Logger sees the URL.
@@ -149,6 +149,7 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 			r.Post("/reviews/{id}/reply", reviewHandler.CreateReply)
 			r.Get("/me/email-preferences", emailHandler.GetPreferences)
 			r.Put("/me/email-preferences", emailHandler.UpdatePreferences)
+			abuseHandler.Routes(r)
 			r.Route("/requests", func(r chi.Router) {
 				// The parent group is already authenticated. Keep every booking
 				// operation in that single security context so a later route
