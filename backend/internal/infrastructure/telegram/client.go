@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
 
 const maxResponseBytes = 16 << 10
@@ -20,12 +23,14 @@ type Config struct {
 	ChatID   string
 	Timeout  time.Duration
 	BaseURL  string
+	AdminURL string
 }
 
 type Client struct {
 	endpoint   string
 	chatID     string
 	httpClient *http.Client
+	adminURL   string
 }
 
 func NewClient(cfg Config) *Client {
@@ -37,6 +42,46 @@ func NewClient(cfg Config) *Client {
 		endpoint:   fmt.Sprintf("%s/bot%s/sendMessage", baseURL, cfg.BotToken),
 		chatID:     cfg.ChatID,
 		httpClient: &http.Client{Timeout: cfg.Timeout},
+		adminURL:   strings.TrimRight(strings.TrimSpace(cfg.AdminURL), "/"),
+	}
+}
+
+// NotifyAdminQueue sends a compact operator signal. Evidence and user contact
+// data deliberately stay in the authenticated panel and are never copied into
+// Telegram.
+func (c *Client) NotifyAdminQueue(ctx context.Context, event domain.AdminQueueEvent) error {
+	label := adminQueueKindLabel(event.Kind)
+	lines := []string{
+		"<b>" + html.EscapeString(label) + "</b>",
+		fmt.Sprintf("<b>ID:</b> %d", event.ID),
+	}
+	if title := strings.TrimSpace(event.Title); title != "" {
+		lines = append(lines, "<b>Объект:</b> "+html.EscapeString(title))
+	}
+	if reason := strings.TrimSpace(event.Reason); reason != "" {
+		lines = append(lines, "<b>Причина:</b> "+html.EscapeString(reason))
+	}
+	if c.adminURL != "" {
+		panelURL := fmt.Sprintf("%s/?kind=%s&id=%d", c.adminURL, url.QueryEscape(event.Kind), event.ID)
+		lines = append(lines, fmt.Sprintf(`<a href="%s">Открыть в панели</a>`, html.EscapeString(panelURL)))
+	}
+	return c.Send(ctx, strings.Join(lines, "\n"))
+}
+
+func adminQueueKindLabel(kind string) string {
+	switch kind {
+	case domain.AdminInboxKindReport:
+		return "Новая жалоба"
+	case domain.AdminInboxKindListing:
+		return "Объявление ждёт ручной проверки"
+	case domain.AdminInboxKindReview:
+		return "Отзыв ждёт ручной проверки"
+	case domain.AdminInboxKindReviewReply:
+		return "Ответ на отзыв ждёт ручной проверки"
+	case domain.AdminInboxKindAttachment:
+		return "Проверка вложения завершилась ошибкой"
+	default:
+		return "Новый элемент очереди"
 	}
 }
 

@@ -31,11 +31,29 @@ type Service struct {
 	notifier     domain.EmailNotifier
 	llm          reviewLLM
 	userEvents   domain.UserEventPublisher
+	adminQueue   domain.AdminQueueNotifier
 	wake         chan struct{}
 }
 
 func (s *Service) SetUserEvents(events domain.UserEventPublisher) {
 	s.userEvents = events
+}
+
+func (s *Service) SetAdminQueueNotifier(notifier domain.AdminQueueNotifier) {
+	s.adminQueue = notifier
+}
+
+func (s *Service) notifyAdminQueue(event domain.AdminQueueEvent) {
+	if s.adminQueue == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.adminQueue.NotifyAdminQueue(ctx, event); err != nil {
+			log.Printf("review admin queue notification for %s %d: %v", event.Kind, event.ID, err)
+		}
+	}()
 }
 
 func (s *Service) publishChanged(userID int32, action string, entityID int64, eventKey string, markUnread bool, payload map[string]any) {
@@ -346,6 +364,21 @@ func (s *Service) processModerationJob(ctx context.Context, job domain.ReviewMod
 	}
 	if status == "active" && target.TargetType == "reply" && target.ReviewAuthorID != target.AuthorID {
 		s.publishChanged(target.ReviewAuthorID, "reply_published", int64(target.ReviewID), fmt.Sprintf("review-job:%d:review-author", job.ID), true, payload)
+	}
+	if status == "moderation_review" {
+		kind := domain.AdminInboxKindReview
+		id := int64(target.ReviewID)
+		title := fmt.Sprintf("Отзыв к объявлению #%d", target.HouseID)
+		if target.TargetType == "reply" {
+			kind = domain.AdminInboxKindReviewReply
+			id = target.TargetID
+			title = fmt.Sprintf("Ответ на отзыв #%d", target.ReviewID)
+		}
+		authorID := target.AuthorID
+		s.notifyAdminQueue(domain.AdminQueueEvent{
+			Kind: kind, ID: id, Title: title,
+			Reason: verdict.Reason, SubjectUserID: &authorID,
+		})
 	}
 	if target.TargetType == "review" && status == "active" && s.listingRepo != nil {
 		if house, getErr := s.listingRepo.GetByID(context.Background(), target.HouseID); getErr == nil {

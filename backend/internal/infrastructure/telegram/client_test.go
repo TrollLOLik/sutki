@@ -3,11 +3,14 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
 
 func TestClientSend(t *testing.T) {
@@ -34,6 +37,88 @@ func TestClientSend(t *testing.T) {
 	client := NewClient(Config{BotToken: "test-token", ChatID: "-100123", Timeout: time.Second, BaseURL: server.URL})
 	if err := client.Send(context.Background(), "test alert"); err != nil {
 		t.Fatalf("send: %v", err)
+	}
+}
+
+func TestClientNotifyAdminQueueEscapesUntrustedText(t *testing.T) {
+	var text string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Text string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		text = body.Text
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":{}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{
+		BotToken: "test-token", ChatID: "-100123", Timeout: time.Second,
+		BaseURL: server.URL, AdminURL: "https://admin.wigaj.ru",
+	})
+	err := client.NotifyAdminQueue(context.Background(), domain.AdminQueueEvent{
+		Kind: domain.AdminInboxKindReport, ID: 42,
+		Title: `<b>подмена</b>`, Reason: `спам & обман`,
+	})
+	if err != nil {
+		t.Fatalf("notify admin queue: %v", err)
+	}
+	if strings.Contains(text, "<b>подмена</b>") || !strings.Contains(text, "&lt;b&gt;подмена&lt;/b&gt;") {
+		t.Fatalf("untrusted title was not escaped: %q", text)
+	}
+	if !strings.Contains(text, "https://admin.wigaj.ru/?kind=report&amp;id=42") {
+		t.Fatalf("admin detail URL missing: %q", text)
+	}
+}
+
+func TestClientNotifyAdminQueueBuildsDeepLinkForEveryKind(t *testing.T) {
+	var text string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Text string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		text = body.Text
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":{}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{
+		BotToken: "test-token", ChatID: "-100123", Timeout: time.Second,
+		BaseURL: server.URL, AdminURL: " https://admin.wigaj.ru/ ",
+	})
+	testCases := []struct {
+		kind  string
+		label string
+	}{
+		{domain.AdminInboxKindReport, "Новая жалоба"},
+		{domain.AdminInboxKindListing, "Объявление ждёт ручной проверки"},
+		{domain.AdminInboxKindReview, "Отзыв ждёт ручной проверки"},
+		{domain.AdminInboxKindReviewReply, "Ответ на отзыв ждёт ручной проверки"},
+		{domain.AdminInboxKindAttachment, "Проверка вложения завершилась ошибкой"},
+	}
+
+	for index, testCase := range testCases {
+		t.Run(testCase.kind, func(t *testing.T) {
+			text = ""
+			id := int64(index + 101)
+			if err := client.NotifyAdminQueue(context.Background(), domain.AdminQueueEvent{Kind: testCase.kind, ID: id}); err != nil {
+				t.Fatalf("notify admin queue: %v", err)
+			}
+			wantURL := "https://admin.wigaj.ru/?kind=" + testCase.kind + "&amp;id=" + fmt.Sprint(id)
+			if !strings.Contains(text, wantURL) {
+				t.Fatalf("deep link missing: want %q in %q", wantURL, text)
+			}
+			if !strings.Contains(text, testCase.label) {
+				t.Fatalf("kind label missing: want %q in %q", testCase.label, text)
+			}
+		})
 	}
 }
 

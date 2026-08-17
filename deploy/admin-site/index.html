@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#111316">
+  <meta name="application-name" content="ВИГАЖ">
+  <meta name="description" content="Операторская панель ВИГАЖ для поддержки и модерации.">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="ВИГАЖ">
+  <meta property="og:title" content="ВИГАЖ — операторская панель">
+  <meta property="og:description" content="Рабочая панель поддержки и модерации ВИГАЖ.">
+  <meta property="og:url" content="https://admin.wigaj.ru/">
+  <meta property="og:image" content="https://admin.wigaj.ru/assets/favicon/android-chrome-512x512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="ВИГАЖ — операторская панель">
+  <meta name="twitter:description" content="Рабочая панель поддержки и модерации ВИГАЖ.">
+  <meta name="twitter:image" content="https://admin.wigaj.ru/assets/favicon/android-chrome-512x512.png">
+  <title>ВИГАЖ — операторская панель</title>
+  <link rel="icon" href="./assets/favicon.svg?v=2" type="image/svg+xml">
+  <link rel="icon" href="./assets/favicon/favicon-32x32.png?v=2" type="image/png" sizes="32x32">
+  <link rel="icon" href="./assets/favicon/favicon-16x16.png?v=2" type="image/png" sizes="16x16">
+  <link rel="shortcut icon" href="./assets/favicon/favicon.ico?v=2">
+  <link rel="apple-touch-icon" href="./assets/favicon/apple-touch-icon.png?v=2" sizes="180x180">
+  <link rel="manifest" href="./assets/site.webmanifest">
+  <link rel="stylesheet" href="./assets/admin.css">
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M20 11a8.1 8.1 0 1 0 2 5.3"/></symbol>
+    <symbol id="icon-log-out" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></symbol>
+    <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="icon-inbox" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 13h4l2 3h4l2-3h4"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="icon-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M10.3 3.6 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="icon-journal" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  </svg>
+
+  <main id="session-gate" class="session-gate" aria-live="polite">
+    <img src="./assets/logo-full-dark.svg" alt="ВИГАЖ" width="168" height="39">
+    <span class="spinner" aria-hidden="true"></span>
+    <p>Проверяем сессию…</p>
+  </main>
+
+  <main id="auth-view" class="auth-view" hidden>
+    <section class="auth-brand" aria-label="ВИГАЖ">
+      <img src="./assets/logo-full-dark.svg" alt="ВИГАЖ" width="224" height="52">
+      <div class="auth-brand-copy">
+        <span class="section-kicker">Операторская панель</span>
+        <h1>Решения без лишнего шума.</h1>
+        <p>Очередь поддержки и модерации в одном рабочем контуре.</p>
+      </div>
+      <div class="auth-security">
+        <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+        <span>Доступ для сотрудников</span>
+      </div>
+    </section>
+
+    <section class="auth-form-wrap">
+      <div class="auth-form-panel">
+        <div class="auth-heading">
+          <span id="auth-step-label" class="section-kicker">Шаг 1 из 2</span>
+          <h2 id="auth-title">Вход в панель</h2>
+          <p id="auth-description">Укажите служебную почту.</p>
+        </div>
+
+        <div id="auth-message" class="inline-message" role="status" hidden></div>
+
+        <form id="email-form" novalidate>
+          <label for="email">Электронная почта</label>
+          <input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@wigaj.ru" required>
+          <p id="email-error" class="field-error" role="alert" hidden></p>
+          <button id="request-code-button" class="button button-primary button-wide" type="submit">
+            <span>Получить код</span>
+            <span class="button-loader" aria-hidden="true"></span>
+          </button>
+        </form>
+
+        <form id="code-form" novalidate hidden>
+          <div class="code-recipient">
+            <span>Код отправлен на</span>
+            <strong id="code-email"></strong>
+            <button id="change-email-button" class="text-button" type="button">Изменить</button>
+          </div>
+          <label for="code">Код из письма</label>
+          <input id="code" class="code-input" name="code" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required>
+          <p id="code-error" class="field-error" role="alert" hidden></p>
+          <button id="verify-code-button" class="button button-primary button-wide" type="submit">
+            <span>Войти</span>
+            <span class="button-loader" aria-hidden="true"></span>
+          </button>
+          <button id="resend-code-button" class="button button-quiet button-wide" type="button">Отправить ещё раз</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="app-view" class="app-view" hidden>
+    <header class="topbar">
+      <div class="topbar-brand">
+        <img src="./assets/logo-full-dark.svg" alt="ВИГАЖ" width="126" height="30">
+        <span>Операторская</span>
+      </div>
+      <nav id="app-nav" class="app-nav" aria-label="Разделы панели">
+        <button class="app-nav-button is-active" type="button" data-view="queue" aria-current="page">
+          <svg class="icon" aria-hidden="true"><use href="#icon-inbox"></use></svg><span>Очередь</span>
+        </button>
+        <button class="app-nav-button owner-only" type="button" data-view="audit" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#icon-journal"></use></svg><span>Журнал</span>
+        </button>
+        <button class="app-nav-button owner-only" type="button" data-view="staff" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#icon-users"></use></svg><span>Сотрудники</span>
+        </button>
+      </nav>
+      <div class="operator">
+        <div class="operator-copy">
+          <span id="operator-role" class="role-badge"></span>
+          <span id="operator-email" class="operator-email"></span>
+        </div>
+        <button id="refresh-button" class="icon-button" type="button" aria-label="Обновить очередь" title="Обновить очередь">
+          <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+        </button>
+        <button id="logout-button" class="icon-button" type="button" aria-label="Выйти" title="Выйти">
+          <svg class="icon" aria-hidden="true"><use href="#icon-log-out"></use></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="queue-workspace" class="workspace">
+      <section class="queue-pane" aria-labelledby="queue-title">
+        <div class="queue-header">
+          <div>
+            <span class="section-kicker">В работе</span>
+            <div class="title-line">
+              <h1 id="queue-title">Очередь</h1>
+              <span id="queue-total" class="total-count">0</span>
+            </div>
+          </div>
+          <span id="updated-at" class="updated-at">Не обновлялась</span>
+        </div>
+
+        <nav id="queue-filters" class="queue-filters" aria-label="Фильтры очереди" role="tablist">
+          <button class="filter-tab is-active" type="button" role="tab" aria-selected="true" data-filter="all">
+            <span>Все</span><span class="filter-count" data-count="total">0</span>
+          </button>
+          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="reports">
+            <span>Жалобы</span><span class="filter-count" data-count="reports">0</span>
+          </button>
+          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="listings">
+            <span>Объявления</span><span class="filter-count" data-count="listings">0</span>
+          </button>
+          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="reviews">
+            <span>Отзывы</span><span class="filter-count" data-count="reviews">0</span>
+          </button>
+          <button class="filter-tab" type="button" role="tab" aria-selected="false" data-filter="attachments">
+            <span>Вложения</span><span class="filter-count" data-count="attachments">0</span>
+          </button>
+        </nav>
+
+        <div id="queue-error" class="queue-error" role="alert" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+          <div><strong>Не удалось загрузить очередь</strong><span id="queue-error-text"></span></div>
+          <button id="retry-list-button" class="button button-quiet" type="button">Повторить</button>
+        </div>
+
+        <div id="queue-loading" class="queue-loading" aria-label="Загрузка очереди" hidden>
+          <div class="queue-skeleton"></div><div class="queue-skeleton"></div><div class="queue-skeleton"></div><div class="queue-skeleton"></div><div class="queue-skeleton"></div>
+        </div>
+
+        <div id="queue-empty" class="empty-state" hidden>
+          <svg class="empty-icon" aria-hidden="true"><use href="#icon-check"></use></svg>
+          <h2>Очередь пуста</h2>
+          <p>По выбранному фильтру нет элементов в работе.</p>
+        </div>
+
+        <div id="queue-list" class="queue-list" role="list"></div>
+        <div id="queue-cap" class="queue-cap" hidden>Показаны первые 100 элементов</div>
+      </section>
+
+      <section id="detail-pane" class="detail-pane" aria-labelledby="detail-title">
+        <div class="detail-mobile-bar">
+          <button id="detail-back-button" class="icon-button" type="button" aria-label="Назад к очереди">
+            <svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
+          </button>
+          <span>Карточка проверки</span>
+        </div>
+
+        <div id="detail-blank" class="detail-blank">
+          <svg class="detail-blank-icon" aria-hidden="true"><use href="#icon-inbox"></use></svg>
+          <h2>Выберите элемент очереди</h2>
+          <p>Здесь появятся доказательства, контекст и доступные решения.</p>
+        </div>
+
+        <div id="detail-loading" class="detail-loading" aria-label="Загрузка карточки" hidden>
+          <div class="detail-skeleton detail-skeleton-short"></div>
+          <div class="detail-skeleton detail-skeleton-title"></div>
+          <div class="detail-skeleton"></div>
+          <div class="detail-skeleton detail-skeleton-block"></div>
+          <div class="detail-skeleton detail-skeleton-block"></div>
+        </div>
+
+        <div id="detail-error" class="detail-error" role="alert" hidden>
+          <svg class="empty-icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+          <h2>Карточка недоступна</h2>
+          <p id="detail-error-text"></p>
+          <button id="retry-detail-button" class="button button-quiet" type="button">Повторить</button>
+        </div>
+
+        <article id="detail-content" class="detail-content" hidden>
+          <header class="detail-header">
+            <div class="detail-heading-line">
+              <span id="detail-kind" class="kind-badge"></span>
+              <span id="detail-status" class="status-badge"></span>
+            </div>
+            <h1 id="detail-title"></h1>
+            <p id="detail-summary" class="detail-summary"></p>
+            <div id="detail-meta" class="detail-meta"></div>
+          </header>
+
+          <div class="detail-body">
+            <section class="decision-section" aria-labelledby="decision-title">
+              <div class="section-heading">
+                <span class="section-index">01</span>
+                <div><span class="section-kicker">Маршрут</span><h2 id="decision-title">Лента решения</h2></div>
+              </div>
+              <ol id="decision-timeline" class="decision-timeline"></ol>
+            </section>
+
+            <section class="evidence-section" aria-labelledby="evidence-title">
+              <div class="section-heading">
+                <span class="section-index">02</span>
+                <div><span class="section-kicker">Зафиксировано</span><h2 id="evidence-title">Доказательства</h2></div>
+              </div>
+              <dl id="evidence-content" class="evidence-content"></dl>
+            </section>
+
+            <details class="diagnostics">
+              <summary>
+                <span>Диагностические данные</span>
+                <svg class="icon" aria-hidden="true"><use href="#icon-chevron-down"></use></svg>
+              </summary>
+              <pre id="diagnostics-json"></pre>
+            </details>
+          </div>
+
+          <footer id="action-bar" class="action-bar"></footer>
+        </article>
+      </section>
+    </main>
+
+    <main id="audit-view" class="management-view" hidden>
+      <header class="management-header">
+        <div><span class="section-kicker">Только чтение</span><h1>Журнал действий</h1><p>Входы, решения операторов и изменения доступов.</p></div>
+        <div class="management-summary"><span id="audit-total">0</span><small>записей</small></div>
+      </header>
+      <div class="management-toolbar">
+        <label for="audit-action">Тип события</label>
+        <select id="audit-action">
+          <option value="">Все действия</option>
+          <option value="admin.login">Входы</option>
+          <option value="admin.logout">Выходы</option>
+          <option value="admin_inbox">Решения по очереди</option>
+          <option value="admin.staff">Доступы сотрудников</option>
+        </select>
+      </div>
+      <div id="audit-error" class="management-error" role="alert" hidden></div>
+      <div id="audit-loading" class="management-loading" hidden><span class="spinner" aria-hidden="true"></span><span>Загружаем журнал…</span></div>
+      <div id="audit-empty" class="management-empty" hidden><h2>Записей пока нет</h2><p>Действия сотрудников появятся здесь автоматически.</p></div>
+      <div id="audit-list" class="audit-list" role="list"></div>
+      <nav id="audit-pagination" class="audit-pagination" aria-label="Страницы журнала" hidden>
+        <button id="audit-prev" class="button button-quiet" type="button">Назад</button>
+        <span id="audit-page-label" aria-live="polite"></span>
+        <button id="audit-next" class="button button-quiet" type="button">Далее</button>
+      </nav>
+    </main>
+
+    <main id="staff-view" class="management-view" hidden>
+      <header class="management-header">
+        <div><span class="section-kicker">Контроль доступа</span><h1>Сотрудники</h1><p>Доступ выдаётся только существующим аккаунтам ВИГАЖ.</p></div>
+        <div class="management-summary"><span id="staff-total">0</span><small>сотрудников</small></div>
+      </header>
+      <form id="staff-create-form" class="staff-create-form" novalidate>
+        <div class="staff-create-heading"><h2>Добавить сотрудника</h2><p>После добавления сотрудник сможет войти по коду из письма.</p></div>
+        <label for="staff-email">Почта аккаунта</label>
+        <input id="staff-email" type="email" autocomplete="off" placeholder="name@wigaj.ru" required>
+        <label for="staff-role">Роль</label>
+        <select id="staff-role">
+          <option value="support">Поддержка</option>
+          <option value="moderator">Модератор</option>
+          <option value="owner">Владелец</option>
+        </select>
+        <button id="staff-create-button" class="button button-primary" type="submit"><span>Добавить</span><span class="button-loader" aria-hidden="true"></span></button>
+        <p id="staff-create-error" class="field-error staff-create-error" role="alert"></p>
+      </form>
+      <div id="staff-error" class="management-error" role="alert" hidden></div>
+      <div id="staff-loading" class="management-loading" hidden><span class="spinner" aria-hidden="true"></span><span>Загружаем сотрудников…</span></div>
+      <div id="staff-list" class="staff-list"></div>
+    </main>
+  </div>
+
+  <div id="action-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <form id="action-form" class="modal-panel" novalidate>
+      <div class="modal-heading">
+        <div>
+          <span class="section-kicker">Подтверждение</span>
+          <h2 id="modal-title"></h2>
+        </div>
+        <button class="icon-button" type="button" aria-label="Закрыть" data-close-modal>
+          <svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+        </button>
+      </div>
+      <p id="modal-description" class="modal-description"></p>
+      <div id="reason-field" class="reason-field">
+        <label for="action-reason">Причина решения <span id="reason-required">обязательно</span></label>
+        <textarea id="action-reason" name="reason" rows="5" maxlength="2000" placeholder="Кратко зафиксируйте основание решения"></textarea>
+        <div class="field-meta"><span id="reason-error" class="field-error" role="alert"></span><span id="reason-count">0 / 2000</span></div>
+      </div>
+      <div class="modal-actions">
+        <button class="button button-quiet" type="button" data-close-modal>Отмена</button>
+        <button id="confirm-action-button" class="button" type="submit">
+          <span>Подтвердить</span>
+          <span class="button-loader" aria-hidden="true"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="./assets/admin.js" defer></script>
+</body>
+</html>

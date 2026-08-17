@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -29,6 +30,7 @@ var (
 type Service struct {
 	repo       domain.AbuseRepository
 	userEvents domain.UserEventPublisher
+	adminQueue domain.AdminQueueNotifier
 }
 
 func New(repo domain.AbuseRepository) *Service {
@@ -37,6 +39,10 @@ func New(repo domain.AbuseRepository) *Service {
 
 func (s *Service) SetUserEvents(publisher domain.UserEventPublisher) {
 	s.userEvents = publisher
+}
+
+func (s *Service) SetAdminQueueNotifier(notifier domain.AdminQueueNotifier) {
+	s.adminQueue = notifier
 }
 
 func (s *Service) Report(ctx context.Context, in domain.CreateAbuseReport) (domain.AbuseReport, error) {
@@ -61,7 +67,25 @@ func (s *Service) Report(ctx context.Context, in domain.CreateAbuseReport) (doma
 		return domain.AbuseReport{}, ErrDetailsTooLong
 	}
 
-	return s.repo.CreateReport(ctx, in, maxReportsPerDay)
+	report, err := s.repo.CreateReport(ctx, in, maxReportsPerDay)
+	if err != nil {
+		return domain.AbuseReport{}, err
+	}
+	if s.adminQueue != nil {
+		go func() {
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			subjectUserID := report.ReportedUserID
+			if err := s.adminQueue.NotifyAdminQueue(notifyCtx, domain.AdminQueueEvent{
+				Kind: domain.AdminInboxKindReport, ID: report.ID,
+				Title:  report.TargetType + " #" + strconv.FormatInt(report.TargetID, 10),
+				Reason: report.Reason, SubjectUserID: &subjectUserID,
+			}); err != nil {
+				log.Printf("abuse admin queue notification for report %d: %v", report.ID, err)
+			}
+		}()
+	}
+	return report, nil
 }
 
 func (s *Service) Block(ctx context.Context, blockerUserID, blockedUserID int32) (domain.BlockedUser, error) {

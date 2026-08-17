@@ -34,6 +34,8 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/abuse"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/adminauth"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/admininbox"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/adminops"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/attachmentmoderation"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
@@ -148,6 +150,15 @@ func main() {
 	}
 	emailHandler := httpdelivery.NewEmailHandler(emailPrefsRepo, cfg.EmailUnsubscribeSecret)
 	supportHandler := httpdelivery.NewSupportHandler(notifier, cfg.SupportEmail)
+	var telegramClient *telegram.Client
+	if cfg.TelegramBotToken != "" {
+		telegramClient = telegram.NewClient(telegram.Config{
+			BotToken: cfg.TelegramBotToken,
+			ChatID:   cfg.TelegramChatID,
+			Timeout:  cfg.TelegramTimeout,
+			AdminURL: cfg.AdminPublicURL,
+		})
+	}
 
 	// Listing moderation: synchronous prefilter on create/update plus a
 	// background LLM verdict worker with circuit breaker + degraded mode.
@@ -158,6 +169,9 @@ func main() {
 	}
 	moderationSvc := moderation.New(moderationRepo, llmClientMod, adminAlerter, notifier)
 	moderationSvc.SetUserEvents(userEvents)
+	if telegramClient != nil {
+		moderationSvc.SetAdminQueueNotifier(telegramClient)
+	}
 
 	listingRepo := postgres.NewListingRepo(queries)
 	listingViewRepo := postgres.NewListingViewRepo(pool)
@@ -225,11 +239,15 @@ func main() {
 	})
 	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
-	adminSvc := adminauth.New(postgres.NewAdminRepo(pool), authSvc, adminauth.Config{
+	adminRepo := postgres.NewAdminRepo(pool)
+	adminSvc := adminauth.New(adminRepo, authSvc, adminauth.Config{
 		SessionTTL: cfg.AdminSessionTTL,
 		IdleTTL:    cfg.AdminIdleTTL,
 	})
-	adminHandler := httpdelivery.NewAdminHandler(adminSvc, httpdelivery.AdminHandlerConfig{
+	adminInboxSvc := admininbox.New(postgres.NewAdminInboxRepo(pool))
+	adminInboxSvc.SetUserEvents(userEvents)
+	adminOpsSvc := adminops.New(adminRepo)
+	adminHandler := httpdelivery.NewAdminHandler(adminSvc, adminInboxSvc, adminOpsSvc, httpdelivery.AdminHandlerConfig{
 		AllowedOrigin: cfg.AdminPublicURL,
 		SecureCookies: cfg.AppEnvironment == "production",
 		ExposeCode:    cfg.AuthExposeCode,
@@ -300,6 +318,10 @@ func main() {
 		MaxVideoSeconds: cfg.MaxVideoSeconds,
 		MaxVideoFrames:  cfg.MaxVideoModerationFrames,
 	})
+	if telegramClient != nil {
+		attachmentModerator.SetAdminQueueNotifier(telegramClient)
+	}
+	adminInboxSvc.SetAttachmentRetryWaker(attachmentModerator)
 	chatSvc.SetAttachmentModerationQueue(attachmentModerationRepo, attachmentModerator)
 	if cfg.AttachmentModerationWorkerEnabled {
 		attachmentModerator.StartWorker(ctx)
@@ -331,10 +353,16 @@ func main() {
 	reviewRepo := postgres.NewReviewRepo(pool, queries)
 	reviewSvc := review.New(reviewRepo, listingRepo, aiSummarizer, userRepo, notifier, llmClientReviewMod)
 	reviewSvc.SetUserEvents(userEvents)
+	if telegramClient != nil {
+		reviewSvc.SetAdminQueueNotifier(telegramClient)
+	}
 	reviewSvc.StartWorker(ctx)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
 	abuseSvc := abuse.New(abuseRepo)
 	abuseSvc.SetUserEvents(userEvents)
+	if telegramClient != nil {
+		abuseSvc.SetAdminQueueNotifier(telegramClient)
+	}
 	abuseHandler := httpdelivery.NewAbuseHandler(abuseSvc)
 
 	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, cfg.AppEnvironment != "production")
@@ -343,12 +371,7 @@ func main() {
 
 	mediaHandler := httpdelivery.NewMediaHandler(publicStorage, imageModerator)
 	var opsWebhookHandler *httpdelivery.OpsWebhookHandler
-	if cfg.TelegramBotToken != "" {
-		telegramClient := telegram.NewClient(telegram.Config{
-			BotToken: cfg.TelegramBotToken,
-			ChatID:   cfg.TelegramChatID,
-			Timeout:  cfg.TelegramTimeout,
-		})
+	if telegramClient != nil {
 		opsWebhookHandler = httpdelivery.NewOpsWebhookHandler(telegramClient, cfg.GlitchTipTelegramWebhookSecret)
 		log.Println("GlitchTip Telegram alert bridge enabled")
 	}

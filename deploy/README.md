@@ -265,6 +265,9 @@ to avoid an alert recursion loop.
 
 ## Admin authentication foundation
 
+The static operator panel and its Nginx same-origin proxy are deployed using
+[`ADMIN_PANEL_DEPLOY.md`](ADMIN_PANEL_DEPLOY.md).
+
 Migration `000050_admin_foundation` creates a separate administrator roster,
 opaque browser sessions, and an append-only action journal. The operator API is
 mounted at `/api/admin/v1`; it does not accept mobile JWTs and does not inherit
@@ -298,3 +301,49 @@ Admin login codes use the dedicated `admin_email` OTP channel, so they cannot
 be replayed as normal application login codes. The session cookie is host-only,
 `HttpOnly`, `Secure`, and `SameSite=Strict`; state-changing requests additionally
 require `X-CSRF-Token` and the exact configured `Origin`.
+
+The authenticated operator inbox is available at:
+
+```text
+GET /api/admin/v1/inbox/summary
+GET /api/admin/v1/inbox?kind=<kind>&limit=20&offset=0
+GET /api/admin/v1/inbox/<kind>/<id>
+POST /api/admin/v1/inbox/<kind>/<id>/actions
+GET /api/admin/v1/audit?action=<prefix>&limit=50&offset=0
+GET /api/admin/v1/staff
+POST /api/admin/v1/staff
+PATCH /api/admin/v1/staff/<id>
+```
+
+Supported kinds are `report`, `listing`, `review`, `review_reply`, and
+`attachment`. The inbox reads the existing source queues instead of copying
+their rows. `support` accounts can read reports only; `moderator` and `owner`
+accounts can additionally read listings and reviews in `moderation_review` and
+chat attachments whose automatic check exhausted its retry budget.
+
+The action endpoint requires the admin CSRF header and accepts
+`{"action":"...","reason":"..."}`. Report actions are `start_review`,
+`resolve`, and `dismiss`; support may use them, and terminal decisions require a
+reason. Moderator/owner actions are `approve`/`reject` for listings, reviews,
+and review replies. Reject always requires a reason. Failed attachments expose
+only `retry`: an infrastructure failure is not evidence that media is safe, so
+the admin API deliberately has no manual approve shortcut.
+
+Every source-row change and its `admin_audit_log` entry commit in one database
+transaction. Conflicting concurrent decisions return HTTP 409. Listing/review
+decisions also publish the normal private user event, while attachment retries
+wake the media worker immediately.
+
+When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured, the same bot
+used by the GlitchTip bridge sends compact alerts for new reports, new manual
+listing/review items, and exhausted attachment checks. The message contains no
+captured evidence or contact data; those remain available only in the
+authenticated operator panel. `ADMIN_PUBLIC_URL` is included as the panel link.
+The link contains the queue kind and source-row ID, for example
+`https://admin.wigaj.ru/?kind=review&id=42`. After OTP authentication the panel
+selects the matching queue and opens that item directly.
+
+The owner-only audit endpoint returns the actor, action, target, reason,
+request metadata, and timestamp from the append-only `admin_audit_log`. The
+panel paginates this history and can filter it by an action prefix such as
+`admin_inbox` or `admin.staff`.

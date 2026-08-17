@@ -121,15 +121,20 @@ type Config struct {
 }
 
 type Service struct {
-	repo      Repository
-	storage   domain.FileStorage
-	extractor FrameExtractor
-	moderator ImageModerator
-	notifier  Notifier
-	workDir   string
-	maxVideo  int
-	maxFrames int
-	wake      chan struct{}
+	repo       Repository
+	storage    domain.FileStorage
+	extractor  FrameExtractor
+	moderator  ImageModerator
+	notifier   Notifier
+	adminQueue domain.AdminQueueNotifier
+	workDir    string
+	maxVideo   int
+	maxFrames  int
+	wake       chan struct{}
+}
+
+func (s *Service) SetAdminQueueNotifier(notifier domain.AdminQueueNotifier) {
+	s.adminQueue = notifier
 }
 
 func New(cfg Config) *Service {
@@ -567,6 +572,18 @@ func (s *Service) fail(ctx context.Context, job domain.AttachmentModerationJob, 
 	}
 	if s.notifier != nil {
 		s.notifier.AttachmentFailed(ctx, job.ConversationID, job.MessageID, reason)
+	}
+	if s.adminQueue != nil {
+		go func() {
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.adminQueue.NotifyAdminQueue(notifyCtx, domain.AdminQueueEvent{
+				Kind: domain.AdminInboxKindAttachment, ID: job.AttachmentID,
+				Title: fmt.Sprintf("Вложение сообщения #%d", job.MessageID), Reason: reason,
+			}); err != nil {
+				log.Printf("attachment moderation admin queue notification for attachment %d: %v", job.AttachmentID, err)
+			}
+		}()
 	}
 }
 

@@ -106,4 +106,11 @@ var (
 	// contact. Existing booking transitions and backend system cards remain
 	// available so a block cannot strand an active rental workflow.
 	ErrUserInteractionBlocked = errors.New("user interaction is blocked")
+	// ErrAdminActionConflict means the queue item still exists, but another
+	// operator or worker already moved it out of the state required by the
+	// requested action.
+	ErrAdminActionConflict = errors.New("admin action conflicts with current state")
+	// ErrAdminStaffConflict protects the operator roster from duplicate grants,
+	// self-lockout and removal of the last active owner.
+	ErrAdminStaffConflict = errors.New("admin staff change conflicts with current state")
 )

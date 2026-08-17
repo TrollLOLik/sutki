@@ -79,6 +79,7 @@ type Service struct {
 	alerter    AdminAlerter
 	owners     OwnerNotifier
 	userEvents domain.UserEventPublisher
+	adminQueue domain.AdminQueueNotifier
 	photo      *photoDeps // optional, see SetPhotoPipeline
 
 	wake chan struct{}
@@ -92,6 +93,32 @@ type Service struct {
 
 func (s *Service) SetUserEvents(events domain.UserEventPublisher) {
 	s.userEvents = events
+}
+
+func (s *Service) SetAdminQueueNotifier(notifier domain.AdminQueueNotifier) {
+	s.adminQueue = notifier
+}
+
+func (s *Service) notifyAdminQueue(event domain.AdminQueueEvent) {
+	if s.adminQueue == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.adminQueue.NotifyAdminQueue(ctx, event); err != nil {
+			log.Printf("moderation admin queue notification for %s %d: %v", event.Kind, event.ID, err)
+		}
+	}()
+}
+
+func (s *Service) notifyListingReview(h domain.ModerationHouse, reason string) {
+	ownerID := h.OwnerID
+	s.notifyAdminQueue(domain.AdminQueueEvent{
+		Kind: domain.AdminInboxKindListing, ID: int64(h.ID),
+		Title:  strings.TrimSpace(fmt.Sprintf("%s, %s %s", h.City, h.Street, h.HouseNumber)),
+		Reason: reason, SubjectUserID: &ownerID,
+	})
 }
 
 func (s *Service) publishStatus(ownerID, houseID int32, status, reason, eventKey string, markUnread bool) {
@@ -262,6 +289,9 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		s.publishStatus(h.OwnerID, houseID, status, finalHit.Reason, fmt.Sprintf("listing:%d:%s:%s", houseID, hash, status), true)
 		if status == domain.HouseStatusModerationReview {
 			s.checkReviewQueueAlert(ctx)
+			if h.Status != domain.HouseStatusModerationReview {
+				s.notifyListingReview(h, finalHit.Reason)
+			}
 		}
 		return status, nil
 	}
@@ -282,6 +312,9 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		}
 		s.publishStatus(h.OwnerID, houseID, domain.HouseStatusModerationReview, "", fmt.Sprintf("listing:%d:%s:review", houseID, hash), true)
 		s.checkReviewQueueAlert(ctx)
+		if h.Status != domain.HouseStatusModerationReview {
+			s.notifyListingReview(h, "Текст совпадает с активным объявлением другого владельца")
+		}
 		return domain.HouseStatusModerationReview, nil
 	}
 
@@ -311,6 +344,9 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		s.publishStatus(h.OwnerID, houseID, status, reason, fmt.Sprintf("listing:%d:%s:%s-enqueue-fallback", houseID, hash, status), true)
 		if status == domain.HouseStatusModerationReview {
 			s.checkReviewQueueAlert(ctx)
+			if h.Status != domain.HouseStatusModerationReview {
+				s.notifyListingReview(h, reason)
+			}
 		}
 		s.alertAdmin(ctx, fmt.Sprintf("listing_moderation_enqueue_failed_%d", houseID),
 			"Объявление не поставлено в очередь модерации",
@@ -348,6 +384,9 @@ func (s *Service) Submit(ctx context.Context, houseID int32) (string, error) {
 		return "", err
 	}
 	s.publishStatus(h.OwnerID, houseID, target, "", fmt.Sprintf("listing:%d:%s:%s", houseID, hash, target), target != domain.HouseStatusPendingModeration)
+	if target == domain.HouseStatusModerationReview && h.Status != domain.HouseStatusModerationReview {
+		s.notifyListingReview(h, "Владелец с повторными отклонениями за последние 30 дней")
+	}
 	s.Wake()
 	s.spawnPhotoCheck(houseID)
 	return target, nil
@@ -483,6 +522,7 @@ func (s *Service) rescheduleJobAfterFailure(ctx context.Context, h domain.Modera
 			s.publishStatus(h.OwnerID, h.ID, status, reason, fmt.Sprintf("listing:%d:%s:%s-fallback", h.ID, job.ContentHash, status), markUnread)
 			if status == domain.HouseStatusModerationReview {
 				s.checkReviewQueueAlert(ctx)
+				s.notifyListingReview(h, reason)
 			}
 		}
 
@@ -688,6 +728,9 @@ func (s *Service) afterVerdictApplied(ctx context.Context, h domain.ModerationHo
 	default:
 		s.checkReviewQueueAlert(ctx)
 		s.publishStatus(h.OwnerID, h.ID, domain.HouseStatusModerationReview, "", fmt.Sprintf("listing:%d:%s:review", h.ID, job.ContentHash), true)
+		if h.Status != domain.HouseStatusModerationReview {
+			s.notifyListingReview(h, v.Reason)
+		}
 	}
 }
 
