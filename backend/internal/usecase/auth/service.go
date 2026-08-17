@@ -30,9 +30,10 @@ import (
 const (
 	codeTTL = 10 * time.Minute
 	// resendCooldown throttles how often a new code may be requested per email.
-	resendCooldown  = 60 * time.Second
-	maxAttempts     = 5
-	phonePendingTTL = 30 * time.Second
+	resendCooldown        = 60 * time.Second
+	maxAttempts           = 5
+	phonePendingTTL       = 30 * time.Second
+	adminEmailCodeChannel = "admin_email"
 )
 
 // Config tunes the auth service.
@@ -338,8 +339,23 @@ func (s *Service) issueReauthToken(ctx context.Context, attemptID int64, userID 
 // deleting the record on success. Shared by every email-code verification so
 // the attempt budget is spent identically on all of them.
 func (s *Service) consumeEmailCode(ctx context.Context, email, code string) error {
+	return s.consumeScopedEmailCode(ctx, "email", email, code)
+}
+
+// VerifyAdminCode consumes only an admin_email challenge and never issues a
+// normal user token pair. The admin-auth use case creates its own session only
+// after checking that the account is still enabled and has an operator role.
+func (s *Service) VerifyAdminCode(ctx context.Context, emailRaw, code string) error {
+	email, err := normalizeEmail(emailRaw)
+	if err != nil {
+		return err
+	}
+	return s.consumeScopedEmailCode(ctx, adminEmailCodeChannel, email, code)
+}
+
+func (s *Service) consumeScopedEmailCode(ctx context.Context, channel, email, code string) error {
 	code = strings.TrimSpace(code)
-	rec, err := s.codes.ConsumeAttempt(ctx, "email", email, maxAttempts)
+	rec, err := s.codes.ConsumeAttempt(ctx, channel, email, maxAttempts)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return domain.ErrCodeInvalid
@@ -347,13 +363,13 @@ func (s *Service) consumeEmailCode(ctx context.Context, email, code string) erro
 		return err
 	}
 	if s.now().After(rec.ExpiresAt) {
-		_ = s.codes.Delete(ctx, "email", email)
+		_ = s.codes.Delete(ctx, channel, email)
 		return domain.ErrCodeExpired
 	}
 	if bcrypt.CompareHashAndPassword([]byte(rec.CodeHash), []byte(code)) != nil {
 		return domain.ErrCodeInvalid
 	}
-	_ = s.codes.Delete(ctx, "email", email)
+	_ = s.codes.Delete(ctx, channel, email)
 	return nil
 }
 
@@ -472,6 +488,17 @@ func (s *Service) RequestLoginCode(ctx context.Context, emailRaw string) (Reques
 // change flows intentionally use it for an address not linked to the account
 // yet; public email login must go through RequestLoginCode instead.
 func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCodeResult, error) {
+	return s.requestEmailCode(ctx, "email", emailRaw)
+}
+
+// RequestAdminCode issues an OTP scoped exclusively to the operator surface.
+// Keeping it in a separate auth_code channel prevents a code requested for the
+// admin panel from being replayed against ordinary application login.
+func (s *Service) RequestAdminCode(ctx context.Context, emailRaw string) (RequestCodeResult, error) {
+	return s.requestEmailCode(ctx, adminEmailCodeChannel, emailRaw)
+}
+
+func (s *Service) requestEmailCode(ctx context.Context, channel, emailRaw string) (RequestCodeResult, error) {
 	email, err := normalizeEmail(emailRaw)
 	if err != nil {
 		return RequestCodeResult{}, err
@@ -481,7 +508,7 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	// This prevents invalidating a victim's pending code and flooding their inbox.
 	// Bypassed in dev (exposeCode=true) so developers can test quickly.
 	if !s.exposeCode {
-		switch existing, err := s.codes.Get(ctx, "email", email); {
+		switch existing, err := s.codes.Get(ctx, channel, email); {
 		case err == nil:
 			if s.now().Before(existing.CreatedAt.Add(resendCooldown)) {
 				return RequestCodeResult{}, domain.ErrCodeRequestTooSoon
@@ -503,7 +530,7 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	}
 	expiresAt := s.now().Add(codeTTL)
 	authCode := domain.AuthCode{
-		Channel:   "email",
+		Channel:   channel,
 		Target:    email,
 		CodeHash:  string(hash),
 		ExpiresAt: expiresAt,

@@ -11,7 +11,7 @@ import (
 )
 
 // NewRouter wires middleware and routes into an http.Handler.
-func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, abuseHandler *AbuseHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, paymentsEnabled bool, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
+func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, bookingHandler *BookingHandler, favoriteHandler *FavoriteHandler, cityHandler *CityHandler, reviewHandler *ReviewHandler, chatHandler *ChatHandler, mediaHandler *MediaHandler, activityHandler *ActivityHandler, abuseHandler *AbuseHandler, authSvc *auth.Service, aiHandler *AIHandler, emailHandler *EmailHandler, supportHandler *SupportHandler, paymentHandler *PaymentHandler, promotionHandler *PromotionHandler, opsWebhookHandler *OpsWebhookHandler, adminHandler *AdminHandler, paymentsEnabled bool, minAppVersion string, errorTracking func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	// Remove the internal webhook secret before middleware.Logger sees the URL.
@@ -45,6 +45,11 @@ func NewRouter(listingHandler *ListingHandler, authHandler *AuthHandler, booking
 	})
 	if opsWebhookHandler != nil {
 		r.Post(glitchTipTelegramPath, opsWebhookHandler.GlitchTipTelegram)
+	}
+	if adminHandler != nil {
+		// The operator surface has its own opaque browser session and must not
+		// inherit either the mobile JWT middleware or the mobile version gate.
+		r.Route("/api/admin/v1", adminHandler.Routes)
 	}
 
 	r.Route("/api/v1", func(r chi.Router) {

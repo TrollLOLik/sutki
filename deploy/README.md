@@ -262,3 +262,39 @@ own request logger runs. The bridge accepts at most 64 KiB of JSON, safely
 formats structured Telegram HTML, and returns `502` on Telegram delivery
 failure. Such failures are logged but deliberately not recaptured by GlitchTip
 to avoid an alert recursion loop.
+
+## Admin authentication foundation
+
+Migration `000050_admin_foundation` creates a separate administrator roster,
+opaque browser sessions, and an append-only action journal. The operator API is
+mounted at `/api/admin/v1`; it does not accept mobile JWTs and does not inherit
+the mobile minimum-version gate. Configure the exact browser origin and session
+limits in `deploy/.env.production`:
+
+```dotenv
+ADMIN_PUBLIC_URL=https://admin.wigaj.ru
+ADMIN_SESSION_TTL=8h
+ADMIN_IDLE_TTL=30m
+```
+
+There is intentionally no public bootstrap endpoint. After migrations have
+run, grant the first owner role to an existing account with a verified
+corporate email:
+
+```bash
+sudo docker compose --env-file deploy/.env.production -f deploy/compose.production.yml \
+  exec -T -e ADMIN_BOOTSTRAP_EMAIL=owner@wigaj.ru postgres sh -lc \
+  'psql -U "$APP_DB_USER" -d "$APP_DB_NAME" -v ON_ERROR_STOP=1 -v admin_email="$ADMIN_BOOTSTRAP_EMAIL"' <<'SQL'
+INSERT INTO admin_account (user_id, role)
+SELECT id, 'owner'
+FROM "user"
+WHERE lower(email) = lower(:'admin_email') AND deleted = false
+ON CONFLICT (user_id) DO UPDATE
+SET role = EXCLUDED.role, enabled = true, updated_at = now();
+SQL
+```
+
+Admin login codes use the dedicated `admin_email` OTP channel, so they cannot
+be replayed as normal application login codes. The session cookie is host-only,
+`HttpOnly`, `Secure`, and `SameSite=Strict`; state-changing requests additionally
+require `X-CSRF-Token` and the exact configured `Origin`.

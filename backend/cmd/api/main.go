@@ -33,6 +33,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres"
 	"github.com/TrollLOLik/sutki/backend/internal/repository/postgres/sqlc"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/abuse"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/adminauth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/attachmentmoderation"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/auth"
 	"github.com/TrollLOLik/sutki/backend/internal/usecase/booking"
@@ -224,6 +225,15 @@ func main() {
 	})
 	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)
+	adminSvc := adminauth.New(postgres.NewAdminRepo(pool), authSvc, adminauth.Config{
+		SessionTTL: cfg.AdminSessionTTL,
+		IdleTTL:    cfg.AdminIdleTTL,
+	})
+	adminHandler := httpdelivery.NewAdminHandler(adminSvc, httpdelivery.AdminHandlerConfig{
+		AllowedOrigin: cfg.AdminPublicURL,
+		SecureCookies: cfg.AppEnvironment == "production",
+		ExposeCode:    cfg.AuthExposeCode,
+	})
 	legalSvc, err := legaluc.New(postgres.NewLegalConsentRepo(pool), legaluc.Config{
 		Documents: map[string]domain.LegalDocument{
 			domain.LegalDocumentUserAgreement: {
@@ -344,7 +354,7 @@ func main() {
 	}
 
 	errorTracking := newErrorTrackingMiddleware(cfg.GlitchTipBackendDSN != "")
-	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, abuseHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, cfg.PaymentsEnabled, cfg.MinAppVersion, errorTracking)
+	handler := httpdelivery.NewRouter(listingHandler, authHandler, bookingHandler, favoriteHandler, cityHandler, reviewHandler, chatHandler, mediaHandler, activityHandler, abuseHandler, authSvc, aiHandler, emailHandler, supportHandler, paymentHandler, promotionHandler, opsWebhookHandler, adminHandler, cfg.PaymentsEnabled, cfg.MinAppVersion, errorTracking)
 
 	srv := &http.Server{
 		Addr:         cfg.HTTPAddr,

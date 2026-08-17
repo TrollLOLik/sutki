@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -101,6 +102,12 @@ type Config struct {
 	// SupportEmail receives public callback requests submitted through the
 	// website. Empty disables the endpoint rather than silently dropping leads.
 	SupportEmail string
+	// AdminPublicURL is the exact browser origin allowed to call the separate
+	// operator API. Admin sessions are host-only cookies and are never shared
+	// with the mobile/public application.
+	AdminPublicURL  string
+	AdminSessionTTL time.Duration
+	AdminIdleTTL    time.Duration
 
 	LegalDocumentVersion         string
 	LegalUserAgreementSHA256     string
@@ -201,6 +208,9 @@ func Load() (Config, error) {
 		EmailDailyLimit:              getInt("EMAIL_DAILY_LIMIT", 500),
 		AdminEmail:                   getEnv("ADMIN_EMAIL", ""),
 		SupportEmail:                 getEnv("SUPPORT_EMAIL", ""),
+		AdminPublicURL:               strings.TrimRight(getEnv("ADMIN_PUBLIC_URL", "https://admin.wigaj.ru"), "/"),
+		AdminSessionTTL:              getDuration("ADMIN_SESSION_TTL", 8*time.Hour),
+		AdminIdleTTL:                 getDuration("ADMIN_IDLE_TTL", 30*time.Minute),
 		LegalDocumentVersion:         getEnv("LEGAL_DOCUMENT_VERSION", "2026-08-10"),
 		LegalUserAgreementSHA256:     strings.ToLower(getEnv("LEGAL_USER_AGREEMENT_SHA256", "")),
 		LegalPersonalDataSHA256:      strings.ToLower(getEnv("LEGAL_PERSONAL_DATA_SHA256", "")),
@@ -253,6 +263,13 @@ func Load() (Config, error) {
 	}
 	if cfg.SupportEmail == "" {
 		cfg.SupportEmail = cfg.SMTPUsername
+	}
+	if cfg.AdminSessionTTL <= 0 || cfg.AdminIdleTTL <= 0 || cfg.AdminIdleTTL > cfg.AdminSessionTTL {
+		return Config{}, fmt.Errorf("ADMIN_SESSION_TTL and ADMIN_IDLE_TTL must be positive, with idle TTL no longer than session TTL")
+	}
+	adminURL, err := url.Parse(cfg.AdminPublicURL)
+	if err != nil || adminURL.Host == "" || adminURL.User != nil || adminURL.Path != "" || adminURL.RawQuery != "" || adminURL.Fragment != "" {
+		return Config{}, fmt.Errorf("ADMIN_PUBLIC_URL must be an origin without path, query, or fragment")
 	}
 	if cfg.UCallerEnabled && (cfg.UCallerAPIKey == "" || cfg.UCallerServiceID == "") {
 		return Config{}, fmt.Errorf("UCALLER_API_KEY and UCALLER_SERVICE_ID are required when UCALLER_ENABLED=true")
@@ -340,6 +357,9 @@ func Load() (Config, error) {
 	// defaults, while a misconfigured production deployment refuses to start
 	// rather than starting insecurely.
 	if cfg.AppEnvironment == "production" {
+		if adminURL.Scheme != "https" {
+			return Config{}, fmt.Errorf("ADMIN_PUBLIC_URL must use https in production")
+		}
 		if strings.TrimSpace(cfg.LegalDocumentVersion) == "" {
 			return Config{}, fmt.Errorf("LEGAL_DOCUMENT_VERSION is required in production")
 		}
