@@ -12,6 +12,8 @@ import { Stars } from '@/components/Stars';
 import { BottomSheet, Button, DialogActions, EmptyState, IconButton, LoadErrorState, MaterialSurface, TextArea } from '@/components/ui';
 import { useKeyboardAwareListFocus } from '@/hooks/useKeyboardAwareListFocus';
 import { useMyListings } from '@/lib/api/create-listing';
+import { useListing } from '@/lib/api/listings';
+import { useUserBlockState } from '@/lib/api/abuse';
 import { useReviews, useHostReviews, useCreateReviewReply } from '@/lib/api/reviews';
 import { formatRating, formatReviewsCount } from '@/lib/format';
 import { useSessionStore } from '@/store/session';
@@ -38,6 +40,7 @@ export default function ReviewsScreen() {
   const reviewsListRef = useRef<FlatList<Review>>(null);
   const { handleFocus: handleReplyFocus } = useKeyboardAwareListFocus(reviewsListRef);
   const hostMode = isHost === 'true';
+  const listing = useListing(numericId, !hostMode);
   const listingReviews = useReviews(numericId, { limit: 50 }, !hostMode);
   const hostReviews = useHostReviews(numericId, { limit: 50 }, hostMode);
   const { data, isLoading, isError, refetch, isRefetching } = hostMode
@@ -46,6 +49,15 @@ export default function ReviewsScreen() {
 
   const { status: authStatus, user } = useSessionStore();
   const isAuthenticated = authStatus === 'authenticated';
+  const blockState = useUserBlockState(
+    listing.data?.owner_id,
+    Boolean(
+      isAuthenticated &&
+      listing.data &&
+      listing.data.owner_id !== user?.id
+    ),
+  );
+  const bookingBlocked = Boolean(blockState.data?.blocked);
   const [actionReview, setActionReview] = useState<Review | null>(null);
   const [reportReview, setReportReview] = useState<Review | null>(null);
   const { data: myListingsData } = useMyListings({ limit: 100 }, { enabled: isAuthenticated && isHost !== 'true' });
@@ -134,7 +146,14 @@ export default function ReviewsScreen() {
                   />
                 ) : (
                   <Button
-                    label="Оставить заявку"
+                    label={
+                      bookingBlocked
+                        ? blockState.data?.blocked_by_me
+                          ? 'Пользователь заблокирован'
+                          : 'Заявка недоступна'
+                        : 'Оставить заявку'
+                    }
+                    disabled={bookingBlocked}
                     onPress={() => router.push({ pathname: '/booking/[id]', params: { id } })}
                   />
                 )}

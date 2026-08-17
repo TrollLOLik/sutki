@@ -11,6 +11,7 @@ import { bookingStatusMeta } from '@/lib/booking-status';
 import { formatDateRangeRu, formatGuests, formatRub } from '@/lib/format';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { Booking } from '@/types/booking';
+import { useUserBlockState } from '@/lib/api/abuse';
 
 export type BookingCardVariant = 'outgoing' | 'incoming' | 'history';
 
@@ -107,6 +108,16 @@ export function BookingCard({
   isRejecting = false,
   disabled = false,
 }: BookingCardProps) {
+  const repeatBlockState = useUserBlockState(
+    booking.house?.owner_id,
+    Boolean(onRepeat && booking.house?.owner_id),
+  );
+  const repeatBlocked = Boolean(repeatBlockState.data?.blocked);
+  const repeatLabel = repeatBlocked
+    ? repeatBlockState.data?.blocked_by_me
+      ? 'Заблокирован'
+      : 'Недоступно'
+    : 'Повторить';
   const { palette } = useAppTheme();
   const incoming = variant === 'incoming';
   const history = variant === 'history';
@@ -222,7 +233,14 @@ export function BookingCard({
         ) : history ? (
           <View style={styles.actionRow}>
             <View style={styles.actionCell}>
-              <Button icon="refresh-outline" label="Повторить" variant="secondary" size="md" onPress={onRepeat} />
+              <Button
+                icon={repeatBlocked ? 'ban-outline' : 'refresh-outline'}
+                label={repeatLabel}
+                disabled={repeatBlocked}
+                variant="secondary"
+                size="md"
+                onPress={onRepeat}
+              />
             </View>
             {reviewAvailable ? (
               <View style={styles.actionCell}>
@@ -239,7 +257,13 @@ export function BookingCard({
             </View>
             {onRepeat ? (
               <View style={styles.actionCell}>
-                <Button icon="refresh-outline" label="Повторить" size="md" onPress={onRepeat} />
+                <Button
+                  icon={repeatBlocked ? 'ban-outline' : 'refresh-outline'}
+                  label={repeatLabel}
+                  disabled={repeatBlocked}
+                  size="md"
+                  onPress={onRepeat}
+                />
               </View>
             ) : null}
           </View>

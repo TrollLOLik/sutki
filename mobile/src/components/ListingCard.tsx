@@ -11,6 +11,8 @@ import {
 import { AnimatedListItem, AppIcon, AppText, IconButton, PressableScale, materialSurfaceColor } from '@/components/ui';
 import { formatRating, formatRub } from '@/lib/format';
 import { env } from '@/lib/env';
+import { useUserBlockState } from '@/lib/api/abuse';
+import { useSessionStore } from '@/store/session';
 import { useAppTheme } from '@/theme/useAppTheme';
 import type { ListingCard as ListingCardModel } from '@/types/listing';
 
@@ -44,12 +46,21 @@ const MODERATION_BADGES: Record<string, { label: string; bg: string; fg: string 
 
 function ListingBookingAction({
   compact,
+  blocked,
+  blockedByMe,
   onPress,
 }: {
   compact: boolean;
+  blocked: boolean;
+  blockedByMe: boolean;
   onPress: () => void;
 }) {
   const { palette } = useAppTheme();
+  const label = blocked
+    ? blockedByMe
+      ? 'Пользователь заблокирован'
+      : 'Заявка недоступна'
+    : 'Оставить заявку';
 
   return (
     <View
@@ -61,8 +72,10 @@ function ListingBookingAction({
       }}>
       <PressableScale
         pressedScale={0.97}
+        disabled={blocked}
         accessibilityRole="button"
-        accessibilityLabel="Оставить заявку"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: blocked }}
         onPress={(event) => {
           event.stopPropagation();
           onPress();
@@ -76,28 +89,32 @@ function ListingBookingAction({
               gap: 5,
               borderRadius: compact ? 12 : 14,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.18)',
-              backgroundColor: palette.primary,
+              borderColor: blocked ? palette.line : 'rgba(255,255,255,0.18)',
+              backgroundColor: blocked ? palette.surfaceMuted : palette.primary,
               paddingHorizontal: compact ? 5 : 10,
-              shadowColor: palette.primary,
+              shadowColor: blocked ? 'transparent' : palette.primary,
               shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
+              shadowOpacity: blocked ? 0 : 0.2,
               shadowRadius: 8,
-              elevation: 3,
+              elevation: blocked ? 0 : 3,
           }}>
-          <AppIcon name="calendar-outline" size={compact ? 15 : 17} color="#FFFFFF" />
+          <AppIcon
+            name={blocked ? 'ban-outline' : 'calendar-outline'}
+            size={compact ? 15 : 17}
+            color={blocked ? palette.inkMuted : '#FFFFFF'}
+          />
           <AppText
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.8}
             style={{
               flexShrink: 1,
-              color: '#FFFFFF',
+              color: blocked ? palette.inkMuted : '#FFFFFF',
               fontSize: compact ? 10 : 12,
               lineHeight: compact ? 13 : 16,
               fontWeight: '800',
             }}>
-            Оставить заявку
+            {label}
           </AppText>
         </View>
       </PressableScale>
@@ -122,6 +139,13 @@ export function ListingCard({
 }: ListingCardProps) {
   const { palette, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const authStatus = useSessionStore((state) => state.status);
+  const sessionUserID = useSessionStore((state) => state.user?.id);
+  const blockState = useUserBlockState(
+    listing.owner_id,
+    Boolean(onBook && authStatus === 'authenticated' && sessionUserID !== listing.owner_id),
+  );
+  const bookingBlocked = Boolean(blockState.data?.blocked);
 
   // card: screen - 16px margin each side - 12px padding each side = screenWidth - 56
   // image column: 45% of that, aspect ratio 4:3
@@ -348,7 +372,14 @@ export function ListingCard({
               onUnpublish={onUnpublish}
               style={{ marginTop: 9 }}
             />
-            {onBook ? <ListingBookingAction compact onPress={onBook} /> : null}
+            {onBook ? (
+              <ListingBookingAction
+                compact
+                blocked={bookingBlocked}
+                blockedByMe={Boolean(blockState.data?.blocked_by_me)}
+                onPress={onBook}
+              />
+            ) : null}
           </PressableScale>
         </PromotionHighlightSurface>
       </AnimatedListItem>
@@ -558,7 +589,14 @@ export function ListingCard({
         onUnpublish={onUnpublish}
         style={{ marginTop: 10 }}
       />
-      {onBook ? <ListingBookingAction compact={false} onPress={onBook} /> : null}
+      {onBook ? (
+        <ListingBookingAction
+          compact={false}
+          blocked={bookingBlocked}
+          blockedByMe={Boolean(blockState.data?.blocked_by_me)}
+          onPress={onBook}
+        />
+      ) : null}
         </PressableScale>
       </PromotionHighlightSurface>
     </AnimatedListItem>

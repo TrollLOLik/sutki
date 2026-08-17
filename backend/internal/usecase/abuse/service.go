@@ -3,7 +3,9 @@ package abuse
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
@@ -25,11 +27,16 @@ var (
 )
 
 type Service struct {
-	repo domain.AbuseRepository
+	repo       domain.AbuseRepository
+	userEvents domain.UserEventPublisher
 }
 
 func New(repo domain.AbuseRepository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetUserEvents(publisher domain.UserEventPublisher) {
+	s.userEvents = publisher
 }
 
 func (s *Service) Report(ctx context.Context, in domain.CreateAbuseReport) (domain.AbuseReport, error) {
@@ -61,14 +68,74 @@ func (s *Service) Block(ctx context.Context, blockerUserID, blockedUserID int32)
 	if blockerUserID == blockedUserID {
 		return domain.BlockedUser{}, domain.ErrSelfBlock
 	}
-	return s.repo.BlockUser(ctx, blockerUserID, blockedUserID)
+	blocked, err := s.repo.BlockUser(ctx, blockerUserID, blockedUserID)
+	if err != nil {
+		return domain.BlockedUser{}, err
+	}
+	s.publishBlockStates(ctx, blockerUserID, blockedUserID, "blocked")
+	return blocked, nil
 }
 
 func (s *Service) Unblock(ctx context.Context, blockerUserID, blockedUserID int32) error {
 	if blockerUserID == blockedUserID {
 		return domain.ErrSelfBlock
 	}
-	return s.repo.UnblockUser(ctx, blockerUserID, blockedUserID)
+	if err := s.repo.UnblockUser(ctx, blockerUserID, blockedUserID); err != nil {
+		return err
+	}
+	s.publishBlockStates(ctx, blockerUserID, blockedUserID, "unblocked")
+	return nil
+}
+
+// publishBlockStates pushes the authoritative pair state to both private user
+// channels. The two views intentionally differ: only the user who created an
+// active block may see the unblock action.
+func (s *Service) publishBlockStates(ctx context.Context, firstUserID, secondUserID int32, action string) {
+	if s.userEvents == nil {
+		return
+	}
+
+	firstState, err := s.repo.BlockState(ctx, firstUserID, secondUserID)
+	if err != nil {
+		log.Printf("abuse realtime: read block state for user %d: %v", firstUserID, err)
+		return
+	}
+	secondState, err := s.repo.BlockState(ctx, secondUserID, firstUserID)
+	if err != nil {
+		log.Printf("abuse realtime: read block state for user %d: %v", secondUserID, err)
+		return
+	}
+
+	type recipientState struct {
+		userID      int32
+		otherUserID int32
+		state       domain.UserBlockState
+	}
+	recipients := []recipientState{
+		{userID: firstUserID, otherUserID: secondUserID, state: firstState},
+		{userID: secondUserID, otherUserID: firstUserID, state: secondState},
+	}
+
+	go func() {
+		publishCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, recipient := range recipients {
+			err := s.userEvents.PublishUserEvent(publishCtx, recipient.userID, domain.UserEvent{
+				Type:     "user.block.changed",
+				Action:   action,
+				EntityID: int64(recipient.otherUserID),
+				Payload: map[string]any{
+					"other_user_id": recipient.otherUserID,
+					"blocked":       recipient.state.Blocked,
+					"blocked_by_me": recipient.state.BlockedByMe,
+				},
+				OccurredAt: time.Now().UTC(),
+			})
+			if err != nil {
+				log.Printf("abuse realtime: publish block state to user %d: %v", recipient.userID, err)
+			}
+		}
+	}()
 }
 
 func (s *Service) ListBlocked(ctx context.Context, userID, limit, offset int32) (domain.BlockedUsersPage, error) {

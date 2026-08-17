@@ -79,6 +79,8 @@ import Animated, {
 import { ReportSheet } from '@/components/safety/ReportSheet';
 import { UserActionsSheet } from '@/components/safety/UserActionsSheet';
 import {
+	abuseKeys,
+	fetchUserBlockState,
 	useBlockUser,
 	useUnblockUser,
 	useUserBlockState,
@@ -89,6 +91,14 @@ const CHAT_LIST_CONTENT_STYLE = { paddingVertical: 18 } as const;
 const CHAT_LIST_BATCH_SIZE = 8;
 const CHAT_VIDEO_UPLOADS_ENABLED = false;
 const keyExtractor = (item: ChatMessage) => String(item.id);
+
+function isInteractionBlockedError(error: unknown): error is ApiError {
+	return (
+		error instanceof ApiError &&
+		error.status === 403 &&
+		(error.message.includes('Обмен сообщениями') || error.message.includes('блокиров'))
+	);
+}
 
 export default function ChatDialogScreen() {
 	const { palette, isDark } = useAppTheme();
@@ -165,6 +175,15 @@ export default function ChatDialogScreen() {
 	const unblockUser = useUnblockUser(otherUserID);
 	const isBlocked = blockState?.blocked === true;
 	const blockedByMe = blockState?.blocked_by_me === true;
+	const syncBlockState = React.useCallback(async () => {
+		if (otherUserID <= 0) return;
+		try {
+			const current = await fetchUserBlockState(otherUserID);
+			queryClient.setQueryData(abuseKeys.userBlockState(otherUserID), current);
+		} catch {
+			queryClient.invalidateQueries({ queryKey: abuseKeys.userBlockState(otherUserID) });
+		}
+	}, [otherUserID, queryClient]);
 	const houseID = activeConv?.house_id || (params.houseId ? parseInt(params.houseId, 10) : undefined);
 	const { data: listing } = useListing(houseID);
 
@@ -824,6 +843,10 @@ export default function ChatDialogScreen() {
 				cancelEditing();
 				hapticSuccess();
 			} catch (err) {
+				if (isInteractionBlockedError(err)) {
+					await syncBlockState();
+					return;
+				}
 				console.error('[Chat] Failed to edit message:', err);
 				// Текст остаётся в поле: сервер мог отказать из-за прочтения или
 				// истёкшего окна, и терять набранное из-за этого нельзя.
@@ -960,6 +983,37 @@ export default function ChatDialogScreen() {
 				};
 			});
 		} catch (err) {
+			if (isInteractionBlockedError(err)) {
+				// A block may race an already-open composer or its realtime packet may
+				// be delayed. Remove the optimistic bubble, restore the draft and fetch
+				// the authoritative directional state instead of surfacing a dev error.
+				queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {
+					if (!old) return old;
+					return {
+						...old,
+						pages: old.pages.map((page) => page.filter((message) => message.id !== tempId)),
+					};
+				});
+				setInputText(text);
+				setReplyTo(replyTarget);
+				if (hasAttachments) {
+					addStaged(
+						stagedSnapshot.map((file) => ({
+							uri: file.uri,
+							fileName: file.fileName,
+							mimeType: file.mimeType,
+							size: file.size,
+							width: file.width,
+							height: file.height,
+							durationSeconds: file.durationSeconds,
+							thumbnailUri: file.thumbnailUri,
+						})),
+					);
+				}
+				await syncBlockState();
+				return;
+			}
+
 			console.error('[Chat] Failed to send message:', err);
 			// Mark optimistic message as failed
 			queryClient.setQueryData<InfiniteData<ChatMessage[]>>(chatKeys.messages(convID), (old) => {

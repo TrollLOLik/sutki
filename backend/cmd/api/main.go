@@ -323,7 +323,9 @@ func main() {
 	reviewSvc.SetUserEvents(userEvents)
 	reviewSvc.StartWorker(ctx)
 	reviewHandler := httpdelivery.NewReviewHandler(reviewSvc, cfg.MediaBaseURL)
-	abuseHandler := httpdelivery.NewAbuseHandler(abuse.New(abuseRepo))
+	abuseSvc := abuse.New(abuseRepo)
+	abuseSvc.SetUserEvents(userEvents)
+	abuseHandler := httpdelivery.NewAbuseHandler(abuseSvc)
 
 	aiHandler := httpdelivery.NewAIHandler(llmClientGen, listingSvc, cfg.AppEnvironment != "production")
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 )
@@ -16,6 +17,7 @@ type fakeAbuseRepo struct {
 	blockCalls  int
 	listLimit   int32
 	listOffset  int32
+	blockStates map[int32]domain.UserBlockState
 }
 
 func (f *fakeAbuseRepo) CreateReport(_ context.Context, in domain.CreateAbuseReport, limit int32) (domain.AbuseReport, error) {
@@ -44,8 +46,22 @@ func (f *fakeAbuseRepo) IsBlockedBetween(context.Context, int32, int32) (bool, e
 	return false, nil
 }
 
-func (f *fakeAbuseRepo) BlockState(context.Context, int32, int32) (domain.UserBlockState, error) {
-	return domain.UserBlockState{}, nil
+func (f *fakeAbuseRepo) BlockState(_ context.Context, viewerUserID, _ int32) (domain.UserBlockState, error) {
+	return f.blockStates[viewerUserID], nil
+}
+
+type publishedBlockEvent struct {
+	userID int32
+	event  domain.UserEvent
+}
+
+type fakeUserEventPublisher struct {
+	events chan publishedBlockEvent
+}
+
+func (f *fakeUserEventPublisher) PublishUserEvent(_ context.Context, userID int32, event domain.UserEvent) error {
+	f.events <- publishedBlockEvent{userID: userID, event: event}
+	return nil
 }
 
 func TestReportNormalizesAndForwardsServerMetadata(t *testing.T) {
@@ -121,6 +137,46 @@ func TestBlockRejectsSelf(t *testing.T) {
 	}
 	if repo.blockCalls != 0 {
 		t.Fatal("repository was called for a self-block")
+	}
+}
+
+func TestBlockPublishesAuthoritativeStateToBothUsers(t *testing.T) {
+	repo := &fakeAbuseRepo{blockStates: map[int32]domain.UserBlockState{
+		11: {Blocked: true, BlockedByMe: true},
+		22: {Blocked: true, BlockedByMe: false},
+	}}
+	publisher := &fakeUserEventPublisher{events: make(chan publishedBlockEvent, 2)}
+	svc := New(repo)
+	svc.SetUserEvents(publisher)
+
+	if _, err := svc.Block(context.Background(), 11, 22); err != nil {
+		t.Fatalf("Block() error = %v", err)
+	}
+
+	got := make(map[int32]domain.UserEvent, 2)
+	for range 2 {
+		select {
+		case published := <-publisher.events:
+			got[published.userID] = published.event
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for block realtime event")
+		}
+	}
+
+	for userID, otherUserID := range map[int32]int32{11: 22, 22: 11} {
+		event, ok := got[userID]
+		if !ok {
+			t.Fatalf("missing event for user %d", userID)
+		}
+		if event.Type != "user.block.changed" || event.Action != "blocked" || event.EntityID != int64(otherUserID) {
+			t.Fatalf("event for user %d = %#v", userID, event)
+		}
+		if event.Payload["blocked"] != true {
+			t.Fatalf("blocked payload for user %d = %#v", userID, event.Payload)
+		}
+	}
+	if got[11].Payload["blocked_by_me"] != true || got[22].Payload["blocked_by_me"] != false {
+		t.Fatalf("directional payloads = blocker %#v, blocked %#v", got[11].Payload, got[22].Payload)
 	}
 }
 

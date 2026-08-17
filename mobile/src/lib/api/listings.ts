@@ -209,10 +209,10 @@ export function useListings(
   });
 }
 
-export function useListing(id: number | undefined) {
+export function useListing(id: number | undefined, enabled = true) {
   return useQuery({
     queryKey: listingKeys.detail(id ?? 0),
     queryFn: () => fetchListing(id as number),
-    enabled: id != null && id > 0,
+    enabled: enabled && id != null && id > 0,
   });
 }

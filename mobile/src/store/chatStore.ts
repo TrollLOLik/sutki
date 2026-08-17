@@ -94,6 +94,12 @@ interface UserRealtimeEvent {
 	scope?: string;
 	action?: string;
 	entity_id?: number;
+	payload?: {
+		other_user_id?: number;
+		blocked?: boolean;
+		blocked_by_me?: boolean;
+		[key: string]: unknown;
+	};
 	conversation_id?: number;
 	message_id?: number;
 	reason?: string;
@@ -123,7 +129,7 @@ function startPresenceHeartbeat() {
 function invalidateRealtimeData(payload?: UserRealtimeEvent) {
 	queryClient.invalidateQueries({ queryKey: ['activity'] });
 	if (!payload) {
-		for (const key of [['chat'], ['bookings'], ['listings'], ['my-listings'], ['reviews'], ['my-reviews'], ['listing-promotions']]) {
+		for (const key of [['chat'], ['abuse'], ['bookings'], ['listings'], ['my-listings'], ['reviews'], ['my-reviews'], ['listing-promotions']]) {
 			queryClient.invalidateQueries({ queryKey: key });
 		}
 		return;
@@ -149,6 +155,27 @@ function invalidateRealtimeData(payload?: UserRealtimeEvent) {
 			queryClient.invalidateQueries({ queryKey: ['host-reviews'] });
 			queryClient.invalidateQueries({ queryKey: ['listings'] });
 			break;
+		case 'user.block.changed': {
+			const otherUserID = Number(payload.payload?.other_user_id ?? payload.entity_id);
+			const blocked = payload.payload?.blocked;
+			const blockedByMe = payload.payload?.blocked_by_me;
+			if (
+				Number.isFinite(otherUserID) &&
+				otherUserID > 0 &&
+				typeof blocked === 'boolean' &&
+				typeof blockedByMe === 'boolean'
+			) {
+				queryClient.setQueryData(
+					['abuse', 'user-block-state', otherUserID],
+					{ blocked, blocked_by_me: blockedByMe },
+				);
+			} else {
+				queryClient.invalidateQueries({ queryKey: ['abuse'] });
+			}
+			queryClient.invalidateQueries({ queryKey: ['abuse', 'blocked-users'] });
+			queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+			break;
+		}
 	}
 }
 

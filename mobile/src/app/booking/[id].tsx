@@ -6,12 +6,11 @@ import { ru } from 'date-fns/locale';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MotiView } from 'moti';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import {
   Pressable,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +22,7 @@ import { Button, Input, MaterialSurface } from '@/components/ui';
 import { PhoneInput } from '@/components/PhoneInput'; // Shared component
 import { useCreateBooking, useListingAvailability } from '@/lib/api/bookings';
 import { useListing } from '@/lib/api/listings';
+import { useUserBlockState } from '@/lib/api/abuse';
 import { ApiError } from '@/lib/api/client';
 import { formatGuests, formatPricePerNight, formatRub, formatNights } from '@/lib/format';
 import { NavigationBackButton } from '@/components/NavigationBackButton';
@@ -93,16 +93,20 @@ export default function BookingScreen() {
   const { data: listing } = useListing(listingId);
   const { data: availability } = useListingAvailability(listingId);
   const createBooking = useCreateBooking(listingId);
+  const blockState = useUserBlockState(
+    listing?.owner_id,
+    Boolean(status === 'authenticated' && listing && listing.owner_id !== user?.id),
+  );
+  const bookingBlocked = Boolean(blockState.data?.blocked);
 
   const [range, setRange] = useState<DateRange>({ start: null, end: null });
   const [count, setCount] = useState(1);
   const [dateError, setDateError] = useState<string | null>(null);
 
   // Pre-fill phone from profile (normalise and mask)
-  const initialPhone = useMemo(() => {
-    if (!user?.phone) return '';
-    return formatPhoneMask(normalizePhoneDigits(user.phone));
-  }, [user?.phone]);
+  const initialPhone = user?.phone
+    ? formatPhoneMask(normalizePhoneDigits(user.phone))
+    : '';
 
   const insets = useSafeAreaInsets();
 
@@ -158,6 +162,15 @@ export default function BookingScreen() {
   const headerBackground = isDark ? '#14161B' : '#FFFFFF';
 
   const onSubmit = handleSubmit(async (values) => {
+    if (bookingBlocked) {
+      Alert.alert(
+        'Заявка недоступна',
+        blockState.data?.blocked_by_me
+          ? 'Сначала разблокируйте владельца объявления в его профиле.'
+          : 'Владелец ограничил взаимодействие с вашим аккаунтом.',
+      );
+      return;
+    }
     if (!range.start || !range.end) {
       setDateError('Выберите даты заезда и выезда');
       return;
@@ -187,6 +200,18 @@ export default function BookingScreen() {
         { text: 'OK', onPress: () => router.replace('/bookings') },
       ]);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 403 && listing?.owner_id) {
+        const refreshedBlockState = await blockState.refetch();
+        if (refreshedBlockState.data?.blocked) {
+          Alert.alert(
+            'Заявка недоступна',
+            refreshedBlockState.data.blocked_by_me
+              ? 'Сначала разблокируйте владельца объявления в его профиле.'
+              : 'Владелец ограничил взаимодействие с вашим аккаунтом.',
+          );
+          return;
+        }
+      }
       if (err instanceof ApiError && err.status === 409) {
         setDateError('Эти даты уже заняты. Выберите другие.');
         setRange({ start: null, end: null });
@@ -302,7 +327,18 @@ export default function BookingScreen() {
                   </Text>
                 </View>
               ) : null}
-              <Button label="Отправить заявку" loading={createBooking.isPending} onPress={onSubmit} />
+              <Button
+                label={
+                  bookingBlocked
+                    ? blockState.data?.blocked_by_me
+                      ? 'Пользователь заблокирован'
+                      : 'Заявка недоступна'
+                    : 'Отправить заявку'
+                }
+                disabled={bookingBlocked}
+                loading={createBooking.isPending}
+                onPress={onSubmit}
+              />
             </View>
           )}>
 
