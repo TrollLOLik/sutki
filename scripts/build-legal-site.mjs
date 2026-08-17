@@ -266,7 +266,10 @@ function pageTemplate({ title, content, hash }) {
 
 function header() {
   return `<header class="site-header"><div class="site-header__inner">
-    <a class="brand" href="/" aria-label="ВИГАЖ — на главную"><img src="/assets/legal/logo-full.svg" alt="ВИГАЖ"></a>
+    <a class="brand" href="/legal/" aria-label="ВИГАЖ — к правовой информации"><picture>
+      <source media="(prefers-color-scheme: dark)" srcset="/assets/legal/logo-full-dark.svg">
+      <img src="/assets/legal/logo-full.svg" alt="ВИГАЖ">
+    </picture></a>
     <span class="site-header__label">Правовая информация</span>
   </div></header>`;
 }
@@ -292,7 +295,13 @@ const legacyRootEnv = join(root, 'deploy', 'legal-hashes.env');
 if (existsSync(legacyRootEnv)) unlinkSync(legacyRootEnv);
 
 copyFileSync(join(root, 'docs', 'legal', 'site', 'legal.css'), join(output, 'assets', 'legal', 'legal.css'));
-copyFileSync(join(root, 'public_html', 'assets', 'images', 'logo-full.svg'), join(output, 'assets', 'legal', 'logo-full.svg'));
+const logoSource = readFileSync(join(root, 'public_html', 'assets', 'images', 'logo-full.svg'), 'utf8');
+writeFileSync(join(output, 'assets', 'legal', 'logo-full.svg'), logoSource, 'utf8');
+writeFileSync(
+  join(output, 'assets', 'legal', 'logo-full-dark.svg'),
+  logoSource.replaceAll('fill="#181A1E"', 'fill="#F4F5F7"'),
+  'utf8',
+);
 copyFileSync(join(root, 'public_html', 'assets', 'images', 'favicon.svg'), join(output, 'assets', 'legal', 'favicon.svg'));
 copyFileSync(join(root, 'public_html', 'assets', 'images', 'favicon', 'favicon.ico'), join(output, 'assets', 'legal', 'favicon.ico'));
 

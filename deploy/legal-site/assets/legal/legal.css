@@ -82,6 +82,11 @@ a:focus-visible {
   text-decoration: none;
 }
 
+.brand picture {
+  display: block;
+  line-height: 0;
+}
+
 .brand img {
   display: block;
   width: 126px;
