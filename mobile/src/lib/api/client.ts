@@ -42,6 +42,7 @@ const API_ERROR_TRANSLATIONS: Record<string, string> = {
   'email already taken': 'Этот email уже используется.',
   'invalid phone number': 'Неверный формат номера телефона.',
   'invalid email': 'Некорректный email.',
+  'email account not found': 'Аккаунт с этой почтой не найден.',
   'invalid code': 'Неверный код подтверждения.',
   'code expired': 'Срок действия кода истёк.',
   'too many attempts': 'Превышено количество попыток. Попробуйте позже.',

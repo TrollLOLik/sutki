@@ -1071,7 +1071,7 @@ export default function CreateListingScreen() {
               <Text style={{ flex: 1, color: palette.inkSecondary, fontSize: 12, lineHeight: 17 }}>
                 Разрешаю публикацию данных объявления и принимаю{' '}
                 <Text
-                  onPress={() => void Linking.openURL('https://wigaj.ru/legal/personal-data-dissemination-consent')}
+                  onPress={() => void Linking.openURL(`${env.legalUrl}/personal-data-dissemination-consent`)}
                   style={{ color: palette.primary, fontWeight: '700' }}>
                   согласие на распространение персональных данных
                 </Text>

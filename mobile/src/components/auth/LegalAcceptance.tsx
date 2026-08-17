@@ -1,6 +1,7 @@
 import { Linking, Text, View } from 'react-native';
 
 import { Checkbox } from '@/components/ui';
+import { env } from '@/lib/env';
 import { useAppTheme } from '@/theme/useAppTheme';
 
 interface LegalAcceptanceProps {
@@ -57,14 +58,14 @@ export function LegalAcceptance({
         checked={acceptTerms}
         label="Я принимаю"
         linkLabel="Пользовательское соглашение"
-        url="https://wigaj.ru/legal/terms"
+        url={`${env.legalUrl}/terms`}
         onChange={onAcceptTermsChange}
       />
       <ConsentRow
         checked={acceptPersonalData}
         label="Я даю"
         linkLabel="согласие на обработку персональных данных"
-        url="https://wigaj.ru/legal/personal-data-consent"
+        url={`${env.legalUrl}/personal-data-consent`}
         onChange={onAcceptPersonalDataChange}
       />
       {error ? <Text style={{ color: palette.danger, fontSize: 13, lineHeight: 18 }}>{error}</Text> : null}

@@ -53,6 +53,7 @@ import { useHostResponseStats } from '@/lib/api/hostStats';
 import { formatHostResponseTime } from '@/lib/formatHostStats';
 import { formatMemberSince } from '@/lib/formatMemberSince';
 import { formatPhoneMask, normalizePhoneDigits } from '@/lib/phone';
+import { env } from '@/lib/env';
 import type { UpdateProfileBody } from '@/types/auth';
 import type { User } from '@/types/user';
 import { GuestProfile } from '@/components/profile/GuestProfile';
@@ -1093,9 +1094,13 @@ export default function ProfileScreen() {
                       )}
                       <View className="h-px bg-line" />
                       {[
-                        ['Пользовательское соглашение', 'https://wigaj.ru/legal/terms'],
-                        ['Обработка персональных данных', 'https://wigaj.ru/legal/personal-data-consent'],
-                        ['Распространение персональных данных', 'https://wigaj.ru/legal/personal-data-dissemination-consent'],
+                        ['Пользовательское соглашение', `${env.legalUrl}/terms`],
+                        ['Политика обработки данных', `${env.legalUrl}/privacy`],
+                        ['Согласие на обработку данных', `${env.legalUrl}/personal-data-consent`],
+                        ['Согласие на распространение данных', `${env.legalUrl}/personal-data-dissemination-consent`],
+                        ['Правила публикации и общения', `${env.legalUrl}/community-standards`],
+                        ['Правила рекомендаций', `${env.legalUrl}/recommendations`],
+                        ['Реквизиты владельца', `${env.legalUrl}/requisites`],
                       ].map(([label, url]) => (
                         <Pressable
                           key={url}

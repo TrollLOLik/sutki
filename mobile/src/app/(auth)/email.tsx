@@ -6,8 +6,9 @@ import { z } from 'zod';
 
 import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
 import { LegalAcceptance } from '@/components/auth/LegalAcceptance';
+import { appAlert } from '@/components/AppAlert';
 import { Button, Input } from '@/components/ui';
-import { useRequestEmailCode } from '@/lib/api/auth';
+import { isEmailAccountNotFoundError, useRequestEmailCode } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 
 const schema = z.object({
@@ -47,6 +48,23 @@ export default function EmailScreen() {
         },
       });
     } catch (err) {
+      if (isEmailAccountNotFoundError(err)) {
+        appAlert.alert(
+          'Почта не привязана',
+          'Аккаунта с этой почтой нет. Зарегистрируйтесь по номеру телефона, а затем при желании добавьте почту в настройках профиля.',
+          [
+            { text: 'Отмена', style: 'cancel' },
+            {
+              text: 'По номеру телефона',
+              onPress: () => router.replace({
+                pathname: '/phone',
+                params: { fromBooking: fromBooking ?? '' },
+              } as any),
+            },
+          ],
+        );
+        return;
+      }
       const message =
         err instanceof ApiError && err.status === 429
           ? 'Слишком частый запрос. Подождите минуту и попробуйте снова.'

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/lib/api/client';
+import { api, ApiError } from '@/lib/api/client';
 import type {
   AuthResponse,
   ReauthChallengeResponse,
@@ -27,6 +27,12 @@ export function requestEmailCode(email: string, accepted = false): Promise<Reque
 /** Verify a login code → issue access/refresh tokens + user. */
 export function verifyEmailCode(email: string, code: string): Promise<AuthResponse> {
   return api.post<AuthResponse>('/api/v1/auth/email/verify', { email, code }, { auth: false });
+}
+
+export function isEmailAccountNotFoundError(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 404) return false;
+  const body = error.body as { error?: unknown } | undefined;
+  return body?.error === 'email account not found';
 }
 
 /** Rotate a refresh token → new token pair (old token is revoked server-side). */

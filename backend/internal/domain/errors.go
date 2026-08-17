@@ -24,6 +24,10 @@ var (
 	ErrTokenInvalid = errors.New("invalid token")
 	// ErrInvalidEmail is returned when an email fails validation.
 	ErrInvalidEmail = errors.New("invalid email")
+	// ErrEmailAccountNotFound is returned when an email login is attempted for
+	// an address that has not been linked to an existing account. New accounts
+	// are created only through the verified phone flow.
+	ErrEmailAccountNotFound = errors.New("email account not found")
 	// ErrEmailTaken is returned when trying to change the email to an already registered address.
 	ErrEmailTaken = errors.New("email already taken")
 	// ErrPhoneTaken is returned when trying to verify a phone that belongs to another user.

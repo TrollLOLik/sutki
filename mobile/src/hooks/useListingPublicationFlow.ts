@@ -5,9 +5,10 @@ import { appAlert as Alert } from '@/components/AppAlert';
 import { useAcceptDataDissemination, useLegalConsentStatus } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 import { useListingPublication } from '@/lib/api/create-listing';
+import { env } from '@/lib/env';
 
 const DISSEMINATION_CONSENT_URL =
-  'https://wigaj.ru/legal/personal-data-dissemination-consent';
+  `${env.legalUrl}/personal-data-dissemination-consent`;
 
 function requiresDisseminationConsent(error: unknown): boolean {
   if (!(error instanceof ApiError) || error.status !== 428) return false;

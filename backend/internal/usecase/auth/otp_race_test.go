@@ -333,3 +333,39 @@ func TestVerifyCode_ConcurrentEmailAttemptsShareOneBudget(t *testing.T) {
 		t.Fatalf("code comparison reached %d times, want exactly %d", got, maxAttempts)
 	}
 }
+
+func TestRequestLoginCode_UnknownEmailDoesNotCreateAccount(t *testing.T) {
+	users := &fakeUsers{}
+	svc := &Service{users: users, now: time.Now, exposeCode: true}
+
+	_, err := svc.RequestLoginCode(context.Background(), "new@example.com")
+	if !errors.Is(err, domain.ErrEmailAccountNotFound) {
+		t.Fatalf("got %v, want ErrEmailAccountNotFound", err)
+	}
+	if users.didCreate() {
+		t.Fatal("email code request created an account")
+	}
+}
+
+func TestVerifyCode_UnknownEmailDoesNotCreateAccount(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash code: %v", err)
+	}
+	codes := &fakeAuthCodes{exists: true, rec: domain.AuthCode{
+		Channel:   "email",
+		Target:    "new@example.com",
+		CodeHash:  string(hash),
+		ExpiresAt: time.Now().Add(10 * time.Minute),
+	}}
+	users := &fakeUsers{}
+	svc := &Service{users: users, codes: codes, now: time.Now}
+
+	_, err = svc.VerifyCode(context.Background(), "new@example.com", "123456", domain.DeviceInfo{})
+	if !errors.Is(err, domain.ErrEmailAccountNotFound) {
+		t.Fatalf("got %v, want ErrEmailAccountNotFound", err)
+	}
+	if users.didCreate() {
+		t.Fatal("email code verification created an account")
+	}
+}

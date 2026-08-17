@@ -209,7 +209,7 @@ func (h *AuthHandler) requestCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.svc.RequestCode(r.Context(), body.Email)
+	res, err := h.svc.RequestLoginCode(r.Context(), body.Email)
 	if err != nil {
 		writeAuthError(w, r, err)
 		return
@@ -433,6 +433,8 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, "phone already linked")
 	case errors.Is(err, domain.ErrInvalidEmail):
 		writeError(w, http.StatusBadRequest, "invalid email")
+	case errors.Is(err, domain.ErrEmailAccountNotFound):
+		writeError(w, http.StatusNotFound, "email account not found")
 	case errors.Is(err, domain.ErrCodeInvalid):
 		writeError(w, http.StatusBadRequest, "invalid code")
 	case errors.Is(err, domain.ErrCodeExpired):
@@ -709,6 +711,8 @@ func writeAuthErrorRussian(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, "Этот номер телефона уже привязан к вашему аккаунту")
 	case errors.Is(err, domain.ErrInvalidEmail):
 		writeError(w, http.StatusBadRequest, "Некорректный email адрес")
+	case errors.Is(err, domain.ErrEmailAccountNotFound):
+		writeError(w, http.StatusNotFound, "Аккаунт с этой почтой не найден")
 	case errors.Is(err, domain.ErrCodeInvalid):
 		writeError(w, http.StatusBadRequest, "Неверный код подтверждения")
 	case errors.Is(err, domain.ErrCodeExpired):

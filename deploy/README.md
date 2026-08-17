@@ -134,16 +134,17 @@ the API is allowed to start. GlitchTip manages its own migrations on startup.
 ## Legal document evidence and retention
 
 The API is fail-closed in production until the published legal document
-version and SHA-256 values are configured. The website calculates each hash
-from the fully resolved Markdown document and returns it in an HTTP header:
+version and SHA-256 values are configured. The generated static pages must be
+publicly reachable before enabling that revision:
 
 ```bash
-curl -fsSI https://wigaj.ru/legal/terms | grep -i x-legal-document-sha256
-curl -fsSI https://wigaj.ru/legal/personal-data-consent | grep -i x-legal-document-sha256
-curl -fsSI https://wigaj.ru/legal/personal-data-dissemination-consent | grep -i x-legal-document-sha256
+curl -fsSI https://arenda.wigaj.ru/legal/terms
+curl -fsSI https://arenda.wigaj.ru/legal/personal-data-consent
+curl -fsSI https://arenda.wigaj.ru/legal/personal-data-dissemination-consent
 ```
 
-Copy the values into `deploy/.env.production` as
+Copy the values generated in `deploy/legal-audit/hashes.env` into
+`deploy/.env.production` as
 `LEGAL_USER_AGREEMENT_SHA256`, `LEGAL_PERSONAL_DATA_SHA256`, and
 `LEGAL_DATA_DISSEMINATION_SHA256`. Set `LEGAL_DOCUMENT_VERSION` to the same
 published edition shown by the website. Changing any resolved document text

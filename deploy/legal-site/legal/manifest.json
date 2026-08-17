@@ -1,0 +1,46 @@
+{
+  "version": "2026-08-10",
+  "effectiveDate": "10 августа 2026 года",
+  "documents": {
+    "privacy": {
+      "title": "Политика обработки персональных данных",
+      "url": "https://arenda.wigaj.ru/legal/privacy/",
+      "sha256": "66c84f6ce7b2be12cd22eb53a1810b9638e2ed2b5f40da91a0f7bb67cbd3de24"
+    },
+    "terms": {
+      "title": "Пользовательское соглашение",
+      "url": "https://arenda.wigaj.ru/legal/terms/",
+      "sha256": "cfd32169f261ece5f47cdde7f9f458857eaa92c4232df13ef394c9fcd509aeda"
+    },
+    "personal-data-consent": {
+      "title": "Согласие на обработку персональных данных",
+      "url": "https://arenda.wigaj.ru/legal/personal-data-consent/",
+      "sha256": "1ffaebb030a35f8cff300ba778d6ae0f2825c6767ad56e385703d1e7d4d8c997"
+    },
+    "personal-data-dissemination-consent": {
+      "title": "Согласие на распространение персональных данных",
+      "url": "https://arenda.wigaj.ru/legal/personal-data-dissemination-consent/",
+      "sha256": "cb369f0282864bf6d576037dcbd6d4cf2e1b8e80552a88728450b05a8b308678"
+    },
+    "community-standards": {
+      "title": "Правила публикации и общения",
+      "url": "https://arenda.wigaj.ru/legal/community-standards/",
+      "sha256": "505381ae080bf2a65e74a868e24889f3d162c017e93093fc4f0f98ef82fc0d16"
+    },
+    "recommendations": {
+      "title": "Правила рекомендательных технологий",
+      "url": "https://arenda.wigaj.ru/legal/recommendations/",
+      "sha256": "9f4e1abbede9fd41bb2ed43de0de7961b9d5a5000b256172e50c65877aa7cc5f"
+    },
+    "requisites": {
+      "title": "Реквизиты владельца сервиса",
+      "url": "https://arenda.wigaj.ru/legal/requisites/",
+      "sha256": "2f1e3cbd307fc4a6d24a6e166fa8ceef852f2e265e7286070758b62bf86fe54d"
+    },
+    "account-deletion": {
+      "title": "Удаление учетной записи",
+      "url": "https://arenda.wigaj.ru/legal/account-deletion/",
+      "sha256": "9435edff03c94d6a9120d4a8ce2bb16bcb6b55e32b489b4c2c29ada7dc77073e"
+    }
+  }
+}

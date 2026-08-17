@@ -452,7 +452,25 @@ type AuthResult struct {
 	ExpiresIn    int64 // access token lifetime in seconds
 }
 
-// RequestCode generates and stores a hashed 6-digit code for the email.
+// RequestLoginCode sends a code only when the email is already linked to an
+// account. Registration is available exclusively through a phone number.
+func (s *Service) RequestLoginCode(ctx context.Context, emailRaw string) (RequestCodeResult, error) {
+	email, err := normalizeEmail(emailRaw)
+	if err != nil {
+		return RequestCodeResult{}, err
+	}
+	if _, err := s.users.GetByEmail(ctx, email); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return RequestCodeResult{}, domain.ErrEmailAccountNotFound
+		}
+		return RequestCodeResult{}, err
+	}
+	return s.RequestCode(ctx, email)
+}
+
+// RequestCode generates and stores a hashed 6-digit code. Internal factor
+// change flows intentionally use it for an address not linked to the account
+// yet; public email login must go through RequestLoginCode instead.
 func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCodeResult, error) {
 	email, err := normalizeEmail(emailRaw)
 	if err != nil {
@@ -519,7 +537,7 @@ func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCode
 	return res, nil
 }
 
-// VerifyCode checks the code, upserts the user and issues a token pair.
+// VerifyCode checks the code for an existing account and issues a token pair.
 func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info domain.DeviceInfo) (AuthResult, error) {
 	email, err := normalizeEmail(emailRaw)
 	if err != nil {
@@ -544,24 +562,17 @@ func (s *Service) VerifyCode(ctx context.Context, emailRaw, code string, info do
 		return AuthResult{}, domain.ErrCodeInvalid
 	}
 
-	// Code is valid: consume it, then find or create the account.
+	// Code is valid: consume it, then resolve the existing account. Keep this
+	// check even though RequestCode already performs it: an old code or a race
+	// with account deletion must never turn email login back into registration.
 	_ = s.codes.Delete(ctx, "email", email)
 
 	user, err := s.users.GetByEmail(ctx, email)
-	isNewUser := errors.Is(err, domain.ErrNotFound)
-	if isNewUser {
-		user, err = s.users.Create(ctx, email)
+	if errors.Is(err, domain.ErrNotFound) {
+		return AuthResult{}, domain.ErrEmailAccountNotFound
 	}
 	if err != nil {
 		return AuthResult{}, err
-	}
-
-	// Greet brand-new accounts. The outbox dedups per user id, so even a
-	// race between two concurrent first logins yields a single welcome.
-	if isNewUser && s.notifier != nil {
-		if err := s.notifier.SendWelcome(ctx, user.ID, email); err != nil {
-			log.Printf("auth: failed to queue welcome email for user %d: %v", user.ID, err)
-		}
 	}
 
 	// Link guest requests and change their status to in_progress. For each

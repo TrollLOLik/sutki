@@ -26,6 +26,7 @@ type fakeUsers struct {
 	user    domain.User
 	byPhone map[string]domain.User
 	updated bool
+	created bool
 }
 
 func (f *fakeUsers) GetByID(_ context.Context, id int32) (domain.User, error) {
@@ -82,6 +83,9 @@ func (f *fakeUsers) didUpdate() bool {
 
 // Unused by these tests; present to satisfy domain.UserRepository.
 func (f *fakeUsers) Create(context.Context, string) (domain.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created = true
 	return domain.User{}, nil
 }
 func (f *fakeUsers) CreateWithPhone(context.Context, string) (domain.User, error) {
@@ -101,6 +105,12 @@ func (f *fakeUsers) CheckActiveBookings(context.Context, int32) (int64, error) {
 	return 0, nil
 }
 func (f *fakeUsers) AnonymizeAndRevoke(context.Context, int32, string) error { return nil }
+
+func (f *fakeUsers) didCreate() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.created
+}
 
 func newChangePhoneFixture(t *testing.T, code string, userID int32) (*Service, *fakePhoneChallenges, *fakeUsers) {
 	svc, challenges, users, _ := newChangePhoneFixtureFull(t, code, userID)

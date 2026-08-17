@@ -4,7 +4,8 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "build:legal": "node scripts/build-legal-site.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

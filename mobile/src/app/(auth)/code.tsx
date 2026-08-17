@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { AuthStepScreen } from '@/components/auth/AuthStepScreen';
+import { appAlert } from '@/components/AppAlert';
 import { Button, MaterialSurface } from '@/components/ui';
 import {
+  isEmailAccountNotFoundError,
   requestEmailCode,
   requestPhoneCode,
   requestPhoneVoiceFallback,
@@ -72,6 +74,23 @@ export default function CodeScreen() {
         setTimeout(() => router.replace('/bookings'), 100);
       }
     } catch (err) {
+      if (email && isEmailAccountNotFoundError(err)) {
+        appAlert.alert(
+          'Почта не привязана',
+          'Этот адрес не связан с аккаунтом. Для регистрации используйте номер телефона.',
+          [
+            { text: 'Отмена', style: 'cancel' },
+            {
+              text: 'По номеру телефона',
+              onPress: () => router.replace({
+                pathname: '/phone',
+                params: { fromBooking: fromBooking ?? '' },
+              } as any),
+            },
+          ],
+        );
+        return;
+      }
       setError(err instanceof ApiError ? err.message : 'Не удалось проверить код. Попробуйте снова.');
     }
   };
