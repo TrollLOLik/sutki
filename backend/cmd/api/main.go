@@ -226,17 +226,21 @@ func main() {
 	refreshRepo := postgres.NewRefreshTokenRepo(queries)
 	phoneChallengeRepo := postgres.NewPhoneChallengeRepo(pool)
 	authSvc := auth.New(userRepo, codeRepo, refreshRepo, auth.Config{
-		Secret:           cfg.JWTSecret,
-		AccessTTL:        cfg.AccessTTL,
-		RefreshTTL:       cfg.RefreshTTL,
-		ExposeCode:       cfg.AuthExposeCode,
-		Notifier:         notifier,
-		PhoneCaller:      ucallerClient,
-		PhoneChallenges:  phoneChallengeRepo,
-		ReauthChallenges: postgres.NewReauthChallengeRepo(pool),
-		DadataAPIKey:     cfg.DadataAPIKey,
-		Storage:          publicStorage,
-		ImageModerator:   imageModerator,
+		Secret:              cfg.JWTSecret,
+		AccessTTL:           cfg.AccessTTL,
+		RefreshTTL:          cfg.RefreshTTL,
+		ExposeCode:          cfg.AuthExposeCode,
+		ReviewAuthEnabled:   cfg.ReviewAuthEnabled,
+		ReviewAuthEmail:     cfg.ReviewAuthEmail,
+		ReviewAuthCode:      cfg.ReviewAuthCode,
+		ReviewAuthExpiresAt: cfg.ReviewAuthExpiresAt,
+		Notifier:            notifier,
+		PhoneCaller:         ucallerClient,
+		PhoneChallenges:     phoneChallengeRepo,
+		ReauthChallenges:    postgres.NewReauthChallengeRepo(pool),
+		DadataAPIKey:        cfg.DadataAPIKey,
+		Storage:             publicStorage,
+		ImageModerator:      imageModerator,
 	})
 	authSvc.StartPhoneChallengeReaper(ctx, time.Minute)
 	authHandler := httpdelivery.NewAuthHandler(authSvc)

@@ -44,6 +44,12 @@ type Config struct {
 	// ExposeCode returns the generated login code in the API response and is
 	// intended for development only.
 	ExposeCode bool
+	// ReviewAuth is a temporary RuStore review credential. It still travels
+	// through auth_code, bcrypt, TTL, resend throttling and the attempt budget.
+	ReviewAuthEnabled   bool
+	ReviewAuthEmail     string
+	ReviewAuthCode      string
+	ReviewAuthExpiresAt time.Time
 
 	// Notifier queues outgoing email (login codes). May be nil in tests or
 	// when SMTP is not configured; sends are then skipped.
@@ -61,19 +67,23 @@ type Config struct {
 
 // Service implements passwordless email/phone auth with JWT access/refresh.
 type Service struct {
-	users            domain.UserRepository
-	codes            domain.AuthCodeRepository
-	refresh          domain.RefreshTokenRepository
-	phoneCaller      domain.PhoneCallProvider
-	phoneChallenges  domain.PhoneChallengeRepository
-	reauthChallenges domain.ReauthChallengeRepository
-	tm               *TokenManager
-	accessTTL        time.Duration
-	refreshTTL       time.Duration
-	exposeCode       bool
-	now              func() time.Time
-	storage          domain.FileStorage
-	imageModerator   domain.ImageModerator
+	users               domain.UserRepository
+	codes               domain.AuthCodeRepository
+	refresh             domain.RefreshTokenRepository
+	phoneCaller         domain.PhoneCallProvider
+	phoneChallenges     domain.PhoneChallengeRepository
+	reauthChallenges    domain.ReauthChallengeRepository
+	tm                  *TokenManager
+	accessTTL           time.Duration
+	refreshTTL          time.Duration
+	exposeCode          bool
+	reviewAuthEnabled   bool
+	reviewAuthEmail     string
+	reviewAuthCode      string
+	reviewAuthExpiresAt time.Time
+	now                 func() time.Time
+	storage             domain.FileStorage
+	imageModerator      domain.ImageModerator
 
 	notifier     domain.EmailNotifier
 	dadataAPIKey string
@@ -417,19 +427,23 @@ func New(
 	cfg Config,
 ) *Service {
 	return &Service{
-		users:            users,
-		codes:            codes,
-		refresh:          refresh,
-		phoneCaller:      cfg.PhoneCaller,
-		phoneChallenges:  cfg.PhoneChallenges,
-		reauthChallenges: cfg.ReauthChallenges,
-		tm:               NewTokenManager(cfg.Secret, cfg.AccessTTL),
-		accessTTL:        cfg.AccessTTL,
-		refreshTTL:       cfg.RefreshTTL,
-		exposeCode:       cfg.ExposeCode,
-		now:              time.Now,
-		storage:          cfg.Storage,
-		imageModerator:   cfg.ImageModerator,
+		users:               users,
+		codes:               codes,
+		refresh:             refresh,
+		phoneCaller:         cfg.PhoneCaller,
+		phoneChallenges:     cfg.PhoneChallenges,
+		reauthChallenges:    cfg.ReauthChallenges,
+		tm:                  NewTokenManager(cfg.Secret, cfg.AccessTTL),
+		accessTTL:           cfg.AccessTTL,
+		refreshTTL:          cfg.RefreshTTL,
+		exposeCode:          cfg.ExposeCode,
+		reviewAuthEnabled:   cfg.ReviewAuthEnabled,
+		reviewAuthEmail:     cfg.ReviewAuthEmail,
+		reviewAuthCode:      cfg.ReviewAuthCode,
+		reviewAuthExpiresAt: cfg.ReviewAuthExpiresAt,
+		now:                 time.Now,
+		storage:             cfg.Storage,
+		imageModerator:      cfg.ImageModerator,
 
 		notifier:     cfg.Notifier,
 		dadataAPIKey: cfg.DadataAPIKey,
@@ -481,24 +495,24 @@ func (s *Service) RequestLoginCode(ctx context.Context, emailRaw string) (Reques
 		}
 		return RequestCodeResult{}, err
 	}
-	return s.RequestCode(ctx, email)
+	return s.requestEmailCode(ctx, "email", email, true)
 }
 
 // RequestCode generates and stores a hashed 6-digit code. Internal factor
 // change flows intentionally use it for an address not linked to the account
 // yet; public email login must go through RequestLoginCode instead.
 func (s *Service) RequestCode(ctx context.Context, emailRaw string) (RequestCodeResult, error) {
-	return s.requestEmailCode(ctx, "email", emailRaw)
+	return s.requestEmailCode(ctx, "email", emailRaw, false)
 }
 
 // RequestAdminCode issues an OTP scoped exclusively to the operator surface.
 // Keeping it in a separate auth_code channel prevents a code requested for the
 // admin panel from being replayed against ordinary application login.
 func (s *Service) RequestAdminCode(ctx context.Context, emailRaw string) (RequestCodeResult, error) {
-	return s.requestEmailCode(ctx, adminEmailCodeChannel, emailRaw)
+	return s.requestEmailCode(ctx, adminEmailCodeChannel, emailRaw, false)
 }
 
-func (s *Service) requestEmailCode(ctx context.Context, channel, emailRaw string) (RequestCodeResult, error) {
+func (s *Service) requestEmailCode(ctx context.Context, channel, emailRaw string, allowReviewAuth bool) (RequestCodeResult, error) {
 	email, err := normalizeEmail(emailRaw)
 	if err != nil {
 		return RequestCodeResult{}, err
@@ -520,9 +534,16 @@ func (s *Service) requestEmailCode(ctx context.Context, channel, emailRaw string
 		}
 	}
 
-	code, err := generateCode()
-	if err != nil {
-		return RequestCodeResult{}, err
+	code := ""
+	usesReviewCode := allowReviewAuth && s.reviewAuthEnabled &&
+		email == s.reviewAuthEmail && s.now().Before(s.reviewAuthExpiresAt)
+	if usesReviewCode {
+		code = s.reviewAuthCode
+	} else {
+		code, err = generateCode()
+		if err != nil {
+			return RequestCodeResult{}, err
+		}
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
 	if err != nil {
@@ -544,7 +565,7 @@ func (s *Service) requestEmailCode(ctx context.Context, channel, emailRaw string
 	// fast DB insert (delivery happens in a background worker), so it stays
 	// on the request path: if queueing fails we log and continue — the code
 	// is already stored and dev flows (exposeCode) still work.
-	if s.notifier != nil {
+	if s.notifier != nil && !usesReviewCode {
 		if err := s.notifier.SendLoginCode(ctx, email, code, codeTTL); err != nil {
 			log.Printf("auth: failed to queue login code email to %s: %v", maskEmail(email), err)
 		}

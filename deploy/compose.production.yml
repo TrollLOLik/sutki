@@ -128,6 +128,12 @@ services:
     restart: unless-stopped
     environment:
       <<: *app-environment
+      # Temporary RuStore reviewer credential. Keep it API-only: neither the
+      # media worker nor any browser/mobile bundle needs the fixed OTP.
+      REVIEW_AUTH_ENABLED: ${REVIEW_AUTH_ENABLED:-false}
+      REVIEW_AUTH_EMAIL: ${REVIEW_AUTH_EMAIL:-}
+      REVIEW_AUTH_CODE: ${REVIEW_AUTH_CODE:-}
+      REVIEW_AUTH_EXPIRES_AT: ${REVIEW_AUTH_EXPIRES_AT:-}
       HTTP_ADDR: :8080
       DATABASE_URL: postgres://${APP_DB_USER:-titop_arenda}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-titop_arenda}?sslmode=disable
       CENTRIFUGO_URL: http://centrifugo:8000

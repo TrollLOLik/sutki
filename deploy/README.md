@@ -263,6 +263,34 @@ formats structured Telegram HTML, and returns `502` on Telegram delivery
 failure. Such failures are logged but deliberately not recaptured by GlitchTip
 to avoid an alert recursion loop.
 
+## Temporary RuStore reviewer login
+
+Create a clean email-only account once after PostgreSQL is running:
+
+```bash
+sh deploy/scripts/create-review-account.sh review@wigaj.ru
+```
+
+The script is idempotent. It creates no phone, admin role, listings, bookings,
+chats, or legal-consent records. Configure its temporary login credential only
+in `deploy/.env.production`:
+
+```dotenv
+REVIEW_AUTH_ENABLED=true
+REVIEW_AUTH_EMAIL=review@wigaj.ru
+REVIEW_AUTH_CODE=<random-six-digits>
+REVIEW_AUTH_EXPIRES_AT=2026-09-15T00:00:00Z
+```
+
+The fixed code is accepted only by the normal email-login request for that
+exact existing account. It is bcrypt-hashed into the regular `auth_code` row
+and keeps the standard ten-minute TTL, one-time consumption, resend cooldown,
+and five-attempt budget. It is not returned by the API, sent by email, accepted
+for administrator login, or accepted while changing another account's email.
+After `REVIEW_AUTH_EXPIRES_AT`, requests automatically return to ordinary email
+delivery. Remove the code from RuStore moderator instructions and set
+`REVIEW_AUTH_ENABLED=false` after review.
+
 ## Admin authentication foundation
 
 The static operator panel and its Nginx same-origin proxy are deployed using

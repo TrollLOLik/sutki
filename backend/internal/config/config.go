@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
@@ -55,8 +56,14 @@ type Config struct {
 	// AuthExposeCode returns login codes in the API response and logs them
 	// (dev only). Defaults to false; opt in explicitly via AUTH_EXPOSE_CODE=true.
 	AuthExposeCode bool
-	ReadTimeout    time.Duration
-	WriteTimeout   time.Duration
+	// ReviewAuth provides a time-limited, ordinary OTP login for the exact
+	// RuStore review account. The plaintext code is never returned by the API.
+	ReviewAuthEnabled   bool
+	ReviewAuthEmail     string
+	ReviewAuthCode      string
+	ReviewAuthExpiresAt time.Time
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
 
 	// SMTP settings for email-code sending (Yandex)
 	SMTPHost     string
@@ -177,6 +184,9 @@ func Load() (Config, error) {
 		AccessTTL:                      getDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTTL:                     getDuration("REFRESH_TOKEN_TTL", 30*24*time.Hour),
 		AuthExposeCode:                 getBool("AUTH_EXPOSE_CODE", false),
+		ReviewAuthEnabled:              getBool("REVIEW_AUTH_ENABLED", false),
+		ReviewAuthEmail:                strings.ToLower(strings.TrimSpace(getEnv("REVIEW_AUTH_EMAIL", ""))),
+		ReviewAuthCode:                 strings.TrimSpace(getEnv("REVIEW_AUTH_CODE", "")),
 		ReadTimeout:                    getDuration("HTTP_READ_TIMEOUT", 15*time.Second),
 		WriteTimeout:                   getDuration("HTTP_WRITE_TIMEOUT", 75*time.Second),
 
@@ -260,6 +270,9 @@ func Load() (Config, error) {
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+	if err := configureReviewAuth(&cfg, strings.TrimSpace(getEnv("REVIEW_AUTH_EXPIRES_AT", ""))); err != nil {
+		return Config{}, err
 	}
 	if cfg.SupportEmail == "" {
 		cfg.SupportEmail = cfg.SMTPUsername
@@ -408,6 +421,34 @@ func Load() (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func configureReviewAuth(cfg *Config, expiresAtRaw string) error {
+	if !cfg.ReviewAuthEnabled {
+		cfg.ReviewAuthEmail = ""
+		cfg.ReviewAuthCode = ""
+		cfg.ReviewAuthExpiresAt = time.Time{}
+		return nil
+	}
+
+	address, err := mail.ParseAddress(cfg.ReviewAuthEmail)
+	if err != nil || address.Address != cfg.ReviewAuthEmail {
+		return fmt.Errorf("REVIEW_AUTH_EMAIL must be one plain valid email address")
+	}
+	if len(cfg.ReviewAuthCode) != 6 || strings.IndexFunc(cfg.ReviewAuthCode, func(r rune) bool {
+		return r < '0' || r > '9'
+	}) != -1 {
+		return fmt.Errorf("REVIEW_AUTH_CODE must contain exactly 6 digits")
+	}
+	if expiresAtRaw == "" {
+		return fmt.Errorf("REVIEW_AUTH_EXPIRES_AT is required when REVIEW_AUTH_ENABLED=true")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, expiresAtRaw)
+	if err != nil {
+		return fmt.Errorf("REVIEW_AUTH_EXPIRES_AT must be an RFC3339 timestamp: %w", err)
+	}
+	cfg.ReviewAuthExpiresAt = expiresAt
+	return nil
 }
 
 func getEnv(key, def string) string {
