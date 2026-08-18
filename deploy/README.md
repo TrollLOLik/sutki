@@ -269,7 +269,9 @@ The static operator panel and its Nginx same-origin proxy are deployed using
 [`ADMIN_PANEL_DEPLOY.md`](ADMIN_PANEL_DEPLOY.md).
 
 Migration `000050_admin_foundation` creates a separate administrator roster,
-opaque browser sessions, and an append-only action journal. The operator API is
+opaque browser sessions, and an append-only action journal. Migration
+`000051_reversible_admin_sanctions` stores active report sanctions and the
+bounded previous state required for an audited rollback. The operator API is
 mounted at `/api/admin/v1`; it does not accept mobile JWTs and does not inherit
 the mobile minimum-version gate. Configure the exact browser origin and session
 limits in `deploy/.env.production`:
@@ -308,7 +310,11 @@ The authenticated operator inbox is available at:
 GET /api/admin/v1/inbox/summary
 GET /api/admin/v1/inbox?kind=<kind>&limit=20&offset=0
 GET /api/admin/v1/inbox/<kind>/<id>
+GET /api/admin/v1/inbox/<kind>/<id>/media/<media-id>
 POST /api/admin/v1/inbox/<kind>/<id>/actions
+GET /api/admin/v1/search?kind=<user|listing|review|message>&q=<exact-value>
+GET /api/admin/v1/search/<kind>/<id>
+GET /api/admin/v1/search/<kind>/<id>/media/<media-id>
 GET /api/admin/v1/audit?action=<prefix>&limit=50&offset=0
 GET /api/admin/v1/staff
 POST /api/admin/v1/staff
@@ -321,18 +327,34 @@ their rows. `support` accounts can read reports only; `moderator` and `owner`
 accounts can additionally read listings and reviews in `moderation_review` and
 chat attachments whose automatic check exhausted its retry budget.
 
-The action endpoint requires the admin CSRF header and accepts
-`{"action":"...","reason":"..."}`. Report actions are `start_review`,
-`resolve`, and `dismiss`; support may use them, and terminal decisions require a
-reason. Moderator/owner actions are `approve`/`reject` for listings, reviews,
-and review replies. Reject always requires a reason. Failed attachments expose
-only `retry`: an infrastructure failure is not evidence that media is safe, so
-the admin API deliberately has no manual approve shortcut.
+The separate exact-search API does not add items to the queue. User lookup
+accepts a complete ID, normalized phone number, or email; object lookup accepts
+only a numeric ID. Search detail includes closed reports and both active and
+revoked sanctions even when no complaint is currently actionable. Support may
+search only bounded user diagnostics. Listing, review, message content, and
+related media remain restricted to moderator and owner roles.
+
+The action endpoint requires the admin CSRF header. Report resolution accepts
+`{"action":"resolve","reason":"...","sanctions":[...]}` with at most one
+content sanction and an optional `disable_user`. Support can update report
+status but cannot apply sanctions. Moderator/owner can later send
+`{"action":"revoke_sanctions","reason":"...","sanction_ids":[...]}` for the
+active sanctions returned by the report detail. Revoking account disablement
+restores account visibility and access, but deliberately does not resurrect
+previous refresh or administrator sessions. Direct moderation actions remain
+`approve`/`reject` for listings, reviews, and review replies. Failed attachments
+expose only `retry`: an infrastructure failure is not evidence that media is
+safe, so the admin API deliberately has no manual approve shortcut.
 
 Every source-row change and its `admin_audit_log` entry commit in one database
 transaction. Conflicting concurrent decisions return HTTP 409. Listing/review
 decisions also publish the normal private user event, while attachment retries
 wake the media worker immediately.
+
+Hiding a reported message now retains its original database row and attachment
+metadata as moderation evidence. Participant-facing reads return only a deleted
+message tombstone; the content is available exclusively through the authorized
+admin evidence path and remains subject to the configured retention policy.
 
 When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured, the same bot
 used by the GlitchTip bridge sends compact alerts for new reports, new manual

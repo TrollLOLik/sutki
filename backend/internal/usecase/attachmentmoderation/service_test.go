@@ -293,6 +293,15 @@ type fakeNotifier struct {
 	rejectMsg string
 }
 
+type fakeAdminQueueNotifier struct {
+	events chan domain.AdminQueueEvent
+}
+
+func (f *fakeAdminQueueNotifier) NotifyAdminQueue(_ context.Context, event domain.AdminQueueEvent) error {
+	f.events <- event
+	return nil
+}
+
 func (n *fakeNotifier) AttachmentApproved(_ context.Context, _, messageID int64) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -633,6 +642,8 @@ func TestExhaustedRetriesMarkAttachmentFailed(t *testing.T) {
 	job.Attempts = maxAttempts
 
 	svc := newTestService(t, repo, storage, &fakeExtractor{available: true}, &fakeModerator{result: approved()}, &fakeNotifier{})
+	queue := &fakeAdminQueueNotifier{events: make(chan domain.AdminQueueEvent, 1)}
+	svc.SetAdminQueueNotifier(queue)
 
 	svc.processJob(context.Background(), job)
 
@@ -647,6 +658,14 @@ func TestExhaustedRetriesMarkAttachmentFailed(t *testing.T) {
 	}
 	if _, retried := repo.retried[job.ID]; retried {
 		t.Fatal("expected no further retry after the budget is spent")
+	}
+	select {
+	case event := <-queue.events:
+		if event.Kind != domain.AdminInboxKindAttachment || event.ID != job.AttachmentID {
+			t.Fatalf("admin queue event = %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for attachment admin queue notification")
 	}
 }
 

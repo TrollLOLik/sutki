@@ -59,6 +59,15 @@ type fakeUserEventPublisher struct {
 	events chan publishedBlockEvent
 }
 
+type fakeAdminQueueNotifier struct {
+	events chan domain.AdminQueueEvent
+}
+
+func (f *fakeAdminQueueNotifier) NotifyAdminQueue(_ context.Context, event domain.AdminQueueEvent) error {
+	f.events <- event
+	return nil
+}
+
 func (f *fakeUserEventPublisher) PublishUserEvent(_ context.Context, userID int32, event domain.UserEvent) error {
 	f.events <- publishedBlockEvent{userID: userID, event: event}
 	return nil
@@ -100,6 +109,31 @@ func TestReportNormalizesAndForwardsServerMetadata(t *testing.T) {
 	}
 	if repo.createLimit != maxReportsPerDay {
 		t.Fatalf("daily limit = %d, want %d", repo.createLimit, maxReportsPerDay)
+	}
+}
+
+func TestReportNotifiesAdminQueue(t *testing.T) {
+	repo := &fakeAbuseRepo{}
+	queue := &fakeAdminQueueNotifier{events: make(chan domain.AdminQueueEvent, 1)}
+	svc := New(repo)
+	svc.SetAdminQueueNotifier(queue)
+
+	if _, err := svc.Report(context.Background(), domain.CreateAbuseReport{
+		ReporterUserID: 11,
+		TargetType:     domain.ReportTargetListing,
+		TargetID:       42,
+		Reason:         domain.ReportReasonFraud,
+	}); err != nil {
+		t.Fatalf("Report() error = %v", err)
+	}
+
+	select {
+	case event := <-queue.events:
+		if event.Kind != domain.AdminInboxKindReport || event.ID != 7 || event.Title != "listing #42" {
+			t.Fatalf("admin queue event = %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for admin queue notification")
 	}
 }
 

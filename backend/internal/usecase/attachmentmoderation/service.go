@@ -30,6 +30,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/videoframes"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/adminnotify"
 )
 
 const (
@@ -574,16 +575,10 @@ func (s *Service) fail(ctx context.Context, job domain.AttachmentModerationJob, 
 		s.notifier.AttachmentFailed(ctx, job.ConversationID, job.MessageID, reason)
 	}
 	if s.adminQueue != nil {
-		go func() {
-			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := s.adminQueue.NotifyAdminQueue(notifyCtx, domain.AdminQueueEvent{
-				Kind: domain.AdminInboxKindAttachment, ID: job.AttachmentID,
-				Title: fmt.Sprintf("Вложение сообщения #%d", job.MessageID), Reason: reason,
-			}); err != nil {
-				log.Printf("attachment moderation admin queue notification for attachment %d: %v", job.AttachmentID, err)
-			}
-		}()
+		adminnotify.Send(s.adminQueue, domain.AdminQueueEvent{
+			Kind: domain.AdminInboxKindAttachment, ID: job.AttachmentID,
+			Title: fmt.Sprintf("Вложение сообщения #%d", job.MessageID), Reason: reason,
+		}, "attachment moderation")
 	}
 }
 

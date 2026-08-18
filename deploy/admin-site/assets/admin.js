@@ -5,6 +5,7 @@
   const PAGE_LIMIT = 100;
   const AUDIT_LIMIT = 50;
   const VALID_KINDS = new Set(['report', 'listing', 'review', 'review_reply', 'attachment']);
+  const SEARCH_KINDS = new Set(['user', 'listing', 'review', 'message']);
   const FILTER_KINDS = {
     all: [''],
     reports: ['report'],
@@ -14,7 +15,9 @@
   };
   const KIND_LABELS = {
     report: 'Жалоба',
+    user: 'Пользователь',
     listing: 'Объявление',
+    message: 'Сообщение',
     review: 'Отзыв',
     review_reply: 'Ответ на отзыв',
     attachment: 'Вложение',
@@ -23,6 +26,38 @@
     support: 'Поддержка',
     moderator: 'Модератор',
     owner: 'Владелец',
+  };
+  const REPORT_TARGET_LABELS = {
+    user: 'пользователь',
+    listing: 'объявление',
+    message: 'сообщение',
+    review: 'отзыв',
+  };
+  const REPORT_REASON_LABELS = {
+    spam: 'Спам',
+    fraud: 'Мошенничество',
+    harassment: 'Оскорбления или преследование',
+    inappropriate_content: 'Недопустимый контент',
+    personal_data: 'Персональные данные',
+    other: 'Другое',
+  };
+  const SANCTIONS = {
+    reject_listing: {
+      label: 'Снять объявление',
+      description: 'Объявление получит статус «Отклонено» и указанную ниже причину.',
+    },
+    hide_review: {
+      label: 'Скрыть отзыв',
+      description: 'Отзыв исчезнет из публикации, рейтинг объявления будет пересчитан.',
+    },
+    hide_message: {
+      label: 'Скрыть сообщение',
+      description: 'Текст и вложения перестанут отображаться участникам диалога.',
+    },
+    disable_user: {
+      label: 'Отключить аккаунт',
+      description: 'Публичный профиль будет скрыт, все пользовательские сессии завершатся.',
+    },
   };
   const STATUS_LABELS = {
     new: 'Новая',
@@ -35,6 +70,9 @@
     approved: 'Одобрено',
     rejected: 'Отклонено',
     failed: 'Ошибка проверки',
+    disabled: 'Отключён',
+    deleted: 'Удалён',
+    hidden: 'Скрыто',
   };
   const FIELD_LABELS = {
     listing_id: 'Объявление', owner_id: 'Владелец', owner_name: 'Имя владельца', owner_email: 'Почта владельца',
@@ -52,6 +90,7 @@
     start_review: { label: 'Взять в работу', title: 'Взять жалобу в работу?', description: 'Статус изменится для остальных операторов.', tone: 'primary', required: false },
     resolve: { label: 'Подтвердить нарушение', title: 'Завершить рассмотрение?', description: 'Жалоба будет отмечена как подтверждённая. Зафиксируйте основание.', tone: 'success', required: true },
     dismiss: { label: 'Отклонить жалобу', title: 'Отклонить жалобу?', description: 'Жалоба уйдёт из активной очереди. Зафиксируйте основание.', tone: 'danger', required: true },
+    revoke_sanctions: { label: 'Отменить санкции', title: 'Отменить выбранные санкции?', description: 'Будет восстановлено состояние объектов, сохранённое до применения санкций. Отозванные пользовательские сессии восстановить нельзя.', tone: 'warning', required: true },
     approve: { label: 'Одобрить', title: 'Одобрить материал?', description: 'Материал станет доступен согласно текущим правилам публикации.', tone: 'success', required: false },
     reject: { label: 'Отклонить', title: 'Отклонить материал?', description: 'Пользователь увидит указанную причину решения.', tone: 'danger', required: true },
     retry: { label: 'Повторить проверку', title: 'Перезапустить проверку?', description: 'Вложение вернётся в очередь автоматической модерации.', tone: 'warning', required: false },
@@ -89,6 +128,11 @@
     auditOffset: 0,
     auditRequest: 0,
     staff: [],
+    searchItems: [],
+    searchSelected: null,
+    searchDetail: null,
+    searchRequest: 0,
+    searchDetailRequest: 0,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -169,7 +213,7 @@
 
     const isOwner = state.admin.role === 'owner';
     document.querySelectorAll('.owner-only').forEach((element) => setVisible(element, isOwner));
-    if (!isOwner && state.view !== 'queue') state.view = 'queue';
+    if (!isOwner && !['queue', 'search'].includes(state.view)) state.view = 'queue';
     updateAppView();
 
     const supportOnly = state.admin.role === 'support';
@@ -178,6 +222,9 @@
       tab.hidden = hidden;
     });
     if (supportOnly && !['all', 'reports'].includes(state.filter)) state.filter = 'all';
+    document.querySelectorAll('.moderation-search-option').forEach((option) => { option.hidden = supportOnly; });
+    if (supportOnly && $('search-kind').value !== 'user') $('search-kind').value = 'user';
+    updateSearchInput();
     updateFilterTabs();
   }
 
@@ -410,6 +457,9 @@
 
   function renderDetail(detail) {
     const item = detail.item;
+    const media = Array.isArray(detail.media) ? detail.media : [];
+    const users = Array.isArray(detail.users) ? detail.users : [];
+    const relatedReports = Array.isArray(detail.related_reports) ? detail.related_reports : [];
     $('detail-kind').textContent = KIND_LABELS[item.kind] || item.kind;
     $('detail-status').textContent = statusLabel(item.status);
     $('detail-status').dataset.tone = statusTone(item.status);
@@ -417,10 +467,175 @@
     $('detail-summary').textContent = item.summary || item.reason || 'Дополнительное описание отсутствует.';
     renderMeta(item);
     renderTimeline(item);
-    renderEvidence(normalizeJSON(detail.evidence));
+    renderUsers(item, users);
+    renderRelatedReports(item, relatedReports);
+    renderMedia(item, media);
+    renderEvidence(normalizeJSON(detail.evidence), media.length > 0);
     $('diagnostics-json').textContent = JSON.stringify(normalizeJSON(detail.context), null, 2);
     renderActions(item);
     setVisible($('detail-content'), true);
+  }
+
+  function userRelationLabel(item, relation) {
+    if (relation === 'reporter') return 'Автор жалобы';
+    if (item.kind === 'user') return 'Найденный пользователь';
+    if (item.kind === 'report') return 'Пользователь, на которого пожаловались';
+    if (item.kind === 'listing') return 'Владелец объявления';
+    if (item.kind === 'attachment') return 'Отправитель вложения';
+    return 'Автор материала';
+  }
+
+  function userAccountStatus(user) {
+    if (user.deleted) return { label: 'Удалён', tone: 'danger' };
+    if (!user.account_enabled) return { label: 'Отключён', tone: 'danger' };
+    return { label: 'Активен', tone: 'success' };
+  }
+
+  function userField(label, value, tone = '') {
+    const row = create('div', 'user-field');
+    row.append(create('span', 'user-field-label', label));
+    const content = create('strong', tone ? `user-field-value user-field-value-${tone}` : 'user-field-value', value || '—');
+    row.append(content);
+    return row;
+  }
+
+  function userMetric(value, label) {
+    const metric = create('div', 'user-metric');
+    metric.append(create('strong', '', Number(value || 0).toLocaleString('ru-RU')), create('span', '', label));
+    return metric;
+  }
+
+  function renderUsers(item, users) {
+    const section = $('users-section');
+    const grid = $('users-grid');
+    if (!Array.isArray(users) || users.length === 0) {
+      grid.replaceChildren();
+      setVisible(section, false);
+      return;
+    }
+
+    const cards = users.map((user) => {
+      const card = create('article', 'user-card');
+      const heading = create('div', 'user-card-heading');
+      const identity = create('div', 'user-card-identity');
+      const avatar = create('span', 'user-avatar', String(user.name || 'П').trim().slice(0, 1).toUpperCase());
+      const title = create('div');
+      title.append(
+        create('span', 'user-relation', userRelationLabel(item, user.relation)),
+        create('h3', '', user.name || `Пользователь #${user.id}`),
+        create('small', '', `ID ${user.id}`),
+      );
+      identity.append(avatar, title);
+      const accountStatus = userAccountStatus(user);
+      const badge = create('span', 'status-badge', accountStatus.label);
+      badge.dataset.tone = accountStatus.tone;
+      heading.append(identity, badge);
+
+      const fields = create('div', 'user-fields');
+      fields.append(
+        userField('Почта', user.email),
+        userField('Телефон', user.phone, user.phone_verified ? 'success' : ''),
+        userField('Город', user.city),
+        userField('Создан', formatDateTime(user.created_at)),
+        userField('Последняя активность', user.last_seen_at ? formatDateTime(user.last_seen_at) : 'Нет данных'),
+        userField('Версия приложения', user.last_app_version || 'Нет данных'),
+      );
+
+      const flags = create('div', 'user-flags');
+      const flagValues = [
+        [user.phone_verified, 'Номер подтверждён'],
+        [user.identity_verified, 'Аккаунт подтверждён'],
+        [user.public_profile_visible, 'Профиль публичный'],
+      ];
+      flagValues.forEach(([active, label]) => {
+        const flag = create('span', active ? 'user-flag is-active' : 'user-flag', label);
+        flag.prepend(icon(active ? 'check' : 'x'));
+        flags.append(flag);
+      });
+
+      const metrics = create('div', 'user-metrics');
+      metrics.append(
+        userMetric(user.listings_active, 'активных объявлений'),
+        userMetric(user.listings_total, 'объявлений всего'),
+        userMetric(user.reviews_authored, 'оставлено отзывов'),
+        userMetric(user.bookings_as_guest, 'исходящих заявок'),
+        userMetric(user.bookings_as_owner, 'входящих заявок'),
+        userMetric(user.reports_received, 'жалоб получено'),
+        userMetric(user.reports_submitted, 'жалоб отправлено'),
+        userMetric(user.blocks_received, 'заблокировали'),
+        userMetric(user.blocks_created, 'заблокировано им'),
+        userMetric(user.active_sessions, 'активных сессий'),
+      );
+      card.append(heading, fields, flags, metrics);
+      return card;
+    });
+    grid.replaceChildren(...cards);
+    setVisible(section, true);
+  }
+
+  function renderRelatedReports(item, reports) {
+    const section = $('related-reports-section');
+    const list = $('related-reports-list');
+    if (item.kind !== 'report' || !Array.isArray(reports) || reports.length === 0) {
+      list.replaceChildren();
+      setVisible(section, false);
+      return;
+    }
+
+    const createReportCard = (report) => {
+      const button = create('button', 'related-report');
+      button.type = 'button';
+      button.addEventListener('click', () => void openDetail('report', report.id));
+
+      const heading = create('div', 'related-report-heading');
+      const identity = create('div', 'related-report-identity');
+      identity.append(
+        create('strong', '', `Жалоба #${report.id}`),
+        create('span', '', `${REPORT_TARGET_LABELS[report.target_type] || report.target_type} #${report.target_id}`),
+      );
+      const status = create('span', 'status-badge', statusLabel(report.status));
+      status.dataset.tone = statusTone(report.status);
+      heading.append(identity, status);
+
+      const matches = create('div', 'related-report-matches');
+      if (report.same_target) matches.append(create('span', 'relation-chip relation-chip-target', 'Тот же объект'));
+      if (report.same_user) matches.append(create('span', 'relation-chip relation-chip-user', 'Тот же пользователь'));
+
+      const body = create(
+        'p',
+        'related-report-summary',
+        report.details || REPORT_REASON_LABELS[report.reason] || report.reason || 'Комментарий отсутствует.',
+      );
+      const meta = create('span', 'related-report-date', formatDateTime(report.created_at));
+      button.append(heading, matches, body, meta);
+      return button;
+    };
+
+    const groups = [
+      {
+        title: 'Тот же объект',
+        description: 'Повторные жалобы на это же объявление, сообщение, отзыв или профиль.',
+        reports: reports.filter((report) => report.same_target),
+      },
+      {
+        title: 'Тот же пользователь',
+        description: 'Жалобы на другие материалы этого же пользователя.',
+        reports: reports.filter((report) => report.same_user && !report.same_target),
+      },
+    ].filter((group) => group.reports.length > 0);
+
+    list.replaceChildren(...groups.map((group) => {
+      const wrapper = create('section', 'related-report-group');
+      const heading = create('div', 'related-report-group-heading');
+      const copy = create('div');
+      copy.append(create('h3', '', group.title), create('p', '', group.description));
+      heading.append(copy, create('span', 'related-report-count', String(group.reports.length)));
+      const grid = create('div', 'related-report-grid');
+      grid.append(...group.reports.map(createReportCard));
+      wrapper.append(heading, grid);
+      return wrapper;
+    }));
+    setVisible(section, true);
   }
 
   function renderMeta(item) {
@@ -455,14 +670,93 @@
     return value;
   }
 
-  function renderEvidence(evidence) {
+  function inboxMediaURL(item, mediaID, variant = 'original') {
+    const suffix = variant === 'thumbnail' ? '?variant=thumbnail' : '';
+    return `${API_ROOT}/inbox/${encodeURIComponent(item.kind)}/${encodeURIComponent(item.id)}/media/${encodeURIComponent(mediaID)}${suffix}`;
+  }
+
+  function formatFileSize(value) {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '';
+    if (bytes < 1024) return `${bytes} Б`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
+    return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} МБ`;
+  }
+
+  function mediaFallback(text) {
+    const fallback = create('div', 'media-fallback');
+    fallback.append(icon('alert'), create('span', '', text));
+    return fallback;
+  }
+
+  function renderMedia(item, media) {
+    const section = $('media-section');
+    const gallery = $('media-gallery');
+    if (!Array.isArray(media) || media.length === 0) {
+      gallery.replaceChildren();
+      setVisible(section, false);
+      return;
+    }
+
+    const cards = media.map((file) => {
+      const card = create('article', 'media-card');
+      const mime = String(file.mime_type || 'application/octet-stream').toLowerCase();
+      const fileURL = inboxMediaURL(item, file.id);
+      const visual = create('div', 'media-visual');
+
+      if (mime.startsWith('image/')) {
+        const link = create('a', 'media-open');
+        link.href = fileURL;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        const image = create('img');
+        image.src = fileURL;
+        image.alt = file.file_name || `Изображение #${file.id}`;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.addEventListener('error', () => link.replaceChildren(mediaFallback('Изображение недоступно')),
+          { once: true });
+        link.append(image);
+        visual.append(link);
+      } else if (mime.startsWith('video/')) {
+        const video = create('video');
+        video.controls = true;
+        video.preload = 'metadata';
+        video.src = fileURL;
+        if (file.has_thumbnail) video.poster = inboxMediaURL(item, file.id, 'thumbnail');
+        video.addEventListener('error', () => visual.replaceChildren(mediaFallback('Видео недоступно')),
+          { once: true });
+        visual.append(video);
+      } else {
+        const link = create('a', 'media-document');
+        link.href = fileURL;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.append(icon('file'), create('span', '', 'Открыть файл'));
+        visual.append(link);
+      }
+
+      const meta = create('div', 'media-card-meta');
+      meta.append(create('strong', '', file.file_name || `Файл #${file.id}`));
+      const details = [mime, formatFileSize(file.size_bytes)];
+      if (file.width && file.height) details.push(`${file.width} × ${file.height}`);
+      meta.append(create('span', '', details.filter(Boolean).join(' · ')));
+      card.append(visual, meta);
+      return card;
+    });
+    gallery.replaceChildren(...cards);
+    setVisible(section, true);
+  }
+
+  function renderEvidence(evidence, hasMedia = false) {
     const container = $('evidence-content');
     if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence) || Object.keys(evidence).length === 0) {
       container.replaceChildren(create('p', 'evidence-empty', 'Снимок данных для этого элемента отсутствует.'));
       return;
     }
     const fragment = document.createDocumentFragment();
-    Object.entries(evidence).forEach(([key, value]) => {
+    const hiddenMediaKeys = new Set(['photos', 'url', 'thumbnail_url']);
+    Object.entries(evidence).filter(([key]) => !hiddenMediaKeys.has(key)).forEach(([key, value]) => {
       const row = create('div', 'evidence-row');
       row.append(create('dt', '', FIELD_LABELS[key] || humanizeKey(key)));
       const data = create('dd');
@@ -470,6 +764,14 @@
       row.append(data);
       fragment.append(row);
     });
+    if (fragment.childNodes.length === 0) {
+      container.replaceChildren(create(
+        'p',
+        'evidence-empty',
+        hasMedia ? 'Основные материалы показаны в галерее выше.' : 'Медиа удалено или временно недоступно.',
+      ));
+      return;
+    }
     container.replaceChildren(fragment);
   }
 
@@ -518,7 +820,12 @@
 
   function availableActions(item) {
     if (item.kind === 'report') {
-      return item.status === 'new' ? ['start_review', 'resolve', 'dismiss'] : ['resolve', 'dismiss'];
+      if (item.status === 'new') return ['start_review', 'resolve', 'dismiss'];
+      if (item.status === 'in_review') return ['resolve', 'dismiss'];
+      if (item.status === 'resolved' && state.admin.role !== 'support' && (state.detail?.active_sanctions?.length || 0) > 0) {
+        return ['revoke_sanctions'];
+      }
+      return [];
     }
     if (state.admin.role === 'support') return [];
     if (['listing', 'review', 'review_reply'].includes(item.kind)) return ['approve', 'reject'];
@@ -557,6 +864,7 @@
     $('reason-count').textContent = '0 / 2000';
     $('reason-error').textContent = '';
     $('action-reason').setAttribute('aria-invalid', 'false');
+    renderSanctionOptions(action);
     const confirm = $('confirm-action-button');
     confirm.className = `button button-${config.tone}`;
     confirm.querySelector('span').textContent = config.label;
@@ -566,6 +874,66 @@
       modal.classList.add('is-open');
       (config.required ? $('action-reason') : confirm).focus();
     });
+  }
+
+  function reportTargetType() {
+    if (!state.detail || state.detail.item?.kind !== 'report') return '';
+    const context = normalizeJSON(state.detail.context);
+    return String(context.target_type || '').trim();
+  }
+
+  function availableSanctions() {
+    if (!state.detail || state.detail.item?.kind !== 'report' || state.admin?.role === 'support') return [];
+    const result = [];
+    const targetType = reportTargetType();
+    if (targetType === 'listing') result.push('reject_listing');
+    if (targetType === 'review') result.push('hide_review');
+    if (targetType === 'message') result.push('hide_message');
+    if (state.detail.item.subject_user_id) result.push('disable_user');
+    return result;
+  }
+
+  function renderSanctionOptions(action) {
+    const field = $('sanction-field');
+    const container = $('sanction-options');
+    const isRevoke = action === 'revoke_sanctions';
+    const sanctions = action === 'resolve'
+      ? availableSanctions().map((type) => ({ type }))
+      : isRevoke ? (state.detail?.active_sanctions || []) : [];
+    if (sanctions.length === 0) {
+      container.replaceChildren();
+      field.classList.remove('is-revoke');
+      setVisible(field, false);
+      return;
+    }
+    $('sanction-title').textContent = isRevoke ? 'Отменяемые санкции' : 'Санкции';
+    $('sanction-note').textContent = isRevoke
+      ? 'Выберите последствия, которые нужно отменить. Жалоба останется закрытой, а отмена попадёт в журнал аудита.'
+      : 'Выберите только те последствия, которые подтверждены материалами жалобы. Похожие жалобы автоматически не закрываются.';
+    field.classList.toggle('is-revoke', isRevoke);
+    container.replaceChildren(...sanctions.map((sanction) => {
+      const config = SANCTIONS[sanction.type];
+      const label = create('label', 'sanction-option');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = isRevoke ? 'sanction_ids' : 'sanctions';
+      input.value = isRevoke ? String(sanction.id) : sanction.type;
+      const copy = create('span', 'sanction-option-copy');
+      const title = isRevoke ? `Отменить: ${config?.label || sanction.type}` : config.label;
+      const description = isRevoke ? sanctionDescription(sanction) : config.description;
+      copy.append(create('strong', '', title), create('small', '', description));
+      label.append(input, create('span', 'sanction-checkbox'), copy);
+      return label;
+    }));
+    setVisible(field, true);
+  }
+
+  function sanctionDescription(sanction) {
+    const target = `${KIND_LABELS[sanction.target_type] || humanizeKey(sanction.target_type || 'объект')} #${sanction.target_id}`;
+    const actor = sanction.applied_by_email || 'сотрудник не указан';
+    const appliedAt = sanction.applied_at ? formatDateTime(sanction.applied_at) : 'дата не указана';
+    const reason = sanction.reason ? ` Причина: ${sanction.reason}` : '';
+    return `${target} · ${actor} · ${appliedAt}.${reason}`;
   }
 
   function closeActionModal() {
@@ -584,17 +952,24 @@
     if (!state.pendingAction || !state.detail) return;
     const config = ACTIONS[state.pendingAction];
     const reason = $('action-reason').value.trim();
+    const selectedSanctions = Array.from(document.querySelectorAll('#sanction-options input:checked'));
+    const sanctions = state.pendingAction === 'resolve' ? selectedSanctions.map((input) => input.value) : [];
+    const sanctionIDs = state.pendingAction === 'revoke_sanctions' ? selectedSanctions.map((input) => Number(input.value)) : [];
     if (config.required && !reason) {
       $('reason-error').textContent = 'Укажите причину решения.';
       $('action-reason').setAttribute('aria-invalid', 'true');
       $('action-reason').focus();
       return;
     }
+    if (state.pendingAction === 'revoke_sanctions' && sanctionIDs.length === 0) {
+      $('reason-error').textContent = 'Выберите хотя бы одну санкцию для отмены.';
+      return;
+    }
     const button = $('confirm-action-button');
     setButtonLoading(button, true);
     try {
       await api(`/inbox/${encodeURIComponent(state.selected.kind)}/${state.selected.id}/actions`, {
-        method: 'POST', csrf: true, body: { action: state.pendingAction, reason },
+        method: 'POST', csrf: true, body: { action: state.pendingAction, reason, sanctions, sanction_ids: sanctionIDs },
       });
       closeActionModal();
       toast('Решение сохранено.', 'success');
@@ -630,6 +1005,7 @@
 
   function updateAppView() {
     setVisible($('queue-workspace'), state.view === 'queue');
+    setVisible($('search-view'), state.view === 'search');
     setVisible($('audit-view'), state.view === 'audit');
     setVisible($('staff-view'), state.view === 'staff');
     document.querySelectorAll('.app-nav-button').forEach((button) => {
@@ -641,8 +1017,8 @@
   }
 
   async function switchView(view) {
-    if (!['queue', 'audit', 'staff'].includes(view)) return;
-    if (view !== 'queue' && state.admin.role !== 'owner') return;
+    if (!['queue', 'search', 'audit', 'staff'].includes(view)) return;
+    if (['audit', 'staff'].includes(view) && state.admin.role !== 'owner') return;
     state.view = view;
     closeDetail();
     updateAppView();
@@ -654,12 +1030,271 @@
     try {
       if (state.view === 'audit') await loadAudit();
       else if (state.view === 'staff') await loadStaff();
+      else if (state.view === 'search') {
+        if ($('search-query').value.trim()) await runSearch();
+      }
       else await refreshWorkspace(followDeepLink);
     } catch (error) {
       if (!handleSessionError(error)) toast(error.message, 'error');
     } finally {
       $('refresh-button').classList.remove('is-spinning');
     }
+  }
+
+  function updateSearchInput() {
+    const userSearch = $('search-kind').value === 'user';
+    $('search-query').placeholder = userSearch ? 'ID, полный телефон или почта' : 'ID объекта';
+    $('search-query').inputMode = userSearch ? 'search' : 'numeric';
+    $('search-hint').textContent = userSearch
+      ? 'Поиск выполняется по точному ID, полному телефону или адресу почты.'
+      : 'Укажите полный числовой ID. Поиск по тексту намеренно отключён.';
+  }
+
+  async function runSearch() {
+    const kind = $('search-kind').value;
+    const query = $('search-query').value.trim();
+    if (!SEARCH_KINDS.has(kind) || !query) {
+      $('search-error').textContent = 'Укажите полный идентификатор для поиска.';
+      setVisible($('search-error'), true);
+      $('search-query').focus();
+      return;
+    }
+    if (kind !== 'user' && !/^\d+$/.test(query)) {
+      $('search-error').textContent = 'Для этого объекта нужен числовой ID.';
+      setVisible($('search-error'), true);
+      $('search-query').focus();
+      return;
+    }
+
+    const requestID = ++state.searchRequest;
+    state.searchSelected = null;
+    state.searchDetail = null;
+    setButtonLoading($('search-button'), true);
+    setVisible($('search-error'), false);
+    setVisible($('search-empty'), false);
+    setVisible($('search-loading'), true);
+    setVisible($('search-workspace'), false);
+    try {
+      const result = await api(`/search?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(query)}`);
+      if (requestID !== state.searchRequest) return;
+      state.searchItems = Array.isArray(result.items) ? result.items : [];
+      $('search-total').textContent = String(state.searchItems.length);
+      $('search-result-count').textContent = String(state.searchItems.length);
+      renderSearchResults();
+      setVisible($('search-empty'), state.searchItems.length === 0);
+      setVisible($('search-workspace'), state.searchItems.length > 0);
+      if (state.searchItems.length === 1) {
+        await openSearchDetail(state.searchItems[0].kind, state.searchItems[0].id);
+      }
+    } catch (error) {
+      if (requestID !== state.searchRequest || handleSessionError(error)) return;
+      $('search-error').textContent = error.message;
+      setVisible($('search-error'), true);
+    } finally {
+      if (requestID === state.searchRequest) {
+        setVisible($('search-loading'), false);
+        setButtonLoading($('search-button'), false);
+      }
+    }
+  }
+
+  function renderSearchResults() {
+    const rows = state.searchItems.map((item) => {
+      const button = create('button', 'search-result');
+      button.type = 'button';
+      button.dataset.kind = item.kind;
+      button.dataset.id = String(item.id);
+      const heading = create('div', 'search-result-heading');
+      heading.append(create('strong', '', item.title || `${KIND_LABELS[item.kind] || item.kind} #${item.id}`));
+      const status = create('span', 'status-badge', statusLabel(item.status));
+      status.dataset.tone = statusTone(item.status);
+      heading.append(status);
+      button.append(
+        heading,
+        create('span', 'search-result-kind', `${KIND_LABELS[item.kind] || item.kind} · ID ${item.id}`),
+        create('p', '', item.summary || 'Дополнительные данные отсутствуют.'),
+      );
+      button.addEventListener('click', () => void openSearchDetail(item.kind, item.id));
+      return button;
+    });
+    $('search-results-list').replaceChildren(...rows);
+  }
+
+  async function openSearchDetail(kind, id) {
+    const requestID = ++state.searchDetailRequest;
+    state.searchSelected = { kind, id: Number(id) };
+    document.querySelectorAll('.search-result').forEach((row) => {
+      row.classList.toggle('is-selected', row.dataset.kind === kind && Number(row.dataset.id) === Number(id));
+    });
+    setVisible($('search-detail-blank'), false);
+    setVisible($('search-detail-content'), false);
+    setVisible($('search-detail-error'), false);
+    setVisible($('search-detail-loading'), true);
+    try {
+      const detail = await api(`/search/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
+      if (requestID !== state.searchDetailRequest) return;
+      state.searchDetail = detail;
+      renderSearchDetail(detail);
+    } catch (error) {
+      if (requestID !== state.searchDetailRequest || handleSessionError(error)) return;
+      $('search-detail-error').textContent = error.message;
+      setVisible($('search-detail-error'), true);
+    } finally {
+      if (requestID === state.searchDetailRequest) setVisible($('search-detail-loading'), false);
+    }
+  }
+
+  function renderSearchDetail(detail) {
+    const item = detail.item;
+    $('search-detail-kind').textContent = KIND_LABELS[item.kind] || item.kind;
+    $('search-detail-status').textContent = statusLabel(item.status);
+    $('search-detail-status').dataset.tone = statusTone(item.status);
+    $('search-detail-title').textContent = item.title || `${KIND_LABELS[item.kind] || item.kind} #${item.id}`;
+    $('search-detail-summary').textContent = item.summary || `ID ${item.id}`;
+    renderSearchUsers(item, Array.isArray(detail.users) ? detail.users : []);
+    renderSearchMedia(item, Array.isArray(detail.media) ? detail.media : []);
+    renderSearchEvidence(normalizeJSON(detail.evidence));
+    renderSearchReports(Array.isArray(detail.related_reports) ? detail.related_reports : []);
+    renderSearchSanctions(Array.isArray(detail.sanction_history) ? detail.sanction_history : []);
+    setVisible($('search-detail-content'), true);
+  }
+
+  function renderSearchUsers(item, users) {
+    const section = $('search-users-section');
+    const cards = users.map((user) => {
+      const card = create('article', 'user-card search-user-card');
+      const heading = create('div', 'user-card-heading');
+      const identity = create('div', 'user-card-identity');
+      const avatar = create('span', 'user-avatar', String(user.name || 'П').trim().slice(0, 1).toUpperCase());
+      const title = create('div');
+      title.append(create('span', 'user-relation', userRelationLabel(item, user.relation)), create('h3', '', user.name || `Пользователь #${user.id}`), create('small', '', `ID ${user.id}`));
+      identity.append(avatar, title);
+      const accountStatus = userAccountStatus(user);
+      const badge = create('span', 'status-badge', accountStatus.label);
+      badge.dataset.tone = accountStatus.tone;
+      heading.append(identity, badge);
+      const fields = create('div', 'user-fields');
+      fields.append(
+        userField('Почта', user.email), userField('Телефон', user.phone, user.phone_verified ? 'success' : ''),
+        userField('Город', user.city), userField('Создан', formatDateTime(user.created_at)),
+        userField('Последняя активность', user.last_seen_at ? formatDateTime(user.last_seen_at) : 'Нет данных'),
+        userField('Версия приложения', user.last_app_version || 'Нет данных'),
+      );
+      const metrics = create('div', 'user-metrics');
+      metrics.append(
+        userMetric(user.listings_total, 'объявлений'), userMetric(user.reviews_authored, 'отзывов'),
+        userMetric(user.reports_received, 'жалоб получено'), userMetric(user.reports_submitted, 'жалоб отправлено'),
+        userMetric(user.active_sessions, 'активных сессий'), userMetric(user.blocks_received, 'блокировок'),
+      );
+      card.append(heading, fields, metrics);
+      return card;
+    });
+    $('search-users-list').replaceChildren(...cards);
+    setVisible(section, cards.length > 0);
+  }
+
+  function searchMediaURL(item, mediaID, variant = 'original') {
+    const suffix = variant === 'thumbnail' ? '?variant=thumbnail' : '';
+    return `${API_ROOT}/search/${encodeURIComponent(item.kind)}/${encodeURIComponent(item.id)}/media/${encodeURIComponent(mediaID)}${suffix}`;
+  }
+
+  function renderSearchMedia(item, media) {
+    const section = $('search-media-section');
+    const cards = media.map((file) => {
+      const card = create('article', 'media-card');
+      const mime = String(file.mime_type || 'application/octet-stream').toLowerCase();
+      const url = searchMediaURL(item, file.id);
+      const visual = create('div', 'media-visual');
+      if (mime.startsWith('image/')) {
+        const link = create('a', 'media-open');
+        link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        const image = create('img');
+        image.src = url; image.alt = file.file_name || `Изображение #${file.id}`; image.loading = 'lazy';
+        image.addEventListener('error', () => link.replaceChildren(mediaFallback('Изображение недоступно')), { once: true });
+        link.append(image); visual.append(link);
+      } else if (mime.startsWith('video/')) {
+        const video = create('video');
+        video.controls = true; video.preload = 'metadata'; video.src = url;
+        if (file.has_thumbnail) video.poster = searchMediaURL(item, file.id, 'thumbnail');
+        visual.append(video);
+      } else {
+        const link = create('a', 'media-document');
+        link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.append(icon('file'), create('span', '', 'Открыть файл')); visual.append(link);
+      }
+      const meta = create('div', 'media-card-meta');
+      meta.append(create('strong', '', file.file_name || `Файл #${file.id}`), create('span', '', [mime, formatFileSize(file.size_bytes)].filter(Boolean).join(' · ')));
+      card.append(visual, meta);
+      return card;
+    });
+    $('search-media-list').replaceChildren(...cards);
+    setVisible(section, cards.length > 0);
+  }
+
+  function renderSearchEvidence(evidence) {
+    const container = $('search-evidence-list');
+    if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence) || Object.keys(evidence).length === 0) {
+      container.replaceChildren(create('p', 'evidence-empty', 'Снимок данных отсутствует.'));
+      return;
+    }
+    const rows = Object.entries(evidence).filter(([key]) => !['photos', 'url', 'thumbnail_url'].includes(key)).map(([key, value]) => {
+      const row = create('div', 'evidence-row');
+      row.append(create('dt', '', FIELD_LABELS[key] || humanizeKey(key)));
+      const data = create('dd'); appendValue(data, key, value); row.append(data);
+      return row;
+    });
+    container.replaceChildren(...rows);
+  }
+
+  function renderSearchReports(reports) {
+    const section = $('search-reports-section');
+    const cards = reports.map((report) => {
+      const card = create('article', 'search-history-card');
+      const heading = create('div', 'search-history-heading');
+      heading.append(create('strong', '', `Жалоба #${report.id}`));
+      const badge = create('span', 'status-badge', statusLabel(report.status)); badge.dataset.tone = statusTone(report.status); heading.append(badge);
+      card.append(
+        heading,
+        create('span', 'search-history-target', `${REPORT_TARGET_LABELS[report.target_type] || report.target_type} #${report.target_id}`),
+        create('p', '', report.details || REPORT_REASON_LABELS[report.reason] || report.reason || 'Без комментария'),
+        create('small', '', formatDateTime(report.created_at)),
+      );
+      const open = create('button', 'text-button', 'Открыть жалобу');
+      open.type = 'button'; open.addEventListener('click', () => void openSearchReport(report.id)); card.append(open);
+      return card;
+    });
+    $('search-reports-list').replaceChildren(...cards);
+    $('search-reports-count').textContent = String(cards.length);
+    setVisible(section, cards.length > 0);
+  }
+
+  async function openSearchReport(id) {
+    await switchView('queue');
+    await openDetail('report', id);
+  }
+
+  function renderSearchSanctions(sanctions) {
+    const section = $('search-sanctions-section');
+    const cards = sanctions.map((sanction) => {
+      const card = create('article', `search-history-card${sanction.active ? ' is-active' : ''}`);
+      const heading = create('div', 'search-history-heading');
+      heading.append(create('strong', '', SANCTIONS[sanction.type]?.label || humanizeKey(sanction.type)));
+      const badge = create('span', 'status-badge', sanction.active ? 'Действует' : 'Отозвана');
+      badge.dataset.tone = sanction.active ? 'danger' : 'success'; heading.append(badge);
+      card.append(
+        heading,
+        create('span', 'search-history-target', `${REPORT_TARGET_LABELS[sanction.target_type] || sanction.target_type} #${sanction.target_id} · Жалоба #${sanction.report_id}`),
+        create('p', '', sanction.applied_reason || 'Причина не указана.'),
+        create('small', '', `Применил: ${sanction.applied_by_email || `администратор #${sanction.applied_by_admin_id}`} · ${formatDateTime(sanction.applied_at)}`),
+      );
+      if (!sanction.active) {
+        card.append(create('small', 'search-revocation', `Отозвал: ${sanction.revoked_by_email || 'администратор'} · ${formatDateTime(sanction.revoked_at)}${sanction.revocation_reason ? ` · ${sanction.revocation_reason}` : ''}`));
+      }
+      return card;
+    });
+    $('search-sanctions-list').replaceChildren(...cards);
+    $('search-sanctions-count').textContent = String(cards.length);
+    setVisible(section, cards.length > 0);
   }
 
   async function loadAudit() {
@@ -729,6 +1364,12 @@
       const target = create('div', 'audit-cell');
       const targetValue = [record.target_type, record.target_id && `#${record.target_id}`].filter(Boolean).join(' ');
       target.append(create('small', '', 'Объект'), create('span', '', targetValue || 'Сессия'));
+      if (record.target_type === 'report' && Number(record.target_id) > 0) {
+        const open = create('button', 'audit-target-button', 'Открыть карточку');
+        open.type = 'button';
+        open.addEventListener('click', () => void openAuditTarget('report', Number(record.target_id)));
+        target.append(open);
+      }
 
       const time = create('div', 'audit-cell audit-time');
       time.append(create('small', '', 'Дата и IP'), create('span', '', formatDateTime(record.created_at)), create('span', '', record.ip_address || 'IP не сохранён'));
@@ -736,6 +1377,16 @@
       return row;
     });
     $('audit-list').replaceChildren(...rows);
+  }
+
+  async function openAuditTarget(kind, id) {
+    await switchView('queue');
+    if (state.filter !== 'reports') {
+      state.filter = 'reports';
+      updateFilterTabs();
+      await loadList();
+    }
+    await openDetail(kind, id);
   }
 
   function auditActionLabel(action) {
@@ -890,7 +1541,7 @@
 
   function statusTone(status) {
     if (['active', 'approved', 'resolved'].includes(status)) return 'success';
-    if (['rejected', 'dismissed', 'failed'].includes(status)) return 'danger';
+    if (['rejected', 'dismissed', 'failed', 'disabled', 'deleted', 'hidden'].includes(status)) return 'danger';
     return 'warning';
   }
 
@@ -954,6 +1605,13 @@
   $('audit-prev').addEventListener('click', () => changeAuditPage(-1));
   $('audit-next').addEventListener('click', () => changeAuditPage(1));
   $('staff-create-form').addEventListener('submit', (event) => { event.preventDefault(); void createStaff(); });
+  $('search-form').addEventListener('submit', (event) => { event.preventDefault(); void runSearch(); });
+  $('search-kind').addEventListener('change', () => {
+    updateSearchInput();
+    $('search-error').hidden = true;
+    $('search-query').value = '';
+    $('search-query').focus();
+  });
   $('action-form').addEventListener('submit', (event) => { event.preventDefault(); void submitAction(); });
   document.querySelectorAll('[data-close-modal]').forEach((element) => element.addEventListener('click', closeActionModal));
   $('action-reason').addEventListener('input', () => {

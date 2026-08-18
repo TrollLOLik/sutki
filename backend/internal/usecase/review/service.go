@@ -13,6 +13,7 @@ import (
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
 	"github.com/TrollLOLik/sutki/backend/internal/infrastructure/llm"
 	"github.com/TrollLOLik/sutki/backend/internal/observability"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/adminnotify"
 )
 
 const (
@@ -44,16 +45,7 @@ func (s *Service) SetAdminQueueNotifier(notifier domain.AdminQueueNotifier) {
 }
 
 func (s *Service) notifyAdminQueue(event domain.AdminQueueEvent) {
-	if s.adminQueue == nil {
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := s.adminQueue.NotifyAdminQueue(ctx, event); err != nil {
-			log.Printf("review admin queue notification for %s %d: %v", event.Kind, event.ID, err)
-		}
-	}()
+	adminnotify.Send(s.adminQueue, event, "review")
 }
 
 func (s *Service) publishChanged(userID int32, action string, entityID int64, eventKey string, markUnread bool, payload map[string]any) {

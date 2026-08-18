@@ -527,14 +527,21 @@ LIMIT $3`
 	}
 
 	// Fetch attachments for these messages
-	msgIDs := make([]int64, len(rows))
-	for i, row := range rows {
-		msgIDs[i] = row.ID
+	msgIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		// Moderated and user-deleted messages keep their attachment rows for
+		// audit/retention, but the public history response must not expose them.
+		if !row.DeletedAt.Valid {
+			msgIDs = append(msgIDs, row.ID)
+		}
 	}
 
-	attRows, err := r.q.GetMessageAttachments(ctx, msgIDs)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
+	var attRows []sqlc.GetMessageAttachmentsRow
+	if len(msgIDs) > 0 {
+		attRows, err = r.q.GetMessageAttachments(ctx, msgIDs)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 	}
 
 	attMap := make(map[int64][]domain.MessageAttachment)
@@ -557,6 +564,7 @@ LIMIT $3`
 			EditedAt:         timestamptzPtr(row.EditedAt),
 			DeletedAt:        timestamptzPtr(row.DeletedAt),
 		}
+		messages[i] = redactDeletedMessage(messages[i])
 	}
 
 	return messages, nil
@@ -680,6 +688,10 @@ func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID int64) (domain.
 		EditedAt:         timestamptzPtr(row.EditedAt),
 		DeletedAt:        timestamptzPtr(row.DeletedAt),
 	}
+	msg = redactDeletedMessage(msg)
+	if msg.DeletedAt != nil {
+		return msg, nil
+	}
 
 	attRows, err := r.q.GetMessageAttachments(ctx, []int64{messageID})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -690,6 +702,19 @@ func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID int64) (domain.
 	}
 
 	return msg, nil
+}
+
+// redactDeletedMessage separates evidence retention from public delivery.
+// Moderation keeps the original row and attachment metadata for operators,
+// while every participant-facing repository read receives only the tombstone.
+func redactDeletedMessage(message domain.Message) domain.Message {
+	if message.DeletedAt == nil {
+		return message
+	}
+	message.Body = nil
+	message.Payload = nil
+	message.Attachments = nil
+	return message
 }
 
 // RetryFailedAttachment reuses the immutable stored upload. Ownership, failed

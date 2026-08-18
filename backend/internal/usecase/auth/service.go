@@ -1149,6 +1149,18 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID int64, userID int
 	return nil
 }
 
+// InvalidateSessions mirrors session revocation already committed by another
+// use case into this API process' in-memory validator. The database remains
+// authoritative; this prevents a cached access token from surviving an
+// operator account suspension until its normal cache expiry.
+func (s *Service) InvalidateSessions(sessionIDs []int64) {
+	for _, sessionID := range sessionIDs {
+		if sessionID > 0 {
+			s.blacklistSession(sessionID)
+		}
+	}
+}
+
 func (s *Service) RevokeAllSessionsExcept(ctx context.Context, currentSID int64, userID int32) error {
 	// First fetch all other active sessions to blacklist them in memory
 	tokens, err := s.refresh.ListActive(ctx, userID)

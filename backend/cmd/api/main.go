@@ -158,6 +158,7 @@ func main() {
 			Timeout:  cfg.TelegramTimeout,
 			AdminURL: cfg.AdminPublicURL,
 		})
+		log.Println("admin queue Telegram notifications enabled")
 	}
 
 	// Listing moderation: synchronous prefilter on create/update plus a
@@ -246,6 +247,8 @@ func main() {
 	})
 	adminInboxSvc := admininbox.New(postgres.NewAdminInboxRepo(pool))
 	adminInboxSvc.SetUserEvents(userEvents)
+	adminInboxSvc.SetSessionInvalidator(authSvc)
+	adminInboxSvc.SetMediaStorages(publicStorage, privateStorage)
 	adminOpsSvc := adminops.New(adminRepo)
 	adminHandler := httpdelivery.NewAdminHandler(adminSvc, adminInboxSvc, adminOpsSvc, httpdelivery.AdminHandlerConfig{
 		AllowedOrigin: cfg.AdminPublicURL,

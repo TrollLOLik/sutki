@@ -8,8 +8,92 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/admininbox"
 )
+
+type adminMediaRepoStub struct {
+	object domain.AdminInboxMediaObject
+	detail domain.AdminInboxDetail
+}
+
+func (s *adminMediaRepoStub) AdminInboxSummary(context.Context, bool) (domain.AdminInboxSummary, error) {
+	return domain.AdminInboxSummary{}, nil
+}
+
+func (s *adminMediaRepoStub) ListAdminInbox(context.Context, domain.AdminInboxFilter, bool) (domain.AdminInboxPage, error) {
+	return domain.AdminInboxPage{}, nil
+}
+
+func (s *adminMediaRepoStub) GetAdminInboxItem(context.Context, string, int64) (domain.AdminInboxDetail, error) {
+	return s.detail, nil
+}
+
+func (s *adminMediaRepoStub) SearchAdminItems(context.Context, domain.AdminSearchFilter) (domain.AdminSearchPage, error) {
+	return domain.AdminSearchPage{}, nil
+}
+
+func (s *adminMediaRepoStub) GetAdminSearchItem(context.Context, string, int64) (domain.AdminInboxDetail, error) {
+	return s.detail, nil
+}
+
+func TestAdminInboxDetailIncludesBoundedUserDiagnostics(t *testing.T) {
+	createdAt := time.Date(2026, time.August, 18, 10, 30, 0, 0, time.UTC)
+	repo := &adminMediaRepoStub{detail: domain.AdminInboxDetail{
+		Item: domain.AdminInboxItem{Kind: domain.AdminInboxKindReport, ID: 17, Status: domain.ReportStatusNew},
+		Users: []domain.AdminInboxUser{{
+			Relation: domain.AdminInboxUserRelationSubject, ID: 24, Name: "Александр",
+			Email: "user@wigaj.ru", PhoneVerified: true, CreatedAt: createdAt,
+			ListingsTotal: 3, ReportsReceived: 2,
+		}},
+	}}
+	h := &AdminHandler{inbox: admininbox.New(repo)}
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/v1/inbox/report/17", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("kind", domain.AdminInboxKindReport)
+	routeContext.URLParams.Add("id", "17")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeContext)
+	ctx = context.WithValue(ctx, adminSessionKey, domain.AdminSession{
+		Account: domain.AdminAccount{ID: 7, UserID: 11, Role: domain.AdminRoleModerator},
+	})
+	req = req.WithContext(ctx)
+
+	response := httptest.NewRecorder()
+	h.getInboxItem(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("detail returned %d, want 200: %s", response.Code, response.Body.String())
+	}
+	var body domain.AdminInboxDetail
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Users) != 1 || body.Users[0].ID != 24 || body.Users[0].ReportsReceived != 2 {
+		t.Fatalf("users = %#v", body.Users)
+	}
+	if body.Users[0].Email != "user@wigaj.ru" || !body.Users[0].PhoneVerified {
+		t.Fatalf("diagnostics = %#v", body.Users[0])
+	}
+}
+
+func (s *adminMediaRepoStub) GetAdminInboxMedia(context.Context, string, int64, int64, string) (domain.AdminInboxMediaObject, error) {
+	return s.object, nil
+}
+
+func (s *adminMediaRepoStub) GetAdminSearchMedia(context.Context, string, int64, int64, string) (domain.AdminInboxMediaObject, error) {
+	return s.object, nil
+}
+
+func (s *adminMediaRepoStub) ApplyAdminInboxAction(context.Context, domain.AdminInboxAction) (domain.AdminInboxActionResult, error) {
+	return domain.AdminInboxActionResult{}, nil
+}
+
+type adminMediaPresignerStub struct{ url string }
+
+func (s *adminMediaPresignerStub) PresignGet(context.Context, string, time.Duration) (string, error) {
+	return s.url, nil
+}
 
 func TestAdminOriginGuard(t *testing.T) {
 	h := &AdminHandler{cfg: AdminHandlerConfig{AllowedOrigin: "https://admin.wigaj.ru"}}
@@ -81,5 +165,37 @@ func TestAdminSessionCookiesAreSeparateAndHardened(t *testing.T) {
 	}
 	if byName[adminCSRFCookie].HttpOnly {
 		t.Fatal("CSRF double-submit cookie must be readable by the admin client")
+	}
+}
+
+func TestAdminInboxMediaRedirectIsShortLivedAndNotCached(t *testing.T) {
+	repo := &adminMediaRepoStub{object: domain.AdminInboxMediaObject{
+		Key: "listings/12/photo.jpg", Storage: domain.AdminInboxMediaStoragePublic,
+	}}
+	inbox := admininbox.New(repo)
+	inbox.SetMediaStorages(&adminMediaPresignerStub{url: "https://media.example/signed"}, nil)
+	h := &AdminHandler{inbox: inbox}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/v1/inbox/listing/12/media/33", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("kind", domain.AdminInboxKindListing)
+	routeContext.URLParams.Add("id", "12")
+	routeContext.URLParams.Add("mediaID", "33")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeContext)
+	ctx = context.WithValue(ctx, adminSessionKey, domain.AdminSession{
+		Account: domain.AdminAccount{ID: 7, UserID: 11, Role: domain.AdminRoleModerator},
+	})
+	req = req.WithContext(ctx)
+
+	response := httptest.NewRecorder()
+	h.getInboxMedia(response, req)
+	if response.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("media returned %d, want 307: %s", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Location"); got != "https://media.example/signed" {
+		t.Fatalf("Location = %q", got)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("Cache-Control = %q", got)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/TrollLOLik/sutki/backend/internal/domain"
+	"github.com/TrollLOLik/sutki/backend/internal/usecase/adminnotify"
 )
 
 const (
@@ -72,18 +73,12 @@ func (s *Service) Report(ctx context.Context, in domain.CreateAbuseReport) (doma
 		return domain.AbuseReport{}, err
 	}
 	if s.adminQueue != nil {
-		go func() {
-			notifyCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			subjectUserID := report.ReportedUserID
-			if err := s.adminQueue.NotifyAdminQueue(notifyCtx, domain.AdminQueueEvent{
-				Kind: domain.AdminInboxKindReport, ID: report.ID,
-				Title:  report.TargetType + " #" + strconv.FormatInt(report.TargetID, 10),
-				Reason: report.Reason, SubjectUserID: &subjectUserID,
-			}); err != nil {
-				log.Printf("abuse admin queue notification for report %d: %v", report.ID, err)
-			}
-		}()
+		subjectUserID := report.ReportedUserID
+		adminnotify.Send(s.adminQueue, domain.AdminQueueEvent{
+			Kind: domain.AdminInboxKindReport, ID: report.ID,
+			Title:  report.TargetType + " #" + strconv.FormatInt(report.TargetID, 10),
+			Reason: report.Reason, SubjectUserID: &subjectUserID,
+		}, "abuse")
 	}
 	return report, nil
 }

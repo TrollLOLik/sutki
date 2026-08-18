@@ -18,19 +18,23 @@ import (
 
 const maxResponseBytes = 16 << 10
 
+var defaultAdminQueueRetryDelays = []time.Duration{time.Second, 3 * time.Second}
+
 type Config struct {
-	BotToken string
-	ChatID   string
-	Timeout  time.Duration
-	BaseURL  string
-	AdminURL string
+	BotToken              string
+	ChatID                string
+	Timeout               time.Duration
+	BaseURL               string
+	AdminURL              string
+	AdminQueueRetryDelays []time.Duration
 }
 
 type Client struct {
-	endpoint   string
-	chatID     string
-	httpClient *http.Client
-	adminURL   string
+	endpoint    string
+	chatID      string
+	httpClient  *http.Client
+	adminURL    string
+	retryDelays []time.Duration
 }
 
 func NewClient(cfg Config) *Client {
@@ -38,11 +42,16 @@ func NewClient(cfg Config) *Client {
 	if baseURL == "" {
 		baseURL = "https://api.telegram.org"
 	}
+	retryDelays := cfg.AdminQueueRetryDelays
+	if retryDelays == nil {
+		retryDelays = defaultAdminQueueRetryDelays
+	}
 	return &Client{
-		endpoint:   fmt.Sprintf("%s/bot%s/sendMessage", baseURL, cfg.BotToken),
-		chatID:     cfg.ChatID,
-		httpClient: &http.Client{Timeout: cfg.Timeout},
-		adminURL:   strings.TrimRight(strings.TrimSpace(cfg.AdminURL), "/"),
+		endpoint:    fmt.Sprintf("%s/bot%s/sendMessage", baseURL, cfg.BotToken),
+		chatID:      cfg.ChatID,
+		httpClient:  &http.Client{Timeout: cfg.Timeout},
+		adminURL:    strings.TrimRight(strings.TrimSpace(cfg.AdminURL), "/"),
+		retryDelays: append([]time.Duration(nil), retryDelays...),
 	}
 }
 
@@ -65,7 +74,27 @@ func (c *Client) NotifyAdminQueue(ctx context.Context, event domain.AdminQueueEv
 		panelURL := fmt.Sprintf("%s/?kind=%s&id=%d", c.adminURL, url.QueryEscape(event.Kind), event.ID)
 		lines = append(lines, fmt.Sprintf(`<a href="%s">Открыть в панели</a>`, html.EscapeString(panelURL)))
 	}
-	return c.Send(ctx, strings.Join(lines, "\n"))
+	message := strings.Join(lines, "\n")
+	var lastErr error
+	for attempt := 0; attempt <= len(c.retryDelays); attempt++ {
+		if attempt > 0 {
+			delay := c.retryDelays[attempt-1]
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return fmt.Errorf("notify admin queue: %w", ctx.Err())
+			case <-timer.C:
+			}
+		}
+
+		if err := c.Send(ctx, message); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("notify admin queue after %d attempts: %w", len(c.retryDelays)+1, lastErr)
 }
 
 func adminQueueKindLabel(kind string) string {

@@ -51,6 +51,10 @@ func (h *AdminHandler) Routes(r chi.Router) {
 		r.Get("/inbox/summary", h.inboxSummary)
 		r.Get("/inbox", h.listInbox)
 		r.Get("/inbox/{kind}/{id}", h.getInboxItem)
+		r.Get("/inbox/{kind}/{id}/media/{mediaID}", h.getInboxMedia)
+		r.Get("/search", h.searchAdminItems)
+		r.Get("/search/{kind}/{id}", h.getAdminSearchItem)
+		r.Get("/search/{kind}/{id}/media/{mediaID}", h.getAdminSearchMedia)
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireSession(domain.AdminRoleSupport, true))
@@ -207,6 +211,99 @@ func (h *AdminHandler) getInboxItem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *AdminHandler) getInboxMedia(w http.ResponseWriter, r *http.Request) {
+	session, ok := adminSessionFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется вход в панель управления.")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "Некорректный идентификатор элемента.")
+		return
+	}
+	mediaID, err := strconv.ParseInt(chi.URLParam(r, "mediaID"), 10, 64)
+	if err != nil || mediaID <= 0 {
+		writeError(w, http.StatusBadRequest, "Некорректный идентификатор файла.")
+		return
+	}
+	url, err := h.inbox.MediaURL(
+		r.Context(), session.Account.Role, chi.URLParam(r, "kind"), id, mediaID,
+		r.URL.Query().Get("variant"),
+	)
+	if err != nil {
+		handleAdminInboxError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (h *AdminHandler) searchAdminItems(w http.ResponseWriter, r *http.Request) {
+	session, ok := adminSessionFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется вход в панель управления.")
+		return
+	}
+	result, err := h.inbox.Search(r.Context(), session.Account.Role, domain.AdminSearchFilter{
+		Kind: r.URL.Query().Get("kind"), Query: r.URL.Query().Get("q"),
+	})
+	if err != nil {
+		handleAdminInboxError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *AdminHandler) getAdminSearchItem(w http.ResponseWriter, r *http.Request) {
+	session, ok := adminSessionFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется вход в панель управления.")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "Некорректный идентификатор объекта.")
+		return
+	}
+	result, err := h.inbox.GetSearch(r.Context(), session.Account.Role, chi.URLParam(r, "kind"), id)
+	if err != nil {
+		handleAdminInboxError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *AdminHandler) getAdminSearchMedia(w http.ResponseWriter, r *http.Request) {
+	session, ok := adminSessionFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется вход в панель управления.")
+		return
+	}
+	id, idErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	mediaID, mediaErr := strconv.ParseInt(chi.URLParam(r, "mediaID"), 10, 64)
+	if idErr != nil || mediaErr != nil || id <= 0 || mediaID <= 0 {
+		writeError(w, http.StatusBadRequest, "Некорректный идентификатор файла.")
+		return
+	}
+	url, err := h.inbox.SearchMediaURL(
+		r.Context(), session.Account.Role, chi.URLParam(r, "kind"), id, mediaID,
+		r.URL.Query().Get("variant"),
+	)
+	if err != nil {
+		handleAdminInboxError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
 func (h *AdminHandler) applyInboxAction(w http.ResponseWriter, r *http.Request) {
 	session, ok := adminSessionFromContext(r.Context())
 	if !ok {
@@ -219,8 +316,10 @@ func (h *AdminHandler) applyInboxAction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var body struct {
-		Action string `json:"action"`
-		Reason string `json:"reason"`
+		Action      string   `json:"action"`
+		Reason      string   `json:"reason"`
+		Sanctions   []string `json:"sanctions"`
+		SanctionIDs []int64  `json:"sanction_ids"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -231,6 +330,8 @@ func (h *AdminHandler) applyInboxAction(w http.ResponseWriter, r *http.Request) 
 		ID:             id,
 		Action:         body.Action,
 		Reason:         body.Reason,
+		Sanctions:      body.Sanctions,
+		SanctionIDs:    body.SanctionIDs,
 		ActorAdminID:   session.Account.ID,
 		ActorUserID:    session.Account.UserID,
 		ActorIPAddress: meta.IPAddress,
@@ -456,6 +557,8 @@ func handleAdminInboxError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusBadRequest, "Укажите причину решения.")
 	case errors.Is(err, admininbox.ErrForbidden):
 		writeError(w, http.StatusForbidden, "Недостаточно прав для этого раздела.")
+	case errors.Is(err, admininbox.ErrMediaUnavailable):
+		writeError(w, http.StatusServiceUnavailable, "Медиа временно недоступно.")
 	case errors.Is(err, domain.ErrAdminActionConflict):
 		writeError(w, http.StatusConflict, "Состояние уже изменилось. Обновите очередь.")
 	case errors.Is(err, domain.ErrNotFound):

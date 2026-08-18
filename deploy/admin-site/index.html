@@ -45,6 +45,8 @@
     <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
     <symbol id="icon-journal" viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h4"/></symbol>
     <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/><path d="M9 13h6M9 17h4"/></symbol>
   </svg>
 
   <main id="session-gate" class="session-gate" aria-live="polite">
@@ -115,6 +117,9 @@
       <nav id="app-nav" class="app-nav" aria-label="Разделы панели">
         <button class="app-nav-button is-active" type="button" data-view="queue" aria-current="page">
           <svg class="icon" aria-hidden="true"><use href="#icon-inbox"></use></svg><span>Очередь</span>
+        </button>
+        <button class="app-nav-button" type="button" data-view="search">
+          <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg><span>Поиск</span>
         </button>
         <button class="app-nav-button owner-only" type="button" data-view="audit" hidden>
           <svg class="icon" aria-hidden="true"><use href="#icon-journal"></use></svg><span>Журнал</span>
@@ -237,9 +242,34 @@
               <ol id="decision-timeline" class="decision-timeline"></ol>
             </section>
 
-            <section class="evidence-section" aria-labelledby="evidence-title">
+            <section id="users-section" class="users-section" aria-labelledby="users-title" hidden>
               <div class="section-heading">
                 <span class="section-index">02</span>
+                <div><span class="section-kicker">Связанные аккаунты</span><h2 id="users-title">Пользователи</h2></div>
+              </div>
+              <div id="users-grid" class="users-grid"></div>
+            </section>
+
+            <section id="related-reports-section" class="related-reports-section" aria-labelledby="related-reports-title" hidden>
+              <div class="section-heading">
+                <span class="section-index">03</span>
+                <div><span class="section-kicker">Повторяемость</span><h2 id="related-reports-title">Связанные жалобы</h2></div>
+              </div>
+              <p class="related-reports-note">Жалобы сгруппированы для диагностики, но решение по каждой принимается отдельно.</p>
+              <div id="related-reports-list" class="related-reports-list"></div>
+            </section>
+
+            <section id="media-section" class="media-section" aria-labelledby="media-title" hidden>
+              <div class="section-heading">
+                <span class="section-index">04</span>
+                <div><span class="section-kicker">Материалы объекта</span><h2 id="media-title">Медиа</h2></div>
+              </div>
+              <div id="media-gallery" class="media-gallery"></div>
+            </section>
+
+            <section class="evidence-section" aria-labelledby="evidence-title">
+              <div class="section-heading">
+                <span class="section-index">05</span>
                 <div><span class="section-kicker">Зафиксировано</span><h2 id="evidence-title">Доказательства</h2></div>
               </div>
               <dl id="evidence-content" class="evidence-content"></dl>
@@ -257,6 +287,52 @@
           <footer id="action-bar" class="action-bar"></footer>
         </article>
       </section>
+    </main>
+
+    <main id="search-view" class="management-view search-view" hidden>
+      <header class="management-header">
+        <div><span class="section-kicker">Вне очереди</span><h1>Поиск и история</h1><p>Точный поиск объекта без изменения его статуса и без создания новой задачи.</p></div>
+        <div class="management-summary"><span id="search-total">0</span><small>совпадений</small></div>
+      </header>
+      <form id="search-form" class="search-form" role="search" novalidate>
+        <label for="search-kind">Что найти</label>
+        <select id="search-kind">
+          <option value="user">Пользователь</option>
+          <option value="listing" class="moderation-search-option">Объявление</option>
+          <option value="review" class="moderation-search-option">Отзыв</option>
+          <option value="message" class="moderation-search-option">Сообщение</option>
+        </select>
+        <label for="search-query">Точный идентификатор</label>
+        <input id="search-query" type="search" autocomplete="off" maxlength="254" placeholder="ID, телефон или почта">
+        <button id="search-button" class="button button-primary" type="submit"><span>Найти</span><span class="button-loader" aria-hidden="true"></span></button>
+        <p id="search-hint">Для пользователя укажите ID, полный телефон или почту. Для остальных объектов — ID.</p>
+      </form>
+      <div id="search-error" class="management-error" role="alert" hidden></div>
+      <div id="search-loading" class="management-loading" hidden><span class="spinner" aria-hidden="true"></span><span>Ищем точное совпадение…</span></div>
+      <div id="search-empty" class="management-empty" hidden><h2>Ничего не найдено</h2><p>Проверьте полный идентификатор, телефон или адрес почты.</p></div>
+      <div id="search-workspace" class="search-workspace" hidden>
+        <section class="search-results" aria-labelledby="search-results-title">
+          <div class="search-section-heading"><h2 id="search-results-title">Результаты</h2><span id="search-result-count">0</span></div>
+          <div id="search-results-list" class="search-results-list"></div>
+        </section>
+        <article id="search-detail" class="search-detail">
+          <div id="search-detail-blank" class="management-empty"><h2>Выберите результат</h2><p>Здесь появятся данные объекта, жалобы и история санкций.</p></div>
+          <div id="search-detail-loading" class="management-loading" hidden><span class="spinner" aria-hidden="true"></span><span>Собираем историю…</span></div>
+          <div id="search-detail-error" class="management-error" role="alert" hidden></div>
+          <div id="search-detail-content" hidden>
+            <header class="search-detail-header">
+              <div><span id="search-detail-kind" class="kind-badge"></span><span id="search-detail-status" class="status-badge"></span></div>
+              <h2 id="search-detail-title"></h2>
+              <p id="search-detail-summary"></p>
+            </header>
+            <section id="search-users-section" class="search-card-section" hidden><div class="search-section-heading"><h3>Пользователи</h3></div><div id="search-users-list" class="users-grid"></div></section>
+            <section id="search-media-section" class="search-card-section" hidden><div class="search-section-heading"><h3>Медиа</h3></div><div id="search-media-list" class="media-gallery"></div></section>
+            <section id="search-evidence-section" class="search-card-section"><div class="search-section-heading"><h3>Данные объекта</h3></div><dl id="search-evidence-list" class="evidence-content"></dl></section>
+            <section id="search-reports-section" class="search-card-section" hidden><div class="search-section-heading"><h3>История жалоб</h3><span id="search-reports-count">0</span></div><div id="search-reports-list" class="search-history-list"></div></section>
+            <section id="search-sanctions-section" class="search-card-section" hidden><div class="search-section-heading"><h3>История санкций</h3><span id="search-sanctions-count">0</span></div><div id="search-sanctions-list" class="search-history-list"></div></section>
+          </div>
+        </article>
+      </div>
     </main>
 
     <main id="audit-view" class="management-view" hidden>
@@ -322,6 +398,11 @@
         </button>
       </div>
       <p id="modal-description" class="modal-description"></p>
+      <fieldset id="sanction-field" class="sanction-field" hidden>
+        <legend id="sanction-title">Санкции</legend>
+        <p id="sanction-note">Выберите только те последствия, которые подтверждены материалами жалобы. Похожие жалобы автоматически не закрываются.</p>
+        <div id="sanction-options" class="sanction-options"></div>
+      </fieldset>
       <div id="reason-field" class="reason-field">
         <label for="action-reason">Причина решения <span id="reason-required">обязательно</span></label>
         <textarea id="action-reason" name="reason" rows="5" maxlength="2000" placeholder="Кратко зафиксируйте основание решения"></textarea>

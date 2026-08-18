@@ -122,6 +122,34 @@ func TestClientNotifyAdminQueueBuildsDeepLinkForEveryKind(t *testing.T) {
 	}
 }
 
+func TestClientNotifyAdminQueueRetriesTransientDeliveryFailure(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		if attempts < 3 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"ok":false,"description":"temporary upstream failure"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"result":{}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{
+		BotToken: "test-token", ChatID: "-100123", Timeout: time.Second,
+		BaseURL: server.URL, AdminQueueRetryDelays: []time.Duration{time.Millisecond, time.Millisecond},
+	})
+	if err := client.NotifyAdminQueue(context.Background(), domain.AdminQueueEvent{
+		Kind: domain.AdminInboxKindAttachment, ID: 77,
+	}); err != nil {
+		t.Fatalf("notify admin queue: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("delivery attempts = %d, want 3", attempts)
+	}
+}
+
 func TestClientSendReturnsTelegramError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
