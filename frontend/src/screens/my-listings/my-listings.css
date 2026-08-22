@@ -1,0 +1,99 @@
+.my-listings-screen {
+  min-height: 100dvh;
+  padding-bottom: 28px;
+  background: var(--screen);
+  color: var(--ink);
+}
+
+.my-listings-content {
+  width: min(100%, 1100px);
+  margin: 0 auto;
+  padding: 8px 16px 28px;
+}
+
+.my-listings-desktop-heading { display: none; }
+.my-listings-mobile-header { display: grid; }
+.my-listings-mobile-header .ui-app-header__copy strong {
+  font-size: 18px;
+  line-height: 23px;
+  font-weight: 500;
+}
+.my-listings-mobile-header .ui-app-header__side > .ui-icon-button {
+  width: 46px;
+  height: 46px;
+}
+.my-listings-mobile-header .ui-app-header__side--right .ui-icon-button {
+  border-color: transparent;
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.my-listings-controls {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.my-listings-toolbar .ui-personal-toolbar__actions > .ui-icon-button,
+.my-listings-filter-trigger > .ui-icon-button { color: var(--primary); }
+
+.my-listings-filter-trigger { position: relative; }
+.my-listings-filter-trigger > span {
+  position: absolute;
+  top: -4px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  border: 2px solid var(--screen);
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--primary);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.my-listings-feed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.my-listings-feed.grid-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 899px) {
+  .my-listings-feed .listing-address.ui-text { font-size: 9px; line-height: 13px; }
+}
+.my-listings-tab-viewport { width: 100%; min-width: 0; overflow: hidden; touch-action: pan-y; }
+.my-listings-tab-track { width: 500%; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; transition: transform var(--ui-panel-motion-duration) var(--ui-panel-motion-ease); will-change: transform; }
+.my-listings-tab-track.is-dragging { transition: none; }
+.my-listings-tab-panel { width: 100%; min-width: 0; align-self: start; }
+@media (max-width: 899px) {
+  .my-listings-tab-track { transition: transform 360ms cubic-bezier(.22, .72, .18, 1) !important; }
+  .my-listings-tab-track.is-dragging { transition: none !important; }
+}
+
+@media (min-width: 900px) {
+  .my-listings-screen { padding: 0; }
+  .my-listings-screen > .my-listings-mobile-header { display: none !important; }
+  .my-listings-content { width: min(100% - 48px, 1240px); padding: 38px 0; }
+  .my-listings-desktop-heading { display: grid; margin-bottom: 20px; }
+  .my-listings-desktop-heading h1 { margin: 0; font-size: 28px; font-weight: 500; }
+  .my-listings-desktop-heading p { margin: 5px 0 0; color: var(--ink-secondary); font-size: 13px; }
+  .my-listings-controls { position: sticky; z-index: 35; top: var(--desktop-menu-height); margin-bottom: 18px; padding: 0 0 12px; background: var(--screen); }
+  .my-listings-feed.list-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  main.my-listings-content.ui-personal-collection-layout .ui-personal-collection-grid.my-listings-feed.grid-layout {
+    grid-template-columns: repeat(auto-fill, 180px);
+    width: 100%;
+    padding-bottom: 48px;
+    justify-content: start;
+    align-items: start;
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .my-listings-feed.list-layout { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

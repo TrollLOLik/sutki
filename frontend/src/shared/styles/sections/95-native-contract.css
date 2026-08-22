@@ -1,0 +1,383 @@
+/* Authoritative native navigation and transition contract. */
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-delay: 0ms !important;
+  animation-duration: .001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-delay: 0ms !important;
+  transition-duration: .001ms !important;
+}
+
+html[data-motion='reduced']::view-transition-old(root),
+html[data-motion='reduced']::view-transition-new(root) { animation: none !important; }
+
+.mobile-route-frame {
+  min-height: 100dvh;
+}
+
+/* One restrained press response for circular page chrome. Keeping the
+   transform small prevents the outgoing route snapshot from looking jumpy. */
+:is(
+  .profile-mobile-header > button,
+  .public-profile-mobile-header button,
+  .public-profile-desktop-heading button,
+  .detail-round-button,
+  .requests-mobile-header > button,
+  .request-detail-header > button,
+  .booking-mobile-header button,
+  .create-back-button,
+  .chat-header-icon,
+  .filter-subview-header button,
+  .calendar-range-header button,
+  .detail-location-header > button,
+  .detail-location-close-floating,
+  .public-profile-avatar-close,
+  .overlay-close
+) {
+  transform: translateZ(0);
+  transform-origin: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms cubic-bezier(.2, .75, .25, 1), background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+:is(
+  .profile-mobile-header > button,
+  .public-profile-mobile-header button,
+  .public-profile-desktop-heading button,
+  .detail-round-button,
+  .requests-mobile-header > button,
+  .request-detail-header > button,
+  .booking-mobile-header button,
+  .create-back-button,
+  .chat-header-icon,
+  .filter-subview-header button,
+  .calendar-range-header button,
+  .detail-location-header > button,
+  .detail-location-close-floating,
+  .public-profile-avatar-close,
+  .overlay-close
+):active:not(:disabled) {
+  transform: scale(.96);
+  transition-duration: 70ms;
+}
+
+.theme-transition-reveal {
+  position: fixed;
+  z-index: 1000;
+  width: var(--theme-reveal-size, 0px);
+  height: var(--theme-reveal-size, 0px);
+  left: var(--theme-reveal-left, 50%);
+  top: var(--theme-reveal-top, 50%);
+  border-radius: 50%;
+  background: var(--theme-reveal-color, var(--surface));
+  pointer-events: none;
+  transform: scale(0);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+@media (max-width: 899px) {
+  .route-action-bar-context {
+    display: contents;
+  }
+
+  html[data-route-engine='view'] .custom-tab-bar {
+    transition: none !important;
+  }
+
+  .mobile-route-frame {
+    view-transition-name: none;
+    width: 100%;
+    overflow-x: clip;
+    isolation: isolate;
+    backface-visibility: hidden;
+  }
+
+  .mobile-route-frame.is-primary-swipe-enabled { touch-action: pan-y; }
+
+  .route-action-bar-context { display: contents; }
+
+  html[data-mobile-keyboard='open'] .mobile-route-frame {
+    min-height: var(--app-visual-viewport-height, 100dvh);
+  }
+
+  html[data-mobile-keyboard='open'] .mobile-route-frame.is-primary-swipe-enabled {
+    touch-action: auto;
+  }
+
+  .custom-tab-bar.is-map-layout .tab-bar-material,
+  html[data-theme='dark'] .custom-tab-bar.is-map-layout .tab-bar-material {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .custom-tab-bar.is-map-layout .tab-button > .tab-icon {
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    box-shadow: 0 5px 16px rgba(0,0,0,.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .custom-tab-bar.is-map-layout .tab-button.active > .tab-icon {
+    border-color: var(--primary-border);
+    background: color-mix(in srgb, var(--primary-light) 90%, transparent);
+  }
+
+  /* Legacy per-child route animations used to re-run whenever a sheet or
+     dialog mounted under an already active route. Keep route motion on the
+     route snapshot only so overlays can use their own native presentation. */
+  .mobile-route-frame.is-forward > *,
+  .mobile-route-frame.is-back > *,
+  .mobile-route-frame.is-replace > * {
+    animation: none !important;
+  }
+
+  .mobile-route-frame.is-forward {
+    animation: app-route-fallback-forward var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both;
+    will-change: transform, opacity;
+  }
+
+  .mobile-route-frame.is-back {
+    animation: app-route-fallback-back var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both;
+    will-change: transform, opacity;
+  }
+
+  .mobile-route-frame.is-replace {
+    animation: app-route-fallback-replace var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both;
+    will-change: opacity;
+  }
+
+  html[data-route-engine='view'] .mobile-route-frame.is-forward,
+  html[data-route-engine='view'] .mobile-route-frame.is-back,
+  html[data-route-engine='view'] .mobile-route-frame.is-replace {
+    animation: none !important;
+    transform: none;
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  background: var(--screen);
+  mix-blend-mode: normal;
+  animation-duration: var(--ui-panel-motion-duration);
+  animation-fill-mode: both;
+  animation-timing-function: var(--ui-panel-motion-ease);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+::view-transition-group(root) {
+  background: var(--screen);
+  overflow: clip;
+}
+
+::view-transition-image-pair(root) {
+  overflow: clip;
+}
+
+html[data-route-direction='forward'][data-route-presentation='stack']::view-transition-old(root) {
+  animation-name: app-route-old-forward;
+}
+
+html[data-route-direction='forward'][data-route-presentation='stack']::view-transition-new(root) {
+  animation-name: app-route-new-forward;
+}
+
+html[data-route-direction='back'][data-route-presentation='stack']::view-transition-old(root) {
+  animation-name: app-route-old-back;
+}
+
+html[data-route-direction='back'][data-route-presentation='stack']::view-transition-new(root) {
+  animation-name: app-route-new-back;
+}
+
+html[data-route-direction='replace']::view-transition-old(root) {
+  animation-name: app-route-old-forward;
+}
+
+html[data-route-direction='replace']::view-transition-new(root) {
+  animation-name: app-route-new-forward;
+}
+
+
+@keyframes app-route-new-forward {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes app-route-old-forward {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-100%, 0, 0); }
+}
+
+@keyframes app-route-new-back {
+  from { transform: translate3d(-100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes app-route-old-back {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+@keyframes app-route-old-replace {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes app-route-new-replace {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+
+@keyframes app-route-fallback-forward {
+  from { opacity: .94; transform: translate3d(18px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes app-route-fallback-back {
+  from { opacity: .94; transform: translate3d(-18px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes app-route-fallback-replace {
+  from { opacity: .92; }
+  to { opacity: 1; }
+}
+
+/* Scroll chrome keeps a stable document geometry. Only the chrome itself
+   moves, so reaching either scroll boundary cannot feed synthetic offsets
+   back into the direction detector. */
+.detail-floating-header,
+.create-page-header {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  will-change: transform, opacity;
+  transition: transform 250ms cubic-bezier(.22, .61, .36, 1), opacity 180ms ease-out;
+}
+
+@media (max-width: 899px) {
+  .home-header,
+  .home-header.collapsed {
+    height: var(--header-expanded) !important;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translate3d(0, 0, 0);
+    will-change: transform, opacity;
+    transition: transform 250ms cubic-bezier(.22, .61, .36, 1), opacity 180ms ease-out !important;
+  }
+
+  html[data-app-chrome='hidden'] .home-header,
+  html[data-app-chrome='hidden'] .detail-floating-header,
+  html[data-app-chrome='hidden'] .create-page-header {
+    transform: translate3d(0, calc(-100% - env(safe-area-inset-top)), 0);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .home-header .header-backdrop,
+  .home-header .header-inner {
+    pointer-events: none;
+  }
+
+  .home-header .main-control-row,
+  .home-header .collapsible-filters {
+    pointer-events: auto;
+  }
+
+  .collapsible-filters,
+  .home-header.collapsed .collapsible-filters {
+    height: 120px !important;
+  }
+
+  .collapsible-filters {
+    opacity: 1;
+    visibility: visible;
+    clip-path: inset(0 0 0 0);
+    transform: translate3d(0, 0, 0);
+    will-change: transform, opacity, clip-path;
+    transition:
+      transform 250ms cubic-bezier(.22, .61, .36, 1),
+      opacity 190ms ease-out,
+      clip-path 250ms cubic-bezier(.22, .61, .36, 1),
+      visibility 0s linear 0s !important;
+  }
+
+  .home-header.collapsed .collapsible-filters {
+    opacity: 0;
+    visibility: hidden;
+    clip-path: inset(0 0 100% 0);
+    transform: translate3d(0, -12px, 0);
+    pointer-events: none;
+    transition:
+      transform 250ms cubic-bezier(.22, .61, .36, 1),
+      opacity 160ms ease-in,
+      clip-path 250ms cubic-bezier(.22, .61, .36, 1),
+      visibility 0s linear 250ms !important;
+  }
+
+  .listing-feed,
+  .listing-feed.header-is-collapsed {
+    padding-top: var(--header-expanded) !important;
+    transition-property: none !important;
+  }
+
+  .custom-tab-bar {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto;
+    will-change: transform;
+    transition: transform 250ms cubic-bezier(.22, .61, .36, 1) !important;
+  }
+
+  .custom-tab-bar.is-hidden {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-route-frame,
+  .mobile-route-frame > * {
+    animation: none !important;
+  }
+
+  .home-header,
+  .detail-floating-header,
+  .create-page-header {
+    transition: none !important;
+  }
+
+  .collapsible-filters,
+  .custom-tab-bar {
+    transition: none !important;
+  }
+}
+
+.route-error-page { min-height: 100vh; background: var(--screen); color: var(--ink); }
+.route-error-page > main { width: min(100%, 680px); margin: 0 auto; padding: 48px 16px; }
+
+/* Desktop is intentionally immediate: route and tab swipe motion is a mobile-only affordance. */
+@media (min-width: 900px) {
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-group(root),
+  ::view-transition-image-pair(root) { animation: none !important; }
+
+  .mobile-route-frame,
+  .mobile-route-frame.is-forward,
+  .mobile-route-frame.is-back,
+  .mobile-route-frame.is-replace,
+  .profile-settings-track,
+  .profile-settings-tab-panel,
+  .requests-tab-track,
+  .requests-tab-panel { animation: none !important; transition: none !important; transform: none; will-change: auto; }
+}

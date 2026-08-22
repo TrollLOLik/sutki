@@ -1,0 +1,19 @@
+.ui-kit-page { min-height: 100vh; background: var(--screen); color: var(--ink); }
+.ui-kit-page__content { width: min(calc(100% - 32px), 980px); margin: 0 auto; padding: 28px 0 80px; display: grid; gap: 20px; }
+.ui-kit-hero { min-height: 240px; border: 1px solid var(--line); border-radius: 30px; padding: 28px; display: flex; align-items: center; justify-content: space-between; gap: 24px; background: radial-gradient(circle at 92% 14%, var(--primary-light), transparent 38%), var(--surface); box-shadow: var(--shadow-sm); }
+.ui-kit-hero h1 { max-width: 660px; margin: 14px 0 8px; font-size: 36px; line-height: 1.05; }
+.ui-kit-hero p { max-width: 640px; margin: 0; color: var(--ink-secondary); line-height: 1.55; }
+.ui-kit-hero > svg { flex: 0 0 auto; color: var(--primary); }
+.ui-kit-section { border: 1px solid var(--line); border-radius: 26px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow-xs); }
+.ui-kit-section > header { min-height: 62px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.ui-kit-section h2 { margin: 0; font-size: 19px; }
+.ui-kit-section > header svg { transform: rotate(180deg); color: var(--ink-muted); }
+.ui-kit-section > div { padding: 20px; display: grid; gap: 18px; }
+.ui-kit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ui-kit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ui-kit-demo-card { padding: 18px; }
+.ui-kit-demo-card > span { display: flex; align-items: center; gap: 5px; color: #d59200; font-weight: 500; }
+.ui-kit-demo-card h3 { margin: 10px 0 4px; }
+.ui-kit-demo-card p { margin: 0 0 16px; color: var(--ink-secondary); }
+.ui-kit-demo-card strong { font-size: 20px; }
+@media (max-width: 620px) { .ui-kit-hero h1 { font-size: 28px; } .ui-kit-page__content { width: min(calc(100% - 24px), 980px); padding-top: 16px; }.ui-kit-hero { min-height: 210px; padding: 22px; }.ui-kit-hero > svg { display: none; }.ui-kit-grid { grid-template-columns: 1fr; }.ui-kit-section > div { padding: 16px; } }

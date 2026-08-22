@@ -1,0 +1,2 @@
+export { notificationRepository, useNotificationsSnapshot } from './model/notifications';
+export type { AppNotification, NotificationScope, NotificationTone, NotificationsSnapshot } from './model/notifications';

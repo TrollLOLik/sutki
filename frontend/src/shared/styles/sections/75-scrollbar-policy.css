@@ -1,0 +1,89 @@
+/* No visible scrollbars anywhere. Scrolling remains native / touch-friendly. */
+html { scrollbar-gutter: auto !important; scrollbar-width: none !important; }
+html, body, *, [data-overlayscrollbars-viewport] { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar, [data-overlayscrollbars-viewport]::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; background: transparent !important; }
+.os-scrollbar, .os-scrollbar-corner { display: none !important; opacity: 0 !important; pointer-events: none !important; }
+
+html[data-theme='dark'].legacy-theme-palette-disabled {
+  color-scheme: dark;
+  --ink: #f4f5f7;
+  --ink-secondary: #adb3bd;
+  --ink-muted: #7f8792;
+  --surface: #17191e;
+  --surface-raised: #1c1f25;
+  --surface-muted: #23262d;
+  --surface-skeleton: #2b2e35;
+  --line: #30343c;
+  --screen: #101216;
+  --primary-light: #3a2118;
+  background: var(--screen);
+}
+html[data-theme='dark'] body,
+html[data-theme='dark'] .app-shell { background: var(--screen); }
+html[data-theme='dark'] .profile-screen { background: var(--surface); }
+html[data-theme='dark'] .listing-card,
+html[data-theme='dark'] .desktop-topbar,
+html[data-theme='dark'] .search-pill,
+html[data-theme='dark'] .circle-control,
+html[data-theme='dark'] .secondary-controls > button,
+html[data-theme='dark'] .profile-card,
+html[data-theme='dark'] .profile-signout-button:not(.ui-button--system) { background: var(--surface-raised); color: var(--ink); }
+html[data-theme='dark'] .listing-card.highlighted { background: var(--surface); }
+html[data-theme='dark'] .header-backdrop { background: rgba(16, 18, 22, .88); }
+html[data-theme='dark'] .tab-bar-material { background: rgba(23, 25, 30, .86); border-color: var(--line); }
+html[data-theme='dark'] .profile-complete-message,
+html[data-theme='dark'] .profile-security-method em,
+html[data-theme='dark'] .profile-session > div > em { background: #173523; color: #67d391; }
+html[data-theme='dark'] .profile-danger-outline:not(.ui-button--system),
+html[data-theme='dark'] .profile-session > button:not(.ui-icon-button--system),
+html[data-theme='dark'] .profile-danger-card > span { background: #3a2022; }
+html[data-theme='dark'] .profile-delete-warning { background: #3b2b17; color: #f2bd75; }
+
+@media (min-width: 900px) {
+  .profile-settings-tab-panel { transition: none !important; will-change: auto; }
+  .profile-mobile-header { display: none; }
+  .profile-content { width: min(calc(100% - 48px), 980px); padding: calc(var(--desktop-menu-height) + 18px) 0 64px; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 12px; }
+  .profile-detail-layout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 320px); align-items: start; gap: 20px; }
+  .profile-detail-primary,
+  .profile-detail-summary { min-width: 0; display: grid; align-content: start; gap: 12px; }
+  .profile-detail-primary { position: sticky; top: calc(var(--desktop-menu-height) + 18px); }
+  .profile-section { min-width: 0; }
+  .profile-hero { padding: 18px; }
+  .profile-detail-primary .profile-hero { min-height: 148px; }
+  .profile-avatar-ring { width: 88px; height: 88px; border-radius: 50%; }
+  .profile-avatar-ring img, .profile-avatar-ring strong { border-radius: 50%; }
+  .profile-detail-primary .profile-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-detail-primary .profile-metric { min-height: 70px; padding: 9px 10px; gap: 8px; border-right: 1px solid color-mix(in srgb, var(--line) 58%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent); }
+  .profile-detail-primary .profile-metric:nth-child(2n) { border-right: 0; }
+  .profile-detail-primary .profile-metric:nth-last-child(-n + 2) { border-bottom: 0; }
+  .profile-detail-primary .profile-metric > .ui-stat__icon { width: 34px; height: 34px; }
+  .profile-detail-primary .profile-metric strong { font-size: 13px; line-height: 17px; }
+  .profile-detail-primary .profile-metric small { margin-top: 0; font-size: 10px; line-height: 14px; }
+  .profile-detail-summary .profile-action-row { min-height: 64px; padding: 9px 13px; }
+  .profile-detail-summary .profile-action-row:not(:last-child)::after { right: 13px; left: 62px; }
+  .profile-detail-summary .profile-theme-card { padding: 14px; }
+  .profile-detail-summary .profile-signout-button { min-height: 44px; }
+  .profile-detail-primary .profile-guest-auth-card { padding: 18px; display: grid; gap: 16px; }
+  .profile-detail-primary .profile-guest-auth-copy { align-items: flex-start; }
+  .profile-detail-primary .profile-guest-auth-button { width: 100%; max-width: none; min-width: 0; min-height: 44px; margin-top: 0; }
+  .profile-placeholder-page { padding-top: calc(var(--desktop-menu-height) + 70px); }
+  .profile-settings-layer { padding: 24px; background: rgba(12, 15, 20, .48); animation: profile-modal-backdrop-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+  .profile-settings-layer.is-closing { animation: profile-modal-backdrop-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+  .profile-settings-shell { height: min(880px, calc(100dvh - 48px)); border: 1px solid var(--line); border-radius: 28px; overflow: hidden; box-shadow: 0 34px 100px rgba(0, 0, 0, .26); transform-origin: center; animation: profile-modal-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+  .profile-settings-layer.is-closing .profile-settings-shell { animation: profile-modal-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+  .profile-settings-header { padding-top: 10px; }
+  .profile-settings-tabs { width: min(calc(100% - 32px), 680px); margin-left: auto; margin-right: auto; }
+  .profile-settings-footer { padding-inline: max(16px, calc((100% - 680px) / 2)); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 370px) {
+  .profile-content { padding-left: 12px; padding-right: 12px; }
+  .profile-hero { padding: 16px; gap: 13px; }
+  .profile-avatar-ring { width: 78px; height: 78px; border-radius: 50%; }
+  .profile-avatar-ring img, .profile-avatar-ring strong { border-radius: 50%; }
+  .profile-metric { padding: 12px; gap: 8px; }
+  .profile-metric > span { width: 35px; height: 35px; }
+  .profile-metric strong { font-size: 13px; }
+  .profile-theme-options > button { font-size: 10px; }
+  .profile-settings-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

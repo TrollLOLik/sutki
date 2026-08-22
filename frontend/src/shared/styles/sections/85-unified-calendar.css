@@ -1,0 +1,63 @@
+/* Unified stay-date picker: same interaction and visual selection as the mobile app. */
+.calendar-days button.today:not(.range-start):not(.range-end):not(.in-range) > span {
+  border: 1.5px solid var(--primary);
+  color: var(--primary);
+}
+.calendar-days button.in-range::before,
+.calendar-days button.range-start::before,
+.calendar-days button.range-end::before { display: none !important; }
+.calendar-days button.in-range > span {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 500;
+}
+.calendar-days button.range-start > span,
+.calendar-days button.range-end > span {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 500;
+  box-shadow: 0 4px 11px rgba(255,90,31,.3);
+}
+.date-picker-sheet {
+  height: min(720px, calc(100dvh - 10px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.date-picker-sheet-header {
+  min-height: 58px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+}
+.date-picker-sheet-header h2 { margin: 0; text-align: center; font-size: 17px; font-weight: 500; }
+.date-picker-sheet-header > button:last-child {
+  width: 42px;
+  height: 42px;
+  justify-self: end;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.date-picker-sheet-scroll { min-height: 0; }
+.date-picker-sheet-scroll [data-overlayscrollbars-viewport] { overscroll-behavior: contain; }
+.date-picker-sheet-content { padding: 16px 0; }
+.date-picker-sheet-footer {
+  border-top: 1px solid var(--line);
+  padding: 12px 0 max(4px, env(safe-area-inset-bottom));
+  background: var(--surface);
+}
+.date-picker-sheet-footer .primary-button { width: 100%; }
+
+@media (min-width: 900px) {
+  .date-picker-sheet { height: min(700px, calc(100dvh - 48px)); }
+  .date-picker-sheet-content { padding: 20px 14px; }
+}
+

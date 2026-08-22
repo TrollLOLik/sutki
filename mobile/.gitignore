@@ -19,6 +19,14 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# EAS signing credentials downloaded for store submissions.
+/credentials.json
+/credentials/
+
+# RuStore signing export tool and encrypted key archive.
+/pepk*.jar
+/pepk_out*.zip
+
 # Metro
 .metro-health-check*
 

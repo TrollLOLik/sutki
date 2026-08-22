@@ -1,0 +1,152 @@
+/* Smooth-scroll system: Lenis drives the page, OverlayScrollbars handles nested panels. */
+html {
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 90, 31, .78) transparent;
+}
+body {
+  overflow-x: hidden;
+}
+html::-webkit-scrollbar { width: 10px; }
+html::-webkit-scrollbar-track { background: transparent; }
+html::-webkit-scrollbar-thumb {
+  min-height: 56px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff7a3d, #ff4f1b) border-box;
+  background-clip: padding-box;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #ff8d58, #ff3f0c) border-box;
+  background-clip: padding-box;
+}
+
+.os-theme-sutki {
+  --os-size: 12px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 4px;
+  --os-track-border-radius: 999px;
+  --os-track-bg: rgba(26, 26, 26, .035);
+  --os-track-bg-hover: rgba(26, 26, 26, .055);
+  --os-track-bg-active: rgba(26, 26, 26, .075);
+  --os-handle-border-radius: 999px;
+  --os-handle-bg: rgba(255, 90, 31, .62);
+  --os-handle-bg-hover: rgba(255, 90, 31, .88);
+  --os-handle-bg-active: var(--primary);
+  --os-handle-min-size: 48px;
+  --os-handle-perpendicular-size: 5px;
+  --os-handle-perpendicular-size-hover: 8px;
+  --os-handle-perpendicular-size-active: 8px;
+  --os-handle-interactive-area-offset: 3px;
+}
+.os-theme-sutki.os-scrollbar-horizontal {
+  --os-size: 9px;
+  --os-padding-axis: 7px;
+  --os-handle-min-size: 42px;
+  --os-handle-perpendicular-size: 3px;
+  --os-handle-perpendicular-size-hover: 6px;
+  --os-handle-perpendicular-size-active: 6px;
+}
+.os-theme-sutki .os-scrollbar-handle {
+  background: linear-gradient(180deg, rgba(255,126,70,.94), rgba(255,79,27,.94));
+  box-shadow: 0 2px 8px rgba(255, 90, 31, .2);
+}
+.os-theme-sutki.os-scrollbar-horizontal .os-scrollbar-handle {
+  background: linear-gradient(90deg, rgba(255,126,70,.94), rgba(255,79,27,.94));
+}
+
+.quick-filter-scroll {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+.quick-filter-content {
+  width: max-content;
+  min-width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 3px;
+}
+
+.search-overlay-panel {
+  height: 100dvh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.overlay-results {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+.overlay-results [data-overlayscrollbars-viewport] {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-scroll-content {
+  padding: 0 20px max(20px, env(safe-area-inset-bottom));
+}
+
+.filter-panel-scroll {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.filter-panel-scroll [data-overlayscrollbars-viewport],
+.filter-option-stack [data-overlayscrollbars-viewport] {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.filter-option-stack {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+.filter-option-stack [data-overlayscrollbars-viewport] {
+  padding: 0 16px 24px;
+}
+
+@media (min-width: 720px) {
+  .search-overlay-panel {
+    height: min(780px, calc(100dvh - 48px));
+    min-height: 0;
+    max-height: calc(100dvh - 48px);
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 900px) {
+  .bottom-sheet {
+    max-height: calc(100dvh - 48px);
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  .quick-filter-content { height: 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) { scroll-behavior: auto; }
+  html:not([data-motion='full']) .os-theme-sutki .os-scrollbar-handle { transition: none; }
+}
+
+.filter-date-subview {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.filter-date-scroll {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.filter-date-scroll [data-overlayscrollbars-viewport] {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.filter-date-scroll-content { padding-bottom: 12px; }
+.filter-date-subview > .filter-subview-footer { align-self: stretch; }

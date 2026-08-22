@@ -1,0 +1,194 @@
+:root {
+  /* Brand */
+  --ui-brand-50: #fff5f1;
+  --ui-brand-100: #ffe7dd;
+  --ui-brand-200: #ffcbb8;
+  --ui-brand-300: #ffa47f;
+  --ui-brand-400: #ff7a4a;
+  --ui-brand-500: #ff5a1f;
+  --ui-brand-600: #e64a14;
+  --ui-brand-700: #bd3910;
+  --ui-brand-800: #982f15;
+  --ui-brand-900: #7b2a17;
+
+  /* Semantic palette: mirrors mobile/src/theme/tokens.ts. */
+  color-scheme: light;
+  --primary: #ff5a1f;
+  --primary-hover: #f4511b;
+  --primary-pressed: #e64a14;
+  --primary-light: #fff1ec;
+  --primary-light-strong: #ffdfd0;
+  --primary-border: rgba(255, 90, 31, .34);
+  --primary-text: #c9400f;
+  --focus-ring: rgba(255, 90, 31, .22);
+  --ink: #1a1a1a;
+  --ink-secondary: #6b7280;
+  --ink-muted: #9aa0a6;
+  --ink-inverse: #fff;
+  --screen: #f4f5f7;
+  --surface: #fff;
+  --surface-raised: #f0f1f3;
+  --surface-muted: #f5f6f8;
+  --surface-hover: #eef1f4;
+  --surface-active: #e8ebef;
+  --surface-skeleton: #e9ebee;
+  --field-bg: #fff;
+  --line: #ececec;
+  --line-strong: #cdd2d8;
+  --glass-header: rgba(244, 245, 247, .70);
+  --glass-surface: rgba(255, 255, 255, .90);
+  --glass-surface-strong: rgba(255, 255, 255, .96);
+  --overlay: rgba(12, 16, 22, .48);
+  --overlay-soft: rgba(12, 16, 22, .38);
+  --image-control-bg: rgba(255, 255, 255, .92);
+  --image-control-text: #20242a;
+  --shadow-rgb: 20 27 37;
+  --shadow-xs: 0 2px 7px rgb(var(--shadow-rgb) / .07);
+  --shadow-sm: 0 7px 22px rgb(var(--shadow-rgb) / .08);
+  --shadow-md: 0 15px 38px rgb(var(--shadow-rgb) / .12);
+  --shadow-lg: 0 30px 90px rgb(var(--shadow-rgb) / .22);
+  --success: #2ead6b;
+  --success-strong: #23985c;
+  --success-soft: #e8f7ef;
+  --success-text: #167347;
+  --success-border: #ccebd9;
+  --info: #2f80ed;
+  --info-soft: #eaf2fe;
+  --warning: #8c5a12;
+  --warning-soft: #fff4e2;
+  --warning-border: #f1d9b0;
+  --danger: #e5484d;
+  --danger-strong: #cf3d42;
+  --danger-soft: #fdecec;
+  --danger-text: #c43b3b;
+  --danger-border: #f1c9c9;
+  --rating: #ffb400;
+  --star: #ffb400;
+  --map-base: #e9edf0;
+  --map-road: #d5dbe0;
+  --map-road-edge: #fff;
+  --map-building: #d4d8dc;
+  --map-park: #cae5cf;
+
+  /* One motion contract for shared controls and page chrome. */
+  --ui-motion-fast-duration: 140ms;
+  --ui-motion-duration: 250ms;
+  --ui-motion-slow-duration: 360ms;
+  --ui-motion-standard: cubic-bezier(.2, .8, .2, 1);
+  --ui-motion-spring: cubic-bezier(.2, 1.35, .45, 1);
+  --motion-fast: var(--ui-motion-fast-duration);
+  --motion-base: var(--ui-motion-duration);
+  --motion-slow: var(--ui-motion-slow-duration);
+  --motion-standard: var(--ui-motion-standard);
+  --motion-spring: var(--ui-motion-spring);
+
+  /* Spacing */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-space-10: 40px;
+  --ui-space-12: 48px;
+
+  /* Radius */
+  --ui-radius-xs: 8px;
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 24px;
+  --ui-radius-2xl: 28px;
+  --ui-radius-round: 999px;
+
+  /* Typography */
+  --ui-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ui-font-display: 36px/40px var(--ui-font-family);
+  --ui-font-title1: 30px/36px var(--ui-font-family);
+  --ui-font-title2: 24px/32px var(--ui-font-family);
+  --ui-font-title3: 20px/28px var(--ui-font-family);
+  --ui-font-headline: 18px/28px var(--ui-font-family);
+  --ui-font-body: 16px/24px var(--ui-font-family);
+  --ui-font-subhead: 14px/20px var(--ui-font-family);
+  --ui-font-caption: 12px/16px var(--ui-font-family);
+  --ui-font-label: 11px/16px var(--ui-font-family);
+
+  /* Layering */
+  --ui-z-sticky: 50;
+  --ui-z-popover: 200;
+  --ui-z-overlay: 500;
+  --ui-z-toast: 700;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --primary: #ff6b35;
+  --primary-hover: #ff7b4b;
+  --primary-pressed: #e64a14;
+  --primary-light: #3a2318;
+  --primary-light-strong: #512a1d;
+  --primary-border: rgba(255, 106, 53, .42);
+  --primary-text: #ff8a5c;
+  --focus-ring: rgba(255, 106, 53, .30);
+  --ink: #f2f3f5;
+  --ink-secondary: #9ba1aa;
+  --ink-muted: #6e747d;
+  --ink-inverse: #fff;
+  --screen: #0d0f12;
+  --surface: #17181c;
+  --surface-raised: #202329;
+  --surface-muted: #1f2126;
+  --surface-hover: #26292f;
+  --surface-active: #2a2d33;
+  --surface-skeleton: #2a2d33;
+  --field-bg: #1f2126;
+  --line: #2c2f35;
+  --line-strong: #3b3f47;
+  --glass-header: rgba(13, 15, 18, .72);
+  --glass-surface: rgba(23, 24, 28, .88);
+  --glass-surface-strong: rgba(23, 24, 28, .96);
+  --overlay: rgba(0, 0, 0, .64);
+  --overlay-soft: rgba(0, 0, 0, .52);
+  --image-control-bg: rgba(15, 18, 23, .82);
+  --image-control-text: #f7f8fa;
+  --shadow-rgb: 0 0 0;
+  --shadow-xs: 0 2px 9px rgb(var(--shadow-rgb) / .24);
+  --shadow-sm: 0 9px 26px rgb(var(--shadow-rgb) / .28);
+  --shadow-md: 0 18px 48px rgb(var(--shadow-rgb) / .36);
+  --shadow-lg: 0 34px 100px rgb(var(--shadow-rgb) / .50);
+  --success: #3dbf7c;
+  --success-strong: #54ca8b;
+  --success-soft: #173226;
+  --success-text: #3dbf7c;
+  --success-border: #28593a;
+  --info: #4d94f2;
+  --info-soft: #16283e;
+  --warning: #f0be76;
+  --warning-soft: #3a2a17;
+  --warning-border: #664924;
+  --danger: #f0565b;
+  --danger-strong: #ff6d72;
+  --danger-soft: #3b1d1f;
+  --danger-text: #f25b60;
+  --danger-border: #663037;
+  --rating: #ffb400;
+  --star: #ffb400;
+  --map-base: #252c33;
+  --map-road: #39424b;
+  --map-road-edge: #59636e;
+  --map-building: #343c44;
+  --map-park: #294635;
+}
+
+.ui-root--compact {
+  --ui-control-height-sm: 32px;
+  --ui-control-height-md: 40px;
+  --ui-control-height-lg: 48px;
+}
+
+.ui-root--comfortable {
+  --ui-control-height-sm: 36px;
+  --ui-control-height-md: 48px;
+  --ui-control-height-lg: 56px;
+}

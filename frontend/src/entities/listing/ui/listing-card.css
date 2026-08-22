@@ -1,0 +1,36 @@
+.listing-owner-state {
+  position: relative;
+  z-index: 2;
+  margin-top: 9px;
+  color: var(--ink-secondary);
+  pointer-events: none;
+}
+
+.listing-owner-state > span {
+  min-height: 25px;
+  padding: 0 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.listing-owner-state.is-warning > span {
+  background: var(--warning-soft, var(--primary-light));
+  color: var(--primary);
+}
+
+.listing-owner-state.is-danger > span {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.listing-owner-state p {
+  margin: 7px 0 0;
+  color: var(--ink-secondary);
+  font-size: 11px;
+  line-height: 15px;
+}

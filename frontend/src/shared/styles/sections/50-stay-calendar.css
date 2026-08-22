@@ -1,0 +1,85 @@
+/* Calendar/date flow copied from the mobile app. */
+.quick-filter-scroll button {
+  background: #fff;
+  color: var(--ink-secondary);
+  box-shadow: 0 1px 2px rgba(23, 29, 38, .025);
+}
+.quick-filter-scroll button:hover { border-color: #d5d8dc; background: #fff; }
+.quick-filter-scroll button.selected:hover { border-color: var(--primary); background: var(--primary); }
+
+.listing-card[role="link"] { cursor: pointer; }
+.listing-card[role="link"]:focus-visible { outline: 3px solid rgba(255,90,31,.22); outline-offset: 2px; }
+
+.calendar-range {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 12px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgba(24,31,41,.055);
+}
+.calendar-range.has-error { border-color: #dc4a42; box-shadow: 0 0 0 3px rgba(220,74,66,.09); }
+.calendar-range-header { height: 46px; padding: 0 2px 8px; display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; }
+.calendar-range-header strong { text-align: center; text-transform: capitalize; font-size: 17px; font-weight: 500; }
+.calendar-range-header button { width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 50%; padding: 0; display: grid; place-items: center; background: #fff; color: var(--ink); cursor: pointer; }
+.calendar-range-header button:last-child { justify-self: end; }
+.calendar-range-header button:disabled { opacity: .28; cursor: default; }
+.calendar-weekdays, .calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-weekdays { margin-bottom: 4px; }
+.calendar-weekdays span { height: 28px; display: grid; place-items: center; color: var(--ink-muted); font-size: 10px; font-weight: 500; text-transform: uppercase; }
+.calendar-days button { position: relative; min-width: 0; height: 44px; border: 0; padding: 4px 0; display: grid; place-items: center; background: transparent; color: var(--ink); cursor: pointer; }
+.calendar-days button > span { position: relative; z-index: 2; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 500; }
+.calendar-days button.today:not(.range-start):not(.range-end) > span { border: 1.5px solid var(--primary); color: var(--primary); }
+.calendar-days button.in-range::before { content: ''; position: absolute; z-index: 0; left: 0; right: 0; top: 8px; bottom: 8px; background: var(--primary-light); }
+.calendar-days button.range-start::before { content: ''; position: absolute; z-index: 0; left: 50%; right: 0; top: 8px; bottom: 8px; background: var(--primary-light); }
+.calendar-days button.range-end::before { content: ''; position: absolute; z-index: 0; left: 0; right: 50%; top: 8px; bottom: 8px; background: var(--primary-light); }
+.calendar-days button.range-start.range-end::before { display: none; }
+.calendar-days button.range-start > span, .calendar-days button.range-end > span { background: var(--primary); color: #fff; font-weight: 500; box-shadow: 0 4px 11px rgba(255,90,31,.3); }
+.calendar-days button.in-range > span { color: var(--primary); font-weight: 500; }
+.calendar-days button.outside { opacity: .18; }
+.calendar-days button.disabled { opacity: .34; cursor: default; }
+.calendar-days button.disabled:not(.outside) > span { text-decoration: line-through; text-decoration-thickness: 1px; }
+.calendar-selection-panel { margin: 14px 2px 2px; border-radius: 18px; padding: 12px; display: grid; gap: 11px; background: var(--surface-muted); }
+.calendar-selection-hint { display: flex; align-items: center; gap: 9px; }
+.calendar-selection-hint > span { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; background: var(--primary-light); color: var(--primary); }
+.calendar-selection-hint strong { color: var(--ink-secondary); font-size: 12px; font-weight: 500; }
+.calendar-selection-dates { display: grid; grid-template-columns: minmax(0,1fr) 34px minmax(0,1fr); align-items: center; gap: 8px; }
+.calendar-selection-dates > div { min-width: 0; display: grid; gap: 3px; }
+.calendar-selection-dates small { color: var(--ink-muted); font-size: 9px; font-weight: 500; letter-spacing: .04em; }
+.calendar-selection-dates strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; font-weight: 500; }
+.calendar-selection-dates > span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--ink-muted); }
+.calendar-selection-dates > span.complete { background: var(--primary-light); color: var(--primary); }
+
+.calendar-sheet-toolbar { margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.calendar-sheet-toolbar button { border: 0; padding: 5px 0; background: transparent; color: var(--primary); font-size: 13px; font-weight: 500; cursor: pointer; }
+.calendar-sheet-toolbar span { color: var(--ink-muted); font-size: 12px; font-weight: 500; }
+.calendar-sheet-actions { margin-bottom: 2px; }
+.filter-date-scroll-content { padding: 16px; }
+.filter-date-subview .calendar-range { max-width: 560px; }
+
+.booking-form-section > .calendar-range,
+.booking-dates-field > .calendar-range { max-width: none; }
+.booking-unavailable-legend { margin-top: -5px; display: flex; align-items: center; gap: 8px; color: var(--ink-secondary); }
+.booking-unavailable-legend-mark { position: relative; width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface-muted); overflow: hidden; }
+.booking-unavailable-legend-mark::after { content: ''; position: absolute; left: -1px; right: -1px; top: 7px; height: 1.5px; background: var(--ink-muted); transform: rotate(-45deg); }
+.booking-unavailable-legend small { font-size: 12px; }
+
+@media (max-width: 420px) {
+  .calendar-range { padding: 9px; border-radius: 19px; }
+  .calendar-days button { height: 41px; }
+  .calendar-days button > span { width: 34px; height: 34px; font-size: 12px; }
+  .calendar-days button.in-range::before,
+  .calendar-days button.range-start::before,
+  .calendar-days button.range-end::before { top: 7px; bottom: 7px; }
+  .calendar-selection-panel { padding: 10px; }
+  .calendar-selection-dates strong { font-size: 13px; }
+}
+
+@media (min-width: 900px) {
+  .bottom-sheet:has(.calendar-range) { width: min(100%, 650px); }
+  .booking-form-section > .calendar-range,
+  .booking-dates-field > .calendar-range { padding: 16px; }
+  .booking-form-section .calendar-days button { height: 48px; }
+}

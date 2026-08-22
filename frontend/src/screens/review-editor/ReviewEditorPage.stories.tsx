@@ -1,0 +1,12 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { requestRepository } from '@features/requests';
+import { reviewRepository } from '@features/reviews';
+import { ReviewEditorPage } from '.';
+const noop = () => undefined;
+const meta = { title: 'Pages/Reviews/Editor', component: ReviewEditorPage, parameters: { layout: 'fullscreen' }, tags: ['autodocs'], loaders: [async () => { requestRepository.reset(); reviewRepository.reset(); return {}; }], args: { requestId: 9203, onBack: noop, onDone: noop, onHome: noop, onCreate: noop, onMap: noop, onMessages: noop, onProfile: noop, onToast: noop } } satisfies Meta<typeof ReviewEditorPage>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const NewReview: Story = {};
+export const RejectedReview: Story = { args: { requestId: 9174 } };
+export const MissingRequest: Story = { args: { requestId: 99999 } };
+export const Mobile: Story = { parameters: { viewport: { defaultViewport: 'mobile1' } } };

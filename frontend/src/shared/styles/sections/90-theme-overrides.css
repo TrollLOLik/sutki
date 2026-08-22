@@ -1,0 +1,3606 @@
+/* ========================================================================== 
+   Theme audit 2026-07 — unified semantic palette for every screen
+   ========================================================================== */
+:where(.legacy-theme-palette-disabled) {
+  color-scheme: light;
+  --primary: #ff5a1f;
+  --primary-hover: #f4511b;
+  --primary-pressed: #e64a14;
+  --primary-light: #fff1ec;
+  --primary-light-strong: #ffdfd0;
+  --primary-border: rgba(255, 90, 31, .34);
+  --primary-text: #c9400f;
+  --focus-ring: rgba(255, 90, 31, .22);
+
+  --ink: #1a1a1a;
+  --ink-secondary: #6b7280;
+  --ink-muted: #9aa0a6;
+  --ink-inverse: #ffffff;
+
+  --screen: #f4f5f7;
+  --surface: #ffffff;
+  --surface-raised: #f0f1f3;
+  --surface-muted: #f5f6f8;
+  --surface-hover: #eef1f4;
+  --surface-active: #e8ebef;
+  --surface-skeleton: #e9ebee;
+  --field-bg: #ffffff;
+  --line: #ececec;
+  --line-strong: #cdd2d8;
+
+  --glass-header: rgba(244, 245, 247, .70);
+  --glass-surface: rgba(255, 255, 255, .90);
+  --glass-surface-strong: rgba(255, 255, 255, .96);
+  --overlay: rgba(12, 16, 22, .48);
+  --overlay-soft: rgba(12, 16, 22, .38);
+  --image-control-bg: rgba(255, 255, 255, .92);
+  --image-control-text: #20242a;
+
+  --shadow-rgb: 20 27 37;
+  --shadow-xs: 0 2px 7px rgb(var(--shadow-rgb) / .07);
+  --shadow-sm: 0 7px 22px rgb(var(--shadow-rgb) / .08);
+  --shadow-md: 0 15px 38px rgb(var(--shadow-rgb) / .12);
+  --shadow-lg: 0 30px 90px rgb(var(--shadow-rgb) / .22);
+
+  --success: #2ead6b;
+  --success-strong: #23985c;
+  --success-soft: #e8f7ef;
+  --success-text: #167347;
+  --success-border: #ccebd9;
+  --info: #2f80ed;
+  --info-soft: #eaf2fe;
+  --warning: #8c5a12;
+  --warning-soft: #fff4e2;
+  --warning-border: #f1d9b0;
+  --danger: #e5484d;
+  --danger-strong: #cf3d42;
+  --danger-soft: #fdecec;
+  --danger-text: #c43b3b;
+  --danger-border: #f1c9c9;
+  --rating: #ffb400;
+  --star: #ffb400;
+
+  --map-base: #e9edf0;
+  --map-road: #d5dbe0;
+  --map-road-edge: #ffffff;
+  --map-building: #d4d8dc;
+  --map-park: #cae5cf;
+}
+
+:where(.legacy-theme-palette-dark-disabled) {
+  color-scheme: dark;
+  --primary: #ff6b35;
+  --primary-hover: #ff7b4b;
+  --primary-pressed: #e64a14;
+  --primary-light: #3a2318;
+  --primary-light-strong: #512a1d;
+  --primary-border: rgba(255, 106, 53, .42);
+  --primary-text: #ff8a5c;
+  --focus-ring: rgba(255, 106, 53, .30);
+
+  --ink: #f2f3f5;
+  --ink-secondary: #9ba1aa;
+  --ink-muted: #6e747d;
+  --ink-inverse: #ffffff;
+
+  --screen: #0d0f12;
+  --surface: #17181c;
+  --surface-raised: #202329;
+  --surface-muted: #1f2126;
+  --surface-hover: #26292f;
+  --surface-active: #2a2d33;
+  --surface-skeleton: #2a2d33;
+  --field-bg: #1f2126;
+  --line: #2c2f35;
+  --line-strong: #3b3f47;
+
+  --glass-header: rgba(13, 15, 18, .72);
+  --glass-surface: rgba(23, 24, 28, .88);
+  --glass-surface-strong: rgba(23, 24, 28, .96);
+  --overlay: rgba(0, 0, 0, .64);
+  --overlay-soft: rgba(0, 0, 0, .52);
+  --image-control-bg: rgba(15, 18, 23, .82);
+  --image-control-text: #f7f8fa;
+
+  --shadow-rgb: 0 0 0;
+  --shadow-xs: 0 2px 9px rgb(var(--shadow-rgb) / .24);
+  --shadow-sm: 0 9px 26px rgb(var(--shadow-rgb) / .28);
+  --shadow-md: 0 18px 48px rgb(var(--shadow-rgb) / .36);
+  --shadow-lg: 0 34px 100px rgb(var(--shadow-rgb) / .50);
+
+  --success: #3dbf7c;
+  --success-strong: #54ca8b;
+  --success-soft: #173226;
+  --success-text: #3dbf7c;
+  --success-border: #28593a;
+  --info: #4d94f2;
+  --info-soft: #16283e;
+  --warning: #f0be76;
+  --warning-soft: #3a2a17;
+  --warning-border: #664924;
+  --danger: #f0565b;
+  --danger-strong: #ff6d72;
+  --danger-soft: #3b1d1f;
+  --danger-text: #f25b60;
+  --danger-border: #663037;
+  --rating: #ffb400;
+  --star: #ffb400;
+
+  --map-base: #252c33;
+  --map-road: #39424b;
+  --map-road-edge: #59636e;
+  --map-building: #343c44;
+  --map-park: #294635;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: var(--screen);
+  color: var(--ink);
+}
+
+html { accent-color: var(--primary); }
+body { transition: background-color 160ms ease, color 160ms ease; }
+button,
+input,
+textarea,
+select { color: inherit; }
+input,
+textarea,
+select { caret-color: var(--primary); }
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not([type='submit']):not([type='reset']):focus,
+textarea:focus,
+select:focus { outline: 0; }
+input::placeholder,
+textarea::placeholder { color: var(--ink-muted); opacity: 1; }
+button:focus-visible,
+[role='button']:focus-visible,
+[role='link']:focus-visible { outline-color: var(--focus-ring); }
+::selection { background: var(--primary-light-strong); color: var(--ink); }
+input[type='date'], input[type='time'] { color-scheme: inherit; }
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--field-bg) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* Shared glass and modal layers */
+.header-backdrop,
+.desktop-topbar,
+.detail-floating-header.show-title,
+.booking-mobile-header,
+.create-page-header { background: var(--glass-header); border-color: var(--line); }
+.filter-panel-header,
+.filter-panel-footer,
+.detail-mobile-booking-bar,
+.booking-mobile-submit,
+.create-page-footer,
+.profile-settings-footer { background: var(--glass-surface-strong); border-color: var(--line); }
+.tab-bar-material { background: var(--glass-surface); border-color: var(--line); box-shadow: var(--shadow-md); }
+.overlay-layer { background: var(--overlay-soft); }
+.filter-backdrop,
+.profile-dialog-layer,
+.profile-settings-layer,
+.birthday-picker-layer { background: var(--overlay); }
+.search-overlay-panel,
+.filter-panel,
+.filter-subview,
+.profile-settings-shell,
+.profile-dialog,
+.birthday-picker-sheet { background: var(--surface); color: var(--ink); border-color: var(--line); }
+
+/* Navigation and controls */
+.search-pill,
+.circle-control,
+.secondary-controls > button,
+.quick-filter-scroll button,
+.filter-segmented button,
+.chip-grid button,
+.price-presets button,
+.option-list button,
+.guest-counter button,
+.inline-counter button,
+.secondary-button,
+.date-preset-row button,
+.filter-close,
+.filter-subview-header button,
+.calendar-range-header button,
+.profile-settings-header > button:not(.ui-icon-button--system),
+.birthday-picker-header > button,
+.detail-round-button,
+.booking-title-row > button,
+.booking-guests-stepper button,
+.booking-secondary-button,
+.create-back-button,
+.create-secondary-button {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.quick-filter-scroll button { color: var(--ink-secondary); box-shadow: var(--shadow-xs); }
+.quick-filter-scroll button:hover,
+.booking-secondary-button:hover,
+.booking-title-row > button:hover,
+.booking-guests-stepper button:not(:disabled):hover,
+.create-back-button:hover,
+.create-secondary-button:hover { background: var(--surface-hover); border-color: var(--line-strong); }
+.quick-filter-scroll button.selected,
+.quick-filter-scroll button.selected:hover { background: var(--primary); border-color: var(--primary); color: var(--ink-inverse); }
+.desktop-navigation button:hover { background: var(--surface-hover); }
+.primary-button { color: var(--ink-inverse); }
+
+/* Cards and neutral surfaces */
+.listing-card,
+.listing-card.highlighted,
+.detail-surface,
+.detail-stat-grid > button,
+.detail-stat-grid > div,
+.detail-amenities-grid > div,
+.detail-rules-grid > div,
+.detail-owner-card,
+.detail-booking-card,
+.booking-listing-summary,
+.booking-form-section,
+.booking-summary-card,
+.booking-success-card,
+.create-step-panel,
+.create-category-option,
+.create-map-card,
+.create-amenity-grid button,
+.create-photo-tips article,
+.create-listing-preview,
+.create-sidebar-card,
+.create-step-list,
+.create-success-card,
+.profile-card,
+.profile-signout-button:not(.ui-button--system),
+.profile-session,
+.birthday-wheel-card,
+.calendar-range {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--shadow-sm);
+}
+.listing-card.highlighted { border-color: var(--primary-border); box-shadow: 0 10px 28px color-mix(in srgb, var(--primary) 14%, transparent); }
+@media (hover: hover) and (pointer: fine) {
+  .listing-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
+}
+.filter-card,
+.filter-toggle-card { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow-xs); }
+.filter-toggle-card.selected,
+.filter-segmented button.selected,
+.chip-grid button.selected,
+.option-list button.selected,
+.create-category-option.selected,
+.create-amenity-grid button.selected { background: var(--primary-light); border-color: var(--primary-border); color: var(--ink); }
+
+/* Image controls remain readable over photos in both themes */
+.image-heart,
+.viewed-chip,
+.detail-gallery-side button > span,
+.create-photo-order button,
+.map-placeholder-label {
+  background: var(--image-control-bg);
+  color: var(--image-control-text);
+  border-color: color-mix(in srgb, var(--image-control-text) 16%, transparent);
+}
+.detail-round-button { background: var(--image-control-bg); color: var(--image-control-text); border-color: color-mix(in srgb, var(--image-control-text) 18%, transparent); box-shadow: var(--shadow-sm); }
+.detail-round-button.favorite { background: var(--primary-light); color: var(--primary); border-color: var(--primary-border); }
+.rating-row > span svg,
+.grid-price-row span svg,
+.detail-owner-rating,
+.detail-similar-price svg { color: var(--rating); }
+.empty-illustration { background: radial-gradient(circle at 40% 35%, var(--surface), var(--primary-light)); }
+
+/* Forms */
+.overlay-search-field,
+.filter-search-field,
+.number-field,
+.profile-dialog > input { background: var(--field-bg); border-color: var(--line); color: var(--ink); }
+.booking-date-grid label,
+.booking-contact-grid .ui-input,
+.create-input-wrap,
+.create-description-field textarea,
+.profile-field input,
+.profile-field select,
+.profile-field textarea {
+  background: var(--field-bg);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.booking-date-grid label:focus-within,
+.booking-contact-grid .ui-input:focus-within,
+.create-input-wrap:focus-within,
+.create-description-field textarea:focus,
+.profile-field input:focus,
+.profile-field select:focus,
+.profile-field textarea:focus {
+  border-color: var(--line);
+  box-shadow: none;
+  outline: 0;
+}
+.booking-date-grid input { color-scheme: inherit; }
+.field-error,
+.booking-field-error,
+.booking-contact-grid .ui-field__message,
+.profile-form-error { color: var(--danger); }
+.booking-date-grid label.has-error,
+.booking-contact-grid .ui-input--invalid,
+.calendar-range.has-error { border-color: var(--danger); }
+.calendar-range.has-error { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
+
+/* Calendar */
+.calendar-range { box-shadow: var(--shadow-sm); }
+.calendar-selection-panel { background: var(--surface-muted); }
+.calendar-selection-dates > span { background: var(--surface); color: var(--ink-muted); }
+.calendar-days button.range-start > span,
+.calendar-days button.range-end > span,
+.calendar-days button.in-range > span { color: var(--ink-inverse); }
+.calendar-days button.disabled:not(.outside) > span { color: var(--ink-muted); }
+.date-picker-sheet-footer { background: var(--surface); }
+
+/* Detail placeholders and sticky booking */
+.detail-page,
+.booking-page,
+.create-page-shell,
+.profile-screen { background: var(--surface); color: var(--ink); }
+.detail-map-placeholder,
+.create-map-placeholder { background: var(--map-base); border-color: var(--line); }
+.map-road { background: var(--map-road); border-color: var(--map-road-edge); }
+.map-block { background: var(--map-building); border-color: var(--map-road-edge); }
+.map-park { background: var(--map-park); }
+.detail-map-placeholder::before { opacity: .52; }
+html[data-theme='dark'] .detail-map-placeholder::before { filter: invert(.28); opacity: .22; }
+html[data-theme='dark'] .list-image-wrap img,
+html[data-theme='dark'] .grid-image-wrap img,
+html[data-theme='dark'] .detail-gallery img,
+html[data-theme='dark'] .detail-similar-image img,
+html[data-theme='dark'] .booking-listing-image img,
+html[data-theme='dark'] .create-preview-image img { filter: saturate(1.02) contrast(1.02) brightness(.90); }
+
+/* Semantic states */
+.detail-owner-badges i,
+.detail-booking-safe,
+.booking-date-result,
+.booking-safe-note,
+.booking-success-icon,
+.create-step-list li.done button > span,
+.create-success-icon,
+.profile-metric.success > .ui-stat__icon,
+.profile-complete-message,
+.profile-security-method em,
+.profile-session > div > em {
+  background: var(--success-soft);
+  color: var(--success-text);
+  border-color: var(--success-border);
+}
+.booking-safe-note small,
+.detail-booking-safe small { color: var(--success-text); }
+.create-publish-button { background: var(--success); color: var(--ink-inverse); box-shadow: none; }
+.create-publish-button:hover { background: var(--success-strong); }
+.profile-session > button:not(.ui-icon-button--system),
+.profile-danger-outline:not(.ui-button--system),
+.profile-danger-card > span { background: var(--danger-soft); color: var(--danger-text); border-color: var(--danger-border); }
+.profile-danger-card button:not(.ui-button--system),
+.profile-dialog-danger { background: var(--danger); color: var(--ink-inverse); }
+.profile-danger-card button:not(.ui-button--system):hover,
+.profile-dialog-danger:hover { background: var(--danger-strong); }
+.profile-danger-title,
+.profile-avatar-remove { color: var(--danger-text); }
+.profile-delete-warning { background: var(--warning-soft); color: var(--warning); border: 1px solid var(--warning-border); }
+.create-hint-card { background: var(--primary-light); border-color: var(--primary-border); color: var(--ink-secondary); }
+
+/* Create listing */
+.create-page-header,
+.create-page-footer { box-shadow: var(--shadow-xs); }
+.create-save-state { background: var(--glass-surface); border-color: var(--line); }
+.create-progress-bars button { background: var(--surface-active); }
+.create-category-option,
+.create-chip-row button,
+.create-amenity-grid button,
+.create-photo-tips article,
+.create-photo-dropzone,
+.create-listing-preview,
+.create-sidebar-card,
+.create-step-list,
+.create-step-list li button > span { background-color: var(--surface); border-color: var(--line); color: var(--ink); }
+.create-category-option.selected,
+.create-amenity-grid button.selected,
+.create-photo-dropzone:hover { background: var(--primary-light); }
+.create-chip-row button { color: var(--ink-secondary); }
+.create-chip-row button.selected,
+.create-step-list li.active button > span { background: var(--primary); color: var(--ink-inverse); border-color: var(--primary); }
+.create-suggestion-list { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow-md); }
+.create-suggestion-list button:hover { background: var(--surface-hover); }
+.create-map-card-head,
+.create-map-address { background: var(--surface); color: var(--ink); }
+.create-map-block { background: color-mix(in srgb, var(--map-building) 84%, #c49b72); border-color: var(--line-strong); }
+.create-map-road { border-color: var(--map-road-edge); }
+.create-photo-dropzone { color: var(--ink-secondary); }
+.create-success-card { box-shadow: var(--shadow-lg); }
+
+/* Profile/settings */
+.profile-settings-layer { color: var(--ink); }
+.profile-settings-shell { background: var(--surface); box-shadow: var(--shadow-lg); }
+.profile-theme-card > .profile-theme-options { background: var(--surface-muted); }
+.profile-theme-options > button.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-xs); }
+.profile-session-icon { background: var(--primary-light); color: var(--primary); }
+.profile-dialog { box-shadow: var(--shadow-lg); }
+.profile-progress { background: var(--surface-muted); }
+
+/* Dark-only contrast corrections for elements painted over media */
+html[data-theme='dark'] .promotion-badge,
+html[data-theme='dark'] .listing-status-badge,
+html[data-theme='dark'] .detail-photo-count,
+html[data-theme='dark'] .create-preview-category,
+html[data-theme='dark'] .create-make-cover,
+html[data-theme='dark'] .create-remove-photo { color: #fff; }
+html[data-theme='dark'] .detail-lightbox { background: #08090c; }
+
+/* Disabled/hover states are consistent and never lose contrast */
+button:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled { cursor: not-allowed; }
+button:disabled { color: var(--ink-muted); }
+.primary-button:disabled,
+.booking-primary-button:disabled,
+.create-publish-button:disabled,
+.profile-primary-button:disabled { color: color-mix(in srgb, var(--ink-inverse) 72%, transparent); }
+
+@media (hover: hover) and (pointer: fine) {
+  .search-pill:hover,
+  .circle-control:hover,
+  .secondary-controls > button:hover,
+  .calendar-range-header button:not(:disabled):hover,
+  .profile-settings-header > button:not(.ui-icon-button--system):hover,
+  .birthday-picker-header > button:hover { background: var(--surface-hover); border-color: var(--line-strong); }
+}
+
+@media (max-width: 899px) {
+  .detail-floating-header.show-title,
+  .booking-mobile-header,
+  .create-page-header { box-shadow: 0 1px 0 var(--line); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) body { transition: none; }
+}
+
+/* Final component-level audit fixes for controls with browser-native painting. */
+.web-switch { background: var(--surface-active); }
+.web-switch i { background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-xs); }
+.web-switch.checked { background: var(--primary); }
+.dual-range-track { background: var(--surface-active); }
+.dual-range input::-webkit-slider-thumb { border-color: var(--line-strong); background: var(--surface); box-shadow: var(--shadow-sm); }
+.dual-range input::-moz-range-thumb { border-color: var(--line-strong); background: var(--surface); box-shadow: var(--shadow-sm); }
+.detail-booking-safe small { color: var(--success); }
+.create-save-state svg,
+.create-success-eyebrow { color: var(--success); }
+.create-hint-card p { color: var(--ink-secondary); }
+.create-category-option:hover { border-color: var(--line-strong); box-shadow: var(--shadow-sm); }
+.profile-avatar-remove { color: var(--danger-text); }
+.lightbox-thumbnails button { background: #111318; }
+
+/* Text rendered on soft accent fills uses a stronger accessible tone. */
+.filter-toggle-card.selected,
+.filter-segmented button.selected,
+.chip-grid button.selected,
+.option-list button.selected,
+.filter-option-stack button.selected,
+.calendar-selection-dates > span.complete,
+.detail-section-heading > span { color: var(--primary-text); }
+.detail-stat-icon.primary,
+.detail-amenities-grid > div > span,
+.detail-rules-grid > div > span,
+.sheet-intro > span,
+.result-icon,
+.profile-theme-card > header > span,
+.birthday-picker-icon { color: var(--primary); }
+
+.detail-similar-section { min-width: 0; }
+.profile-security-panel { align-content: start; }
+.birthday-wheel-day button,
+.birthday-wheel-year button { font-variant-numeric: tabular-nums; }
+
+/* ========================================================================== 
+   Exhaustive component pass: remaining nested surfaces and theme edge cases
+   ========================================================================== */
+option { background: var(--surface); color: var(--ink); }
+
+/* These nested cards were still carrying legacy light-only fills. */
+.booking-success-listing,
+.booking-guests-stepper,
+.create-rule-row,
+.create-review-list,
+.create-photo-item {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* Accent icon wells and contextual status blocks. */
+.booking-section-heading > span,
+.detail-section-heading > span,
+.sheet-intro > span,
+.result-icon,
+.profile-theme-card > header > span,
+.birthday-picker-icon {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.booking-date-result,
+.booking-safe-note,
+.detail-booking-safe { border: 1px solid var(--success-border); }
+
+/* Remove the last light-only control shadows and borders. */
+.search-pill,
+.circle-control { box-shadow: var(--shadow-xs); }
+.search-overlay-panel,
+.filter-panel,
+.filter-subview,
+.profile-settings-shell,
+.profile-dialog,
+.birthday-picker-sheet { box-shadow: var(--shadow-lg); }
+.booking-mobile-submit { box-shadow: 0 -10px 30px rgb(var(--shadow-rgb) / .18); }
+.map-placeholder-label { box-shadow: var(--shadow-sm); }
+
+/* Primary actions retain the product gradient but derive glow from the theme. */
+.booking-primary-button,
+.booking-mobile-submit button,
+.detail-primary-cta,
+.detail-mobile-booking-bar button {
+  color: var(--ink-inverse);
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+.profile-primary-button,
+.primary-button { box-shadow: 0 7px 20px color-mix(in srgb, var(--primary) 20%, transparent); }
+
+/* Creation flow: borders, hints, upload area and map no longer leak light CSS. */
+.create-hint-card { border-color: var(--primary-border); }
+.create-photo-dropzone { border-color: var(--line-strong); }
+.create-chip-row button.selected { box-shadow: 0 4px 13px color-mix(in srgb, var(--primary) 18%, transparent); }
+.create-map-block { border-color: var(--line-strong); box-shadow: var(--shadow-xs); }
+.create-map-road { border-color: var(--map-road-edge); box-shadow: none; }
+.create-review-row { border-color: var(--line); }
+.create-photo-item { box-shadow: none; }
+
+/* Media overlay controls intentionally stay neutral and readable. */
+.create-make-cover,
+.create-remove-photo,
+.create-preview-category,
+.detail-photo-count { background: rgba(12, 15, 20, .72); color: #fff; }
+.lightbox-arrow { background: rgba(255, 255, 255, .14); color: #fff; }
+.lightbox-arrow:hover { background: rgba(255, 255, 255, .22); }
+
+/* Native controls and disabled states need explicit themed painting. */
+select,
+input,
+textarea { background-clip: padding-box; }
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] { accent-color: var(--primary); }
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: .58;
+  color: var(--ink-muted);
+}
+.create-progress-bars button:disabled,
+.create-step-list li button:disabled { opacity: 1; color: inherit; }
+.web-switch:disabled,
+.web-switch[aria-disabled='true'] { opacity: .5; }
+
+/* System dark mode should never leave white canvas around overscroll/safe areas. */
+html[data-theme='dark'] body,
+html[data-theme='dark'] #root { background-color: var(--screen); }
+
+@media (max-width: 640px) {
+  .create-page-shell { background: var(--screen); }
+  .create-step-panel { background: var(--surface); }
+}
+
+@media (prefers-contrast: more) {
+  :root,
+  html[data-theme='light'],
+  html[data-theme='dark'] { --line: var(--line-strong); }
+  button:focus-visible { outline-width: 4px; }
+}
+
+/* Unified dialog actions: destructive/reset action is always bottom-left,
+   the primary confirmation is always bottom-right on every viewport. */
+.dialog-action-footer {
+  display: grid;
+  grid-template-columns: minmax(104px, .72fr) minmax(0, 1.28fr) !important;
+  align-items: center;
+  gap: 10px;
+}
+.dialog-action-footer > button {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.dialog-action-footer .modal-reset-button {
+  justify-self: stretch;
+  background: var(--surface);
+  color: var(--ink-secondary);
+  border-color: var(--line);
+  box-shadow: none;
+}
+.dialog-action-footer .modal-reset-button:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.dialog-action-footer .primary-button {
+  max-width: none;
+  margin: 0;
+  display: block;
+  justify-self: stretch;
+}
+.filter-panel-footer.dialog-action-footer {
+  width: 100%;
+  padding-inline: max(16px, calc((100% - 940px) / 2));
+}
+.filter-subview-header-centered {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  justify-content: initial;
+}
+.filter-subview-header-centered > span {
+  width: 44px;
+  height: 44px;
+}
+.filter-subview-header-centered h3 { text-align: center; }
+.date-picker-sheet-header > span {
+  width: 42px;
+  height: 42px;
+}
+.date-picker-sheet-footer.dialog-action-footer {
+  padding: 12px 0 max(4px, env(safe-area-inset-bottom));
+}
+.filter-date-footer.dialog-action-footer {
+  grid-template-columns: minmax(104px, .72fr) minmax(0, 1.28fr) !important;
+}
+
+@media (max-width: 520px) {
+  .dialog-action-footer,
+  .filter-date-footer.dialog-action-footer {
+    grid-template-columns: minmax(96px, .78fr) minmax(0, 1.22fr) !important;
+    gap: 8px;
+  }
+  .filter-panel-footer.dialog-action-footer { padding-inline: 12px; }
+  .dialog-action-footer > button { min-height: 48px; }
+}
+
+/* Catalog parity: exact material surfaces and motion from the mobile app. */
+:root {
+}
+
+.listing-feed { view-transition-name: none; }
+.listing-card {
+  cursor: pointer;
+  background: var(--surface-raised);
+  box-shadow: 0 6px 12px rgb(0 0 0 / .05);
+
+
+  transition: transform var(--motion-fast) var(--motion-spring), box-shadow var(--motion-base) var(--motion-standard), border-color var(--motion-fast) ease;
+}
+html[data-theme='dark'] .listing-card { box-shadow: 0 6px 12px rgb(0 0 0 / .14); }
+.listing-card.highlighted {
+  border: 1px solid transparent;
+  background: linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
+    linear-gradient(135deg, #ff5b35, #ffb13b, #ff426e, #ff5b35) border-box;
+  box-shadow: none;
+}
+.listing-card:active { transform: scale(.985); transition-duration: 70ms; }
+.grid-card:active { transform: scale(.975); }
+
+@media (hover: hover) and (pointer: fine) {
+  .listing-card:hover { transform: translateY(-2px); border-color: var(--line-strong); box-shadow: 0 12px 24px rgb(0 0 0 / .10); }
+  .listing-card.highlighted:hover { border-color: transparent; }
+}
+
+.viewed-chip.is-own { border-color: var(--primary); background: var(--primary); color: #fff; }
+.listing-card-actions {
+  position: relative;
+  z-index: 3;
+  margin-top: 10px;
+  padding-top: 0;
+  display: grid;
+  gap: 8px;
+}
+.listing-card-actions.compact { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgb(128 128 128 / .18); }
+.listing-card-actions.owner.compact .ui-button__label { display: none; }
+.listing-card-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 70ms ease, background var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-base) ease;
+}
+.listing-card-actions.compact button { min-height: 36px; border-radius: 12px; padding-inline: 5px; font-size: 10px; }
+.listing-card-actions button:hover { background: var(--surface-hover); border-color: var(--line-strong); }
+.listing-card-actions button:active { transform: scale(.97); }
+.listing-card-actions .listing-book-button {
+  border-color: rgb(255 255 255 / .18);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 8px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+.listing-card-actions .listing-book-button:hover { border-color: rgb(255 255 255 / .28); background: var(--primary-hover); box-shadow: 0 7px 14px color-mix(in srgb, var(--primary) 24%, transparent); }
+.listing-card-actions.owner { display: flex; }
+.listing-card:has(> .listing-card-actions.owner) {
+  display: flex;
+  flex-direction: column;
+}
+.listing-card > .listing-card-actions.owner {
+  margin-top: auto;
+  padding-top: 10px;
+}
+.listing-card > .listing-card-actions.owner.compact {
+  margin-top: auto;
+  padding-top: 8px;
+}
+.listing-card-actions.owner > button { flex: 1 1 0; }
+.listing-card-actions.owner:has(> :nth-child(3)) > button {
+  gap: 4px;
+  padding-inline: 4px;
+  font-size: 10px;
+}
+.listing-card-actions.owner .promote { border-color: var(--primary-border); color: var(--primary); background: var(--primary-light); }
+.listing-card-actions.owner .promote.ui-button { box-shadow: none; }
+
+.similar-listings-notice {
+  grid-column: 1 / -1;
+  margin: 0 0 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-muted);
+  animation: catalog-notice-in var(--motion-base) var(--motion-standard) both;
+}
+.similar-listings-notice > span { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--primary-light); color: var(--primary); }
+.similar-listings-notice .ui-compact-alert__copy {
+  min-width: 0;
+  flex: 1;
+  justify-items: start;
+  text-align: left;
+}
+.similar-listings-notice .ui-compact-alert__copy > strong.ui-text {
+  width: 100%;
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  text-align: left;
+}
+.similar-listings-notice .ui-compact-alert__copy > p.ui-text {
+  width: 100%;
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: 9px;
+  line-height: 13px;
+  text-align: left;
+}
+
+.search-overlay-panel { animation: mobile-overlay-sheet-in 300ms cubic-bezier(.22, .72, .18, 1) both; }
+.search-result-item { transition: background var(--motion-fast) ease, transform 70ms ease; }
+.search-result-item:active { transform: scale(.99); }
+.circle-control,
+.search-pill,
+.quick-filter-scroll button,
+.secondary-controls > button,
+.plain-heart,
+.image-heart { transition: transform 90ms var(--motion-spring), background var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease, box-shadow var(--motion-base) ease; }
+.circle-control:active,
+.search-pill:active,
+.quick-filter-scroll button:active,
+.secondary-controls > button:active,
+.plain-heart:active,
+.image-heart:active { transform: scale(.96); }
+.plain-heart.is-favorite svg,
+.image-heart.is-favorite svg { animation: catalog-heart-pop 280ms var(--motion-spring); transform-origin: center; }
+
+
+@keyframes catalog-notice-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes catalog-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mobile-overlay-sheet-in { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes mobile-overlay-sheet-out { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 100%, 0); } }
+@keyframes catalog-heart-pop { 0% { transform: scale(.7); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .listing-card,
+  html:not([data-motion='full']) .similar-listings-notice,
+  html:not([data-motion='full']) .search-overlay-panel,
+  html:not([data-motion='full']) .plain-heart.is-favorite svg,
+  html:not([data-motion='full']) .image-heart.is-favorite svg { animation: none !important; }
+}
+.list-image-wrap img, .grid-image-wrap img { filter: none; transition: opacity var(--motion-base) ease, transform var(--motion-slow) var(--motion-standard); }
+@media (hover: hover) and (pointer: fine) {
+  .listing-card:hover .list-image-wrap img,
+  .listing-card:hover .grid-image-wrap img { transform: scale(1.015); }
+}
+
+.catalog-shell { overscroll-behavior-y: contain; }
+.catalog-refresh-indicator {
+  position: fixed;
+  z-index: 29;
+  top: calc(var(--header-expanded) - 6px);
+  left: 50%;
+  min-height: 38px;
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-secondary);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, calc(-48px + var(--pull-distance, 0px)));
+  pointer-events: none;
+  transition: opacity 90ms ease, color var(--motion-fast) ease, transform 90ms var(--motion-standard), visibility 0s linear 90ms;
+}
+.catalog-refresh-indicator.is-visible {
+  opacity: var(--pull-opacity, 1);
+  visibility: visible;
+  transition-delay: 0s;
+}
+.catalog-refresh-indicator span { font-size: 11px; font-weight: 500; white-space: nowrap; }
+.catalog-refresh-indicator.armed { color: var(--primary); }
+.catalog-refresh-indicator.armed:not(.refreshing) svg { transform: rotate(180deg); }
+.catalog-refresh-indicator.refreshing { opacity: 1; color: var(--primary); transform: translate(-50%, 18px); }
+.catalog-refresh-indicator.refreshing svg { animation: catalog-refresh-spin .75s linear infinite; }
+@keyframes catalog-refresh-spin { to { transform: rotate(360deg); } }
+@media (min-width: 900px) { .catalog-refresh-indicator { display: none; } }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='full']) .catalog-refresh-indicator { transition: none; } html:not([data-motion='full']) .catalog-refresh-indicator.refreshing svg { animation-duration: 1.4s; } }
+.mobile-route-frame { min-height: 100dvh; }
+@media (max-width: 899px) {
+  html, body, #root { overflow-x: clip; }
+  .mobile-route-frame { width: 100%; transform-origin: center; }
+  .mobile-route-frame.is-forward { animation: mobile-route-forward 280ms cubic-bezier(.22, .72, .18, 1); }
+  .mobile-route-frame.is-back { animation: mobile-route-back 260ms cubic-bezier(.22, .72, .18, 1); }
+  .mobile-route-frame.is-replace { animation: mobile-route-replace 180ms ease-out; }
+}
+@keyframes mobile-route-forward { from { opacity: .72; transform: translateX(34%); } to { opacity: 1; transform: none; } }
+@keyframes mobile-route-back { from { opacity: .82; transform: translateX(-22%); } to { opacity: 1; transform: none; } }
+@keyframes mobile-route-replace { from { opacity: .7; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='full']) .mobile-route-frame { animation: none !important; } }
+/* Updated mobile filter screen parity. */
+.filter-panel-header { grid-template-columns: 68px minmax(0, 1fr) 68px; }
+.filter-header-reset {
+  min-width: 68px;
+  min-height: 42px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.filter-panel-header > .filter-header-reset { justify-self: end; text-align: right; }
+.filter-card { box-shadow: none; }
+.filter-toggle-card { min-height: 64px; border-radius: 14px; box-shadow: none; }
+.filter-segmented { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.chip-grid button {
+  min-height: 38px;
+  border-radius: 999px;
+  padding-inline: 16px;
+  background: var(--surface-muted);
+  color: var(--ink-secondary);
+  font-size: 14px;
+  font-weight: 400;
+}
+.chip-grid button.selected { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+.dual-range { height: 36px; margin-inline: 14px; }
+.dual-range-track { top: 16px; left: 0; right: 0; background: var(--line); }
+.dual-range-track span { background: var(--primary); }
+.dual-range input { height: 36px; }
+.dual-range input::-webkit-slider-thumb { width: 28px; height: 28px; border-color: var(--line); background: var(--surface); box-shadow: 0 2px 5px rgb(0 0 0 / .15); }
+.dual-range input::-moz-range-thumb { width: 28px; height: 28px; border-color: var(--line); background: var(--surface); box-shadow: 0 2px 5px rgb(0 0 0 / .15); }
+.filter-date-footer { display: block; grid-template-columns: none !important; }
+.filter-date-footer .primary-button { max-width: none; }
+.filter-search-field { border-radius: 12px; }
+.filter-search-field > button { width: 30px; height: 30px; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: var(--ink-muted); cursor: pointer; }
+.filter-option-message { margin: 0; padding: 24px 8px; color: var(--ink-muted); text-align: center; font-size: 14px; }
+.city-picker-header { position: relative; justify-content: center; }
+.city-picker-handle { display: none; }
+
+@media (max-width: 899px) {
+  .filter-panel { animation: mobile-filter-page-in 300ms cubic-bezier(.22, .72, .18, 1) both; }
+  .filter-layout-grid { padding: 14px 16px 24px; gap: 16px; }
+  .filter-column { gap: 16px; }
+  .filter-card { border-radius: 20px; }
+  .filter-segmented { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .filter-segmented button { min-height: 44px; }
+  .filter-toggle-card { border-radius: 14px; }
+  .filter-subview-layer { align-items: end; background: rgb(0 0 0 / .46); }
+  .filter-subview {
+    width: 100%;
+    height: min(80dvh, 720px);
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -8px 24px rgb(0 0 0 / .18);
+    overflow: hidden;
+    animation: mobile-filter-sheet-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease);
+  }
+  .city-picker-sheet { height: 70dvh; padding-top: 12px; }
+  .city-picker-header { min-height: 48px; padding-top: 10px; border-bottom: 0; }
+  .city-picker-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line);
+    transform: translateX(-50%);
+  }
+  .city-picker-header > button { display: none; }
+  .filter-search-field { margin-top: 4px; margin-bottom: 8px; }
+  .filter-subview-header-centered { grid-template-columns: 80px minmax(0, 1fr) 80px; }
+.filter-subview-header-centered > .filter-header-reset {
+  width: auto;
+  min-width: 68px;
+  justify-self: start;
+  color: var(--primary);
+}
+.filter-subview-header-centered > button:last-child { justify-self: end; }
+  .filter-subview-header-centered > .filter-header-reset { width: auto; height: 44px; justify-self: start; }
+}
+@keyframes mobile-filter-page-in { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes mobile-filter-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion='full']) .filter-panel, html:not([data-motion='full']) .filter-subview { animation: none !important; } }
+.filter-toggle-copy strong { font-size: 15px; font-weight: 500; }
+.filter-toggle-copy small { margin-top: 2px; font-size: 12px; }
+.filter-navigation-card strong { font-size: 15px; font-weight: 500; }
+.number-field input { font-size: 15px; font-weight: 500; }
+.inline-counter > span { font-size: 15px; }
+.inline-counter strong { font-size: 15px; font-weight: 500; }
+.filter-panel-footer .primary-button,
+.filter-date-footer .primary-button { min-height: 56px; border-radius: 18px; font-size: 16px; }
+.filter-panel-footer .primary-button,
+.filter-date-footer .primary-button,
+.filter-header-reset,
+.filter-toggle-card,
+.filter-segmented button,
+.chip-grid button,
+.filter-navigation-card button,
+.inline-counter button {
+  transition: transform 70ms cubic-bezier(.2, 1.35, .45, 1), background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+.filter-panel-footer .primary-button:active,
+.filter-date-footer .primary-button:active { transform: scale(.965); opacity: .85; }
+
+.filter-layer .filter-backdrop { animation: mobile-filter-backdrop-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+@media (min-width: 900px) { .filter-panel { animation: filter-panel-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; } }
+.filter-layer.is-closing .filter-backdrop { animation: mobile-filter-backdrop-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.filter-panel.is-closing { animation: filter-panel-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.filter-subview-layer.is-closing .filter-subview { animation: mobile-filter-sheet-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.filter-subview-header-centered { grid-template-columns: 80px minmax(0, 1fr) 80px; }
+.filter-subview-header-centered > .filter-header-reset {
+  width: auto;
+  min-width: 68px;
+  justify-self: start;
+  color: var(--primary);
+}
+.filter-subview-header-centered > button:last-child { justify-self: end; }
+@keyframes filter-panel-out { from { opacity: 1; transform: none; } to { opacity: .7; transform: translateY(18px); } }
+@keyframes mobile-filter-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes mobile-filter-sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+@media (max-width: 899px) { .filter-panel.is-closing { animation: mobile-filter-page-out 300ms cubic-bezier(.22, .72, .18, 1) both; } }
+@keyframes mobile-filter-page-out { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 100%, 0); } }
+@media (max-width: 899px) {
+  .filter-subview-layer { background: transparent; }
+  .filter-subview-layer::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / .46);
+    animation: mobile-filter-backdrop-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both;
+    pointer-events: none;
+  }
+  .filter-subview-layer.is-closing::before { animation: mobile-filter-backdrop-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+  .filter-subview { z-index: 1; }
+}
+@keyframes mobile-filter-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@media (min-width: 900px) {
+  .filter-panel-footer { padding-inline: max(16px, calc((100% - 940px) / 2)); }
+  .filter-panel-footer .primary-button { width: min(360px, 100%); margin-left: auto; margin-right: 0; }
+  .filter-subview { animation: desktop-filter-dialog-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease); }
+  .filter-subview-layer.is-closing .filter-subview { animation: desktop-filter-dialog-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+
+  .city-picker-sheet {
+    height: auto;
+    max-height: min(520px, calc(100dvh - 48px));
+    grid-template-rows: auto auto minmax(64px, auto);
+  }
+  .city-picker-header {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    padding-inline: 16px;
+  }
+  .city-picker-header .city-picker-handle { display: block; width: 44px; height: 44px; }
+  .city-picker-header h3 { text-align: center; }
+  .city-picker-header > button { justify-self: end; }
+  .city-picker-sheet .filter-search-field { margin: 16px; }
+  .city-picker-sheet .filter-option-stack {
+    height: auto;
+    min-height: 64px;
+    max-height: 312px;
+  }
+  .city-picker-sheet .filter-option-stack [data-overlayscrollbars-viewport] { padding: 0 0 16px; box-sizing: border-box; }
+  .city-picker-sheet .filter-option-stack button {
+    width: calc(100% - 32px);
+    margin-inline: 16px;
+  }
+  .city-picker-sheet .filter-option-stack button.selected {
+    margin: 2px 16px;
+  }
+  .city-picker-sheet .filter-option-message { margin-inline: 16px; }
+}
+@keyframes desktop-filter-dialog-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes desktop-filter-dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(18px) scale(.985); } }
+/* Only controls behave like native chrome; page and user content stays copyable. */
+button,
+[role='button'],
+[role='tab'],
+.custom-tab-bar,
+.desktop-topbar,
+.ui-app-header {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Shared date picker parity. */
+.date-picker-header {
+  min-height: 68px;
+  grid-template-columns: 80px minmax(0, 1fr) 80px;
+  padding: 10px 16px;
+}
+.date-picker-header > .filter-header-reset {
+  width: auto;
+  min-width: 80px;
+  justify-self: start;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+.date-picker-header h2 {
+  margin: 0;
+  color: var(--ink);
+  text-align: center;
+  font-size: 17px;
+  font-weight: 500;
+}
+.date-picker-header > button:last-child {
+  width: 44px;
+  height: 44px;
+  justify-self: end;
+}
+.date-picker-actions {
+  border-top: 1px solid var(--line);
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  display: block;
+  background: var(--surface);
+}
+.date-picker-actions .primary-button {
+  width: 100%;
+  min-height: 56px;
+  margin: 0;
+}
+
+/* Listing detail parity and motion. */
+.detail-floating-header {
+  --detail-header-progress: 0;
+  isolation: isolate;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.detail-floating-header::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  opacity: var(--detail-header-progress);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.detail-floating-header.show-title { background: transparent; box-shadow: none; }
+.detail-floating-inner > strong {
+  opacity: var(--detail-header-progress);
+  transform: translateY(calc((1 - var(--detail-header-progress)) * 7px));
+  transition: none;
+}
+.detail-title-block h1,
+.detail-booking-price strong,
+.detail-price-mobile strong { letter-spacing: 0; }
+.detail-description button svg {
+  transition: transform 380ms cubic-bezier(.2, .9, .2, 1.2);
+}
+.detail-description button.expanded svg { transform: rotate(180deg); }
+.detail-owner-avatar { overflow: hidden; }
+.detail-owner-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.listing-owner-actions {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.listing-owner-actions > button {
+  min-width: 0;
+  min-height: 44px;
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--surface-muted);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 180ms cubic-bezier(.2, .9, .2, 1.2), background 150ms ease, border-color 150ms ease;
+}
+.listing-owner-actions > button.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.listing-owner-actions > button.tinted {
+  border-color: var(--primary-border);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.listing-owner-actions > button:active { transform: scale(.96); }
+.detail-mobile-booking-bar.owner-mode { display: flex; min-height: 78px; }
+.detail-mobile-booking-bar.owner-mode .listing-owner-actions > button { min-height: 44px; }
+.detail-booking-card.owner-mode { gap: 16px; }
+.detail-lightbox { animation: detail-lightbox-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.detail-lightbox > img { animation: detail-lightbox-image-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.detail-lightbox.is-closing { animation: detail-lightbox-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.detail-lightbox.is-closing > img { animation: detail-lightbox-image-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+@keyframes detail-lightbox-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes detail-lightbox-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes detail-lightbox-image-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes detail-lightbox-image-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.96); } }
+@media (min-width: 900px) {
+  .detail-floating-header::before { display: none; }
+  .detail-mobile-booking-bar.owner-mode { display: none; }
+  .detail-booking-card.owner-mode .listing-owner-actions { flex-direction: column; }
+  .detail-booking-card.owner-mode .listing-owner-actions > button { width: 100%; min-height: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .detail-description button svg,
+  html:not([data-motion='full']) .listing-owner-actions > button,
+  html:not([data-motion='full']) .detail-lightbox,
+  html:not([data-motion='full']) .detail-lightbox > img,
+  html:not([data-motion='full']) .detail-location-surface { animation: none; transition-duration: .01ms; }
+}
+/* Smooth listing description disclosure. */
+.detail-description p,
+.detail-description p.expanded {
+  display: block;
+  max-height: 60px;
+  overflow: hidden;
+  -webkit-line-clamp: unset;
+  opacity: .88;
+  transition:
+    max-height 420ms cubic-bezier(.4, 0, .2, 1),
+    opacity 260ms ease;
+}
+.detail-description p.expanded {
+  opacity: 1;
+}
+.detail-description button {
+  transition: color 150ms ease, transform 180ms cubic-bezier(.2, .9, .2, 1.2);
+}
+.detail-description button:active { transform: scale(.97); }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .detail-description p,
+  html:not([data-motion='full']) .detail-description p.expanded,
+  html:not([data-motion='full']) .detail-description button { transition-duration: .01ms; }
+}
+/* Booking flow parity with the mobile application. */
+.booking-listing-summary {
+  animation: booking-listing-enter 460ms cubic-bezier(.2, .85, .25, 1.15) both;
+}
+.booking-mobile-total {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    max-height 300ms cubic-bezier(.4, 0, .2, 1),
+    opacity 220ms ease,
+    transform 300ms cubic-bezier(.4, 0, .2, 1),
+    margin 300ms ease;
+}
+.booking-mobile-submit.has-total .booking-mobile-total {
+  max-height: 54px;
+  margin-bottom: 10px;
+  opacity: 1;
+  transform: none;
+}
+.booking-mobile-total > span { min-width: 0; display: grid; gap: 3px; }
+.booking-mobile-total strong,
+.booking-mobile-total small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.booking-mobile-total strong { font-size: 12px; font-weight: 500; }
+.booking-mobile-total small { color: var(--ink-secondary); font-size: 10px; }
+.booking-mobile-total b { flex: 0 0 auto; font-size: 13px; }
+.booking-guests-stepper button,
+.booking-mobile-submit button,
+.booking-primary-button,
+.booking-secondary-button { transition: transform 170ms cubic-bezier(.2, .9, .2, 1.2), filter 150ms ease, background 150ms ease; }
+.booking-guests-stepper button:active:not(:disabled),
+.booking-mobile-submit button:active:not(:disabled),
+.booking-primary-button:active:not(:disabled),
+.booking-secondary-button:active:not(:disabled) { transform: scale(.96); }
+@keyframes booking-listing-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 899px) {
+  .booking-main { width: 100%; padding: 18px 16px 148px; }
+  .booking-layout,
+  .booking-form-column { gap: 22px; }
+  .booking-listing-summary {
+    border-radius: 18px;
+    padding: 12px;
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 12px;
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-sm);
+  }
+  .booking-listing-image { width: 78px; border-radius: 14px; }
+  .booking-listing-summary h2 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 19px; }
+  .booking-listing-summary p { margin: 2px 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; line-height: 16px; }
+  .booking-listing-summary > div:last-child > strong { font-size: 14px; }
+  .booking-listing-summary small { font-size: 10px; font-weight: 400; }
+  .booking-form-section {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    gap: 10px;
+    background: transparent;
+    box-shadow: none;
+  }
+  .booking-form-section#booking-dates { gap: 8px; }
+  .booking-section-heading { display: block; }
+  .booking-section-heading > span { display: none; }
+  .booking-section-heading h2 { font-size: 16px; line-height: 21px; font-weight: 500; }
+  .booking-section-heading p { font-size: 11px; line-height: 16px; }
+  .booking-guests-stepper {
+    min-height: 62px;
+    border-radius: 16px;
+    padding: 12px 16px;
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+  }
+  .booking-guests-stepper > div:first-child small { display: none; }
+  .booking-guests-stepper > div:first-child strong { font-size: 13px; font-weight: 500; }
+  .booking-contact-grid { gap: 12px; }
+  .booking-contact-grid .ui-field__head { display: none; }
+  .booking-contact-grid .ui-input { min-height: 54px; border-radius: 15px; background: var(--field-bg); }
+  .booking-mobile-submit {
+    display: block;
+    min-height: 76px;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  .booking-mobile-total { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 2px; }
+  .booking-mobile-submit > button { width: 100%; min-height: 52px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .booking-listing-summary,
+  html:not([data-motion='full']) .booking-mobile-total,
+  html:not([data-motion='full']) .booking-guests-stepper button,
+  html:not([data-motion='full']) .booking-mobile-submit button,
+  html:not([data-motion='full']) .booking-primary-button,
+  html:not([data-motion='full']) .booking-secondary-button { animation: none; transition-duration: .01ms; }
+}
+/* Restored application motion and corrected date picker geometry. */
+@media (max-width: 899px) {
+  .sheet-backdrop { animation: app-sheet-backdrop-in 220ms ease-out both; }
+  .bottom-sheet { animation: app-sheet-content-in 340ms cubic-bezier(.16, 1, .3, 1) both; }
+
+  .date-picker-header,
+  .date-picker-sheet-header {
+    min-height: 72px;
+    grid-template-columns: 86px minmax(0, 1fr) 44px;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+  .date-picker-header > .filter-header-reset {
+    width: 86px;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 14px;
+  }
+  .date-picker-header h2 {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 17px;
+  }
+  .date-picker-header > button:last-child { width: 44px; height: 44px; }
+  .date-picker-sheet-content { padding: 18px 16px 24px; }
+  .date-picker-sheet-content .calendar-range,
+  .filter-date-scroll-content .calendar-range {
+    padding: 14px;
+    border-radius: 22px;
+  }
+  .date-picker-sheet-content .calendar-range-header,
+  .filter-date-scroll-content .calendar-range-header { padding-inline: 3px; }
+  .date-picker-sheet-content .calendar-weekdays,
+  .date-picker-sheet-content .calendar-days,
+  .filter-date-scroll-content .calendar-weekdays,
+  .filter-date-scroll-content .calendar-days { margin-inline: 2px; }
+}
+@keyframes app-sheet-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-sheet-content-in {
+  from { transform: translate3d(0, 100%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .sheet-backdrop,
+  html:not([data-motion='full']) .bottom-sheet { animation: none !important; }
+}
+/* Exact mobile date-sheet header geometry. */
+@media (max-width: 899px) {
+  .date-picker-header,
+  .date-picker-sheet-header {
+    position: relative;
+    grid-template-columns: 80px minmax(0, 1fr) 80px;
+    gap: 0;
+    padding-inline: 16px;
+  }
+  .date-picker-header > .filter-header-reset {
+    width: 80px;
+    min-width: 80px;
+    justify-self: start;
+    text-align: left;
+  }
+  .date-picker-header > button:last-child {
+    width: 80px;
+    min-width: 80px;
+    justify-self: end;
+    justify-content: flex-end;
+  }
+}
+
+.detail-page .detail-owner-badges {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.detail-page .detail-owner-badges i {
+  width: auto;
+  flex: 0 0 auto;
+  padding-inline: 12px;
+}
+
+
+/* Filter controls use the shared UI primitives; keep their catalog states
+   authoritative over the remaining legacy button rules above. */
+.filter-panel .chip-grid > .ui-chip-wrap > button.ui-chip.ui-chip--selected {
+  border-color: var(--primary);
+  background: var(--primary-light-strong, #ffdfd0);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.filter-panel .inline-counter button.filter-guest-step.ui-icon-button {
+  box-sizing: border-box;
+  inline-size: 40px;
+  min-inline-size: 40px;
+  max-inline-size: 40px;
+  block-size: 40px;
+  min-block-size: 40px;
+  max-block-size: 40px;
+  aspect-ratio: 1;
+  flex: 0 0 40px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.filter-panel > .ui-app-header.ui-list-page-header--mobile.filter-panel-header {
+  background-color: rgba(255, 255, 255, .68);
+  backdrop-filter: blur(22px) saturate(1.25);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+}
+
+.filter-panel .filter-layout-grid {
+  padding-top: calc(82px + env(safe-area-inset-top));
+}
+
+html[data-theme='dark'] .filter-panel > .ui-app-header.ui-list-page-header--mobile.filter-panel-header {
+  background-color: rgba(13, 15, 18, .64);
+}
+
+/* Booking fields keep the shared md input contract even when legacy page
+   layout rules are more specific. Geometry outside the controls is unchanged. */
+.booking-page .booking-contact-grid .ui-input.ui-input--system.ui-input--md {
+  height: 50px;
+  min-height: 50px;
+  border-radius: 16px;
+  padding-inline: 13px;
+}
+.booking-page .booking-contact-grid .ui-input.ui-input--system.ui-input--md > input {
+  height: 48px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* Reusable city/date pickers keep their own content but use the shared Modal frame. */
+.ui-modal.city-picker-sheet { padding-top: 0; }
+.ui-modal.city-picker-sheet > .ui-dialog-header::before { content: none; }
+.ui-modal.city-picker-sheet > .ui-dialog-header > .ui-dialog-header__copy { grid-column: auto; text-align: left; }
+.ui-modal.city-picker-sheet > .ui-dialog-header > .ui-dialog-header__close { grid-column: auto; justify-self: end; }
+
+/* Owner status is a real card on desktop too. Keep this final so generic
+   detail typography and section rules cannot flatten it into plain text. */
+@media (min-width: 900px) {
+  .detail-page .detail-content-column > .detail-owner-status-banner {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--primary-border);
+    border-radius: 18px;
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    background: var(--primary-light);
+    color: var(--ink);
+  }
+  .detail-page .detail-content-column > .detail-owner-status-banner > span {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    color: var(--primary);
+  }
+  .detail-page .detail-content-column > .detail-owner-status-banner strong {
+    display: block;
+    font-size: 14px;
+    line-height: 19px;
+    font-weight: 600 !important;
+  }
+  .detail-page .detail-content-column > .detail-owner-status-banner p {
+    margin: 3px 0 0;
+    color: var(--ink-secondary);
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .detail-page .detail-content-column > .detail-owner-status-banner.is-rejected {
+    border-color: var(--danger-border);
+    background: var(--danger-soft);
+  }
+  .detail-page .detail-content-column > .detail-owner-status-banner.is-rejected > span {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    color: var(--danger);
+  }
+}
+
+@media (max-width: 899px) {
+  .detail-page .detail-mobile-booking-bar.owner-mode {
+    border-top: 0;
+    background: var(--screen);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Compact footer actions in catalog dialogs on mobile. */
+@media (max-width: 899px) {
+  .booking-page .booking-mobile-header {
+    border-bottom: 0;
+    box-shadow: none;
+  }
+  .filter-panel-footer,
+  .date-picker-sheet > .ui-bottom-sheet__footer,
+  .guest-picker-sheet > .ui-bottom-sheet__footer {
+    padding: 7px 12px max(8px, env(safe-area-inset-bottom));
+  }
+  .filter-panel-footer .primary-button,
+  .date-picker-sheet > .ui-bottom-sheet__footer .ui-button,
+  .guest-picker-sheet > .ui-bottom-sheet__footer .ui-button {
+    min-height: 44px;
+    height: 44px;
+    border-radius: 14px;
+    padding-inline: 13px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+  }
+  .booking-page .booking-mobile-submit {
+    min-height: 58px;
+    padding: 7px 12px max(8px, env(safe-area-inset-bottom));
+  }
+  .booking-page .booking-mobile-submit > button {
+    min-height: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+  .booking-success-dialog {
+    border-radius: 20px;
+    padding: 18px;
+  }
+  .booking-success-dialog-copy {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .booking-success-dialog-copy > span { width: 44px; height: 44px; }
+  .booking-success-dialog h2 { font-size: 17px; line-height: 22px; }
+  .booking-success-dialog p { font-size: 12px; line-height: 17px; }
+  .booking-success-dialog > i { margin: 16px 0; }
+  .booking-success-dialog > button { min-height: 44px; font-size: 13px; }
+  .date-picker-sheet > .ui-bottom-sheet__footer .ui-button,
+  .guest-picker-sheet > .ui-bottom-sheet__footer .ui-button {
+    min-height: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font-size: 12px !important;
+    line-height: 16px;
+  }
+  .date-picker-sheet > .ui-bottom-sheet__footer,
+  .guest-picker-sheet > .ui-bottom-sheet__footer {
+    padding: 14px 16px max(18px, env(safe-area-inset-bottom));
+  }
+  .date-picker-sheet > .ui-bottom-sheet__footer .ui-button__label,
+  .guest-picker-sheet > .ui-bottom-sheet__footer .ui-button__label {
+    font-size: 12px !important;
+    line-height: 16px;
+  }
+}
+
+/* Prices are the only 600-weight emphasis in catalog and listing detail. */
+.listing-feed .price strong,
+.listing-feed .grid-price-row strong,
+.detail-page .detail-price-mobile strong,
+.detail-page .detail-booking-price strong,
+.detail-page .detail-mobile-booking-bar strong,
+.detail-page .listing-card .price strong,
+.detail-page .listing-card .grid-price-row strong {
+  font-weight: 600 !important;
+}
+
+/* Airier, regular-weight city choices. */
+.city-picker-any {
+  min-height: 52px;
+  margin: 4px 16px 10px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.city-picker-any span,
+.city-picker-sheet .filter-option-stack button,
+.city-picker-sheet .filter-option-stack button span {
+  font-weight: 400;
+}
+.city-picker-sheet .filter-option-stack [data-overlayscrollbars-viewport] {
+  padding: 6px 0 18px !important;
+}
+.city-picker-sheet .filter-option-stack button,
+.city-picker-sheet .filter-option-stack button.selected {
+  width: calc(100% - 32px);
+  min-height: 52px;
+  margin: 3px 16px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.city-picker-sheet .filter-option-stack button.selected {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.city-picker-sheet .filter-option-stack button > svg {
+  width: 17px;
+  height: 17px;
+}
+
+.detail-page .detail-header-actions .detail-round-button {
+  border-color: var(--primary);
+}
+
+.detail-page .detail-title-block h1 {
+  font-size: 28px;
+  line-height: 34px;
+}
+@media (max-width: 899px) {
+  .detail-page .detail-mobile-booking-bar {
+    background: var(--screen);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .detail-page .detail-title-block h1 {
+    font-size: 20px;
+    line-height: 25px;
+  }
+}
+
+.city-picker-body > .ui-search-field {
+  width: calc(100% - 32px);
+  min-height: 44px;
+  margin: 0 16px 8px;
+  padding-inline: 12px;
+  gap: 8px;
+  border-radius: 14px;
+  box-sizing: border-box;
+}
+.city-picker-body > .ui-search-field input {
+  height: 42px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.city-picker-body > .ui-search-field .ui-input__before svg {
+  width: 17px;
+  height: 17px;
+}
+.city-picker-body > .ui-search-field .ui-icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+.city-picker-body > .ui-search-field .ui-icon-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.city-picker-sheet > header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+}
+.city-picker-sheet > header::before {
+  content: '';
+  grid-column: 1;
+  width: 40px;
+  height: 40px;
+}
+.city-picker-sheet > header > div {
+  grid-column: 2;
+  min-width: 0;
+  text-align: center;
+}
+.city-picker-sheet > header h2 {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.city-picker-sheet > header > .ui-icon-button {
+  grid-column: 3;
+  justify-self: center;
+  align-self: center;
+  padding: 0;
+}
+.city-picker-sheet > header > .ui-icon-button svg {
+  display: block;
+  margin: 0;
+}
+
+/* Catalog modal headers are clean in the native app, without separators. */
+.filter-panel-header,
+.filter-subview-header,
+.guest-picker-sheet > header,
+.date-picker-sheet > header,
+.city-picker-sheet > header {
+  border-bottom: 0;
+}
+
+.filter-segmented button.selected {
+  border-color: color-mix(in srgb, var(--primary) 78%, transparent);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+/* Native catalog modal close control. */
+.filter-close,
+.guest-picker-sheet > header > .ui-icon-button,
+.date-picker-sheet > header > .ui-icon-button,
+.city-picker-sheet > header > .ui-icon-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--ink-secondary);
+  box-shadow: none;
+}
+.filter-close svg,
+.guest-picker-sheet > header > .ui-icon-button svg,
+.date-picker-sheet > header > .ui-icon-button svg,
+.city-picker-sheet > header > .ui-icon-button svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2;
+}
+@media (hover: hover) and (pointer: fine) {
+  .filter-close:hover,
+  .guest-picker-sheet > header > .ui-icon-button:hover,
+  .date-picker-sheet > header > .ui-icon-button:hover,
+  .city-picker-sheet > header > .ui-icon-button:hover {
+    border-color: var(--line-strong);
+    background: var(--surface-hover);
+    color: var(--ink);
+  }
+}
+
+/* Authoritative mobile catalog parity with the native application. */
+.quick-filter-scroll button,
+.quick-filter-scroll button:hover {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--ink-secondary);
+  box-shadow: none;
+}
+.quick-filter-scroll button.selected,
+.quick-filter-scroll button.selected:hover { border-color: var(--primary); background: var(--primary); color: #fff; }
+.listing-card { box-shadow: 0 7px 14px rgb(0 0 0 / .05); }
+html[data-theme='dark'] .listing-card { box-shadow: 0 7px 14px rgb(0 0 0 / .14); }
+.image-heart,
+.viewed-chip { background: rgba(255, 255, 255, .9); }
+.tab-bar-material {
+  border-color: rgba(18, 24, 32, .09);
+  background: rgba(255, 255, 255, .76);
+  box-shadow: 0 10px 20px rgb(0 0 0 / .14);
+}
+html[data-theme='dark'] .image-heart,
+html[data-theme='dark'] .viewed-chip { background: rgba(23, 24, 28, .9); }
+html[data-theme='dark'] .image-heart.ui-icon-button--system.ui-icon-button--sm {
+  border-color: rgba(255,255,255,.18);
+  background: rgba(23,24,28,.9);
+  color: #fff;
+}
+html[data-theme='dark'] .image-heart.ui-icon-button--system.ui-icon-button--sm.is-favorite { color: var(--primary); }
+.image-heart.ui-icon-button--system,
+.plain-heart.ui-icon-button--system { color: var(--ink-secondary); }
+.listing-mini-card .image-heart.ui-icon-button--system { background: var(--surface-muted); }
+.image-heart.ui-icon-button--system.is-favorite,
+.plain-heart.ui-icon-button--system.is-favorite { color: var(--primary); }
+html[data-theme='dark'] .tab-bar-material {
+  border-color: rgba(255, 255, 255, .11);
+  background: rgba(24, 26, 31, .76);
+  box-shadow: 0 10px 20px rgb(0 0 0 / .3);
+}
+html[data-theme='dark'] .tab-button.active > span { background: rgba(255, 107, 53, .17); }
+.viewed-chip.is-own,
+html[data-theme='dark'] .viewed-chip.is-own { border-color: var(--primary); background: var(--primary); color: #fff; }
+.calendar-range {
+  padding: 12px;
+  border-radius: 22px;
+  background: var(--surface-raised);
+  box-shadow: none;
+}
+.calendar-range-header {
+  height: 52px;
+  padding: 0 4px 12px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+}
+.calendar-range-header strong { font-size: 17px; font-weight: 500; }
+.calendar-range-header button { width: 40px; height: 40px; background: var(--surface); }
+.calendar-weekdays { margin-bottom: 4px; }
+.calendar-weekdays span { height: 28px; font-size: 11px; font-weight: 500; }
+.calendar-days button { height: 46px; padding: 5px 0; }
+.calendar-days button > span { width: 36px; height: 36px; font-size: 14px; font-weight: 500; }
+.calendar-days button.in-range > span,
+.calendar-days button.range-start > span,
+.calendar-days button.range-end > span {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 500;
+}
+.calendar-days button.range-start > span,
+.calendar-days button.range-end > span { box-shadow: 0 3px 8px color-mix(in srgb, var(--primary) 34%, transparent); }
+.calendar-days button.outside { opacity: .22; }
+.calendar-days button.disabled { opacity: .4; }
+.calendar-selection-panel { margin: 14px 4px 0; padding: 12px; }
+.calendar-selection-hint strong { font-size: 12px; font-weight: 500; }
+.calendar-selection-dates { gap: 9px; }
+.calendar-selection-dates small { font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.calendar-selection-dates strong { font-size: 15px; font-weight: 500; }
+
+.overlay-layer { animation: app-overlay-backdrop-in var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; }
+.overlay-layer.is-closing { animation: app-overlay-backdrop-out var(--ui-panel-motion-duration) var(--ui-panel-motion-ease) both; pointer-events: none; }
+.search-overlay-panel.is-closing { animation: mobile-overlay-sheet-out 300ms cubic-bezier(.22, .72, .18, 1) both; }
+@media (min-width: 900px) {
+  .search-overlay-panel { animation: catalog-overlay-in 220ms ease-out both; }
+  .search-overlay-panel.is-closing { animation: app-overlay-content-out 220ms ease-in both; }
+}
+@keyframes app-overlay-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-overlay-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes app-overlay-content-out { from { opacity: 1; } to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .overlay-layer,
+  html:not([data-motion='full']) .filter-backdrop { animation: none !important; }
+}
+
+@media (max-width: 899px) {
+  :root { --header-expanded: 182px; --header-collapsed: 68px; }
+  .header-inner { padding-top: 0; padding-bottom: 10px; }
+  .listing-feed,
+  .listing-feed.header-is-collapsed { padding-top: var(--header-expanded); }
+
+  .date-picker-sheet-content { padding: 16px; }
+  .date-picker-sheet-content .calendar-range,
+  .filter-date-scroll-content .calendar-range { padding: 12px; }
+}
+
+@media (max-width: 420px) {
+  .header-inner { padding-left: 16px; padding-right: 16px; }
+  .listing-feed { padding-left: 16px; padding-right: 16px; }
+  .main-control-row { gap: 10px; }
+  .circle-control { width: 48px; min-width: 48px; height: 48px; }
+  .secondary-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 48px; }
+  .secondary-controls > button { padding-left: 12px; padding-right: 12px; }
+  .list-card { padding: 12px; }
+  .list-card-top { gap: 12px; }
+  .listing-feed.grid-layout { gap: 12px; }
+}
+.tab-button.active > span { animation: app-tab-focus 260ms cubic-bezier(.2, 1.35, .45, 1); }
+@keyframes app-tab-focus { from { transform: scale(.9); opacity: .72; } to { transform: scale(1.03); opacity: 1; } }
+/* Final shared mobile date-picker geometry. */
+@media (max-width: 899px) {
+  .date-picker-sheet > .sheet-handle {
+    width: 38px;
+    height: 4px;
+    margin: 0 auto 14px;
+  }
+
+  .date-picker-sheet > .date-picker-sheet-header {
+    min-height: 0;
+    margin: 0 16px 16px;
+    padding: 0 0 16px;
+    grid-template-columns: 80px minmax(0, 1fr) 80px;
+    gap: 0;
+  }
+
+  .date-picker-sheet > .date-picker-sheet-header > .filter-header-reset {
+    width: 80px;
+    min-width: 80px;
+    min-height: 40px;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .date-picker-sheet > .date-picker-sheet-header > button:last-child {
+    width: 80px;
+    min-width: 80px;
+    height: 40px;
+    justify-self: end;
+    justify-content: flex-end;
+  }
+
+  .date-picker-sheet-content { padding: 0 16px 16px; }
+  .date-picker-sheet-content .calendar-range { padding: 12px; }
+  .date-picker-sheet-content .calendar-range-header {
+    box-sizing: border-box;
+    height: 52px;
+    min-height: 52px;
+    padding: 0 4px 12px;
+  }
+}
+/* Native city picker rows keep the sheet's 16px content gutter. */
+.city-picker-any {
+  width: calc(100% - 32px);
+  min-height: 48px;
+  margin: 0 16px 8px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.city-picker-any svg { color: var(--primary); }
+.city-picker-any:active { background: var(--surface-muted); }
+.city-picker-sheet .filter-option-stack button,
+.city-picker-sheet .filter-option-stack button.selected {
+  width: calc(100% - 32px);
+  min-height: 56px;
+  margin: 0 16px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 400;
+}
+.city-picker-sheet .filter-option-stack button:active { opacity: .7; }
+.city-picker-sheet .filter-option-message { margin-inline: 16px; }
+/* Final catalog, filters and detail parity audit against the native app. */
+.catalog-refresh-indicator {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+@media (max-width: 899px) {
+  /* Catalog */
+  .header-inner { padding: 0 16px 10px; }
+  .quick-filter-scroll button { font-size: 14px; font-weight: 500; }
+  .secondary-controls > button > span { font-size: 12px; font-weight: 500; }
+  .listing-feed,
+  .listing-feed.header-is-collapsed { padding-left: 16px; padding-right: 16px; }
+
+  /* Full-screen filters */
+  .filter-panel-header {
+    min-height: 68px;
+    grid-template-columns: 68px minmax(0, 1fr) 68px;
+    padding: 10px 16px;
+  }
+  .filter-panel-header h2 { font-size: 20px; font-weight: 500; }
+  .filter-close { width: 48px; height: 48px; }
+  .filter-layout-grid { padding: 14px 16px 24px; gap: 16px; }
+  .filter-column { gap: 16px; }
+  .filter-card { padding: 16px; border-radius: 20px; }
+  .filter-card > h3,
+  .filter-section > h3 { font-size: 16px; font-weight: 500; }
+  .filter-segmented { gap: 8px; }
+  .filter-segmented button {
+    min-height: 44px;
+    border-radius: 14px;
+    padding-inline: 8px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .filter-toggle-card {
+    min-height: 64px;
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+  .filter-navigation-card > button { min-height: 68px; padding: 0 14px; gap: 14px; }
+  .filter-row-icon { width: 40px; height: 40px; }
+  .filter-panel-footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+  .filter-panel-footer .primary-button { min-height: 56px; border-radius: 18px; }
+
+  /* City picker */
+  .city-picker-sheet .filter-search-field { margin: 4px 16px 16px; }
+  .city-picker-sheet .filter-option-stack [data-overlayscrollbars-viewport] { padding: 0 !important; }
+
+  /* Listing detail */
+  .detail-content-column {
+    padding: 24px 16px 32px;
+    gap: 24px;
+  }
+  .detail-title-block { gap: 4px; }
+  .detail-title-block h1 {
+    font-size: 24px;
+    line-height: 30px;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+  .detail-stat-grid { gap: 10px; }
+  .detail-stat-grid > button,
+  .detail-stat-grid > div {
+    min-height: 66px;
+    border-radius: 16px;
+    padding: 12px;
+  }
+  .detail-price-mobile strong { font-size: 28px; line-height: 34px; font-weight: 500; }
+  .detail-facts { margin-top: 0; }
+  .detail-facts span { min-height: 30px; padding-inline: 12px; font-weight: 500; }
+  .detail-section h2,
+  .detail-surface h2 { font-size: 16px; line-height: 22px; font-weight: 500; letter-spacing: 0; }
+  .detail-description button { font-weight: 500; }
+  .detail-amenities-grid > div {
+    min-height: 52px;
+    border-radius: 12px;
+    padding: 8px;
+    gap: 6px;
+  }
+  .detail-amenities-grid > div > span {
+    width: 20px;
+    height: 20px;
+    border-radius: 0;
+    background: transparent;
+  }
+  .detail-amenities-grid strong.ui-text { font-size: 10px; line-height: 13px; font-weight: 500; }
+  .detail-rules-grid > div { min-height: 76px; padding: 11px 12px; gap: 9px; }
+  .detail-rules-grid > div > span { width: 32px; height: 32px; }
+  .detail-rules-grid strong { font-size: 12px; line-height: 16px; font-weight: 500; }
+  .detail-mobile-booking-bar {
+    min-height: 80px;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    gap: 14px;
+  }
+  .detail-mobile-booking-bar strong { font-size: 18px; font-weight: 500; }
+  .detail-mobile-booking-bar button,
+  .detail-primary-cta { min-height: 56px; border-radius: 18px; }
+}
+.catalog-refresh-indicator:not(.is-visible) { display: none; }
+.city-picker-sheet { grid-template-rows: auto auto auto minmax(0, 1fr); }
+/* One shared native date sheet is used by catalog, filters and detail. */
+@media (max-width: 899px) {
+  .date-picker-sheet {
+    height: auto;
+    max-height: calc(100dvh - 24px);
+    padding: 12px 0 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+  .date-picker-sheet-content { padding: 0 16px; }
+  .date-picker-sheet-footer {
+    border-top: 0;
+    padding: 16px 16px max(32px, env(safe-area-inset-bottom));
+    background: var(--surface);
+  }
+  .date-picker-sheet-footer .primary-button {
+    min-height: 56px;
+    border-radius: 18px;
+    font-size: 16px;
+  }
+}
+/* Native material hierarchy: base and raised surfaces are intentionally distinct. */
+:root,
+html[data-theme='light'] { --surface-material-base: #ffffff; --header-material: #ffffff; }
+html[data-theme='dark'] { --surface-material-base: #181a1f; --header-material: #14161b; }
+html[data-theme='dark'] .listing-card { background: var(--surface-raised); }
+.filter-card,
+.filter-toggle-card { border-color: color-mix(in srgb, var(--line) 66%, transparent); background: var(--surface-raised); }
+html[data-theme='dark'] .filter-panel-header { background: rgba(20, 22, 27, .72); }
+html[data-theme='dark'] .filter-panel-footer { background: rgba(20, 22, 27, .97); }
+.filter-panel > .ui-app-header.filter-panel-header {
+  border-bottom: 0;
+  background: rgba(255, 255, 255, .62);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+}
+html[data-theme='dark'] .filter-panel > .ui-app-header.filter-panel-header {
+  background: rgba(20, 22, 27, .62);
+}
+html[data-theme='dark'] .detail-mobile-booking-bar { background: var(--header-material); }
+@media (max-width: 899px) {
+  html[data-theme='dark'] .detail-page .detail-mobile-booking-bar { background: var(--screen); }
+}
+
+@media (max-width: 899px) {
+  .date-picker-sheet > .date-picker-sheet-header > .filter-header-reset,
+  .date-picker-sheet > .date-picker-sheet-header > button:last-child {
+    height: 32px;
+    min-height: 32px;
+  }
+  .filter-panel-footer .primary-button,
+  .date-picker-sheet-footer .primary-button,
+  .detail-mobile-booking-bar button,
+  .detail-primary-cta { font-weight: 500; }
+  .detail-owner-card { grid-template-columns: 56px minmax(0, 1fr) 22px; gap: 16px; }
+  .detail-owner-name { font-size: 20px; line-height: 25px; font-weight: 500; }
+  .detail-owner-rating strong { font-size: 14px; font-weight: 500; }
+  .detail-owner-rating em,
+  .detail-owner-info small { font-size: 14px; }
+  .detail-owner-badges i { min-height: 24px; padding-inline: 12px; font-size: 12px; font-weight: 500; }
+  .detail-owner-badges i svg { display: none; }
+}
+@media (max-width: 899px) {
+  .detail-similar-grid { display: block; }
+  .detail-similar-grid .list-card { margin-bottom: 12px; }
+}
+/* Catalog controls use the native primary icon color and compact typography. */
+html[data-theme='dark'] .circle-control,
+.circle-control { color: var(--primary); }
+@media (max-width: 899px) {
+  .quick-filter-scroll button {
+    height: 36px;
+    padding-inline: 16px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+  .secondary-controls { margin-top: 10px; gap: 8px; }
+  .secondary-controls > button {
+    height: 48px;
+    padding-inline: 12px;
+    border-radius: 16px;
+  }
+  .secondary-controls > button > span {
+    gap: 8px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+  }
+}
+/* Native catalog promotion surface and regular-weight controls. */
+.quick-filter-scroll button,
+.quick-filter-scroll button.selected,
+.secondary-controls > button > span { font-weight: 400; }
+
+.listing-card.highlighted,
+html[data-theme='dark'] .listing-card.highlighted {
+  border: 1px solid transparent;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 18px rgba(255, 100, 56, .24);
+}
+.listing-card.highlighted::before {
+  content: '';
+  position: absolute;
+  z-index: 19;
+  inset: 0;
+  border: 1.5px solid transparent;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, #ff5b35 0%, #ffb13b 36%, #ff426e 72%, #ff5b35 100%) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.listing-card.highlighted::after {
+  content: '';
+  position: absolute;
+  z-index: 20;
+  top: -40px;
+  bottom: -40px;
+  left: 0;
+  width: 76px;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.22), rgba(255,255,255,0));
+  transform: translateX(-120px) rotate(12deg);
+  animation:
+    catalog-highlight-shimmer-motion 4.9s linear infinite,
+    catalog-highlight-shimmer-opacity 4.9s linear infinite;
+}
+@keyframes catalog-highlight-shimmer-motion {
+  0%, 18.367% { transform: translateX(-120px) rotate(12deg); animation-timing-function: cubic-bezier(.455, .03, .515, .955); }
+  55.102%, 100% { transform: translateX(calc(100vw + 80px)) rotate(12deg); }
+}
+@keyframes catalog-highlight-shimmer-opacity {
+  0%, 18.367% { opacity: 0; }
+  19.837%, 52.163% { opacity: .72; }
+  55.102%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full']) .listing-card.highlighted::after { animation: none; }
+}
+/* Native typography contract. */
+.filter-toggle-copy strong { font-size: 15px; font-weight: 500; }
+.filter-toggle-copy small { font-size: 12px; font-weight: 400; }
+.filter-navigation-copy small { font-size: 12px; font-weight: 400; }
+.filter-navigation-copy strong { font-size: 15px; font-weight: 500; }
+.filter-guest-value { font-size: 15px; font-weight: 400; }
+.filter-counter strong { font-size: 15px; font-weight: 500; }
+.filter-header-reset { font-size: 15px; font-weight: 500; }
+.filter-panel-footer .primary-button { font-size: 16px; font-weight: 500; }
+
+.detail-floating-inner > strong { font-size: 16px; line-height: 21px; font-weight: 500; }
+.detail-stat-grid strong { font-size: 14px; font-weight: 500; }
+.detail-stat-grid small { font-size: 11px; font-weight: 400; }
+.detail-description p { font-size: 14px; line-height: 20px; font-weight: 400; }
+.detail-description button { font-size: 14px; font-weight: 500; }
+.detail-primary-cta,
+.detail-mobile-booking-bar button { font-size: 16px; font-weight: 500; }
+.detail-booking-price strong { font-weight: 500; }
+.detail-gallery-side button > span { font-weight: 500; }
+
+.profile-avatar-ring strong { font-size: 24px; line-height: 30px; font-weight: 500; }
+.profile-brand-badge,
+.profile-brand-badge.ui-text { min-height: 20px; border-radius: 10px; padding: 3px 7px; font-size: 8px; line-height: 12px; font-weight: 500; }
+.profile-hero-copy h1,
+.profile-hero-copy h1.ui-text { font-size: 18px; line-height: 23px; font-weight: 500; letter-spacing: 0; }
+.profile-hero-copy p,
+.profile-hero-copy p.ui-text { font-size: 10px; line-height: 14px; font-weight: 400; }
+.profile-hero-copy p > span.ui-text { font-size: 10px; line-height: 14px; }
+.profile-hero-copy p > svg { width: 11px; height: 11px; }
+.profile-hero-copy small,
+.profile-hero-copy small.ui-text { font-size: 9px; line-height: 13px; font-weight: 400; }
+.profile-metric strong { font-size: 16px; line-height: 21px; font-weight: 600; }
+.profile-metric small { font-size: 12px; line-height: 17px; font-weight: 400; }
+.profile-section > h2 { font-size: 15px; line-height: 20px; font-weight: 500; }
+.profile-action-copy strong { font-size: 14px; line-height: 18px; font-weight: 500; }
+.profile-action-copy small { font-size: 11px; line-height: 15px; font-weight: 400; }
+.profile-action-row > em { font-size: 9px; font-weight: 500; }
+.profile-theme-card > header strong { font-size: 14px; line-height: 19px; font-weight: 500; }
+.profile-theme-card > header small { font-size: 11px; line-height: 15px; font-weight: 400; }
+.profile-theme-options > button { font-size: 11px; font-weight: 400; }
+.profile-signout-button:not(.ui-button--system),
+.profile-primary-button,
+.profile-secondary-button,
+.profile-dialog-danger { font-size: 13px; font-weight: 500; }
+.profile-settings-header h2 { font-size: 16px; line-height: 21px; font-weight: 500; }
+.profile-settings-panel > h3 { font-size: 15px; line-height: 20px; font-weight: 500; }
+.profile-field > span,
+.profile-dialog > label { font-size: 11px; font-weight: 400; }
+.profile-completion-head,
+.profile-completion-list button,
+.profile-about-card :is(span, strong) { font-weight: 400; }
+.profile-settings-footer.dialog-action-footer { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+.profile-settings-footer.dialog-action-footer > button:not(.ui-button--system) { height: 40px; min-height: 40px !important; padding: 0 12px; border-radius: 14px; font-size: 12px; }
+.profile-settings-header > button:not(.ui-icon-button--system) { background: var(--surface-raised); }
+
+@media (max-width: 899px) {
+  .filter-card > h3,
+  .filter-section > h3 { font-size: 16px; font-weight: 500; }
+  .filter-segmented button { font-size: 12px; font-weight: 500; }
+  .detail-title-block h1 { font-size: 24px; line-height: 29px; font-weight: 500; }
+}
+.filter-panel { background: var(--screen); }
+
+/* Catalog selectors and unselected filter chips stay visually quiet. */
+.quick-filter-scroll button,
+.quick-filter-scroll button *,
+.secondary-controls > button,
+.secondary-controls > button *,
+.chip-grid button:not(.selected),
+.chip-grid button:not(.selected) *,
+.ui-chip:not(.ui-chip--selected),
+.ui-chip:not(.ui-chip--selected) * { font-weight: 400; }
+/* Compact mobile listing-detail typography. */
+@media (max-width: 899px) {
+  .detail-title-block h1 { font-size: 24px; line-height: 30px; }
+  .detail-title-block p { font-size: 14px; line-height: 20px; }
+  .detail-stat-grid strong { font-size: 14px; }
+  .detail-stat-grid small { font-size: 11px; }
+  .detail-price-mobile strong { font-size: 28px; line-height: 34px; }
+  .detail-price-mobile span { font-size: 14px; }
+  .detail-facts span { font-size: 12px; font-weight: 500; }
+  .detail-section h2,
+  .detail-surface h2 { font-size: 16px; line-height: 22px; }
+  .detail-description p { font-size: 14px; line-height: 20px; }
+  .detail-description button { font-size: 14px; }
+  .detail-owner-name { font-size: 20px; line-height: 25px; font-weight: 500; }
+  .detail-owner-rating strong,
+  .detail-owner-rating em,
+  .detail-owner-info small { font-size: 14px; }
+  .detail-owner-badges i { font-size: 12px; font-weight: 500; }
+  .detail-mobile-booking-bar strong { font-size: 18px; }
+  .detail-mobile-booking-bar button,
+  .detail-primary-cta { font-size: 16px; }
+}
+
+/* Listing detail uses regular supporting copy and reserves emphasis for titles. */
+.detail-main :where(h1, h2, h3, h4, h5, h6, strong, b, button, span, small, em, i, p) {
+  font-weight: 400 !important;
+}
+.detail-page .detail-title-block h1,
+.detail-page .detail-floating-inner > strong,
+.detail-page .detail-section h2,
+.detail-page .detail-surface h2,
+.detail-page .detail-owner-name,
+.detail-page .listing-card h3 {
+  font-weight: 500 !important;
+}
+.detail-page .detail-owner-badges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+.detail-page .detail-owner-badges i {
+  min-width: 0;
+  padding-inline: clamp(6px, 2vw, 12px);
+  justify-content: center;
+  white-space: nowrap;
+  font-size: clamp(9px, 2.6vw, 12px);
+}
+.detail-page .detail-owner-section :where(strong, small, em, i) {
+  font-weight: 400 !important;
+}
+.detail-page .detail-owner-section h2,
+.detail-page .detail-owner-section .detail-owner-name {
+  font-weight: 500 !important;
+}
+.detail-page .detail-price-mobile strong,
+.detail-page .detail-mobile-booking-bar strong,
+.detail-page .detail-booking-price strong {
+  font-weight: 500 !important;
+}
+.listing-feed .price strong,
+.listing-feed .grid-price-row strong {
+  font-weight: 500 !important;
+}
+.detail-page .detail-owner-rating svg {
+  color: #fff;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / .55));
+}
+.detail-page .detail-owner-rating strong,
+.detail-page .detail-owner-rating em,
+.detail-page .detail-owner-info > small {
+  font-weight: 400 !important;
+}
+@media (max-width: 899px) {
+  .detail-page .detail-owner-status-banner {
+    grid-template-columns: 38px minmax(0, 1fr);
+    border-radius: 16px;
+    padding: 12px;
+    gap: 10px;
+  }
+  .detail-page .detail-owner-status-banner > span { width: 38px; height: 38px; }
+  .detail-page .detail-owner-status-banner > span svg { width: 18px; height: 18px; }
+  .detail-page .detail-owner-status-banner strong { font-size: 13px; line-height: 17px; font-weight: 500 !important; }
+  .detail-page .detail-owner-status-banner p { margin-top: 2px; font-size: 11px; line-height: 16px; }
+  .detail-page .detail-mobile-booking-bar.owner-mode {
+    border-top: 0;
+    background: var(--screen);
+  }
+  .detail-page .detail-mobile-booking-bar.owner-mode .listing-owner-actions {
+    width: 100%;
+  }
+  .detail-page .detail-mobile-booking-bar.owner-mode .listing-owner-actions > button.primary {
+    border: 1px solid var(--primary);
+    background: var(--primary);
+    color: #fff;
+  }
+  .detail-page .detail-mobile-booking-bar.owner-mode .listing-owner-actions > button.tinted {
+    border: 1px solid var(--primary-border);
+    background: var(--primary-light);
+    color: var(--primary);
+    box-shadow: none;
+  }
+  .detail-page .detail-title-block h1 {
+    font-size: 22px;
+    line-height: 27px;
+  }
+  .detail-page .detail-title-block p {
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .detail-page .detail-section h2,
+  .detail-page .detail-surface h2 {
+    font-size: 14px;
+    line-height: 19px;
+  }
+  .detail-page .detail-stat-grid > button,
+  .detail-page .detail-stat-grid > div {
+    min-height: 60px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-raised);
+    box-shadow: none;
+  }
+  .detail-page .detail-stat-icon {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    border-radius: 50%;
+    background: var(--surface-muted);
+    color: var(--ink-secondary);
+  }
+  .detail-page .detail-stat-icon.primary {
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+  .detail-page .detail-stat-grid strong {
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 500 !important;
+  }
+  .detail-page .detail-stat-grid small {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 400 !important;
+  }
+  .detail-page .detail-rules-grid strong {
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .detail-page .detail-facts span {
+    min-height: 28px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+  .detail-page .detail-mobile-booking-bar:not(.owner-mode) > button {
+    border-radius: 16px;
+    background: var(--primary);
+    box-shadow: none;
+  }
+  .detail-page .detail-owner-section .detail-owner-name {
+    font-size: 18px;
+    line-height: 23px;
+  }
+  .detail-page .detail-owner-section .detail-owner-rating strong {
+    font-size: 13px;
+    line-height: 17px;
+    font-weight: 400 !important;
+  }
+  .detail-page .detail-owner-section .detail-owner-rating em,
+  .detail-page .detail-owner-section .detail-owner-info > small {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400 !important;
+  }
+
+  /* Catalog cards keep a stable height when titles and addresses are long. */
+  .listing-feed.grid-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+    justify-content: stretch;
+    align-items: start;
+  }
+  .listing-feed.grid-layout .grid-card {
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+  }
+  .listing-feed .list-card-info,
+  .listing-feed .grid-card-body {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .listing-feed .list-card .list-image-wrap {
+    width: 40%;
+    flex: 0 0 40%;
+    aspect-ratio: 4 / 3;
+  }
+  .listing-feed .list-card-info h3,
+  .listing-feed .grid-card h3 {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: initial;
+  }
+  .listing-feed .list-card-info h3 {
+    font-size: 14px;
+    line-height: 19px;
+  }
+  .listing-feed .grid-card h3 {
+    min-height: 18px;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .listing-feed .listing-address,
+  .listing-feed .listing-address.ui-text {
+    color: var(--ink-secondary);
+    font-size: 10px;
+    line-height: 14px;
+  }
+  .listing-feed .listing-city,
+  .listing-feed .listing-city.ui-text {
+    min-width: 0;
+    color: var(--ink-secondary);
+    font-size: 9px;
+    line-height: 13px;
+  }
+  .listing-feed .listing-city svg {
+    width: 8px;
+    height: 8px;
+  }
+  .listing-feed .grid-card p {
+    font-size: 9px;
+    line-height: 13px;
+  }
+  .listing-feed .rating-row > span {
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .listing-feed .rating-row > span svg {
+    width: 13px;
+    height: 13px;
+  }
+  .listing-feed .grid-price-row span {
+    font-size: 10px;
+    line-height: 14px;
+  }
+  .listing-feed .grid-price-row span svg {
+    width: 12px;
+    height: 12px;
+  }
+  .listing-feed .list-facts,
+  .listing-feed .grid-facts {
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 9px;
+  }
+  .listing-feed .list-facts span,
+  .listing-feed .grid-facts span {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .listing-feed .list-facts svg,
+  .listing-feed .grid-facts svg {
+    flex: 0 0 auto;
+  }
+}
+
+/* Catalog/detail date and guest pickers follow the native app typography. */
+.date-picker-sheet h2 {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 400;
+}
+.date-picker-sheet .filter-header-reset {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.date-picker-sheet > header > .ui-icon-button svg {
+  width: 24px;
+  height: 24px;
+}
+.date-picker-sheet .calendar-range-header strong {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 400;
+}
+.date-picker-sheet .calendar-weekdays span {
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 500;
+}
+.date-picker-sheet .calendar-days button > span {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+}
+.date-picker-sheet .calendar-selection-hint strong {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.date-picker-sheet .calendar-selection-dates small {
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 500;
+}
+.date-picker-sheet .calendar-selection-dates strong {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.calendar-selection-dates strong.calendar-selection-placeholder {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 400;
+}
+.guest-picker-sheet h2 {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 400;
+}
+.guest-picker-sheet .ui-counter {
+  width: min(100%, 260px);
+  gap: 24px;
+}
+.guest-picker-sheet .ui-counter > strong {
+  min-width: 64px;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 500;
+}
+.guest-picker-sheet .ui-counter > .ui-icon-button {
+  width: 48px;
+  height: 48px;
+}
+.guest-picker-sheet .ui-counter > .ui-icon-button svg {
+  width: 24px;
+  height: 24px;
+}
+.date-picker-sheet .ui-bottom-sheet__footer .ui-button,
+.guest-picker-sheet .ui-bottom-sheet__footer .ui-button {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+@media (min-width: 760px) and (max-width: 899px) {
+  .listing-feed.grid-layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
+  :root {
+    --header-expanded: 168px;
+  }
+  .home-header .header-backdrop {
+    opacity: 1;
+    border: 0;
+    background: var(--screen);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    transition: opacity 180ms ease;
+  }
+  .home-header.collapsed .header-backdrop {
+    opacity: 0;
+  }
+  .search-pill-main > span.has-value {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+  }
+  .search-pill {
+    height: 44px;
+    padding-left: 0;
+    border-radius: 22px;
+  }
+  .search-pill-main {
+    padding-left: 8px;
+    gap: 6px;
+  }
+  .search-pill-main > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .main-control-row {
+    gap: 8px;
+  }
+  .main-control-row .circle-control {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 50%;
+  }
+  .main-control-row .circle-control > svg {
+    width: 20px;
+    height: 20px;
+  }
+  .quick-filter-scroll {
+    height: 40px;
+    margin-top: 10px;
+  }
+  .quick-filter-scroll button {
+    height: 33px;
+    padding-inline: 12px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+  }
+  .secondary-controls {
+    margin-top: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    gap: 7px;
+  }
+  .secondary-controls > button {
+    height: 42px;
+    padding-inline: 10px;
+    border-radius: 14px;
+  }
+  .secondary-controls > button > span {
+    gap: 6px;
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 400;
+  }
+  .secondary-controls > button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .secondary-controls .favorite-filter {
+    width: 42px;
+    min-width: 42px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .date-picker-sheet h2,
+  .guest-picker-sheet h2 {
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 400;
+  }
+  .date-picker-sheet .filter-header-reset {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+  .date-picker-sheet .calendar-range-header strong {
+    font-size: 16px;
+    line-height: 21px;
+    font-weight: 400;
+  }
+}
+
+/* Compact catalog search suggestions. */
+.search-overlay-panel .overlay-results-content {
+  padding-top: 10px;
+}
+.search-overlay-panel .overlay-results h3 {
+  margin-block: 10px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 400;
+}
+.search-overlay-panel .section-heading-row {
+  min-height: 36px;
+  gap: 12px;
+}
+.search-overlay-panel .section-heading-row h3 {
+  margin: 0;
+}
+.search-overlay-panel .section-heading-row button {
+  min-height: 36px;
+  border-radius: 10px;
+  padding-inline: 8px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 400;
+}
+.search-overlay-panel .result-stack {
+  gap: 6px;
+}
+.search-overlay-panel .search-result-item {
+  min-height: 58px;
+  border-radius: 16px;
+  padding: 8px 11px;
+  gap: 10px;
+}
+.search-overlay-panel .result-icon {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+}
+.search-overlay-panel .result-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.search-overlay-panel .search-result-item strong {
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+}
+.search-overlay-panel .search-result-item small {
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 400;
+}
+
+/* Compact catalog filters on phones and tablets. */
+@media (max-width: 899px) {
+  .filter-panel-header {
+    min-height: 68px;
+    grid-template-columns: 68px minmax(0, 1fr) 68px;
+    padding: 10px 16px;
+  }
+  .filter-panel-header h2 {
+    font-size: 19px;
+    line-height: 24px;
+    font-weight: 500;
+  }
+  .filter-header-reset {
+    min-height: 42px;
+    padding-inline: 0;
+    font-size: 14px;
+    line-height: 19px;
+    font-weight: 400;
+  }
+  .filter-close {
+    width: 48px;
+    height: 48px;
+  }
+  .filter-close svg {
+    width: 22px;
+    height: 22px;
+  }
+  .filter-layout-grid {
+    padding: 14px 16px 24px;
+    gap: 16px;
+  }
+  .filter-column {
+    gap: 16px;
+  }
+  .filter-card {
+    padding: 16px;
+    border-color: transparent;
+    border-radius: 20px;
+  }
+  .filter-card.filter-navigation-card { padding: 0; }
+  .filter-spaced-card {
+    gap: 21px;
+  }
+  .filter-section {
+    gap: 11px;
+  }
+  .filter-card > h3,
+  .filter-section > h3 {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+  .filter-segmented {
+    margin-top: 12px;
+    gap: 8px;
+  }
+  .filter-segmented button {
+    min-height: 44px;
+    padding: 7px 8px;
+    border-radius: 14px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+  }
+  .filter-toggle-card {
+    min-height: 68px;
+    grid-template-columns: 40px minmax(0, 1fr) 46px;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 18px;
+  }
+  .filter-toggle-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .filter-toggle-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .filter-row-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .filter-row-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .filter-toggle-copy strong {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 500;
+  }
+  .filter-navigation-copy strong,
+  .filter-navigation-card strong {
+    font-size: 14px;
+    line-height: 19px;
+    font-weight: 500;
+  }
+  .filter-toggle-copy small {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 17px;
+    font-weight: 400;
+  }
+  .filter-navigation-copy small,
+  .filter-navigation-card small {
+    margin-top: 0;
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 400;
+  }
+  .web-switch {
+    width: 46px;
+    height: 26px;
+    padding: 3px;
+  }
+  .web-switch i {
+    width: 20px;
+    height: 20px;
+  }
+  .web-switch.checked i {
+    transform: translateX(20px);
+  }
+  .filter-navigation-card > button {
+    min-height: 68px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+  .filter-navigation-card > .filter-navigation-divider {
+    margin-left: 66px;
+  }
+  .filter-navigation-card { width: 100%; margin-inline: 0; }
+  .filter-navigation-card > button > svg {
+    width: 19px;
+    height: 19px;
+  }
+  .number-field-grid,
+  .date-input-grid {
+    gap: 12px;
+  }
+  .filter-number-field.ui-input--system.ui-input--md { height: 50px; min-height: 50px; border-radius: 16px; padding-inline: 13px; background: var(--surface-muted); }
+  .filter-number-field.ui-input--system.ui-input--md input { height: 48px; font-size: 14px; font-weight: 500; }
+  .dual-range {
+    height: 36px;
+    margin-inline: 14px;
+  }
+  .dual-range-track {
+    top: 16px;
+  }
+  .dual-range input {
+    height: 36px;
+  }
+  .dual-range input::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+  .dual-range input::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
+  .price-presets {
+    gap: 7px;
+  }
+  .price-presets button {
+    min-height: 32px;
+    padding-inline: 11px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .chip-grid {
+    gap: 8px;
+  }
+  .chip-grid button {
+    min-height: 38px;
+    padding-inline: 15px;
+    border-radius: 999px;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+  }
+  .room-chip-grid button {
+    min-width: 56px;
+  }
+  .inline-counter {
+    min-height: 62px;
+    padding: 10px 14px;
+    gap: 14px;
+    border-radius: 14px;
+  }
+  .inline-counter > span,
+  .inline-counter strong {
+    font-size: 14px;
+    line-height: 19px;
+    font-weight: 500;
+  }
+  .inline-counter > div {
+    gap: 14px;
+  }
+  .inline-counter button {
+    width: 36px;
+    height: 36px;
+  }
+  .inline-counter button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .filter-panel-footer {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  .filter-panel-footer .primary-button {
+    min-height: 52px;
+    border-radius: 17px;
+    font-size: 14px;
+    line-height: 19px;
+    font-weight: 500;
+  }
+}
+
+/* Desktop catalog controls keep their pill/circle silhouettes. */
+@media (min-width: 900px) {
+  .home-header .search-pill {
+    border-radius: 999px;
+  }
+  .home-header .main-control-row .circle-control {
+    border-radius: 50%;
+  }
+  .home-header .secondary-controls .favorite-filter {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    padding: 0;
+    border-radius: 50%;
+  }
+}
+
+/* Final city picker sizing and alignment. */
+.city-picker-sheet > header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  border-bottom: 0;
+}
+.city-picker-sheet > header::before {
+  content: '';
+  grid-column: 1;
+  width: 40px;
+  height: 40px;
+}
+.city-picker-sheet > header > div {
+  grid-column: 2;
+  min-width: 0;
+  text-align: center;
+}
+.city-picker-sheet > header h2 {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.city-picker-sheet > header > .ui-icon-button {
+  grid-column: 3;
+  justify-self: center;
+  align-self: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--ink-secondary);
+}
+.city-picker-sheet > header > .ui-icon-button svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  stroke-width: 2;
+}
+.city-picker-body > .ui-search-field {
+  width: calc(100% - 32px);
+  min-height: 44px;
+  margin: 0 16px 8px;
+  padding-inline: 12px;
+  gap: 8px;
+  border-radius: 14px;
+  box-sizing: border-box;
+}
+.city-picker-body > .ui-search-field input {
+  height: 42px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.city-picker-body > .ui-search-field .ui-input__before svg {
+  width: 17px;
+  height: 17px;
+}
+.city-picker-body > .ui-search-field .ui-icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+.city-picker-any {
+  min-height: 52px;
+  margin: 4px 16px 10px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.city-picker-any span,
+.city-picker-sheet .filter-option-stack button,
+.city-picker-sheet .filter-option-stack button span {
+  font-weight: 400;
+}
+.city-picker-sheet .filter-option-stack [data-overlayscrollbars-viewport] {
+  padding: 6px 0 18px !important;
+}
+.city-picker-sheet .filter-option-stack button,
+.city-picker-sheet .filter-option-stack button.selected {
+  width: calc(100% - 32px);
+  min-height: 52px;
+  margin: 3px 16px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+.city-picker-sheet .filter-option-stack button.selected {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.city-picker-sheet .filter-option-stack button > svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Final listing-detail action and title sizing. */
+.listing-feed .price strong,
+.listing-feed .grid-price-row strong,
+.detail-page .detail-price-mobile strong,
+.detail-page .detail-booking-price strong,
+.detail-page .detail-mobile-booking-bar strong,
+.detail-page .listing-card .price strong,
+.detail-page .listing-card .grid-price-row strong {
+  font-weight: 600 !important;
+}
+.detail-page .detail-similar-grid {
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0 !important;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  transition: none;
+}
+.detail-page .detail-similar-grid .list-card {
+  margin-bottom: 0;
+}
+.detail-page .detail-similar-grid > :only-child {
+  grid-column: auto;
+}
+.detail-page .detail-header-actions .detail-round-button {
+  border-color: color-mix(in srgb, var(--image-control-text) 18%, transparent);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+.detail-page .detail-title-block h1 {
+  font-size: 28px;
+  line-height: 34px;
+}
+@media (max-width: 899px) {
+  .listing-feed.list-layout .listing-card-actions .listing-book-button {
+    min-height: 38px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  .listing-feed.list-layout .listing-card-actions .listing-book-button svg { width: 14px; height: 14px; }
+  .detail-page .detail-title-block h1 {
+    font-size: 20px;
+    line-height: 25px;
+  }
+  .detail-page .detail-mobile-booking-bar button {
+    min-height: 46px;
+    padding-inline: 12px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500 !important;
+  }
+  .detail-page .detail-mobile-booking-bar > span > strong {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .detail-page .detail-mobile-booking-bar > span > small {
+    font-size: 10px;
+    line-height: 14px;
+  }
+  .detail-page .detail-description p {
+    font-size: 13px;
+    line-height: 19px;
+  }
+  .detail-page .detail-description button {
+    padding-top: 3px;
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .detail-page .detail-description button > .ui-text {
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .detail-page .detail-description button > svg {
+    width: 14px;
+    height: 14px;
+  }
+  .detail-page .detail-floating-header.show-title .detail-round-button {
+    border-color: var(--line);
+    background: var(--surface-muted);
+    color: var(--ink-secondary);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .detail-page .detail-floating-header.show-title .detail-header-actions .detail-round-button {
+    color: var(--primary);
+  }
+  .detail-page .detail-floating-inner > strong {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500 !important;
+  }
+  .detail-page .detail-title-block h1 {
+    opacity: calc(1 - var(--detail-header-progress));
+    transform: translateY(calc(var(--detail-header-progress) * -4px));
+    transition: none;
+  }
+}
+@media (min-width: 900px) {
+  .detail-page .detail-similar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .detail-page .detail-floating-inner {
+    padding-inline: 12px;
+    box-sizing: border-box;
+  }
+  .detail-page .detail-floating-inner > .detail-round-button {
+    grid-column: 1;
+    justify-self: start;
+  }
+  .detail-page .detail-floating-inner > .detail-header-actions {
+    grid-column: 3;
+    justify-self: end;
+  }
+  .detail-page .detail-desktop-title-row > button {
+    display: none;
+  }
+}
+
+.detail-page .detail-owner-badges {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.detail-page .detail-owner-badges i {
+  width: auto;
+  flex: 0 0 auto;
+  padding-inline: 12px;
+}
+@media (max-width: 899px) {
+  .profile-metrics .profile-metric { min-height: 104px; padding: 12px 10px; gap: 8px; align-items: center; }
+  .profile-metrics .profile-metric > .ui-stat__icon { width: 36px; height: 36px; }
+  .profile-metrics .profile-metric > .ui-stat__copy { min-width: 0; align-content: center; gap: 2px; }
+  .profile-metrics .profile-metric .ui-stat__copy > strong.ui-text { overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: normal; word-break: normal; color: var(--ink); font-size: 13px; line-height: 17px; font-weight: 500; }
+  .profile-metrics .profile-metric .ui-stat__copy > small.ui-text { margin-top: 0; overflow-wrap: normal; word-break: normal; color: var(--ink-secondary); font-size: 10px; line-height: 14px; font-weight: 400; }
+  .detail-page .detail-price-mobile > strong.ui-text { font-size: 28px; line-height: 34px; font-weight: 500 !important; }
+  .detail-page .detail-owner-section .detail-owner-card { grid-template-columns: 52px minmax(0, 1fr) 18px; gap: 12px; padding: 14px; }
+  .detail-page .detail-owner-section .detail-owner-avatar { width: 52px; height: 52px; font-size: 18px; }
+  .detail-page .detail-owner-section .detail-owner-name.ui-text { font-size: 14px; line-height: 19px; }
+  .detail-page .detail-owner-section .detail-owner-rating { gap: 4px; }
+  .detail-page .detail-owner-section .detail-owner-rating-value.ui-text { margin-right: 0; font-size: 10px; line-height: 14px; }
+  .detail-page .detail-owner-section .detail-owner-rating svg { width: 10px; height: 10px; flex: 0 0 10px; }
+  .detail-page .detail-owner-section .detail-owner-reviews.ui-text { margin-left: 1px; color: var(--ink-muted); font-size: 8px; line-height: 12px; }
+  .detail-page .detail-owner-section .detail-owner-listings.ui-text { color: var(--ink-secondary); font-size: 9px; line-height: 13px; }
+  .detail-page .detail-owner-section .detail-owner-card > svg { width: 18px; height: 18px; }
+  .detail-page .detail-owner-section .detail-owner-badges i.ui-text { min-height: 24px; padding-inline: 10px; font-size: 9px; line-height: 13px; }
+}
+/* Shared catalog primitives keep the established catalog geometry. */
+.search-pill .search-pill-main.ui-button--system {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  padding: 0 4px 0 12px;
+  background: transparent;
+  color: var(--ink-muted);
+  box-shadow: none;
+}
+.search-pill-main > .ui-button__icon { flex: 0 0 auto; }
+.search-pill-main > .ui-button__label {
+  min-width: 0;
+  flex: 1;
+  display: block;
+  overflow: hidden;
+  text-align: left;
+}
+.search-pill-main > .ui-button__label > span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.search-pill-main > .ui-button__label > span.has-value { color: var(--ink); }
+.search-pill-clear.ui-icon-button,
+.main-control-row .circle-control.ui-icon-button { flex: 0 0 auto; }
+.quick-filter-content > .ui-chip-wrap { flex: 0 0 auto; }
+.quick-filter-scroll .ui-chip--selected,
+.quick-filter-scroll .ui-chip--selected:hover {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.secondary-controls > .ui-button .ui-button__label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.secondary-controls > .ui-button .ui-button__icon { flex: 0 0 auto; }
+.guest-favorites-sync.ui-list-cell > .ui-list-cell__before {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+}
+.guest-favorites-sync.ui-list-cell > .ui-list-cell__copy {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  flex: 1;
+  justify-items: start;
+  background: transparent;
+  text-align: left;
+}
+.guest-favorites-sync.ui-list-cell .ui-list-cell__copy > strong {
+  width: 100%;
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  text-align: left;
+}
+.guest-favorites-sync.ui-list-cell .ui-list-cell__copy > small {
+  width: 100%;
+  margin-top: 2px;
+  color: var(--ink-secondary);
+  font-size: 9px;
+  line-height: 13px;
+  font-weight: 400;
+  text-align: left;
+}
+.listing-skeleton > .ui-skeleton,
+.listing-skeleton > div > .ui-skeleton { animation: shimmer 1.25s ease-in-out infinite alternate; }
+.listing-skeleton > div > .ui-skeleton { height: 12px; border-radius: 8px; }
+.listing-skeleton > div > .ui-skeleton:nth-child(2) { width: 88%; height: 18px; }
+.listing-skeleton > div > .ui-skeleton:nth-child(3) { width: 66%; }
+.listing-skeleton > div > .ui-skeleton:nth-child(4) { width: 78%; }
+
+/* Search is the same full-page modal, field and list-cell system as the rest of catalog. */
+.search-overlay-panel.ui-full-page-modal {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.search-overlay-panel .search-overlay-title-header {
+  padding-inline: var(--search-overlay-gutter);
+}
+.search-overlay-search {
+  padding: 0 var(--search-overlay-gutter) 16px;
+  border-bottom: 1px solid var(--line);
+}
+.search-overlay-panel .overlay-search-field.ui-input--system {
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  border-radius: 16px;
+  padding: 0 12px;
+  background: var(--surface-muted);
+}
+.search-overlay-panel .overlay-search-field.ui-input--system input {
+  height: 46px;
+  font-size: 14px;
+}
+.search-overlay-panel .search-result-item.ui-list-cell {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+.search-overlay-panel .search-result-item > .ui-list-cell__before {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 50%;
+}
+.search-overlay-panel .search-result-item > .ui-list-cell__copy { gap: 2px; }
+
+@media (max-width: 899px) {
+  .search-pill-main > .ui-button__label > span.has-value {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+  }
+  .search-pill-main > .ui-button__icon > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .secondary-controls > .ui-button .ui-button__label {
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 400;
+  }
+}
+
+/* Desktop listing-detail typography follows the compact mobile component scale. */
+@media (min-width: 900px) {
+  .detail-page .detail-facts span.ui-text {
+    min-height: 26px;
+    border-radius: 9px;
+    padding-inline: 9px;
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 400;
+  }
+  .detail-page .detail-stat-grid small.ui-text {
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 400 !important;
+  }
+  .detail-page .detail-rules-grid strong.ui-text {
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 500;
+  }
+  .detail-page .detail-booking-price strong.ui-text {
+    font-size: 30px;
+    line-height: 36px;
+  }
+  .detail-page .detail-booking-price > span.ui-text {
+    color: var(--ink-secondary);
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .detail-page .detail-booking-fields small.ui-text {
+    color: var(--ink);
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 500;
+  }
+  .detail-page .detail-booking-fields strong.ui-text {
+    color: var(--ink-secondary);
+    font-size: 10px;
+    line-height: 14px;
+    font-weight: 400 !important;
+  }
+  .detail-page .detail-booking-card > p.ui-text {
+    color: var(--ink-secondary);
+    font-size: 10px;
+    line-height: 15px;
+    font-weight: 400;
+  }
+  .detail-page .detail-owner-section .detail-owner-rating-value.ui-text {
+    margin-right: 0;
+    font-size: 11px;
+    line-height: 15px;
+  }
+  .detail-page .detail-owner-section .detail-owner-rating svg {
+    width: 11px;
+    height: 11px;
+    flex: 0 0 11px;
+  }
+  .detail-page .detail-owner-section .detail-owner-reviews.ui-text {
+    margin-left: 1px;
+    font-size: 9px;
+    line-height: 13px;
+  }
+  .detail-page .detail-owner-section .detail-owner-listings.ui-text {
+    font-size: 10px;
+    line-height: 14px;
+  }
+}
+
+@media (max-width: 899px) {
+  .detail-page .detail-similar-grid > .listing-card > .listing-card-actions {
+    display: none;
+  }
+}
+
+/* Primary actions keep their fill on hover and use the same lift as edit buttons. */
+@media (hover: hover) and (pointer: fine) {
+  .ui-button--system.ui-button--mode-solid.ui-button--tone-primary:hover:not(:disabled),
+  .listing-card-actions .ui-button--system.ui-button--mode-solid.ui-button--tone-primary:hover:not(:disabled),
+  .listing-card-actions .listing-book-button:hover:not(:disabled) {
+    border-color: var(--ui-action-tone, var(--primary));
+    background: var(--ui-action-tone, var(--primary));
+    color: #fff;
+    transform: translateY(-1px);
+  }
+}
+
+/* Final desktop listing-detail hierarchy: compact copy, readable facts, two large related cards. */
+@media (min-width: 900px) {
+  .detail-page .detail-title-block {
+    gap: 5px;
+  }
+
+  .detail-page .detail-title-block h1 {
+    max-width: 680px;
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 500;
+  }
+
+  .detail-page .detail-title-block p.ui-text {
+    gap: 6px;
+    font-size: 12px;
+    line-height: 17px;
+  }
+
+  .detail-page .detail-title-block p.ui-text > svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .detail-page .detail-facts {
+    gap: 7px;
+  }
+
+  .detail-page .detail-facts span.ui-text {
+    min-height: 30px;
+    border-radius: 10px;
+    padding-inline: 11px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+  }
+
+  .detail-page .detail-description {
+    gap: 8px;
+  }
+
+  .detail-page .detail-description h2.ui-text {
+    font-size: 14px;
+    line-height: 19px;
+  }
+
+  .detail-page .detail-description p.ui-text {
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .detail-page .detail-description button,
+  .detail-page .detail-description button > .ui-text {
+    font-size: 11px;
+    line-height: 15px;
+  }
+
+  .detail-page .detail-booking-fields button {
+    background: transparent;
+  }
+
+  .detail-page .detail-similar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .detail-page .detail-similar-grid > .list-card { width: 100%; min-height: 0; }
+}

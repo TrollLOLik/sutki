@@ -1,0 +1,12 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { reviewRepository } from '@features/reviews';
+import { PublicReviewsPage } from '.';
+const noop = () => undefined;
+const meta = { title: 'Pages/Reviews/Public reviews', component: PublicReviewsPage, parameters: { layout: 'fullscreen' }, tags: ['autodocs'], loaders: [async () => { reviewRepository.reset(); return {}; }], args: { kind: 'listing', subjectId: '5', onBack: noop, onHome: noop, onCreate: noop, onMap: noop, onMessages: noop, onProfile: noop, onBookListing: noop, onEditListing: noop, onToast: noop } } satisfies Meta<typeof PublicReviewsPage>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Listing: Story = {};
+export const OwnListingWithReply: Story = { args: { subjectId: '6' } };
+export const Host: Story = { args: { kind: 'user', subjectId: 'anna' } };
+export const Empty: Story = { args: { kind: 'listing', subjectId: '12' } };
+export const Mobile: Story = { parameters: { viewport: { defaultViewport: 'mobile1' } } };

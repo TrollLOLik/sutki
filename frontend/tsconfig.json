@@ -1,0 +1,89 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "incremental": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@app": [
+        "src/app/index.ts"
+      ],
+      "@app/*": [
+        "src/app/*"
+      ],
+      "@pages": [
+        "src/screens"
+      ],
+      "@pages/*": [
+        "src/screens/*"
+      ],
+      "@features": [
+        "src/features"
+      ],
+      "@features/*": [
+        "src/features/*"
+      ],
+      "@entities": [
+        "src/entities"
+      ],
+      "@entities/*": [
+        "src/entities/*"
+      ],
+      "@widgets": [
+        "src/widgets"
+      ],
+      "@widgets/*": [
+        "src/widgets/*"
+      ],
+      "@shared": [
+        "src/shared"
+      ],
+      "@shared/*": [
+        "src/shared/*"
+      ],
+      "@ui": [
+        "src/shared/ui/index.ts"
+      ],
+      "@ui/*": [
+        "src/shared/ui/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "src"
+  ],
+  "references": [],
+  "exclude": [
+    "src/**/*.stories.ts",
+    "src/**/*.stories.tsx",
+    ".storybook",
+    "storybook-static"
+  ]
+}
