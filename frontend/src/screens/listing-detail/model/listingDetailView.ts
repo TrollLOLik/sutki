@@ -11,7 +11,7 @@ export interface ListingDetailRule {
   Icon: LucideIcon;
 }
 
-export const listingPhotoSet = ['/listings/flat-1.jpg', '/listings/flat-2.jpg', '/listings/flat-3.jpg', '/listings/flat-1.jpg', '/listings/flat-2.jpg'];
+export const listingPhotoSet = ['/listings/flat-1.jpg', '/listings/flat-2.jpg', '/listings/flat-3.jpg'];
 
 const featureDictionary: Record<string, ListingDetailFeature> = {
   wifi: { label: 'Wi‑Fi', Icon: Wifi },
@@ -19,7 +19,8 @@ const featureDictionary: Record<string, ListingDetailFeature> = {
   dishes: { label: 'Посуда', Icon: CookingPot },
   microwave: { label: 'Микроволновка', Icon: Waves },
   tvbox: { label: 'Телевизор', Icon: Tv },
-  shower: { label: 'Стиральная машина', Icon: WashingMachine },
+  shower: { label: 'Душ', Icon: Waves },
+  washing: { label: 'Стиральная машина', Icon: WashingMachine },
   grill: { label: 'Кухня', Icon: CookingPot },
 };
 
@@ -43,29 +44,26 @@ export function formatRoomsCount(rooms: number) {
 }
 
 export function getListingDetailTitle(listing: Listing) {
-  if (listing.id === 1) return 'Уютная квартира на сутки в центре';
-  if (listing.categoryId === 'cottage') return 'Уютный коттедж для отдыха';
   return listing.title;
 }
 
 export function buildListingFeatures(listing: Listing): ListingDetailFeature[] {
-  const base = listing.serviceIds
-    .map((id) => featureDictionary[id])
-    .filter((item): item is ListingDetailFeature => Boolean(item));
-  const additions: ListingDetailFeature[] = [
-    { label: 'Кондиционер', Icon: Snowflake },
-    { label: 'Балкон', Icon: Home },
-  ];
-  return [...base, ...additions].filter((item, index, array) => array.findIndex((entry) => entry.label === item.label) === index);
+  const references = listing.services?.length
+    ? listing.services.map((service) => ({
+      label: service.name,
+      Icon: featureDictionary[service.id]?.Icon ?? Home,
+    }))
+    : listing.serviceIds.map((id) => featureDictionary[id]).filter((item): item is ListingDetailFeature => Boolean(item));
+  return references.filter((item, index, array) => array.findIndex((entry) => entry.label === item.label) === index);
 }
 
 export function buildListingRules(listing: Listing): ListingDetailRule[] {
   return [
-    { label: 'Заезд после 14:00', Icon: Clock3 },
-    { label: 'Выезд до 12:00', Icon: Clock3 },
+    listing.checkInAfter ? { label: `Заезд после ${listing.checkInAfter}`, Icon: Clock3 } : null,
+    listing.checkOutBefore ? { label: `Выезд до ${listing.checkOutBefore}`, Icon: Clock3 } : null,
     { label: listing.smokingAllowed ? 'Курение разрешено' : 'Курение запрещено', Icon: listing.smokingAllowed ? Waves : Ban },
     { label: listing.petsAllowed ? 'Можно с питомцами' : 'Без питомцев', Icon: listing.petsAllowed ? PawPrint : Ban },
     { label: listing.childrenAllowed ? 'Можно с детьми' : 'Без детей', Icon: listing.childrenAllowed ? Users : Ban },
     { label: listing.eventsAllowed ? 'Мероприятия разрешены' : 'Без вечеринок', Icon: listing.eventsAllowed ? Users : Ban },
-  ];
+  ].filter((item): item is ListingDetailRule => item !== null);
 }

@@ -13,10 +13,6 @@ function roomsLabel(rooms: number) {
   return `${rooms} комнат`;
 }
 
-function cardTitle(rooms: number) {
-  return rooms <= 0 ? 'Современная студия' : `Уютная ${rooms}-комн. квартира`;
-}
-
 function rub(value: number) {
   return new Intl.NumberFormat('ru-RU').format(value);
 }
@@ -89,7 +85,7 @@ export function ListingCard({ listing, layout, mode, favorite, onToggleFavorite,
             <SectionTitle as="strong">{rub(listing.price)} ₽</SectionTitle>
             <DescriptionText color="inherit"><Star size={13} fill="currentColor" />{listing.rating.toFixed(1).replace('.', ',')}</DescriptionText>
           </div>
-          <BodyText as="h3" weight={500}>{cardTitle(listing.rooms)}</BodyText>
+          <BodyText as="h3" weight={500}>{listing.title}</BodyText>
           <DescriptionText as="p" truncate>{listing.address}</DescriptionText>
           <div className="grid-facts">
             <BadgeText color="secondary"><Expand size={12} />{listing.area} м²</BadgeText>
@@ -122,7 +118,7 @@ export function ListingCard({ listing, layout, mode, favorite, onToggleFavorite,
               onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }}
             /> : null}
           </div>
-          <BodyText as="h3" weight={500}>{cardTitle(listing.rooms)}</BodyText>
+          <BodyText as="h3" weight={500}>{listing.title}</BodyText>
           <DescriptionText as="p" className="listing-address" truncate>{listing.address}</DescriptionText>
           <BadgeText as="p" className="listing-city" weight={400} color="secondary" truncate><MapPin size={10} />{listing.city}</BadgeText>
           <div className="list-facts">

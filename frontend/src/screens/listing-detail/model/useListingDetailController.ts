@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import type { Listing } from '@shared/data/listings';
-import { listings } from '@shared/data/listings';
 import { useChatSnapshot } from '@features/chat';
 import type { OwnerListingStatus } from '@features/my-listings';
 import type { BookingDraft } from './listingDetailTypes';
@@ -8,13 +7,14 @@ import { buildListingFeatures, buildListingRules, formatListingPrice, getListing
 
 interface ListingDetailControllerOptions {
   listing: Listing;
+  allListings: readonly Listing[];
   ownerStatus?: OwnerListingStatus;
   onPublish?: () => void;
   onUnpublish?: () => void;
   onToast: (message: string) => void;
 }
 
-export function useListingDetailController({ listing, ownerStatus, onPublish, onUnpublish, onToast }: ListingDetailControllerOptions) {
+export function useListingDetailController({ listing, allListings, ownerStatus, onPublish, onUnpublish, onToast }: ListingDetailControllerOptions) {
   const [activePhoto, setActivePhoto] = useState(0);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [publicationConfirmation, setPublicationConfirmation] = useState<'publish' | 'unpublish' | null>(null);
@@ -32,15 +32,16 @@ export function useListingDetailController({ listing, ownerStatus, onPublish, on
   const { conversations } = useChatSnapshot();
 
   const photos = useMemo(() => {
+    if (listing.photos?.length) return listing.photos;
     const first = listing.coverUrl;
     return [first, ...listingPhotoSet.filter((item) => item !== first)].slice(0, 5);
-  }, [listing.coverUrl]);
+  }, [listing.coverUrl, listing.photos]);
   const features = useMemo(() => buildListingFeatures(listing), [listing]);
   const rules = useMemo(() => buildListingRules(listing), [listing]);
-  const similar = useMemo(() => listings.filter((item) => item.id !== listing.id && item.cityName === listing.cityName).slice(0, 3), [listing.cityName, listing.id]);
+  const similar = useMemo(() => allListings.filter((item) => item.id !== listing.id && item.cityName === listing.cityName).slice(0, 3), [allListings, listing.cityName, listing.id]);
   const owner = useMemo(() => listing.owner ?? conversations.find((conversation) => conversation.listing?.id === listing.id && !conversation.isOwner)?.otherUser ?? conversations.find((conversation) => conversation.listing?.id === listing.id)?.otherUser, [conversations, listing]);
   const ownerName = owner ? `${owner.surname} ${owner.name}`.trim() : 'Арендодатель';
-  const ownerRating = owner?.rating ?? 4.9;
+  const ownerRating = owner?.rating ?? 0;
   const ownerReviews = owner?.reviewsCount ?? 0;
   const ownerCanPromote = !ownerStatus || ownerStatus === 'active';
   const ownerCanUnpublish = ownerStatus === 'active';

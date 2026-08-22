@@ -14,6 +14,7 @@ import { ListingGallery } from './ListingGallery';
 
 type DetailProps = {
   listing: Listing;
+  allListings: readonly Listing[];
   favorite: boolean;
   favorites: ReadonlySet<number>;
   onToggleFavorite: () => void;
@@ -39,6 +40,7 @@ type DetailProps = {
 
 export function ListingDetailPage({
   listing,
+  allListings,
   favorite,
   favorites,
   onToggleFavorite,
@@ -61,7 +63,7 @@ export function ListingDetailPage({
   onBook,
   onToast,
 }: DetailProps) {
-  const controller = useListingDetailController({ listing, ownerStatus, onPublish, onUnpublish, onToast });
+  const controller = useListingDetailController({ listing, allListings, ownerStatus, onPublish, onUnpublish, onToast });
   const {
     activePhoto,
     setActivePhoto,

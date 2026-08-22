@@ -5,7 +5,7 @@ import { useDemoSession } from '@features/auth';
 import type { RequestDirection } from '@features/requests';
 import type { HomeTab } from '@pages/home';
 import type { BookingDraft } from '@pages/listing-detail';
-import { listings } from '@shared/data/listings';
+import type { PublicListingsBootstrap } from '@shared/api/publicListings';
 import { useSmoothScroll } from '@shared/lib/scroll/ScrollSystem';
 import { useAppScrollChrome } from '@shared/lib/scroll/useAppScrollChrome';
 import { BodyText, BottomSheet, Button, ConfirmationDialog, SectionTitle, Snackbar } from '@ui';
@@ -37,14 +37,22 @@ function bottomNavigationTab(route: AppRoute): HomeTab | null {
 
 export interface AppProps {
   initialLocation?: string;
+  listingsBootstrap: PublicListingsBootstrap;
 }
 
-export function App({ initialLocation }: AppProps) {
+export function App({ initialLocation, listingsBootstrap }: AppProps) {
   useEffect(() => startDemoEventBridge(), []);
   const { route, navigationDirection, scrollRestoration, navigate, back } = useAppRouter(initialLocation);
   const [reportedTabBar, setReportedTabBar] = useState<{ route: string; hidden: boolean }>({ route: '', hidden: false });
   const session = useDemoSession();
-  const search = useListingSearch();
+  const search = useListingSearch({
+    source: listingsBootstrap.source,
+    initialListings: listingsBootstrap.listings,
+    initialListing: listingsBootstrap.listingDetail,
+    references: listingsBootstrap.references,
+    catalogLoaded: listingsBootstrap.catalogLoaded,
+    initialError: listingsBootstrap.error,
+  });
   const [layer, setLayer] = useState<AppSearchLayer>(null);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>();
   const [guestAuthPromptOpen, setGuestAuthPromptOpen] = useState(false);
@@ -57,7 +65,7 @@ export function App({ initialLocation }: AppProps) {
   const clearMessage = useCallback(() => setMessage(''), []);
   const { scrollTo } = useSmoothScroll();
   const pendingAuthRouteRef = useRef<AppRoute | null>(null);
-  const catalogAlreadyShownRef = useRef(false);
+  const catalogAlreadyShownRef = useRef(listingsBootstrap.catalogLoaded);
   const initialSessionRouteResolvedRef = useRef(false);
 
   useEffect(() => {
@@ -67,6 +75,7 @@ export function App({ initialLocation }: AppProps) {
   const performancePrompt = usePerformancePrompt();
 
   useEffect(() => {
+    if (session.status === 'loading') return;
     const authRoute = route.name === 'welcome' || route.name === 'auth-phone' || route.name === 'auth-email' || route.name === 'auth-code';
     const protectedRoute = route.name === 'profile' || route.name === 'my-listings' || route.name === 'create' || route.name === 'promotion' || route.name === 'messages' || route.name === 'requests' || route.name === 'booking' || route.name === 'my-reviews' || route.name === 'review-editor' || route.name === 'notifications';
     const guestProtectedRoute = route.name === 'my-listings' || route.name === 'create' || route.name === 'promotion' || route.name === 'requests' || route.name === 'my-reviews' || route.name === 'review-editor' || route.name === 'notifications';
@@ -130,9 +139,14 @@ export function App({ initialLocation }: AppProps) {
 
   useEffect(() => {
     const listingId = route.name === 'listing' || route.name === 'booking' ? route.listingId : null;
-    const listingTitle = listingId == null ? undefined : listings.find((item) => item.id === listingId)?.title;
+    const listingTitle = listingId == null ? undefined : search.getListing(listingId)?.title;
     document.title = `${routeTitle(route, listingTitle)} — ВИГАЖ`;
-  }, [route]);
+  }, [route, search.getListing]);
+
+  useEffect(() => {
+    if (route.name !== 'listing' && route.name !== 'booking') return;
+    void search.loadListing(route.listingId).catch(() => undefined);
+  }, [route, search.loadListing]);
 
   useLayoutEffect(() => {
     const restore = () => scrollTo(scrollRestoration.top, { immediate: true, force: true });

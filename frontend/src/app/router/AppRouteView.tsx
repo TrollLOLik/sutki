@@ -5,7 +5,6 @@ import { demoSession } from '@features/auth';
 import { myListingsRepository, useMyListingsSnapshot } from '@features/my-listings';
 import { HomePage, type HomeTab } from '@pages/home';
 import type { BookingDraft } from '@pages/listing-detail';
-import { listings } from '@shared/data/listings';
 import type { AppSearchLayer } from '../ui/AppSearchLayers';
 import { RouteErrorPage } from '../ui/RouteErrorPage';
 import { AccountRouteView } from './AccountRouteView';
@@ -142,7 +141,7 @@ function MarketplaceRouteView({
       return <PromotionPage listingId={route.listingId} onBack={() => back({ name: 'my-listings' })} onOpenListing={openListing} onCheckout={() => {}} onHome={goHome} onMap={goMap} onMessages={goMessages} onProfile={goProfile} onCreate={goCreate} />;
 
     case 'booking': {
-      const listing = ownerById.get(route.listingId) ?? listings.find((item) => item.id === route.listingId);
+      const listing = ownerById.get(route.listingId) ?? search.getListing(route.listingId);
       if (!listing) return <RouteErrorPage title="Объявление не найдено" description="Возможно, оно удалено или ссылка устарела." onBack={() => back({ name: 'home' })} onHome={goHome} />;
       return (
         <BookingPage
@@ -169,11 +168,12 @@ function MarketplaceRouteView({
 
     case 'listing': {
       const ownerEntry = ownerEntryById.get(route.listingId);
-      const listing = ownerEntry?.listing ?? listings.find((item) => item.id === route.listingId);
+      const listing = ownerEntry?.listing ?? search.getListing(route.listingId);
       if (!listing) return <RouteErrorPage title="Объявление не найдено" description="Возможно, оно удалено или ссылка устарела." onBack={() => back({ name: 'home' })} onHome={goHome} />;
       return (
         <ListingDetailPage
           listing={listing}
+          allListings={search.allListings}
           favorite={search.favorites.has(listing.id)}
           favorites={search.favorites}
           onToggleFavorite={() => search.toggleFavorite(listing.id)}
@@ -209,6 +209,9 @@ function MarketplaceRouteView({
           query={search.query}
           filters={search.filters}
           listings={catalogListings}
+          loading={search.loading}
+          error={search.error}
+          onRetry={search.retry}
           favorites={search.favorites}
           activeFilters={search.activeFilters}
           showingSimilar={search.showingSimilar}

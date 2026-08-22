@@ -9,6 +9,10 @@ const nextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  async rewrites() {
+    const backendOrigin = String(process.env.BACKEND_API_BASE_URL || 'https://arenda.wigaj.ru').replace(/\/$/, '');
+    return [{ source: '/api/v1/:path*', destination: `${backendOrigin}/api/v1/:path*` }];
+  },
 };
 
 export default nextConfig;

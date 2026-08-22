@@ -108,12 +108,11 @@ export function ListingDetailContent({
         <BodyText className="ui-text--inherit-metrics" color="secondary">{formatRoomsCount(listing.rooms)}</BodyText>
         <BodyText className="ui-text--inherit-metrics" color="secondary">{listing.area} м²</BodyText>
         <BodyText className="ui-text--inherit-metrics" color="secondary">до {listing.capacity} гостей</BodyText>
-        <BodyText className="ui-text--inherit-metrics" color="secondary">{(listing.id % 9) + 1} этаж</BodyText>
       </section>
 
       <section className="detail-surface detail-description">
         <SectionTitle className="ui-text--inherit-metrics" color="inherit">Описание</SectionTitle>
-        <DescriptionText as="p" ref={descriptionRef} id={`listing-description-${listing.id}`} className={`${descriptionExpanded ? 'expanded ' : ''}ui-text--inherit-metrics`} color="secondary" style={{ maxHeight: descriptionExpanded ? `${descriptionHeight}px` : '60px' }}>Уютная и светлая квартира в самом центре города. Идеальный вариант для пары, семьи или командировки. Всё необходимое для комфортного проживания уже есть: удобная кровать, просторная кухня, полностью оборудованная ванная, быстрый интернет и тихий двор. Рядом магазины, кафе, остановки общественного транспорта и основные достопримечательности.</DescriptionText>
+        <DescriptionText as="p" ref={descriptionRef} id={`listing-description-${listing.id}`} className={`${descriptionExpanded ? 'expanded ' : ''}ui-text--inherit-metrics`} color="secondary" style={{ maxHeight: descriptionExpanded ? `${descriptionHeight}px` : '60px' }}>{listing.description?.trim() || 'Владелец пока не добавил описание.'}</DescriptionText>
         <Pressable className={descriptionExpanded ? 'expanded' : ''} aria-expanded={descriptionExpanded} aria-controls={`listing-description-${listing.id}`} onClick={onToggleDescription}>
           <BodyText className="ui-text--inherit-metrics" color="inherit" weight={500}>{descriptionExpanded ? 'Свернуть' : 'Подробнее'}</BodyText><ChevronDown size={17} />
         </Pressable>
@@ -140,7 +139,7 @@ export function ListingDetailContent({
           <span className="detail-owner-info">
             <BodyText className="detail-owner-name ui-text--inherit-metrics" color="inherit" weight={500}>{ownerName}</BodyText>
             <span className="detail-owner-rating"><BodyText as="strong" className="detail-owner-rating-value ui-text--inherit-metrics" color="inverse" weight={500}>{ownerRating.toFixed(1).replace('.', ',')}</BodyText><Star size={12} fill="currentColor" /><DescriptionText as="em" className="detail-owner-reviews ui-text--inherit-metrics" color="muted">{formatReviewsCount(ownerReviews)}</DescriptionText></span>
-            <DescriptionText as="small" className="detail-owner-listings ui-text--inherit-metrics" color="secondary">1 активное объявление</DescriptionText>
+            <DescriptionText as="small" className="detail-owner-listings ui-text--inherit-metrics" color="secondary">{listing.owner?.listingsCount ?? 0} активных объявлений</DescriptionText>
           </span>
           <ChevronRight size={20} />
           <span className="detail-owner-badges">{ownerVerified ? <BadgeText as="i" className="ui-text--inherit-metrics" color="inherit"><BadgeCheck size={14} />Документы проверены</BadgeText> : null}{ownerPhone ? <BadgeText as="i" className="ui-text--inherit-metrics" color="inherit"><Phone size={14} />Телефон подтверждён</BadgeText> : null}</span>
@@ -155,7 +154,7 @@ export function ListingDetailContent({
             <span className="map-block block-one" /><span className="map-block block-two" /><span className="map-block block-three" /><span className="map-park" />
             <span className="map-pin"><MapPin size={28} fill="currentColor" /></span>
           </Pressable>
-          <div className="detail-map-ai-recommendation"><DescriptionText as="p" className="ui-text--inherit-metrics" color="inherit">Дом находится на Красноармейской улице в Магнитогорске, всего в нескольких минутах ходьбы от станции и детского сада. Рядом расположены магазины и супермаркет, что делает повседневные покупки удобными.</DescriptionText></div>
+          <div className="detail-map-ai-recommendation"><DescriptionText as="p" className="ui-text--inherit-metrics" color="inherit">{listing.locationSummary?.trim() || 'Расположение объекта указано на карте приблизительно.'}</DescriptionText></div>
         </section>
       ) : null}
 

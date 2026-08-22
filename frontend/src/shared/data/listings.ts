@@ -15,6 +15,19 @@ export type ListingOwner = {
   city?: string;
   memberSince?: string;
   responseTime?: string;
+  listingsCount?: number;
+};
+
+export type ListingReference = {
+  id: string;
+  apiId: number;
+  name: string;
+};
+
+export type ListingPOI = {
+  name: string;
+  type: string;
+  distance: number;
 };
 
 export type Listing = {
@@ -45,6 +58,18 @@ export type Listing = {
   viewed?: boolean;
   statusBadge?: ListingStatusBadge;
   owner?: ListingOwner;
+  description?: string;
+  photos?: string[];
+  services?: ListingReference[];
+  categories?: ListingReference[];
+  checkInAfter?: string | null;
+  checkOutBefore?: string | null;
+  locationSummary?: string | null;
+  reviewsSummary?: string | null;
+  pois?: ListingPOI[];
+  lat?: number | null;
+  lng?: number | null;
+  locationRadius?: number;
 };
 
 const anna: ListingOwner = {

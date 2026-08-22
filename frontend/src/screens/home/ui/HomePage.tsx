@@ -17,6 +17,7 @@ interface HomePageProps {
   favorites: Set<number>;
   activeFilters: number;
   loading?: boolean;
+  error?: string;
   showingSimilar?: boolean;
   hasSearchConstraints?: boolean;
   initialLayout?: ListingLayoutMode;
@@ -36,6 +37,7 @@ interface HomePageProps {
   onEditListing: (id: number) => void;
   onPromoteListing: (id: number) => void;
   onReset: () => void;
+  onRetry?: () => void;
   onNavigate: (tab: HomeTab | 'create') => void;
   guest?: boolean;
   onAuth?: () => void;
@@ -82,12 +84,14 @@ export function HomePage(props: HomePageProps) {
         layout={layout}
         headerCollapsed={headerCollapsed}
         loading={loading}
+        error={props.error}
         showingSimilar={props.showingSimilar}
         guest={props.guest}
         favoritesOnly={props.filters.favoritesOnly}
         listings={props.listings}
         favorites={props.favorites}
         onAuth={props.onAuth}
+        onRetry={props.onRetry}
         onToggleFavorite={props.onToggleFavorite}
         onOpenListing={props.onOpenListing}
         onBookListing={props.onBookListing}

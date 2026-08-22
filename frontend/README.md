@@ -84,16 +84,22 @@ import { Button, Field, Modal, Stack, TextField } from '@ui';
 
 Документация: [`docs/UI_KIT.md`](docs/UI_KIT.md), [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) и [`docs/REFERENCES.md`](docs/REFERENCES.md).
 
-## Mock backend
+## API и временные mock-адаптеры
 
-Чат и заявки работают через repository interfaces. По умолчанию активен session mock: изменения живут до перезагрузки вкладки. Реальный HTTP-адаптер подключается через `.env` без переписывания UI.
+Публичный каталог и авторизация работают с Go API. Next.js выступает BFF для авторизации: access/refresh-токены хранятся только в `HttpOnly` cookie и не попадают в клиентский JavaScript. Чат и заявки пока работают через repository interfaces; для них по умолчанию активен session mock.
 
 ```env
 NEXT_PUBLIC_CHAT_DATA_MODE=session-mock
 NEXT_PUBLIC_REQUESTS_DATA_MODE=session-mock
-NEXT_PUBLIC_API_BASE_URL=/api
+NEXT_PUBLIC_LISTINGS_DATA_MODE=http
+NEXT_PUBLIC_API_BASE_URL=
+BACKEND_API_BASE_URL=https://arenda.wigaj.ru
+NEXT_PUBLIC_LEGAL_URL=https://arenda.wigaj.ru/legal
+NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
 NEXT_PUBLIC_MOCK_LATENCY_MS=220
 ```
+
+`NEXT_PUBLIC_API_BASE_URL` оставляют пустым, чтобы браузер обращался к same-origin `/api/v1/*`, а Next.js проксировал только это пространство в Go API. Внутренние маршруты `/api/web-auth/*` обрабатываются самим Next.js.
 
 Подробнее: [`docs/DATA_ADAPTERS.md`](docs/DATA_ADAPTERS.md).
 

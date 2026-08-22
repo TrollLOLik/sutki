@@ -1,6 +1,6 @@
 import { CalendarDays, Check, MapPin, UserRound } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { demoSession, saveDemoProfileSetup, type AuthChannel } from '@features/auth';
+import { demoSession, saveProfileSetup, uploadProfileAvatar, WebAuthError, type WebAuthUser } from '@features/auth';
 import { BirthdayPickerSheet, formatBirthday, ProfileAvatarEditor } from '@features/profile';
 import { CityPickerSheet } from '@features/search-filters';
 import { useMediaQuery } from '@shared/lib/adaptivity';
@@ -8,13 +8,11 @@ import { BadgeText, BodyText, Button, DescriptionText, Field, HeroTitle, PickerB
 import { AuthStepScreen } from './AuthStepScreen';
 
 interface ProfileSetupPageProps {
-  identifier?: string;
-  channel?: AuthChannel;
   onBack: () => void;
   onDone: () => void;
 }
 
-export function ProfileSetupPage({ identifier, channel, onBack, onDone }: ProfileSetupPageProps) {
+export function ProfileSetupPage({ onBack, onDone }: ProfileSetupPageProps) {
   const desktopAutoFocus = useMediaQuery('(min-width: 900px)');
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
@@ -26,15 +24,33 @@ export function ProfileSetupPage({ identifier, channel, onBack, onDone }: Profil
   const [avatarError, setAvatarError] = useState('');
   const [error, setError] = useState('');
   const [complete, setComplete] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [createdUser, setCreatedUser] = useState<WebAuthUser | null>(null);
   const canSubmit = name.trim().length >= 2 && city.trim().length >= 2;
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return setError('Укажите имя и город');
-    saveDemoProfileSetup({ name: name.trim(), surname: surname.trim(), city: city.trim(), birthday, avatar, phone: channel === 'phone' ? identifier ?? '' : '', email: channel === 'email' ? identifier ?? '' : '' });
-    setComplete(true);
+    setLoading(true);
+    setError('');
+    try {
+      const avatarUrl = avatar ? await uploadProfileAvatar(avatar) : undefined;
+      const user = await saveProfileSetup({
+        name: name.trim(),
+        surname: surname.trim() || undefined,
+        city: city.trim(),
+        birthday: birthday || undefined,
+        avatar_url: avatarUrl,
+      });
+      setCreatedUser(user);
+      setComplete(true);
+    } catch (submitError) {
+      setError(submitError instanceof WebAuthError ? submitError.message : 'Не удалось сохранить профиль. Попробуйте ещё раз.');
+    } finally {
+      setLoading(false);
+    }
   };
-  if (complete) return <main className="auth-success"><section><span><Check size={34} /></span><BadgeText as="p" color="secondary">Готово</BadgeText><HeroTitle>Профиль создан</HeroTitle><DescriptionText as="p">Добро пожаловать в «ВИГАЖ»</DescriptionText><Button size="lg" stretched onClick={() => { demoSession.completeOnboarding(); onDone(); }}>Начать</Button></section></main>;
-  return <form id="auth-profile-setup-form" className="auth-profile-setup-page" onSubmit={submit}><AuthStepScreen contextClassName="auth-profile-setup-page" icon={<UserRound size={22} />} title="Создание профиля" description="Расскажите немного о себе. Эти данные можно изменить позже." onBack={onBack} footer={<Button type="submit" form="auth-profile-setup-form" size="md" stretched disabled={!canSubmit}>Продолжить</Button>}>
+  if (complete) return <main className="auth-success"><section><span><Check size={34} /></span><BadgeText as="p" color="secondary">Готово</BadgeText><HeroTitle>Профиль создан</HeroTitle><DescriptionText as="p">Добро пожаловать в «ВИГАЖ»</DescriptionText><Button size="lg" stretched onClick={() => { if (createdUser) demoSession.completeOnboarding(createdUser); onDone(); }}>Начать</Button></section></main>;
+  return <form id="auth-profile-setup-form" className="auth-profile-setup-page" onSubmit={submit}><AuthStepScreen contextClassName="auth-profile-setup-page" icon={<UserRound size={22} />} title="Создание профиля" description="Расскажите немного о себе. Эти данные можно изменить позже." onBack={onBack} footer={<Button type="submit" form="auth-profile-setup-form" size="md" stretched loading={loading} disabled={!canSubmit}>Продолжить</Button>}>
     <div className="auth-profile-avatar">
       <ProfileAvatarEditor value={avatar} onChange={setAvatar} onError={setAvatarError} />
       <BodyText as="p">Добавьте фото профиля</BodyText>
@@ -58,6 +74,7 @@ export function ProfileSetupPage({ identifier, channel, onBack, onDone }: Profil
         onClick={() => setCityPickerOpen(true)}
       />
     </Field>
+    {error && canSubmit ? <BadgeText as="p" className="auth-code-error" color="danger" role="alert">{error}</BadgeText> : null}
     <BirthdayPickerSheet open={birthdayOpen} value={birthday} onClose={() => setBirthdayOpen(false)} onApply={(value) => { setBirthday(value); setBirthdayOpen(false); }} />
     <CityPickerSheet
       open={cityPickerOpen}
